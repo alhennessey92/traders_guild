@@ -3231,6 +3231,18 @@ struct PushNotificationSettingsView: View {
                 .onChange(of: prefs.event) { _, newValue in
                     savePreference(\.event, value: newValue)
                 }
+
+                SettingsToggleRow(
+                    icon: "calendar.badge.clock",
+                    title: "Event Reminder",
+                    subtitle: "Reminder before an event you're attending starts",
+                    isOn: $prefs.eventReminder,
+                    iconColor: .orange
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.eventReminder) { _, newValue in
+                    savePreference(\.eventReminder, value: newValue)
+                }
             }
 
             Divider()
@@ -3324,6 +3336,7 @@ struct PushNotificationSettingsView: View {
         case \.markerEngagement:  update = RLPushPreferencesUpdateRequest(markerEngagement: value)
         case \.announcement:      update = RLPushPreferencesUpdateRequest(announcement: value)
         case \.event:             update = RLPushPreferencesUpdateRequest(event: value)
+        case \.eventReminder:     update = RLPushPreferencesUpdateRequest(eventReminder: value)
         case \.friendRequest:     update = RLPushPreferencesUpdateRequest(friendRequest: value)
         default: break
         }

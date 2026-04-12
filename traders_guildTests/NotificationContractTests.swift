@@ -116,6 +116,59 @@ struct NotificationContractTests {
         #expect(dto.navigationDestination == .adminReports(guildId: guildId, reportId: reportId))
     }
 
+    @Test func contentReportResolutionSummaryBuildsFromNotificationPayload() async throws {
+        let notificationId = UUID()
+        let recipientId = UUID()
+        let guildId = UUID()
+        let reportId = UUID()
+
+        let json = """
+        {
+          "id": "\(notificationId.uuidString)",
+          "recipient_id": "\(recipientId.uuidString)",
+          "notification_type": "content_report",
+          "title": "Report resolved",
+          "body": "Your report was resolved",
+          "data": {
+            "report_id": "\(reportId.uuidString)",
+            "guild_id": "\(guildId.uuidString)",
+            "guild_name": "Guild",
+            "content_type": "chatroom_message",
+            "resolution_status": "resolved",
+            "reviewer_display_name": "Moderator Mia",
+            "resolution_note": "Removed for spam."
+          },
+          "destination": {
+            "type": "admin_reports",
+            "guild_id": "\(guildId.uuidString)",
+            "report_id": "\(reportId.uuidString)"
+          },
+          "is_read": false,
+          "read_at": null,
+          "view_count": 0,
+          "first_viewed_at": null,
+          "last_viewed_at": null,
+          "created_at": "2026-03-26T10:00:00Z",
+          "updated_at": "2026-03-26T10:00:00Z"
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+
+        let dto = try decoder.decode(RLNotificationDTO.self, from: Data(json.utf8))
+        let summary = try #require(dto.contentReportResolutionSummary)
+
+        #expect(summary.reportId == reportId)
+        #expect(summary.guildId == guildId)
+        #expect(summary.guildName == "Guild")
+        #expect(summary.contentTypeDisplay == "Chat Message")
+        #expect(summary.statusTitle == "Resolved")
+        #expect(summary.reviewerDisplayName == "Moderator Mia")
+        #expect(summary.resolutionNote == "Removed for spam.")
+    }
+
     @Test func websocketMessageTypeIncludesNotificationLifecycleCases() async throws {
         #expect(WSMessageType(rawValue: "notification") == .notification)
         #expect(WSMessageType(rawValue: "notification_stats_update") == .notificationStatsUpdate)
@@ -177,6 +230,95 @@ struct NotificationContractTests {
         #expect(dto.markerSharePayload?.markerId == markerId)
         #expect(dto.markerSharePayload?.symbolId == symbolId)
         #expect(dto.markerSharePayload?.timeframe == "1h")
+    }
+
+    @Test func announcementNotificationsReusePersistedGuildPostIcons() async throws {
+        let json = """
+        {
+          "id": "\(UUID().uuidString)",
+          "recipient_id": "\(UUID().uuidString)",
+          "notification_type": "announcement",
+          "title": "Guild update",
+          "body": "New schedule posted",
+          "data": {
+            "announcement_id": "\(UUID().uuidString)",
+            "icon_key": "bell"
+          },
+          "destination": {
+            "type": "announcement",
+            "announcement_id": "\(UUID().uuidString)"
+          },
+          "is_read": false,
+          "read_at": null,
+          "view_count": 0,
+          "first_viewed_at": null,
+          "last_viewed_at": null,
+          "created_at": "2026-03-26T10:05:00Z",
+          "updated_at": "2026-03-26T10:05:00Z"
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+
+        let dto = try decoder.decode(RLNotificationDTO.self, from: Data(json.utf8))
+
+        #expect(dto.guildPostIconKey == .bell)
+        #expect(dto.icon == "bell.fill")
+    }
+
+    @Test func createAnnouncementRequestAlwaysEncodesPreview() throws {
+        let request = RLCreateGuildAnnouncementRequestDTO(
+            title: "Guild update",
+            content: "Expanded announcement body",
+            preview: "Expanded announcement body",
+            isImportant: true,
+            iconKey: .megaphone
+        )
+
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+
+        let data = try encoder.encode(request)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(json["preview"] as? String == "Expanded announcement body")
+        #expect(json["is_important"] as? Bool == true)
+        #expect(json["icon_key"] as? String == GuildPostIconKey.megaphone.rawValue)
+    }
+
+    @Test func announcementPreviewFallsBackToContentWhenBackendOmitsIt() {
+        let now = Date()
+        let content = String(repeating: "A", count: 120)
+        let announcement = RLGuildAnnouncementWithAuthorDTO(
+            announcement: RLGuildAnnouncementResponseDTO(
+                id: UUID(),
+                guildId: UUID(),
+                authorMembershipId: UUID(),
+                title: "Guild update",
+                content: content,
+                preview: nil,
+                postedAt: now,
+                isImportant: true,
+                iconKey: nil,
+                readCount: 0,
+                status: "posted",
+                isRead: false
+            ),
+            authorMembership: RLGuildSimpleMembershipResponse(
+                userId: UUID(),
+                guildId: UUID(),
+                role: "owner",
+                reputation: 10,
+                accuracyRate: nil,
+                userDisplayName: "Alice",
+                userUsername: "alice",
+                userAvatarUrl: nil
+            )
+        )
+
+        #expect(announcement.preview == String(content.prefix(100)))
     }
 
     @Test func pushTapPayloadParsesSnakeCaseDMDestination() async throws {
@@ -275,6 +417,7 @@ struct NotificationContractTests {
         #expect(dto.type == .friendRequest)
         #expect(dto.navigationDestination == .userProfile(userId: requestedUserId))
         #expect(dto.senderAvatarURL == "https://example.com/alice.png")
+        #expect(dto.friendRequestFromUserId == requestedUserId)
     }
 
     @Test func markerActivityDTODecodesResolvedPredictionResult() async throws {

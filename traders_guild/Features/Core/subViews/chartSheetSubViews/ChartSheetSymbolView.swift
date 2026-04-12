@@ -397,7 +397,7 @@ struct ChartSheetSymbolView: View {
                     if isRequestingGuild {
                         ProgressView()
                             .scaleEffect(0.6)
-                            .tint((inGuild || isRequested) ? .blue : AppColors.surfaceDetailSecondaryForeground)
+                            .tint((inGuild || isRequested) ? AppColors.statusInfo : AppColors.surfaceDetailSecondaryForeground)
                     } else {
                         Image(systemName: guildButtonIcon(inGuild: inGuild, isRequested: isRequested, canManage: canDirectlyManageGuildWatchlist))
                             .font(.system(size: 12, weight: .semibold))
@@ -559,8 +559,8 @@ struct ChartSheetSymbolView: View {
     }
 
     private func guildButtonForegroundColor(inGuild: Bool, isRequested: Bool) -> Color {
-        if inGuild { return .blue }
-        if isRequested { return .orange }
+        if inGuild { return AppColors.statusInfo }
+        if isRequested { return AppColors.moderationOrange }
         return AppColors.surfaceDetailSecondaryForeground
     }
 
@@ -1118,7 +1118,7 @@ struct SymbolListRow: View {
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(AppColors.statusInfo90)
                         .font(.title3)
                 }
             }
@@ -1229,7 +1229,7 @@ struct GlobalSymbolListRow: View {
 
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.statusInfo90)
                             .font(.title3)
                     }
                 }
@@ -1407,6 +1407,7 @@ struct MarketSessionTimeline: View {
 
     private var session: RLTradingSymbolDTO.MarketSession { symbol.marketSession }
     private var tz: TimeZone { symbol.exchangeTimeZone }
+    private var usesOandaForexSessionBoundaries: Bool { symbol.usesOandaForexSessionBoundaries }
 
     private var exchangeTimeString: String {
         let formatter = DateFormatter()
@@ -1431,6 +1432,9 @@ struct MarketSessionTimeline: View {
     }
 
     private var isInSession: Bool {
+        if let oandaState = oandaSessionState {
+            return oandaState.isOpen
+        }
         if session.isContinuous {
             return !(session.closedWeekend && isWeekend)
         }
@@ -1446,6 +1450,10 @@ struct MarketSessionTimeline: View {
     private var countdownText: String {
         var calendar = Calendar.current
         calendar.timeZone = tz
+
+        if let oandaState = oandaSessionState {
+            return "\(oandaState.isOpen ? "Closes" : "Opens") \(relativeCountdown(to: oandaState.nextTransition))"
+        }
 
         if session.isContinuous && !session.closedWeekend {
             return "Always Open"
@@ -1505,6 +1513,46 @@ struct MarketSessionTimeline: View {
 
     private func timeLabel(_ hour: Int, _ minute: Int) -> String {
         String(format: "%02d:%02d", hour >= 24 ? 0 : hour, minute)
+    }
+
+    private var oandaSessionState: (isOpen: Bool, nextTransition: Date)? {
+        guard usesOandaForexSessionBoundaries else { return nil }
+
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+
+        let sundayOpen = DateComponents(hour: 22, minute: 0, weekday: 1)
+        let fridayClose = DateComponents(hour: 22, minute: 0, weekday: 6)
+
+        guard
+            let lastSundayOpen = calendar.nextDate(
+                after: now,
+                matching: sundayOpen,
+                matchingPolicy: .nextTime,
+                direction: .backward
+            ),
+            let lastFridayClose = calendar.nextDate(
+                after: now,
+                matching: fridayClose,
+                matchingPolicy: .nextTime,
+                direction: .backward
+            ),
+            let nextSundayOpen = calendar.nextDate(
+                after: now,
+                matching: sundayOpen,
+                matchingPolicy: .nextTime
+            ),
+            let nextFridayClose = calendar.nextDate(
+                after: now,
+                matching: fridayClose,
+                matchingPolicy: .nextTime
+            )
+        else {
+            return nil
+        }
+
+        let isOpen = lastSundayOpen > lastFridayClose
+        return isOpen ? (true, nextFridayClose) : (false, nextSundayOpen)
     }
 
     var body: some View {
@@ -1610,7 +1658,7 @@ struct MarketSessionTimeline: View {
                     .frame(width: dayWidth * 5, height: 6)
                     .offset(x: dayWidth)
 
-                if !isWeekend {
+                if !isWeekend || (usesOandaForexSessionBoundaries && isInSession) {
                     Circle()
                         .fill(AppColors.systemWhite)
                         .frame(width: 8, height: 8)

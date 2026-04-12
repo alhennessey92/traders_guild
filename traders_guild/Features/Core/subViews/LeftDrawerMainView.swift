@@ -40,12 +40,36 @@ enum DrawerMenuAction {
     case betaFeedback
 }
 
+enum DrawerRestrictedAccessLevel {
+    case moderator
+    case admin
+
+    func isAllowed(for role: RLMemberRole?) -> Bool {
+        switch self {
+        case .moderator:
+            return role?.canModerate ?? false
+        case .admin:
+            return role?.canAdmin ?? false
+        }
+    }
+
+    var deniedMessage: String {
+        switch self {
+        case .moderator:
+            return "Moderator access is required to open this panel"
+        case .admin:
+            return "Admin access is required to open this panel"
+        }
+    }
+}
+
 /// Identifies which bottom sheet content to present from the left drawer.
 /// Conforms to `Identifiable` for `.sheet(item:)` and `Equatable` to support `.onChange`.
 /// Each case carries the minimal data needed to render its detail view.
 enum BottomSheetContent: Identifiable, Equatable {
     case announcement(RLGuildAnnouncementWithAuthorDTO)  // Uses combined DTO from backend
     case event(RLGuildEventWithAuthorDTO)  // Uses combined DTO from backend
+    case reportResolution(RLReportResolutionSummary)
     case profile
     case guildMemberRL(RLGuildMemberDTO)
     case betaFeedback
@@ -63,6 +87,7 @@ enum BottomSheetContent: Identifiable, Equatable {
         switch self {
         case .announcement(let announcement): return "announcement-\(announcement.id)"
         case .event(let event): return "event-\(event.id)"
+        case .reportResolution(let summary): return "report-resolution-\(summary.id)"
         case .profile: return "profile"
         case .guildMemberRL(let user): return "profile-rl-\(user.id)"
         case .betaFeedback: return "beta-feedback"
@@ -85,6 +110,8 @@ enum BottomSheetContent: Identifiable, Equatable {
             return a1.id == a2.id
         case (.event(let e1), .event(let e2)):
             return e1.id == e2.id
+        case (.reportResolution(let s1), .reportResolution(let s2)):
+            return s1 == s2
         case (.profile, .profile):
             return true
         case (.guildMemberRL(let m1), .guildMemberRL(let m2)):
@@ -112,6 +139,21 @@ enum BottomSheetContent: Identifiable, Equatable {
         default:
             return false
         }
+    }
+
+    var requiredAccessLevel: DrawerRestrictedAccessLevel? {
+        switch self {
+        case .createAnnouncement, .createEvent, .inviteMembers, .manageMembers, .manageReports:
+            return .moderator
+        case .guildSettings, .manageChatrooms, .manageRoles, .manageGuildWatchlist:
+            return .admin
+        default:
+            return nil
+        }
+    }
+
+    func isAllowed(for role: RLMemberRole?) -> Bool {
+        requiredAccessLevel?.isAllowed(for: role) ?? true
     }
 }
 
@@ -151,6 +193,34 @@ struct LeftDrawerMainView: View {
     /// Used when the global overlay is tapped/dragged or the drawer closes.
     private func dismissAllSheets() {
         bottomSheetContent = nil
+    }
+
+    @discardableResult
+    private func enforceNavigationAccess(for state: DrawerNavigationState) -> Bool {
+        guard state == .adminPanel, rlAppState.canModerate == false else {
+            return true
+        }
+
+        if navigationState != .main {
+            navigationState = .main
+        }
+        rlAppState.showInfo(DrawerRestrictedAccessLevel.moderator.deniedMessage)
+        return false
+    }
+
+    @discardableResult
+    private func enforceSheetAccess(for content: BottomSheetContent?) -> Bool {
+        guard let content,
+              let requiredAccessLevel = content.requiredAccessLevel,
+              requiredAccessLevel.isAllowed(for: rlAppState.currentRole) == false else {
+            return true
+        }
+
+        if bottomSheetContent != nil {
+            bottomSheetContent = nil
+        }
+        rlAppState.showInfo(requiredAccessLevel.deniedMessage)
+        return false
     }
     
     var body: some View {
@@ -240,11 +310,18 @@ struct LeftDrawerMainView: View {
                     .presentationCornerRadius(33)
             }
             .onChange(of: bottomSheetContent) { oldValue, newValue in
+                guard enforceSheetAccess(for: newValue) else {
+                    sheetOverlayVisible = false
+                    return
+                }
                 sheetOverlayVisible = newValue != nil
                 // Reset detent when opening new sheet
                 if newValue != nil {
                     selectedDetent = .fraction(0.6)
                 }
+            }
+            .onChange(of: navigationState) { _, newValue in
+                _ = enforceNavigationAccess(for: newValue)
             }
             .onChange(of: dismissSheetsSignal) { oldValue, newValue in
                 if newValue {
@@ -273,6 +350,8 @@ struct LeftDrawerMainView: View {
             return [.fraction(0.6), .large]  // ADD .large
         case .event:
             return [.fraction(0.6), .large]
+        case .reportResolution:
+            return [.fraction(0.55), .large]
         case .guildMemberRL:
             return [.fraction(0.6), .large]
         case .betaFeedback:
@@ -360,8 +439,15 @@ struct LeftDrawerMainView: View {
                 bottomSheetContent = .guildMemberRL(member)
 
             case .adminReports:
+                guard enforceNavigationAccess(for: .adminPanel) else {
+                    return
+                }
                 navigationState = .adminPanel
                 bottomSheetContent = .manageReports
+
+            case .reportResolution(let summary):
+                navigationState = .notifications
+                bottomSheetContent = .reportResolution(summary)
             }
         } catch {
             rlAppState.showError(error, title: "Unable to Open Notification", style: .toast)
@@ -480,16 +566,16 @@ struct MainDrawerView: View {
                     Image(systemName: "shield.pattern.checkered")
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     
                     Text(rlGuild.name)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     + Text(" Guild")
                         .font(.title2)
                         .fontWeight(.medium)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     
                     
                     Spacer()
@@ -530,11 +616,11 @@ struct MainDrawerView: View {
                     Image(systemName: "shield.pattern.checkered")
                         .font(.footnote)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     Text("\(guildReputation)")
                         .font(.caption)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     + Text(" Guild Reputation")
                         .font(.caption)
                         .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
@@ -904,6 +990,8 @@ struct BottomSheetView: View {
                 AnnouncementDetailView(announcement: announcement)
             case .event(let event):
                 EventDetailView(event: event)
+            case .reportResolution(let summary):
+                ReportResolutionSummaryView(summary: summary)
             case .profile:  // Changed from 'user' to 'membership'
                 UserProfileDetailView(selectedDetent: $selectedDetent)
                     .environmentObject(leftDrawerViewModel)

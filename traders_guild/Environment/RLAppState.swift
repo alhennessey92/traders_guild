@@ -116,6 +116,8 @@ class RLAppState: ObservableObject {
 
     func effectiveOnlineStatus(userId: UUID, fallback: Bool) -> Bool {
         guard shouldShowPresence else { return false }
+        // Current user is always online (they're using the app right now)
+        if userId == currentUser?.id { return true }
         if presenceByUserId.isEmpty {
             return fallback
         }
@@ -764,9 +766,11 @@ class RLAppState: ObservableObject {
     /// Offer biometric enrollment if available and not already set up
     func offerBiometricEnrollmentIfNeeded() {
         let manager = BiometricAuthManager.shared
+        let declined = KeychainPreferences.bool(forKey: "traders_guild_biometric_declined")
+            || UserDefaults.standard.bool(forKey: "traders_guild_biometric_declined")
         guard manager.isBiometricAvailable,
               !manager.isBiometricEnabled,
-              !UserDefaults.standard.bool(forKey: "traders_guild_biometric_declined") else {
+              !declined else {
             return
         }
         // Delay so the guild selection sheet fully dismisses before presenting this sheet
@@ -1395,14 +1399,48 @@ class RLAppState: ObservableObject {
         name: String,
         description: String?,
         isOpen: Bool,
-        language: String? = nil,
-        location: String? = nil,
+        language: String,
+        location: String,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
         initialAnnouncementTitle: String,
         initialAnnouncementContent: String,
         initialAnnouncementPreview: String? = nil,
         initialAnnouncementIsImportant: Bool = true
     ) async throws -> RLGuildWithMembership {
+        let normalizedLanguage = language.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedJoinQuestions = joinQuestions
+            .map { $0.prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .enumerated()
+            .map { index, prompt in
+                RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
+            }
+        guard !normalizedLanguage.isEmpty else {
+            showError(
+                title: "Language Required",
+                message: "Choose a language before creating your guild.",
+                style: .toast
+            )
+            throw APIError.badRequest("language_required")
+        }
+        guard !normalizedLocation.isEmpty else {
+            showError(
+                title: "Country Required",
+                message: "Choose a country before creating your guild.",
+                style: .toast
+            )
+            throw APIError.badRequest("country_required")
+        }
+        guard isOpen || !normalizedJoinQuestions.isEmpty else {
+            showError(
+                title: "Join Question Required",
+                message: "Add at least one join question before creating a private guild.",
+                style: .toast
+            )
+            throw APIError.badRequest("private_guild_question_required")
+        }
+
         isLoading = true
         defer { isLoading = false }
         
@@ -1411,9 +1449,9 @@ class RLAppState: ObservableObject {
                 name: name,
                 description: description,
                 isOpen: isOpen,
-                language: language,
-                location: location,
-                joinQuestions: joinQuestions,
+                language: normalizedLanguage,
+                location: normalizedLocation,
+                joinQuestions: normalizedJoinQuestions,
                 initialAnnouncementTitle: initialAnnouncementTitle,
                 initialAnnouncementContent: initialAnnouncementContent,
                 initialAnnouncementPreview: initialAnnouncementPreview,
@@ -1572,18 +1610,31 @@ class RLAppState: ObservableObject {
     }
     
     /// Create announcement (ADMIN/MOD only)
-    func createAnnouncement(title: String, content: String, preview: String? = nil, isImportant: Bool = false) async throws -> RLGuildAnnouncementWithAuthorDTO {
+    func createAnnouncement(
+        title: String,
+        content: String,
+        preview: String? = nil,
+        isImportant: Bool = false,
+        iconKey: GuildPostIconKey? = nil
+    ) async throws -> RLGuildAnnouncementWithAuthorDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPreview = preview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedPreview = trimmedPreview.isEmpty
+            ? String(normalizedContent.prefix(180))
+            : trimmedPreview
         
         do {
             let response = try await realApi.createAnnouncement(
                 guildId: guild.id,
-                title: title,
-                content: content,
-                preview: preview,
-                isImportant: isImportant
+                title: normalizedTitle,
+                content: normalizedContent,
+                preview: normalizedPreview,
+                isImportant: isImportant,
+                iconKey: iconKey
             )
             
             showSuccess(RLUserFacingCopy.text(.successAnnouncementPosted))
@@ -1654,7 +1705,14 @@ class RLAppState: ObservableObject {
     
     /// Create event (ADMIN/MOD only)
     /// Constructs full RLGuildEventWithAuthorDTO locally since we know current user is the author
-    func createEvent(title: String, content: String, preview: String, eventDate: Date, isImportant: Bool = false) async throws -> RLGuildEventWithAuthorDTO {
+    func createEvent(
+        title: String,
+        content: String,
+        preview: String,
+        eventDate: Date,
+        isImportant: Bool = false,
+        iconKey: GuildPostIconKey? = nil
+    ) async throws -> RLGuildEventWithAuthorDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
         }
@@ -1673,7 +1731,8 @@ class RLAppState: ObservableObject {
                 content: content,
                 preview: preview,
                 eventDate: eventDate,
-                isImportant: isImportant
+                isImportant: isImportant,
+                iconKey: iconKey
             )
             
             // Construct the author membership info from current user
@@ -2767,11 +2826,16 @@ class RLAppState: ObservableObject {
     // MARK: - In-App Tutorial Persistence
 
     func hasTutorialCompleted(for userId: UUID) -> Bool {
-        UserDefaults.standard.bool(forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+        let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
+        // Check Keychain first (survives reinstall), fall back to UserDefaults for migration
+        return KeychainPreferences.bool(forKey: key)
+            || UserDefaults.standard.bool(forKey: key)
     }
 
     func markTutorialCompleted(for userId: UUID) {
-        UserDefaults.standard.set(true, forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+        let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
+        KeychainPreferences.setBool(true, forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
         clearTutorialProgress(for: userId)
     }
 
@@ -2790,7 +2854,9 @@ class RLAppState: ObservableObject {
     }
 
     func resetTutorial(for userId: UUID) {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)tutorial_completed_\(userId.uuidString)")
+        let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
+        KeychainPreferences.removeValue(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
         clearTutorialProgress(for: userId)
     }
 

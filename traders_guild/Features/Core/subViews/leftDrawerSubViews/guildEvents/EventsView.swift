@@ -19,6 +19,25 @@ private let eventTimeFormatter: DateFormatter = {
     return df
 }()
 
+private enum EventListTab: String, CaseIterable, UnifiedTabItem {
+    case active
+    case past
+
+    var title: String {
+        switch self {
+        case .active: return "Active"
+        case .past: return "Past"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .active: return "calendar.badge.clock"
+        case .past: return "clock.arrow.circlepath"
+        }
+    }
+}
+
 // MARK: - ================================================================================================
 // MARK: - EVENTS LIST VIEW
 // MARK: - ================================================================================================
@@ -26,6 +45,28 @@ private let eventTimeFormatter: DateFormatter = {
 struct EventsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    @State private var selectedTab: EventListTab = .active
+
+    private var activeEvents: [RLGuildEventWithAuthorDTO] {
+        leftDrawerViewModel.upcomingEvents
+            .filter(\.isActiveEvent)
+            .sorted { $0.eventDate < $1.eventDate }
+    }
+
+    private var pastEvents: [RLGuildEventWithAuthorDTO] {
+        leftDrawerViewModel.upcomingEvents
+            .filter(\.isPastEvent)
+            .sorted { $0.eventDate > $1.eventDate }
+    }
+
+    private var selectedEvents: [RLGuildEventWithAuthorDTO] {
+        switch selectedTab {
+        case .active:
+            return activeEvents
+        case .past:
+            return pastEvents
+        }
+    }
     
     var body: some View {
         VStack(spacing: 10) {
@@ -34,26 +75,47 @@ struct EventsListView: View {
                 UnifiedLoadingState(message: "Loading events...")
                     .padding(.top, 40)
             }
-            // Empty state
-            else if leftDrawerViewModel.upcomingEvents.isEmpty {
-                UnifiedEmptyState(
-                    icon: "calendar",
-                    title: "No events yet",
-                    subtitle: "Check back later for guild updates"
-                )
-                .padding(.top, 40)
-            } else {
-                ForEach(leftDrawerViewModel.upcomingEvents) { event in
-                    EventRowView(
-                        event: event,
-                        onTap: {
-                            bottomSheetContent = .event(event)
+            else {
+                UnifiedTabBar(
+                    selectedTab: $selectedTab,
+                    size: .compact,
+                    theme: .subTab,
+                    countForTab: { tab in
+                        switch tab {
+                        case .active:
+                            return activeEvents.count
+                        case .past:
+                            return pastEvents.count
                         }
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+
+                if selectedEvents.isEmpty {
+                    UnifiedEmptyState(
+                        icon: selectedTab == .active ? "calendar.badge.clock" : "clock.arrow.circlepath",
+                        title: selectedTab == .active ? "No active events" : "No past events",
+                        subtitle: selectedTab == .active
+                            ? "Check back later for upcoming guild events"
+                            : "Finished guild events will appear here"
                     )
+                    .padding(.top, 32)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(selectedEvents) { event in
+                            EventRowView(
+                                event: event,
+                                onTap: {
+                                    bottomSheetContent = .event(event)
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
             }
         }
-        .padding(.horizontal, 16)
     }
 }
 
@@ -72,15 +134,21 @@ struct EventRowView: View {
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
-            showUnreadDot: !event.isRead,
             isUnread: !event.isRead,
+            semanticBorderColor: event.isImportant && !event.isRead
+                ? AppColors.statusHighlight80.opacity(0.45) : nil,
             cornerRadius: 14
         ) {
             VStack(spacing: 0) {
                 // MARK: - Main Content Area
                 HStack(alignment: .top, spacing: 12) {
-                    // Date pill
-                    UnifiedDatePill(date: event.eventDate)
+                    GuildPostIconBadge(
+                        iconKey: event.iconKey,
+                        isFeatured: event.isImportant,
+                        size: 36,
+                        iconSize: 16,
+                        isRead: event.isRead
+                    )
 
                     // Event content
                     VStack(alignment: .leading, spacing: 6) {
@@ -103,13 +171,15 @@ struct EventRowView: View {
                         .font(.caption2)
                         .foregroundColor(AppColors.accentColor)
                         .padding(.top, 2)
+
+                        if event.isImportant {
+                            UnifiedImportanceBadge(text: "FEATURED EVENT")
+                        }
                     }
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.3))
+                    rowAccessory
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
@@ -125,6 +195,20 @@ struct EventRowView: View {
                     cornerRadius: 14
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private var rowAccessory: some View {
+        if event.isRead {
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(AppColors.whiteText.opacity(0.3))
+        } else {
+            Circle()
+                .fill(AppColors.accentColor)
+                .frame(width: 10, height: 10)
+                .padding(.top, 4)
         }
     }
 }
@@ -162,13 +246,23 @@ struct EventDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with date and title
                 HStack(alignment: .top, spacing: 12) {
-                    UnifiedDatePill(date: displayedEvent.eventDate, width: 56)
+                    GuildPostIconBadge(
+                        iconKey: displayedEvent.iconKey,
+                        isFeatured: displayedEvent.isImportant,
+                        size: 44,
+                        iconSize: 20,
+                        isRead: false
+                    )
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(displayedEvent.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
+
+                        if displayedEvent.isImportant {
+                            UnifiedImportanceBadge(text: "FEATURED EVENT")
+                        }
                         
                         Text(dateFormatter.string(from: displayedEvent.eventDate))
                             .font(.caption)
@@ -386,4 +480,3 @@ struct EventDetailView: View {
         }
     }
 }
-

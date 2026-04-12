@@ -73,13 +73,13 @@ struct AnnouncementRowView: View {
                 // MARK: - Main Content Area
                 HStack(alignment: .top, spacing: 12) {
                     // Icon
-                    UnifiedIconBadge(
-                        icon: announcement.isImportant ? "megaphone.fill" : "megaphone",
-                        color: (announcement.isImportant ? AppColors.whiteText : AppColors.whiteText.opacity(0.8))
-                            .opacity(styling.iconOpacity),
+                    GuildPostIconBadge(
+                        iconKey: announcement.iconKey,
+                        isFeatured: announcement.isImportant,
+                        showsFeaturedMarker: false,
                         size: 36,
                         iconSize: 16,
-                        backgroundOpacity: styling.iconBadgeOpacity
+                        isRead: announcement.isRead
                     )
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -93,7 +93,7 @@ struct AnnouncementRowView: View {
 
                         // Importance badge
                         if announcement.isImportant {
-                            UnifiedImportanceBadge(text: "IMPORTANT ANNOUNCEMENT")
+                            UnifiedImportanceBadge(text: "Important")
                         }
 
                         // Preview text
@@ -106,9 +106,7 @@ struct AnnouncementRowView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.3))
+                    rowAccessory
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
@@ -124,6 +122,20 @@ struct AnnouncementRowView: View {
                     cornerRadius: 14
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private var rowAccessory: some View {
+        if announcement.isRead {
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(AppColors.whiteText.opacity(0.3))
+        } else {
+            Circle()
+                .fill(AppColors.accentColor)
+                .frame(width: 10, height: 10)
+                .padding(.top, 4)
         }
     }
 }
@@ -147,12 +159,13 @@ struct AnnouncementDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with icon and title
                 HStack(alignment: .top, spacing: 12) {
-                    UnifiedIconBadge(
-                        icon: "megaphone.fill",
-                        color: AppColors.accentColor,
+                    GuildPostIconBadge(
+                        iconKey: announcement.iconKey,
+                        isFeatured: announcement.isImportant,
+                        showsFeaturedMarker: false,
                         size: 44,
                         iconSize: 20,
-                        backgroundOpacity: 0.2
+                        isRead: false
                     )
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -162,7 +175,7 @@ struct AnnouncementDetailView: View {
                             .foregroundColor(.primary)
                         
                         if announcement.isImportant {
-                            UnifiedImportanceBadge(text: "IMPORTANT ANNOUNCEMENT")
+                            UnifiedImportanceBadge(text: "Important")
                         }
                         
                         Text(announcement.timeAgoFormatted)
@@ -360,4 +373,3 @@ struct RLAuthorFooter: View {
             )
     }
 }
-

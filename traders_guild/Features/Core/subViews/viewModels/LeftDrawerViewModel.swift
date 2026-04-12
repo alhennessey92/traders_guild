@@ -97,6 +97,7 @@ class LeftDrawerViewModel: ObservableObject {
     private var notificationResyncTask: Task<Void, Never>?
 
     var notificationRefreshActionOverride: (() async -> Void)?
+    var friendRelationshipRefreshActionOverride: (() async -> Void)?
     var notificationResyncDebounceNanoseconds: UInt64 = 350_000_000
     private(set) var lastNotificationSyncAt: Date?
     private(set) var lastNotificationStatsUpdateAt: Date?
@@ -626,6 +627,32 @@ class LeftDrawerViewModel: ObservableObject {
         }
     }
 
+    /// Refresh pending requests and accepted friends together so friend-related surfaces stay in sync.
+    func refreshFriendRelationshipCaches(guildId: UUID? = nil, rlAppState: RLAppState) async {
+        async let requestsTask: Void = refreshFriendRequests(guildId: guildId, rlAppState: rlAppState)
+        async let friendsTask: Void = refreshFriends(guildId: guildId, rlAppState: rlAppState)
+        _ = await (requestsTask, friendsTask)
+    }
+
+    func incomingFriendRequest(for notification: RLNotificationDTO) -> RLFriendRequestIncomingDTO? {
+        if let requestId = notification.friendRequestId,
+           let request = pendingFriendRequestsIncoming.first(where: { $0.id == requestId }) {
+            return request
+        }
+
+        if let fromMembershipId = notification.friendRequestFromMembershipId,
+           let request = pendingFriendRequestsIncoming.first(where: { $0.fromMembershipId == fromMembershipId }) {
+            return request
+        }
+
+        if let fromUserId = notification.friendRequestFromUserId,
+           let request = pendingFriendRequestsIncoming.first(where: { $0.fromUserId == fromUserId }) {
+            return request
+        }
+
+        return nil
+    }
+
     /// Refresh the accuracy leaderboard for the current guild
     @discardableResult
     func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async -> Bool {
@@ -1032,7 +1059,30 @@ class LeftDrawerViewModel: ObservableObject {
             userNotifications.insert(notification, at: 0)
             lastRealtimeNotificationInsertAt = Date()
             markNotificationListSynced(at: lastRealtimeNotificationInsertAt ?? Date())
+            refreshFriendRelationshipCachesIfNeeded(for: notification)
             print("🔔 New real-time notification: \(notification.displayTitle)")
+        }
+    }
+
+    private func refreshFriendRelationshipCachesIfNeeded(for notification: RLNotificationDTO) {
+        guard let type = notification.type,
+              type == .friendRequest || type == .friendAccept else {
+            return
+        }
+
+        if let friendRelationshipRefreshActionOverride {
+            Task {
+                await friendRelationshipRefreshActionOverride()
+            }
+            return
+        }
+
+        guard let rlAppState = rlAppStateRef else { return }
+        let guildId = rlAppState.currentGuild?.id
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshFriendRelationshipCaches(guildId: guildId, rlAppState: rlAppState)
         }
     }
 

@@ -150,6 +150,105 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.replyPreview == rhs.replyPreview &&
         lhs.reactions == rhs.reactions
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, chatroomId, author, content
+        case timestamp
+        case createdAt
+        case timestampFormatted, isEdited
+        case isCurrentUserMessage, canEdit, canDelete
+        case attachmentUrl, attachmentType, attachmentName, attachments
+        case replyPreview, reactions
+    }
+
+    init(
+        id: UUID,
+        chatroomId: UUID,
+        author: RLGuildMemberDTO,
+        content: String,
+        timestamp: Date,
+        timestampFormatted: String,
+        isEdited: Bool,
+        isCurrentUserMessage: Bool,
+        canEdit: Bool,
+        canDelete: Bool,
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?,
+        attachments: [RLMessageAttachmentDTO],
+        replyPreview: RLMessageReplyPreviewDTO?,
+        reactions: [RLMessageReactionDTO]
+    ) {
+        self.id = id
+        self.chatroomId = chatroomId
+        self.author = author
+        self.content = content
+        self.timestamp = timestamp
+        self.timestampFormatted = timestampFormatted
+        self.isEdited = isEdited
+        self.isCurrentUserMessage = isCurrentUserMessage
+        self.canEdit = canEdit
+        self.canDelete = canDelete
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+        self.attachments = attachments
+        self.replyPreview = replyPreview
+        self.reactions = reactions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        let attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
+        let attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
+        let attachments = try container.decodeIfPresent([RLMessageAttachmentDTO].self, forKey: .attachments)
+            ?? Self.fallbackAttachments(
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
+            )
+
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            chatroomId: try container.decode(UUID.self, forKey: .chatroomId),
+            author: try container.decode(RLGuildMemberDTO.self, forKey: .author),
+            content: try container.decode(String.self, forKey: .content),
+            timestamp: try container.decodeIfPresent(Date.self, forKey: .timestamp)
+                ?? container.decode(Date.self, forKey: .createdAt),
+            timestampFormatted: try container.decode(String.self, forKey: .timestampFormatted),
+            isEdited: try container.decode(Bool.self, forKey: .isEdited),
+            isCurrentUserMessage: try container.decode(Bool.self, forKey: .isCurrentUserMessage),
+            canEdit: try container.decode(Bool.self, forKey: .canEdit),
+            canDelete: try container.decode(Bool.self, forKey: .canDelete),
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName,
+            attachments: attachments,
+            replyPreview: try container.decodeIfPresent(RLMessageReplyPreviewDTO.self, forKey: .replyPreview),
+            reactions: try container.decodeIfPresent([RLMessageReactionDTO].self, forKey: .reactions) ?? []
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(chatroomId, forKey: .chatroomId)
+        try container.encode(author, forKey: .author)
+        try container.encode(content, forKey: .content)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(timestampFormatted, forKey: .timestampFormatted)
+        try container.encode(isEdited, forKey: .isEdited)
+        try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
+        try container.encode(canEdit, forKey: .canEdit)
+        try container.encode(canDelete, forKey: .canDelete)
+        try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
+        try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
+        try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
+        try container.encode(attachments, forKey: .attachments)
+        try container.encodeIfPresent(replyPreview, forKey: .replyPreview)
+        try container.encode(reactions, forKey: .reactions)
+    }
     
     // MARK: - Convenience
     
@@ -170,6 +269,21 @@ struct RLChatroomMessageDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    private static func fallbackAttachments(
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?
+    ) -> [RLMessageAttachmentDTO] {
+        guard let attachmentUrl else { return [] }
+        return [
+            RLMessageAttachmentDTO(
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
+            )
+        ]
     }
 
     /// Create a pending (optimistic) message for immediate display before server confirmation.
@@ -391,6 +505,110 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
         lhs.replyPreview == rhs.replyPreview &&
         lhs.reactions == rhs.reactions
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, dmId, author, content
+        case timestamp
+        case createdAt
+        case timestampFormatted, isEdited
+        case isCurrentUserMessage, canEdit, canDelete
+        case isRead
+        case attachmentUrl, attachmentType, attachmentName, attachments
+        case replyPreview, reactions
+    }
+
+    init(
+        id: UUID,
+        dmId: UUID,
+        author: RLGuildMemberDTO,
+        content: String,
+        timestamp: Date,
+        timestampFormatted: String,
+        isEdited: Bool,
+        isCurrentUserMessage: Bool,
+        canEdit: Bool,
+        canDelete: Bool,
+        isRead: Bool,
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?,
+        attachments: [RLMessageAttachmentDTO],
+        replyPreview: RLMessageReplyPreviewDTO?,
+        reactions: [RLMessageReactionDTO]
+    ) {
+        self.id = id
+        self.dmId = dmId
+        self.author = author
+        self.content = content
+        self.timestamp = timestamp
+        self.timestampFormatted = timestampFormatted
+        self.isEdited = isEdited
+        self.isCurrentUserMessage = isCurrentUserMessage
+        self.canEdit = canEdit
+        self.canDelete = canDelete
+        self.isRead = isRead
+        self.attachmentUrl = attachmentUrl
+        self.attachmentType = attachmentType
+        self.attachmentName = attachmentName
+        self.attachments = attachments
+        self.replyPreview = replyPreview
+        self.reactions = reactions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        let attachmentType = try container.decodeIfPresent(String.self, forKey: .attachmentType)
+        let attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
+        let attachments = try container.decodeIfPresent([RLMessageAttachmentDTO].self, forKey: .attachments)
+            ?? Self.fallbackAttachments(
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
+            )
+
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            dmId: try container.decode(UUID.self, forKey: .dmId),
+            author: try container.decode(RLGuildMemberDTO.self, forKey: .author),
+            content: try container.decode(String.self, forKey: .content),
+            timestamp: try container.decodeIfPresent(Date.self, forKey: .timestamp)
+                ?? container.decode(Date.self, forKey: .createdAt),
+            timestampFormatted: try container.decode(String.self, forKey: .timestampFormatted),
+            isEdited: try container.decode(Bool.self, forKey: .isEdited),
+            isCurrentUserMessage: try container.decode(Bool.self, forKey: .isCurrentUserMessage),
+            canEdit: try container.decode(Bool.self, forKey: .canEdit),
+            canDelete: try container.decode(Bool.self, forKey: .canDelete),
+            isRead: try container.decode(Bool.self, forKey: .isRead),
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
+            attachmentName: attachmentName,
+            attachments: attachments,
+            replyPreview: try container.decodeIfPresent(RLMessageReplyPreviewDTO.self, forKey: .replyPreview),
+            reactions: try container.decodeIfPresent([RLMessageReactionDTO].self, forKey: .reactions) ?? []
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(dmId, forKey: .dmId)
+        try container.encode(author, forKey: .author)
+        try container.encode(content, forKey: .content)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(timestampFormatted, forKey: .timestampFormatted)
+        try container.encode(isEdited, forKey: .isEdited)
+        try container.encode(isCurrentUserMessage, forKey: .isCurrentUserMessage)
+        try container.encode(canEdit, forKey: .canEdit)
+        try container.encode(canDelete, forKey: .canDelete)
+        try container.encode(isRead, forKey: .isRead)
+        try container.encodeIfPresent(attachmentUrl, forKey: .attachmentUrl)
+        try container.encodeIfPresent(attachmentType, forKey: .attachmentType)
+        try container.encodeIfPresent(attachmentName, forKey: .attachmentName)
+        try container.encode(attachments, forKey: .attachments)
+        try container.encodeIfPresent(replyPreview, forKey: .replyPreview)
+        try container.encode(reactions, forKey: .reactions)
+    }
     
     // MARK: - Convenience
     
@@ -410,6 +628,21 @@ struct RLDMMessageDTO: Codable, Identifiable, Equatable, Hashable {
             return self
         }
         return updated
+    }
+
+    private static func fallbackAttachments(
+        attachmentUrl: String?,
+        attachmentType: String?,
+        attachmentName: String?
+    ) -> [RLMessageAttachmentDTO] {
+        guard let attachmentUrl else { return [] }
+        return [
+            RLMessageAttachmentDTO(
+                attachmentUrl: attachmentUrl,
+                attachmentType: attachmentType,
+                attachmentName: attachmentName
+            )
+        ]
     }
 
     /// Create a pending (optimistic) message for immediate display before server confirmation.

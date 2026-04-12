@@ -13,7 +13,7 @@ struct GlobalReputationBreakdownSheetView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if isLoading {
-                    ProgressView().tint(AppColors.accentColor).padding(.top, 36)
+                    ProgressView().tint(AppColors.guildReputationAccent).padding(.top, 36)
                 } else if let errorMessage {
                     UnifiedEmptyState(icon: "exclamationmark.triangle", title: "Unable to load", subtitle: errorMessage)
                         .padding(.top, 28)
@@ -39,7 +39,7 @@ struct GlobalReputationBreakdownSheetView: View {
                                 Text("\(profile.weeklyDelta >= 0 ? "+" : "")\(profile.weeklyDelta)")
                                     .font(.title3)
                                     .fontWeight(.bold)
-                                    .foregroundColor(profile.weeklyDelta >= 0 ? .green : .red)
+                                    .foregroundColor(profile.weeklyDelta >= 0 ? AppColors.statusPositive : AppColors.statusNegative)
                             }
                         }
                         HStack {
@@ -50,7 +50,7 @@ struct GlobalReputationBreakdownSheetView: View {
                         BreakdownDateBarChart(
                             points: reputationTrendPoints(
                                 from: profile.reputationTrend30d,
-                                positiveTint: AppColors.accentColor
+                                positiveTint: AppColors.guildReputationAccent
                             ),
                             centeredBaseline: true
                         )
@@ -59,13 +59,13 @@ struct GlobalReputationBreakdownSheetView: View {
 
                     BreakdownCard(title: "Breakdown") {
                         VStack(spacing: 10) {
-                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: .green)
-                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: .blue)
+                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
+                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
                             if profile.breakdown.activityRep != 0 {
-                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: .cyan)
+                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
                             }
                             if profile.breakdown.penaltyRep != 0 {
-                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: .red)
+                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
                             }
                         }
                     }
@@ -87,7 +87,7 @@ struct GlobalReputationBreakdownSheetView: View {
                                         label: guild.guildName,
                                         valueText: "\(guild.reputation)",
                                         progress: max(0, min(1, Double(guild.reputation) / Double(max(1, profile.globalReputation)))),
-                                        tint: AppColors.accentColor
+                                        tint: AppColors.guildReputationAccent
                                     )
                                 }
                             }
@@ -96,8 +96,8 @@ struct GlobalReputationBreakdownSheetView: View {
 
                     BreakdownCard(title: "Modifiers") {
                         VStack(spacing: 10) {
-                            BreakdownMetricRow(label: "Total Modifier", value: profile.modifiers.totalModifierFormatted, valueColor: AppColors.accentColor)
-                            BreakdownMetricRow(label: "Clean Record", value: profile.modifiers.cleanRecordBonus ? "Yes" : "No", valueColor: profile.modifiers.cleanRecordBonus ? .green : .red)
+                            BreakdownMetricRow(label: "Total Modifier", value: profile.modifiers.totalModifierFormatted, valueColor: AppColors.guildReputationAccent)
+                            BreakdownMetricRow(label: "Clean Record", value: profile.modifiers.cleanRecordBonus ? "Yes" : "No", valueColor: profile.modifiers.cleanRecordBonus ? AppColors.statusPositive : AppColors.statusNegative)
                             BreakdownMetricRow(label: "Consecutive Active Days", value: "\(profile.consecutiveActiveDays)", valueColor: AppColors.whiteText)
                         }
                     }
@@ -157,7 +157,7 @@ struct GlobalAccuracyBreakdownSheetView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if isLoading {
-                    ProgressView().tint(AppColors.accentColor).padding(.top, 36)
+                    ProgressView().tint(AppColors.guildReputationAccent).padding(.top, 36)
                 } else if let errorMessage {
                     UnifiedEmptyState(icon: "exclamationmark.triangle", title: "Unable to load", subtitle: errorMessage)
                         .padding(.top, 28)
@@ -194,9 +194,9 @@ struct GlobalAccuracyBreakdownSheetView: View {
                     BreakdownCard(title: "Performance") {
                         VStack(spacing: 10) {
                             BreakdownMetricRow(label: "Predictions", value: "\(profile.totalPredictions)", valueColor: AppColors.whiteText)
-                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: .green)
-                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: .red)
-                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: .orange)
+                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
+                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: AppColors.statusNegative)
+                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
                         }
                     }
 
@@ -207,21 +207,21 @@ struct GlobalAccuracyBreakdownSheetView: View {
 
                     BreakdownCard(title: "Streaks") {
                         HStack(spacing: 8) {
-                            BreakdownMetricPill(label: "Win", value: "\(profile.winStreak)", tint: .green)
-                            BreakdownMetricPill(label: "Loss", value: "\(profile.lossStreak)", tint: .red)
-                            BreakdownMetricPill(label: "Best", value: "\(profile.bestWinStreak)", tint: .yellow)
+                            BreakdownMetricPill(label: "Win", value: "\(profile.winStreak)", tint: AppColors.statusPositive)
+                            BreakdownMetricPill(label: "Loss", value: "\(profile.lossStreak)", tint: AppColors.statusNegative)
+                            BreakdownMetricPill(label: "Best", value: "\(profile.bestWinStreak)", tint: AppColors.statusHighlight80)
                         }
                     }
 
                     if let rollingAccuracy = profile.rollingAccuracyFormatted {
                         BreakdownCard(title: "30-Day Rolling") {
                             HStack(spacing: 12) {
-                                BreakdownMetricPill(label: "Accuracy", value: rollingAccuracy, tint: AppColors.accentColor)
-                                BreakdownMetricPill(label: "Wins", value: "\(profile.rollingWins30d)", tint: .green)
+                                BreakdownMetricPill(label: "Accuracy", value: rollingAccuracy, tint: AppColors.guildReputationAccent)
+                                BreakdownMetricPill(label: "Wins", value: "\(profile.rollingWins30d)", tint: AppColors.statusPositive)
                                 BreakdownMetricPill(
                                     label: "Losses",
                                     value: "\(max(0, profile.rollingTotal30d - profile.rollingWins30d))",
-                                    tint: .red
+                                    tint: AppColors.statusNegative
                                 )
                             }
                         }
@@ -282,7 +282,7 @@ struct GuildReputationBreakdownSheetView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if isLoading {
-                    ProgressView().tint(AppColors.accentColor).padding(.top, 36)
+                    ProgressView().tint(AppColors.guildReputationAccent).padding(.top, 36)
                 } else if let errorMessage {
                     UnifiedEmptyState(icon: "exclamationmark.triangle", title: "Unable to load", subtitle: errorMessage)
                         .padding(.top, 28)
@@ -309,7 +309,7 @@ struct GuildReputationBreakdownSheetView: View {
                                 }
                                 Text("\(profile.weeklyDelta >= 0 ? "+" : "")\(profile.weeklyDelta) this week")
                                     .font(.caption)
-                                    .foregroundColor(profile.weeklyDelta >= 0 ? .green : .red)
+                                    .foregroundColor(profile.weeklyDelta >= 0 ? AppColors.statusPositive : AppColors.statusNegative)
                             }
                         }
 
@@ -345,19 +345,19 @@ struct GuildReputationBreakdownSheetView: View {
                         } else {
                             Text("Maximum tier reached")
                                 .font(.subheadline)
-                                .foregroundColor(.yellow)
+                                .foregroundColor(AppColors.statusHighlight80)
                         }
                     }
 
                     BreakdownCard(title: "Breakdown") {
                         VStack(spacing: 10) {
-                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: .green)
-                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: .blue)
+                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
+                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
                             if profile.breakdown.activityRep != 0 {
-                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: .cyan)
+                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
                             }
                             if profile.breakdown.penaltyRep != 0 {
-                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: .red)
+                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
                             }
                         }
                     }
@@ -432,7 +432,7 @@ struct GuildAccuracyBreakdownSheetView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if isLoading {
-                    ProgressView().tint(AppColors.accentColor).padding(.top, 36)
+                    ProgressView().tint(AppColors.guildReputationAccent).padding(.top, 36)
                 } else if let errorMessage {
                     UnifiedEmptyState(icon: "exclamationmark.triangle", title: "Unable to load", subtitle: errorMessage)
                         .padding(.top, 28)
@@ -469,11 +469,11 @@ struct GuildAccuracyBreakdownSheetView: View {
                     BreakdownCard(title: "Performance") {
                         VStack(spacing: 10) {
                             BreakdownMetricRow(label: "Predictions", value: "\(profile.totalPredictions)", valueColor: AppColors.whiteText)
-                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: .green)
-                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: .red)
-                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: .orange)
+                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
+                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: AppColors.statusNegative)
+                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
                             if let rank = profile.rankInGuild {
-                                BreakdownMetricRow(label: "Rank in Guild", value: "#\(rank)", valueColor: AppColors.accentColor)
+                                BreakdownMetricRow(label: "Rank in Guild", value: "#\(rank)", valueColor: AppColors.guildReputationAccent)
                             }
                         }
                     }
@@ -485,21 +485,21 @@ struct GuildAccuracyBreakdownSheetView: View {
 
                     BreakdownCard(title: "Streaks") {
                         HStack(spacing: 8) {
-                            BreakdownMetricPill(label: "Win", value: "\(profile.winStreak)", tint: .green)
-                            BreakdownMetricPill(label: "Loss", value: "\(profile.lossStreak)", tint: .red)
-                            BreakdownMetricPill(label: "Best", value: "\(profile.bestWinStreak)", tint: .yellow)
+                            BreakdownMetricPill(label: "Win", value: "\(profile.winStreak)", tint: AppColors.statusPositive)
+                            BreakdownMetricPill(label: "Loss", value: "\(profile.lossStreak)", tint: AppColors.statusNegative)
+                            BreakdownMetricPill(label: "Best", value: "\(profile.bestWinStreak)", tint: AppColors.statusHighlight80)
                         }
                     }
 
                     if let rollingAccuracy = profile.rollingAccuracyFormatted {
                         BreakdownCard(title: "30-Day Rolling") {
                             HStack(spacing: 12) {
-                                BreakdownMetricPill(label: "Accuracy", value: rollingAccuracy, tint: AppColors.accentColor)
-                                BreakdownMetricPill(label: "Wins", value: "\(profile.rollingWins30d)", tint: .green)
+                                BreakdownMetricPill(label: "Accuracy", value: rollingAccuracy, tint: AppColors.guildReputationAccent)
+                                BreakdownMetricPill(label: "Wins", value: "\(profile.rollingWins30d)", tint: AppColors.statusPositive)
                                 BreakdownMetricPill(
                                     label: "Losses",
                                     value: "\(max(0, profile.rollingTotal30d - profile.rollingWins30d))",
-                                    tint: .red
+                                    tint: AppColors.statusNegative
                                 )
                             }
                         }
@@ -763,9 +763,9 @@ private func accuracyTrendPoints(
         let direction: Color
         if let previous {
             if value > previous + 0.0001 {
-                direction = .green
+                direction = AppColors.statusPositive
             } else if value + 0.0001 < previous {
-                direction = .red
+                direction = AppColors.statusNegative
             } else {
                 direction = tint.opacity(0.6)
             }
@@ -782,10 +782,10 @@ private func accuracyTrendPoints(
 }
 
 private func breakdownAccuracyColor(_ value: Double) -> Color {
-    if value >= 0.7 { return .green }
-    if value >= 0.5 { return .yellow }
-    if value >= 0.3 { return .orange }
-    return .red
+    if value >= 0.7 { return AppColors.statusPositive }
+    if value >= 0.5 { return AppColors.statusHighlight80 }
+    if value >= 0.3 { return AppColors.moderationOrange }
+    return AppColors.statusNegative
 }
 
 private struct BreakdownRuleItem: Identifiable {
@@ -798,19 +798,19 @@ private struct BreakdownRuleItem: Identifiable {
 
 private func reputationRuleItems() -> [BreakdownRuleItem] {
     [
-        BreakdownRuleItem(title: "Tracked setup result", detail: "Resolved TP and SL outcomes change reputation.", tint: .green),
-        BreakdownRuleItem(title: "Marker likes", detail: "Likes add reputation and unlikes remove part of it.", tint: .pink),
-        BreakdownRuleItem(title: "Marker comments", detail: "Comments on your marker add reputation while deleted comments reverse it.", tint: .blue),
-        BreakdownRuleItem(title: "Activity bonus", detail: "Daily participation and streak bonuses add reputation.", tint: .cyan),
-        BreakdownRuleItem(title: "Reports and decay", detail: "Moderation penalties and inactivity decay reduce reputation.", tint: .red),
+        BreakdownRuleItem(title: "Tracked setup result", detail: "Resolved TP and SL outcomes change reputation.", tint: AppColors.statusPositive),
+        BreakdownRuleItem(title: "Marker likes", detail: "Likes add reputation and unlikes remove part of it.", tint: AppColors.moderationOrange),
+        BreakdownRuleItem(title: "Marker comments", detail: "Comments on your marker add reputation while deleted comments reverse it.", tint: AppColors.statusInfo),
+        BreakdownRuleItem(title: "Activity bonus", detail: "Daily participation and streak bonuses add reputation.", tint: AppColors.guildReputationAccent),
+        BreakdownRuleItem(title: "Reports and decay", detail: "Moderation penalties and inactivity decay reduce reputation.", tint: AppColors.statusNegative),
     ]
 }
 
 private func accuracyRuleItems() -> [BreakdownRuleItem] {
     [
-        BreakdownRuleItem(title: "TP hit", detail: "A resolved tracked setup that hits TP counts as a win.", tint: .green),
-        BreakdownRuleItem(title: "SL hit", detail: "A resolved tracked setup that hits SL counts as a loss.", tint: .red),
-        BreakdownRuleItem(title: "Expired setup", detail: "Expired tracked setups do not change accuracy.", tint: .gray),
+        BreakdownRuleItem(title: "TP hit", detail: "A resolved tracked setup that hits TP counts as a win.", tint: AppColors.statusPositive),
+        BreakdownRuleItem(title: "SL hit", detail: "A resolved tracked setup that hits SL counts as a loss.", tint: AppColors.statusNegative),
+        BreakdownRuleItem(title: "Expired setup", detail: "Expired tracked setups do not change accuracy.", tint: AppColors.greyText),
     ]
 }
 
@@ -880,7 +880,7 @@ private struct BreakdownImpactList: View {
                     Text(event.pointsFormatted)
                         .font(.subheadline)
                         .fontWeight(.bold)
-                        .foregroundColor(event.isPositive ? .green : .red)
+                        .foregroundColor(event.isPositive ? AppColors.statusPositive : AppColors.statusNegative)
                 }
             }
         }
@@ -899,7 +899,7 @@ private struct BreakdownFreshnessBadge: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(AppColors.accentColor)
+                .fill(AppColors.guildReputationAccent)
                 .frame(width: 6, height: 6)
             Text(label)
                 .font(.caption2)

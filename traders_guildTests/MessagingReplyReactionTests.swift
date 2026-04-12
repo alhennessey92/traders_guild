@@ -128,6 +128,29 @@ struct MessagingReplyReactionTests {
             RLToggleMessageReactionRequest(emoji: "🔥")
         )
         #expect(reactionRequest["emoji"] as? String == "🔥")
+
+        let announcementRequest = try encodeJSONObject(
+            RLCreateGuildAnnouncementRequestDTO(
+                title: "Guild update",
+                content: "Content",
+                preview: "Preview",
+                isImportant: true,
+                iconKey: .bell
+            )
+        )
+        #expect(announcementRequest["icon_key"] as? String == "bell")
+
+        let eventRequest = try encodeJSONObject(
+            RLCreateGuildEventRequestDTO(
+                title: "Review session",
+                content: "Bring your charts",
+                preview: "Tonight",
+                eventDate: Date(timeIntervalSince1970: 1_700_000_000),
+                isImportant: false,
+                iconKey: .calendar
+            )
+        )
+        #expect(eventRequest["icon_key"] as? String == "calendar")
     }
 
     @Test
@@ -153,6 +176,16 @@ struct MessagingReplyReactionTests {
         #expect(RLMessageReactionDTO(emoji: "🔥", count: 1, reactedByCurrentUser: false).compactBubbleCountText == nil)
         #expect(RLMessageReactionDTO(emoji: "🔥", count: 2, reactedByCurrentUser: false).compactBubbleCountText == nil)
         #expect(RLMessageReactionDTO(emoji: "🔥", count: 3, reactedByCurrentUser: false).compactBubbleCountText == "3")
+    }
+
+    @Test
+    func sharedReactionPaletteAndDeletedTombstoneHelpersStayStable() {
+        #expect(ChatQuickReactionPalette.emojis == ["👍", "❤️", "😂", "😮", "😢", "😡", "🎉", "🔥", "👏", "🙌", "👀", "🤔"])
+        #expect(ChatDeletedMessagePresentation.tombstoneText == "Message deleted")
+
+        let deletedID = UUID()
+        #expect(ChatDeletedMessagePresentation.isDeleted(messageId: deletedID, within: [deletedID]))
+        #expect(!ChatDeletedMessagePresentation.isDeleted(messageId: UUID(), within: [deletedID]))
     }
 
     @Test

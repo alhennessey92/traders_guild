@@ -117,7 +117,7 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         case .question: return Color(hex: "#5B7FFF") ?? .blue
         case .poll: return Color(hex: "#8B5CF6") ?? .purple
         case .news: return Color(hex: "#EC4899") ?? .pink
-        case .reaction: return Color(hex: "#F59E0B") ?? .orange
+        case .reaction: return AppColors.markerReactionAccent
         case .personal: return Color(hex: "#6B7280") ?? .gray
         }
     }
@@ -174,10 +174,11 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
                 (Color(hex: "#F9A8D4") ?? .pink).opacity(0.66),
             ]
         case .reaction:
+            let accent = AppColors.markerReactionAccent
             return [
                 base,
-                (Color(hex: "#F59E0B") ?? .orange).opacity(0.9),
-                (Color(hex: "#FCD34D") ?? .yellow).opacity(0.7),
+                accent.opacity(0.92),
+                accent.opacity(0.58),
             ]
         case .personal:
             return [
@@ -211,10 +212,10 @@ enum RLTrackingState: String, Codable, CaseIterable {
     var color: Color {
         switch self {
         case .draft: return .gray
-        case .armed: return Color(hex: "#0F9EB4") ?? .teal
-        case .active: return .green
-        case .tpHit: return .green
-        case .slHit: return .red
+        case .armed: return RLComponentType.levelEntry.color
+        case .active: return RLComponentType.levelEntry.color
+        case .tpHit: return RLComponentType.levelTp.color
+        case .slHit: return RLComponentType.levelSl.color
         case .expired: return .gray
         }
     }
@@ -245,6 +246,25 @@ enum RLTrackingState: String, Codable, CaseIterable {
         case .active: return 2
         case .tpHit, .slHit, .expired: return 3
         }
+    }
+}
+
+enum MarkerEmojiNormalization {
+    static func normalized(_ rawValue: String?) -> String? {
+        guard let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+
+        let candidate = String(trimmed.prefix(1))
+        guard candidate.unicodeScalars.contains(where: isEmojiScalar) else {
+            return nil
+        }
+        return candidate
+    }
+
+    private static func isEmojiScalar(_ scalar: UnicodeScalar) -> Bool {
+        scalar.properties.isEmojiPresentation || scalar.properties.isEmoji
     }
 }
 
@@ -716,7 +736,7 @@ extension MarkerComponentPayload {
 
     var emojiValue: String? {
         if case let .reactionEmoji(payload) = self {
-            return payload.emoji
+            return MarkerEmojiNormalization.normalized(payload.emoji)
         }
         return nil
     }
@@ -1343,7 +1363,9 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     }
 
     var selectedEmoji: String? {
-        components.first { $0.componentType == RLComponentType.reactionEmoji.rawValue }?.payload.emojiValue
+        MarkerEmojiNormalization.normalized(
+            components.first { $0.componentType == RLComponentType.reactionEmoji.rawValue }?.payload.emojiValue
+        )
     }
 
     var selectedIndicator: String? {

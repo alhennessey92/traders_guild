@@ -138,14 +138,10 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         switch marker.intentEnum {
         case .setup:
             if let outcome {
-                if outcome.isWin { return AppColors.statusPositive70 }
-                if outcome.isLoss { return AppColors.statusNegative70 }
-                return AppColors.surfaceGray90
+                return outcome.state.color
             }
-            if let metrics = liveSetupMetrics {
-                return metrics.isMovingTowardTarget
-                    ? RLComponentType.levelTp.color
-                    : RLComponentType.levelSl.color
+            if liveSetupMetrics != nil {
+                return RLComponentType.levelEntry.color
             }
             return AppColors.listCardContextSummaryFallback
         default:
@@ -345,7 +341,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                             .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(AppColors.statusPositive70))
+                            .background(Capsule().fill(RLComponentType.levelEntry.color))
                     }
 
                     TrackingStatePill(state: trackingState, size: .compact)
@@ -403,7 +399,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     .foregroundColor(AppColors.onAccentForeground)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(AppColors.statusPositive70))
+                    .background(Capsule().fill(RLComponentType.levelEntry.color))
             } else if let trackingState, trackingState.isResolved == false {
                 TrackingStatePill(state: trackingState, size: .compact)
             }
@@ -536,7 +532,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                             .foregroundColor(AppColors.onAccentForeground)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(AppColors.statusPositive70))
+                            .background(Capsule().fill(RLComponentType.levelEntry.color))
                     }
 
                     TrackingStatePill(state: trackingState, size: .compact)
@@ -661,12 +657,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     MarkerActivityMetaChip(
                         icon: liveSetupMetrics.isMovingTowardTarget ? "waveform.path.ecg" : "arrow.down.right",
                         text: "Live \(formatPnL(liveSetupMetrics.currentPnL))",
-                        tint: liveSetupMetrics.isMovingTowardTarget
-                            ? RLComponentType.levelTp.color
-                            : RLComponentType.levelSl.color,
-                        background: liveSetupMetrics.isMovingTowardTarget
-                            ? RLComponentType.levelTp.color.opacity(0.15)
-                            : RLComponentType.levelSl.color.opacity(0.15)
+                        tint: RLComponentType.levelEntry.color,
+                        background: RLComponentType.levelEntry.color.opacity(0.15)
                     )
                     UnifiedSetupProgressStrip(
                         metrics: liveSetupMetrics,
@@ -811,9 +803,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
     // MARK: - Helpers
 
     private func outcomeTint(_ outcome: SetupOutcome) -> Color {
-        if outcome.isWin { return AppColors.statusPositive70 }
-        if outcome.isLoss { return AppColors.statusNegative70 }
-        return AppColors.surfaceGray90
+        outcome.state.color
     }
 
     private func formatPnL(_ pnl: Double) -> String {

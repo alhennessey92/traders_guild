@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum ChartPanelResizeHandleStyle {
     case indicator
@@ -280,7 +281,54 @@ struct PanelMiniInfoBadge: Identifiable {
     let id = UUID()
     let text: String
     let color: Color
-    var textColor: Color = AppColors.onAccentForeground
+
+    var textColor: Color
+
+    init(text: String, color: Color, textColor: Color? = nil) {
+        self.text = text
+        self.color = color
+        self.textColor = textColor ?? PanelChromeTextColorResolver.textColor(for: color)
+    }
+}
+
+enum PanelChromeTextColorResolver {
+    static func textColor(for background: Color) -> Color {
+        let uiColor = UIColor(background)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return AppColors.onAccentForeground
+        }
+
+        let luminance =
+            (0.2126 * red) +
+            (0.7152 * green) +
+            (0.0722 * blue)
+
+        return luminance > 0.62 ? AppColors.primaryForeground : AppColors.onAccentForeground
+    }
+
+    static func readableAccentColor(_ preferred: Color) -> Color {
+        let uiColor = UIColor(preferred)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return preferred
+        }
+
+        let luminance =
+            (0.2126 * red) +
+            (0.7152 * green) +
+            (0.0722 * blue)
+
+        return luminance > 0.7 ? AppColors.primaryForeground : preferred
+    }
 }
 
 struct PanelMiniInfoOverlay: View {
@@ -345,22 +393,63 @@ struct IndicatorPanelYAxisLabel: Identifiable {
     let color: Color
 }
 
+struct IndicatorPanelGuideLine {
+    let value: Double
+    let color: Color
+    var lineWidth: CGFloat = 0.5
+    var dash: [CGFloat] = []
+}
+
+func drawIndicatorPanelGuideLines(
+    context: GraphicsContext,
+    viewport: IndicatorPanelViewport,
+    plotWidth: CGFloat,
+    guides: [IndicatorPanelGuideLine]
+) {
+    guard plotWidth > 0 else { return }
+
+    for guide in guides {
+        let y = viewport.yPosition(for: guide.value)
+        guard y.isFinite else { continue }
+
+        let path = Path { path in
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: plotWidth, y: y))
+        }
+
+        context.stroke(
+            path,
+            with: .color(guide.color),
+            style: StrokeStyle(lineWidth: guide.lineWidth, dash: guide.dash)
+        )
+    }
+}
+
 struct IndicatorPanelYAxisLane: View {
     let viewport: IndicatorPanelViewport
     let labels: [IndicatorPanelYAxisLabel]
+    var laneWidth: CGFloat = ChartAxisMetrics.indicatorPanelYAxisLaneWidth
+    var labelWidth: CGFloat = ChartAxisMetrics.indicatorPanelYAxisLabelWidth
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 AppColors.panelYAxisLaneBackground
 
-                ForEach(labels) { label in
-                    let y = viewport.yPosition(for: label.value)
-                    if y >= viewport.topPadding - 12, y <= viewport.contentBottomY + 12 {
-                        Text(label.text)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(label.color)
-                            .position(x: geometry.size.width - 22, y: y)
+                Canvas { context, size in
+                    let x = max(2, min(size.width - 3, labelWidth + 1))
+
+                    for label in labels {
+                        let y = viewport.yPosition(for: label.value)
+                        guard y >= viewport.topPadding - 12, y <= viewport.contentBottomY + 12 else { continue }
+
+                        context.draw(
+                            Text(label.text)
+                                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                .foregroundColor(label.color),
+                            at: CGPoint(x: x, y: y),
+                            anchor: .trailing
+                        )
                     }
                 }
             }
@@ -370,7 +459,7 @@ struct IndicatorPanelYAxisLane: View {
                     .frame(width: 1)
             }
         }
-        .frame(width: ChartAxisMetrics.yAxisLaneWidth)
+        .frame(width: laneWidth)
         .allowsHitTesting(false)
     }
 }

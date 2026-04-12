@@ -131,7 +131,7 @@ struct AdminPanelListView: View {
                         icon: "list.bullet.rectangle",
                         title: "Guild Watchlist",
                         subtitle: "Review requests and manage symbols",
-                        iconColor: .blue
+                        iconColor: AppColors.statusInfo
                     ) {
                         bottomSheetContent = .manageGuildWatchlist
                     }
@@ -179,7 +179,7 @@ struct AdminPanelListView: View {
                     icon: "person.badge.plus",
                     title: "Invite Members",
                     subtitle: "Search and invite users to your guild",
-                    iconColor: .blue
+                    iconColor: AppColors.statusInfo
                 ) {
                     bottomSheetContent = .inviteMembers
                 }
@@ -200,7 +200,7 @@ struct AdminPanelListView: View {
                         icon: "person.badge.shield.checkmark",
                         title: "Manage Roles",
                         subtitle: "Change member roles, kick or ban",
-                        iconColor: .orange
+                        iconColor: AppColors.moderationOrange
                     ) {
                         bottomSheetContent = .manageRoles
                     }
@@ -282,10 +282,13 @@ struct CreateAnnouncementView: View {
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
 
+    private let availableAnnouncementIcons = GuildPostIconKey.allCases.filter { $0 != .star }
+
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var preview: String = ""
     @State private var isImportant: Bool = false
+    @State private var selectedIconKey: GuildPostIconKey = .announcementDefault
     @State private var isSubmitting: Bool = false
 
     private var isValid: Bool {
@@ -327,35 +330,42 @@ struct CreateAnnouncementView: View {
                                 placeholder: "Announcement content...",
                                 text: $content
                             )
+                            GuildPostIconPickerSection(
+                                title: "Announcement Icon",
+                                subtitle: "Choose the icon members will see in the feed and notifications.",
+                                availableIcons: availableAnnouncementIcons,
+                                selectedIconKey: $selectedIconKey
+                            )
                             AdminToggleRow(
                                 title: "Mark as Important",
                                 subtitle: "Highlights this announcement",
                                 icon: "exclamationmark.triangle.fill",
-                                iconColor: .orange,
+                                iconColor: AppColors.statusWarning80,
                                 isOn: $isImportant
                             )
                         }
+
+                        AdminFooterActions(
+                            primaryTitle: "Post Announcement",
+                            primaryDisabled: !isValid,
+                            isSubmitting: isSubmitting,
+                            onCancel: { dismiss() },
+                            onPrimary: { Task { await createAnnouncement() } }
+                        )
+                        .padding(.top, 8)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .padding(.bottom, 20)
                 }
-
-                AdminFooterActions(
-                    primaryTitle: "Post Announcement",
-                    primaryDisabled: !isValid,
-                    isSubmitting: isSubmitting,
-                    onCancel: { dismiss() },
-                    onPrimary: { Task { await createAnnouncement() } }
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .adminSheetChrome(edge: .bottom)
+                .scrollDismissesKeyboard(.immediately)
             }
 
             SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .dismissKeyboardOnTapAndDragBackground()
         .background(AdminSheetBackground())
     }
     
@@ -369,7 +379,8 @@ struct CreateAnnouncementView: View {
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 content: content.trimmingCharacters(in: .whitespacesAndNewlines),
                 preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
-                isImportant: isImportant
+                isImportant: isImportant,
+                iconKey: selectedIconKey
             )
 
             leftDrawerViewModel.announcements.insert(newAnnouncement, at: 0)
@@ -394,6 +405,7 @@ struct CreateEventView: View {
     @State private var preview: String = ""
     @State private var eventDate: Date = Date().addingTimeInterval(86400)
     @State private var isImportant: Bool = false
+    @State private var selectedIconKey: GuildPostIconKey = .eventDefault
     @State private var isSubmitting: Bool = false
 
     private var isValid: Bool {
@@ -454,6 +466,11 @@ struct CreateEventView: View {
                                 placeholder: "Describe the event in detail...",
                                 text: $content
                             )
+                            GuildPostIconPickerSection(
+                                title: "Event Icon",
+                                subtitle: "Choose the icon members will see in the feed and notifications.",
+                                selectedIconKey: $selectedIconKey
+                            )
                             AdminToggleRow(
                                 title: "Featured Event",
                                 subtitle: "Highlight this event",
@@ -462,27 +479,28 @@ struct CreateEventView: View {
                                 isOn: $isImportant
                             )
                         }
+
+                        AdminFooterActions(
+                            primaryTitle: "Create Event",
+                            primaryDisabled: !isValid,
+                            isSubmitting: isSubmitting,
+                            onCancel: { dismiss() },
+                            onPrimary: { Task { await createEvent() } }
+                        )
+                        .padding(.top, 8)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .padding(.bottom, 20)
                 }
-
-                AdminFooterActions(
-                    primaryTitle: "Create Event",
-                    primaryDisabled: !isValid,
-                    isSubmitting: isSubmitting,
-                    onCancel: { dismiss() },
-                    onPrimary: { Task { await createEvent() } }
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .adminSheetChrome(edge: .bottom)
+                .scrollDismissesKeyboard(.immediately)
             }
 
             SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .dismissKeyboardOnTapAndDragBackground()
         .background(AdminSheetBackground())
     }
 
@@ -497,13 +515,83 @@ struct CreateEventView: View {
                 content: content.trimmingCharacters(in: .whitespacesAndNewlines),
                 preview: preview.trimmingCharacters(in: .whitespacesAndNewlines),
                 eventDate: eventDate,
-                isImportant: isImportant
+                isImportant: isImportant,
+                iconKey: selectedIconKey
             )
 
             leftDrawerViewModel.upcomingEvents.insert(newEvent, at: 0)
             dismiss()
         } catch {
             // Error is already shown by rlAppState
+        }
+    }
+}
+
+private struct GuildPostIconPickerSection: View {
+    let title: String
+    let subtitle: String
+    var availableIcons: [GuildPostIconKey] = GuildPostIconKey.allCases
+    @Binding var selectedIconKey: GuildPostIconKey
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText.opacity(0.8))
+            }
+
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(availableIcons) { iconKey in
+                    Button {
+                        selectedIconKey = iconKey
+                    } label: {
+                        VStack(spacing: 6) {
+                            GuildPostIconBadge(
+                                iconKey: iconKey,
+                                isFeatured: selectedIconKey == iconKey,
+                                showsFeaturedMarker: false,
+                                size: 38,
+                                iconSize: 16,
+                                isRead: false
+                            )
+                            Text(iconKey.title)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(
+                                    selectedIconKey == iconKey
+                                        ? AppColors.whiteText
+                                        : AppColors.greyText
+                                )
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    selectedIconKey == iconKey
+                                        ? iconKey.accentColor.opacity(0.18)
+                                        : AppColors.insetPanelBackground
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(
+                                            selectedIconKey == iconKey
+                                                ? iconKey.accentColor.opacity(0.7)
+                                                : AppColors.surfaceWhite12,
+                                            lineWidth: selectedIconKey == iconKey ? 1.4 : 1
+                                        )
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }

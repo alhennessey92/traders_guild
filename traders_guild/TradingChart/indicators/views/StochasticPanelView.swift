@@ -84,7 +84,8 @@ struct StochasticPanelView: View {
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
                     candleSpacing: candleSpacing,
-                    minVerticalScale: zoomPolicy.minimumScale
+                    minVerticalScale: zoomPolicy.minimumScale,
+                    yAxisWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
                 ) {
                     stochasticContentArea
                 }
@@ -234,25 +235,45 @@ struct StochasticPanelView: View {
     }
     
     private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
-        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
-        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
-        let middleY = viewport.yPosition(for: 50)
         let lineEndX = plotEndX(totalWidth: size.width)
-        
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: overboughtY))
-        path.addLine(to: CGPoint(x: lineEndX, y: overboughtY))
-        context.stroke(path, with: .color(AppColors.statusNegative40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
-        
-        path = Path()
-        path.move(to: CGPoint(x: 0, y: middleY))
-        path.addLine(to: CGPoint(x: lineEndX, y: middleY))
-        context.stroke(path, with: .color(AppColors.surfaceGray30), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-        
-        path = Path()
-        path.move(to: CGPoint(x: 0, y: oversoldY))
-        path.addLine(to: CGPoint(x: lineEndX, y: oversoldY))
-        context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+
+        drawIndicatorPanelGuideLines(
+            context: context,
+            viewport: viewport,
+            plotWidth: lineEndX,
+            guides: [
+                IndicatorPanelGuideLine(
+                    value: 100,
+                    color: AppColors.panelYAxisLaneText.opacity(0.5),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+                IndicatorPanelGuideLine(
+                    value: config.overboughtLevel,
+                    color: AppColors.statusNegative40,
+                    lineWidth: 0.5,
+                    dash: [4, 4]
+                ),
+                IndicatorPanelGuideLine(
+                    value: 50,
+                    color: AppColors.surfaceGray30,
+                    lineWidth: 0.5,
+                    dash: [2, 2]
+                ),
+                IndicatorPanelGuideLine(
+                    value: config.oversoldLevel,
+                    color: AppColors.statusPositive40,
+                    lineWidth: 0.5,
+                    dash: [4, 4]
+                ),
+                IndicatorPanelGuideLine(
+                    value: 0,
+                    color: AppColors.panelYAxisLaneText.opacity(0.5),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+            ]
+        )
     }
     
     private func drawKLine(context: GraphicsContext, size: CGSize, config: StochasticConfig, viewport: IndicatorPanelViewport) {
@@ -333,7 +354,10 @@ struct StochasticPanelView: View {
     }
 
     private func plotEndX(totalWidth: CGFloat) -> CGFloat {
-        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+        ChartAxisMetrics.plotWidth(
+            totalWidth: totalWidth,
+            axisLaneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
+        )
     }
     
     // MARK: - Current Value Indicator
@@ -363,7 +387,7 @@ struct StochasticPanelView: View {
                         
                         let text = Text(String(format: "%.1f", kValue))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.onAccentForeground)
+                            .foregroundColor(PanelChromeTextColorResolver.textColor(for: lineColor))
                         
                         context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
@@ -411,23 +435,9 @@ struct StochasticPanelView: View {
                 Spacer()
                 IndicatorPanelYAxisLane(
                     viewport: transformedViewport(height: geometry.size.height),
-                    labels: [
-                        IndicatorPanelYAxisLabel(
-                            value: stochConfig?.overboughtLevel ?? 80,
-                            text: String(format: "%.0f", stochConfig?.overboughtLevel ?? 80),
-                            color: AppColors.statusNegative85
-                        ),
-                        IndicatorPanelYAxisLabel(
-                            value: 50,
-                            text: "50",
-                            color: AppColors.panelYAxisLaneText
-                        ),
-                        IndicatorPanelYAxisLabel(
-                            value: stochConfig?.oversoldLevel ?? 20,
-                            text: String(format: "%.0f", stochConfig?.oversoldLevel ?? 20),
-                            color: AppColors.statusPositive85
-                        ),
-                    ]
+                    labels: yAxisLabels,
+                    laneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth,
+                    labelWidth: ChartAxisMetrics.indicatorPanelYAxisLabelWidth
                 )
             }
         }
@@ -436,27 +446,26 @@ struct StochasticPanelView: View {
     // MARK: - Header
     
     private var miniInfoOverlay: some View {
-        VStack(alignment: .leading) {
+        Group {
             if let latest = indicatorManager.latestStochastic {
                 PanelMiniInfoOverlay(
                     tokens: [
                         PanelMiniInfoToken(
                             label: "%K",
                             value: String(format: "%.1f", latest.kValue),
-                            valueColor: stochConfig?.color.color ?? .yellow
+                            valueColor: PanelChromeTextColorResolver.readableAccentColor(stochConfig?.color.color ?? .yellow)
                         ),
                         PanelMiniInfoToken(
                             label: "%D",
                             value: String(format: "%.1f", latest.dValue),
-                            valueColor: stochConfig?.dColor.color ?? .red
+                            valueColor: PanelChromeTextColorResolver.readableAccentColor(stochConfig?.dColor.color ?? .red)
                         ),
                     ],
                     trailingBadge: stochConditionBadge(value: latest.kValue)
                 )
             }
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.top, 6)
         .padding(.leading, 8)
         .allowsHitTesting(false)
@@ -472,6 +481,38 @@ struct StochasticPanelView: View {
             return PanelMiniInfoBadge(text: "OVERSOLD", color: AppColors.statusPositive80)
         }
         return nil
+    }
+
+    private var yAxisLabels: [IndicatorPanelYAxisLabel] {
+        deduplicatedLabels([
+            IndicatorPanelYAxisLabel(value: 100, text: "100", color: AppColors.panelYAxisLaneText),
+            IndicatorPanelYAxisLabel(
+                value: stochConfig?.overboughtLevel ?? 80,
+                text: String(format: "%.0f", stochConfig?.overboughtLevel ?? 80),
+                color: AppColors.statusNegative85
+            ),
+            IndicatorPanelYAxisLabel(value: 50, text: "50", color: AppColors.panelYAxisLaneText),
+            IndicatorPanelYAxisLabel(
+                value: stochConfig?.oversoldLevel ?? 20,
+                text: String(format: "%.0f", stochConfig?.oversoldLevel ?? 20),
+                color: AppColors.statusPositive85
+            ),
+            IndicatorPanelYAxisLabel(value: 0, text: "0", color: AppColors.panelYAxisLaneText),
+        ])
+    }
+
+    private func deduplicatedLabels(
+        _ labels: [IndicatorPanelYAxisLabel],
+        tolerance: Double = 0.25
+    ) -> [IndicatorPanelYAxisLabel] {
+        var filtered: [IndicatorPanelYAxisLabel] = []
+
+        for label in labels {
+            guard !filtered.contains(where: { abs($0.value - label.value) <= tolerance }) else { continue }
+            filtered.append(label)
+        }
+
+        return filtered
     }
     
     // MARK: - X-Axis Labels

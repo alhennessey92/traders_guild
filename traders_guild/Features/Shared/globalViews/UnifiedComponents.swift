@@ -147,9 +147,7 @@ private func unifiedSearchCapsuleBackground() -> some View {
 }
 
 private var unifiedSearchAccessoryForeground: Color {
-    ThemeManager.shared.currentTheme == .lightGrey
-        ? AppColors.standardSearchFieldAccessory
-        : AppColors.surfaceWhite50
+    AppColors.adaptiveSearchAccessoryForeground
 }
 
 /// Unified search bar with consistent capsule styling
@@ -1042,7 +1040,7 @@ struct UnifiedAuthorFooter: View {
                 Text("\(reputation)")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .foregroundColor(AppColors.accentColor.opacity(0.9))
+            .foregroundColor(AppColors.guildReputationAccent.opacity(0.9))
             
             // Accuracy
             if let accuracy = accuracy {
@@ -1138,7 +1136,7 @@ struct UnifiedAuthorFooterFromMember: View {
             Text("\(author.reputation)")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .foregroundColor(AppColors.accentColor.opacity(0.9))
+            .foregroundColor(AppColors.guildReputationAccent.opacity(0.9))
             
             Spacer()
             
@@ -1212,23 +1210,23 @@ struct UnifiedAuthorRow: View {
             Image(systemName: "shield.pattern.checkered")
                 .font(.system(size: 9))
                 .fontWeight(.bold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             
             Text("\(reputation)")
                 .font(.caption2)
                 .fontWeight(.semibold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             
             if let accuracy = accuracy {
                 UnifiedSeparatorDot()
                 Image(systemName: "target")
                     .font(.system(size: 9))
                     .fontWeight(.bold)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppColors.statusPositive90)
                 Text(accuracy)
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppColors.statusPositive90)
             }
             
             Spacer()
@@ -1288,23 +1286,23 @@ struct UnifiedAuthorRowFromMember: View {
             Image(systemName: "shield.pattern.checkered")
                 .font(.caption2)
                 .fontWeight(.bold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             
             Text("\(author.reputation)")
                 .font(.caption2)
                 .fontWeight(.semibold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             
             if let accuracy = author.accuracyFormatted {
                 UnifiedSeparatorDot()
                 Image(systemName: "target")
                     .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppColors.statusPositive90)
                 Text(accuracy)
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.green)
+                    .foregroundColor(AppColors.statusPositive90)
             }
             
             Spacer()
@@ -1352,7 +1350,7 @@ struct UnifiedRoleBadge: View {
             if isOwner {
                 Text("Owner")
                     .font(fontSize)
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
                     .fontWeight(.semibold)
                     .lineLimit(1)
             } else {
@@ -1369,12 +1367,12 @@ struct UnifiedRoleBadge: View {
                 Image(systemName: "shield.pattern.checkered")
                     .font(iconSize)
                     .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
 
                 Text("\(reputation)")
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
                 
                 if let accuracy = accuracy {
                     UnifiedSeparatorDot(size: 3, opacity: 0.5)
@@ -1382,12 +1380,12 @@ struct UnifiedRoleBadge: View {
                     Image(systemName: "target")
                         .font(iconSize)
                         .fontWeight(.bold)
-                        .foregroundColor(.green)
+                        .foregroundColor(AppColors.statusPositive90)
                     
                     Text(accuracy)
                         .font(.caption2)
                         .fontWeight(.semibold)
-                        .foregroundColor(.green)
+                        .foregroundColor(AppColors.statusPositive90)
                 }
             }
         }
@@ -1485,6 +1483,46 @@ struct UnifiedIconBadge: View {
                 .foregroundColor(color)
         }
         .frame(width: size, height: size)
+    }
+}
+
+struct GuildPostIconBadge: View {
+    let iconKey: GuildPostIconKey
+    var isFeatured: Bool = false
+    var showsFeaturedMarker: Bool = true
+    var size: CGFloat = 36
+    var iconSize: CGFloat = 16
+    var isRead: Bool = false
+
+    private var tint: Color {
+        isFeatured ? AppColors.statusHighlight80 : iconKey.accentColor
+    }
+
+    var body: some View {
+        UnifiedIconBadge(
+            icon: iconKey.systemImage,
+            color: tint.opacity(isRead ? 0.82 : 1),
+            size: size,
+            iconSize: iconSize,
+            backgroundOpacity: isFeatured ? 0.28 : (isRead ? 0.14 : 0.2)
+        )
+        .overlay {
+            Circle()
+                .stroke(tint.opacity(isFeatured ? 0.9 : 0.24), lineWidth: isFeatured ? 2 : 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if isFeatured && showsFeaturedMarker {
+                Image(systemName: "star.fill")
+                    .font(.system(size: size * 0.28, weight: .bold))
+                    .foregroundColor(AppColors.statusHighlight80)
+                    .background(
+                        Circle()
+                            .fill(AppColors.sheetBackground)
+                            .frame(width: size * 0.38, height: size * 0.38)
+                    )
+                    .offset(x: size * 0.08, y: -size * 0.08)
+            }
+        }
     }
 }
 
@@ -1699,12 +1737,12 @@ struct UnifiedMemberAvatar: View {
                 CachedAvatarImage(url: url, size: size, initials: initials)
             } else {
                 Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
+                    .fill(AppColors.guildReputationAccent.opacity(0.3))
                     .frame(width: size, height: size)
                     .overlay(
                         Text(initials)
                             .font(.system(size: size * 0.35, weight: .bold))
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                     )
             }
 
@@ -1955,7 +1993,7 @@ struct UnifiedLeaderboardRow: View {
                     Text("\(user.reputation)")
                         .font(.system(size: 13, weight: .bold))
                 }
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -2244,8 +2282,8 @@ struct ApproachingLevelChip: View {
 
     private var chipColor: Color {
         switch status {
-        case .approachingTP: return .green
-        case .approachingSL: return .orange
+        case .approachingTP: return RLComponentType.levelTp.color
+        case .approachingSL: return RLComponentType.levelSl.color
         default: return .clear
         }
     }

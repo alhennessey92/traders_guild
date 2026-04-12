@@ -67,8 +67,15 @@ class BiometricAuthManager {
     // MARK: - Biometric Enabled State
 
     var isBiometricEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: biometricEnabledKey) }
-        set { UserDefaults.standard.set(newValue, forKey: biometricEnabledKey) }
+        get {
+            // Check Keychain first (survives reinstall), fall back to UserDefaults for migration
+            KeychainPreferences.bool(forKey: biometricEnabledKey)
+                || UserDefaults.standard.bool(forKey: biometricEnabledKey)
+        }
+        set {
+            KeychainPreferences.setBool(newValue, forKey: biometricEnabledKey)
+            UserDefaults.standard.set(newValue, forKey: biometricEnabledKey)
+        }
     }
 
     /// Whether biometric login is available and enabled
@@ -183,7 +190,8 @@ class BiometricAuthManager {
 
     /// Disable biometric login and remove stored token
     func disableBiometric() {
-        isBiometricEnabled = false
+        KeychainPreferences.setBool(false, forKey: biometricEnabledKey)
+        UserDefaults.standard.set(false, forKey: biometricEnabledKey)
         deleteBiometricRefreshToken()
     }
 

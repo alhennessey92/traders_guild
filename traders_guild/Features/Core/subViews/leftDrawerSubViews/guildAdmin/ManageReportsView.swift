@@ -3,7 +3,7 @@
 //  traders_guild
 //
 //  Admin/Moderator Panel - Manage Reports View
-//  Moderators can view reports, Admins can resolve/dismiss
+//  Moderators can review and resolve reports, while admin/owner keep higher-impact actions.
 //
 
 import SwiftUI
@@ -77,6 +77,140 @@ enum ContentTypeFilter: String, CaseIterable, UnifiedTabItem {
     }
 }
 
+struct ReportResolutionSummaryView: View {
+    let summary: RLReportResolutionSummary
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    AdminSheetHeader(
+                        icon: summary.statusIcon,
+                        iconColor: summary.statusColor,
+                        title: "Report Update",
+                        subtitle: "Resolution details for this report"
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 30)
+                    .padding(.bottom, 12)
+                    .adminSheetChrome(edge: .top)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: summary.statusIcon)
+                                .font(.headline)
+                                .foregroundColor(summary.statusColor)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(summary.statusTitle)
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText)
+                                Text(summary.outcomeSummary)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+
+                            Spacer()
+                        }
+
+                        if let notifiedAt = summary.notifiedAt {
+                            Text(notifiedAt, style: .relative)
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText.opacity(0.7))
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(summary.statusColor.opacity(0.10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(summary.statusColor.opacity(0.18), lineWidth: 1)
+                            )
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Resolution Details", systemImage: "doc.text.magnifyingglass")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(AppColors.whiteText)
+
+                        summaryRow(label: "Content", value: summary.contentTypeDisplay)
+
+                        if let guildName = summary.guildName, !guildName.isEmpty {
+                            summaryRow(label: "Guild", value: guildName)
+                        }
+
+                        if let reviewerDisplayName = summary.reviewerDisplayName, !reviewerDisplayName.isEmpty {
+                            summaryRow(label: "Reviewed by", value: reviewerDisplayName)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppColors.symbolSheetGroupedPanelFill)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                            )
+                    )
+
+                    if let resolutionNote = summary.resolutionNote,
+                       !resolutionNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Moderator Note", systemImage: "text.bubble.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(AppColors.whiteText)
+
+                            Text(resolutionNote)
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.whiteText.opacity(0.88))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(AppColors.whiteText.opacity(0.05))
+                                )
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppColors.symbolSheetGroupedPanelFill)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(AppColors.surfaceWhite12, lineWidth: 0.8)
+                                )
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+
+            SheetCloseButton(action: { dismiss() })
+                .padding(.top, 20)
+                .padding(.trailing, 20)
+        }
+        .background(AdminSheetBackground())
+    }
+
+    private func summaryRow(label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+                .frame(width: 90, alignment: .leading)
+
+            Text(value)
+                .font(.subheadline)
+                .foregroundColor(AppColors.whiteText)
+
+            Spacer()
+        }
+    }
+}
+
 // MARK: - ================================================================================================
 // MARK: - MANAGE REPORTS VIEW
 // MARK: - ================================================================================================
@@ -100,7 +234,11 @@ struct ManageReportsView: View {
     @State private var selectedReport: RLContentReportDTO? = nil
     @State private var resolutionNote: String = ""
     @State private var isProcessing: Bool = false
-    @State private var memberActionUserId: UUID? = nil  // for loading state on Suspend/Kick/Ban
+    @State private var memberActionUserId: UUID? = nil  // for loading state on member actions
+
+    private var canModerate: Bool {
+        rlAppState.canModerate
+    }
 
     private var canAdmin: Bool {
         rlAppState.canAdmin
@@ -118,28 +256,35 @@ struct ManageReportsView: View {
                     .padding(.bottom, 12)
                     .adminSheetChrome(edge: .top)
 
-                // Status Filter
-                statusFilterBar
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
-                    .background(AppColors.sheetBackground.opacity(0.98))
+                // Filters
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("STATUS")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppColors.greyText.opacity(0.6))
+                        .padding(.horizontal)
+                    statusFilterBar
 
-                // Content Type Filter
-                contentTypeFilterBar
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                    .background(AppColors.sheetBackground.opacity(0.98))
+                    Text("CONTENT TYPE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppColors.greyText.opacity(0.6))
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                    contentTypeFilterBar
+                }
+                .padding(.vertical, 10)
+                .background(AppColors.sheetBackground.opacity(0.98))
 
-                Divider()
+                Rectangle()
+                    .fill(AppColors.surfaceWhite12)
+                    .frame(height: 0.5)
 
                 // Content
                 contentView
             }
 
-            // Dismiss button
-            SheetCloseButton(action: { dismiss() })
-            .padding(.top, 20)
-            .padding(.trailing, 20)
+            headerCornerControls
+                .padding(.top, 18)
+                .padding(.trailing, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AdminSheetBackground())
@@ -164,17 +309,27 @@ struct ManageReportsView: View {
             icon: "flag.fill",
             iconColor: .red,
             title: "Manage Reports",
-            subtitle: canAdmin ? "Review & resolve reports" : "View reported content",
-            trailing: pendingCount > 0 ? AnyView(
-                Text("\(pendingCount)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(AppColors.onAccentForeground)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.orange))
-            ) : nil
+            subtitle: canModerate ? "Review and resolve reported content" : "View reported content"
         )
+    }
+
+    private var headerCornerControls: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            SheetCloseButton(action: { dismiss() })
+
+            if pendingCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.fill")
+                        .font(.caption2.weight(.bold))
+                    Text("\(pendingCount)")
+                        .font(.caption2.weight(.bold))
+                }
+                .foregroundColor(AppColors.onAccentForeground)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(AppColors.moderationOrange))
+            }
+        }
     }
 
     // MARK: - Status Filter Bar
@@ -287,6 +442,13 @@ struct ManageReportsView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText)
 
+                        Text(report.shortReference)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(AppColors.surfaceWhite70)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(AppColors.surfaceWhite06))
+
                         // Reason badge
                         Text(report.reasonDisplay)
                             .font(.system(size: 10, weight: .medium))
@@ -382,22 +544,38 @@ struct ManageReportsView: View {
                 VStack(alignment: .leading, spacing: 16) {
 
                     // ── Status Banner ──
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(report.statusColor)
-                            .frame(width: 10, height: 10)
-                        Text(report.status.uppercased())
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(report.statusColor)
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(report.statusColor)
+                                    .frame(width: 10, height: 10)
+                                Text(report.status.uppercased())
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(report.statusColor)
+                            }
+
+                            Text(report.shortReference)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(AppColors.surfaceWhite88)
+                        }
+
                         Spacer()
-                        Text(report.reasonDisplay)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.onAccentForeground)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(reasonColor(for: report.reason)))
+
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Text(report.reasonDisplay)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.onAccentForeground)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(reasonColor(for: report.reason)))
+
+                            Text("Ref \(report.shortReference)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(AppColors.greyText)
+                        }
                     }
                     .padding()
                     .background(
@@ -572,50 +750,45 @@ struct ManageReportsView: View {
                         )
                     }
 
-                    // ── Take action on reported user (pending + admin + has reported user) ──
-                    if report.isPending && canAdmin, let reportedUserId = report.reportedUserId {
+                    // ── Take action on reported user (pending + moderator/admin + has reported user) ──
+                    if report.isPending && canModerate, let reportedUserId = report.reportedUserId {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Take Action on User", systemImage: "person.crop.circle.badge.exclamationmark")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             let busy = memberActionUserId == reportedUserId
                             HStack(spacing: 8) {
-                                Button(action: { suspendReportedUser(report: report, userId: reportedUserId) }) {
-                                    HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
-                                        Image(systemName: "pause.circle.fill")
-                                        Text("Suspend")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
+                                reportActionButton(
+                                    title: "Mute",
+                                    icon: "speaker.slash.fill",
+                                    color: AppColors.moderationOrange,
+                                    busy: busy
+                                ) { muteReportedUser(report: report, userId: reportedUserId) }
+
+                                reportActionButton(
+                                    title: "Suspend",
+                                    icon: "pause.circle.fill",
+                                    color: AppColors.moderationOrange,
+                                    busy: busy
+                                ) { suspendReportedUser(report: report, userId: reportedUserId) }
+                            }
+
+                            if canAdmin {
+                                HStack(spacing: 8) {
+                                    reportActionButton(
+                                        title: "Kick",
+                                        icon: "person.fill.xmark",
+                                        color: AppColors.moderationOrange,
+                                        busy: busy
+                                    ) { kickReportedUser(report: report, userId: reportedUserId) }
+
+                                    reportActionButton(
+                                        title: "Ban",
+                                        icon: "nosign",
+                                        color: .red,
+                                        busy: busy
+                                    ) { banReportedUser(report: report, userId: reportedUserId) }
                                 }
-                                .buttonStyle(.bordered)
-                                .tint(.orange)
-                                .disabled(isProcessing || busy)
-                                Button(action: { kickReportedUser(report: report, userId: reportedUserId) }) {
-                                    HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
-                                        Image(systemName: "person.fill.xmark")
-                                        Text("Kick")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.orange)
-                                .disabled(isProcessing || busy)
-                                Button(action: { banReportedUser(report: report, userId: reportedUserId) }) {
-                                    HStack(spacing: 4) {
-                                        if busy { ProgressView().scaleEffect(0.7).tint(AppColors.onAccentForeground) }
-                                        Image(systemName: "nosign")
-                                        Text("Ban")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.red)
-                                .disabled(isProcessing || busy)
                             }
                         }
                         .padding()
@@ -625,8 +798,8 @@ struct ManageReportsView: View {
                         )
                     }
 
-                    // ── Admin Actions (only for pending reports + admin/owner) ──
-                    if report.isPending && canAdmin {
+                    // ── Resolution actions (pending reports + moderator+) ──
+                    if report.isPending && canModerate {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Resolve Report", systemImage: "gavel.fill")
                                 .font(.subheadline)
@@ -656,40 +829,19 @@ struct ManageReportsView: View {
 
                             // Action buttons
                             HStack(spacing: 12) {
-                                // Resolve button
-                                Button(action: { resolveReport(report, action: "resolved") }) {
-                                    HStack(spacing: 6) {
-                                        if isProcessing {
-                                            ProgressView()
-                                                .scaleEffect(0.7)
-                                                .tint(AppColors.onAccentForeground)
-                                        }
-                                        Image(systemName: "checkmark.circle.fill")
-                                        Text("Resolve")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.green)
-                                .disabled(isProcessing)
+                                reportActionButton(
+                                    title: "Resolve",
+                                    icon: "checkmark.circle.fill",
+                                    color: AppColors.statusPositive,
+                                    busy: isProcessing
+                                ) { resolveReport(report, action: "resolved") }
 
-                                // Dismiss button
-                                Button(action: { resolveReport(report, action: "dismissed") }) {
-                                    HStack(spacing: 6) {
-                                        if isProcessing {
-                                            ProgressView()
-                                                .scaleEffect(0.7)
-                                        }
-                                        Image(systemName: "xmark.circle.fill")
-                                        Text("Dismiss")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.gray)
-                                .disabled(isProcessing)
+                                reportActionButton(
+                                    title: "Dismiss",
+                                    icon: "xmark.circle.fill",
+                                    color: AppColors.greyText,
+                                    busy: isProcessing
+                                ) { resolveReport(report, action: "dismissed") }
                             }
                         }
                         .padding()
@@ -697,12 +849,12 @@ struct ManageReportsView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(AppColors.symbolSheetGroupedPanelFill)
                         )
-                    } else if report.isPending && !canAdmin {
+                    } else if report.isPending && !canModerate {
                         // Moderator viewing pending report — info only
                         HStack(spacing: 8) {
                             Image(systemName: "info.circle.fill")
-                                .foregroundColor(.blue)
-                            Text("Only admins and owners can resolve or dismiss reports.")
+                                .foregroundColor(AppColors.statusInfo)
+                            Text("You need moderator access to resolve or dismiss reports.")
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
                         }
@@ -718,10 +870,8 @@ struct ManageReportsView: View {
             .navigationTitle("Report Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        selectedReport = nil
-                    }
+                ToolbarItem(placement: .confirmationAction) {
+                    SheetCloseButton(action: { selectedReport = nil })
                 }
             }
         }
@@ -729,6 +879,42 @@ struct ManageReportsView: View {
     }
 
     // MARK: - Info Row Helper
+
+    private func reportActionButton(
+        title: String,
+        icon: String,
+        color: Color,
+        busy: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if busy {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(color)
+                }
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.12))
+                    .overlay(
+                        Capsule()
+                            .stroke(color.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isProcessing || busy)
+        .opacity((isProcessing || busy) ? 0.5 : 1.0)
+    }
 
     private func infoRow(label: String, value: String) -> some View {
         HStack(spacing: 4) {
@@ -746,10 +932,10 @@ struct ManageReportsView: View {
 
     private func reasonColor(for reason: String) -> Color {
         switch reason {
-        case "spam": return .blue
+        case "spam": return AppColors.statusInfo
         case "harassment": return .red
         case "hate_speech": return .purple
-        case "inappropriate": return .orange
+        case "inappropriate": return AppColors.moderationOrange
         case "misinformation": return AppColors.statusHighlight80
         default: return .gray
         }
@@ -794,11 +980,24 @@ struct ManageReportsView: View {
         }
     }
 
+    private func muteReportedUser(report: RLContentReportDTO, userId: UUID) {
+        memberActionUserId = userId
+        Task {
+            do {
+                try await rlAppState.muteMember(userId: userId, durationMinutes: 60, reason: "Report \(report.shortReference)")
+                await resolveReportAfterMemberAction(report: report, actionNote: "User muted (1 hour)")
+            } catch {
+                // Error shown by appState
+            }
+            memberActionUserId = nil
+        }
+    }
+
     private func suspendReportedUser(report: RLContentReportDTO, userId: UUID) {
         memberActionUserId = userId
         Task {
             do {
-                try await rlAppState.suspendMember(userId: userId, durationMinutes: 60, reason: "Report #\(report.id.uuidString.prefix(8))")
+                try await rlAppState.suspendMember(userId: userId, durationMinutes: 60, reason: "Report \(report.shortReference)")
                 await resolveReportAfterMemberAction(report: report, actionNote: "User suspended (1 hour)")
             } catch {
                 // Error shown by appState

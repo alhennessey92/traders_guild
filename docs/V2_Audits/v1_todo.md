@@ -166,27 +166,134 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 54. [Fixed] For setup marker once it’s resolved the chart info box doesn’t need to display the price position slider with to and sl can simply display result of marker like sl hit, risk reward, rep gain etc… 
 
-55. For any new user mid grey theme as default
+55. [Fixed] For any new user mid grey theme as default
 
 
-56. Sometimes when removing a horizontal line like resistance gets stuck in a state, flashes in chart info box and in the bottom bar active section and cant remove it unless close app fully. Just tested and hapened again with trendline after deleting 3 other drawings
+56. [Fixed] Sometimes when removing a horizontal line like resistance gets stuck in a state, flashes in chart info box and in the bottom bar active section and cant remove it unless close app fully. Just tested and hapened again with trendline after deleting 3 other drawings
 
 57. When adding a annotation make the text box simpler on chart and allow to wrap text underneath when user enters new line
 
 58. [Fixed] Adjusting the timeframe panel height adjusts the candle height with it, should stay fixed, only thing that affects candle height in the timeframe panel is by sliding in the y axis
 
-59. When indicator panel is active x axis is great with good distance from x axis on main chart to bottom of indicator panel, but when closing the indicator panel the x axis time text jumps up slightly almost touching the bottom of the indicator panel, need to make sure that there is still a gap, like when open. Fine for timeframe panels so not sure of the difference
+59. [Fixed] When indicator panel is active x axis is great with good distance from x axis on main chart to bottom of indicator panel, but when closing the indicator panel the x axis time text jumps up slightly almost touching the bottom of the indicator panel, need to make sure that there is still a gap, like when open. Fine for timeframe panels so not sure of the difference
 
 
 
 
-60. Indicator panels need looking at they are still not behaving correctly. For some reason there’s a few bugs with it now and can happen when 1 or 2 active. Closing the panel causes the x axis times to jump up slightly removing the small gap in between. Sometimes when activating the panel the header is missing - have to swipe around a bit before it appears. When 2 are active closing the bottom causes the closed header to move below the main x axis. When viewing a marker and returning the header can sometimes disappear and it all looks a bit messed up. Timeframe panels are perfect so not sure how they differ maybe compare and see
+60. [Fixed] Indicator panels need looking at they are still not behaving correctly. For some reason there’s a few bugs with it now and can happen when 1 or 2 active. Closing the panel causes the x axis times to jump up slightly removing the small gap in between. Sometimes when activating the panel the header is missing - have to swipe around a bit before it appears. When 2 are active closing the bottom causes the closed header to move below the main x axis. When viewing a marker and returning the header can sometimes disappear and it all looks a bit messed up. Timeframe panels are perfect so not sure how they differ maybe compare and see
 
 
-61. Bottom chart buttons sitting at different heights to top of panels depending on the configuration need to make them follow the top of the top most panel
+61. [Fixed] Bottom chart buttons sitting at different heights to top of panels depending on the configuration need to make them follow the top of the top most panel
 
-62. Need to add ability to report marker in general disclosure
+62. [Fixed] Need to add ability to report marker in general disclosure
 
-63. When reporting anything should send notification to both parties to see it was done.
+63. [Fixed] When reporting anything should send notification to both parties to see it was done.
 
-64. When reporting chat message should add report icon reaction to offending message
+64. [Fixed] When reporting chat message should add report icon reaction to offending message
+
+
+
+
+65. [Fixed] Mods should have ability to deal with reports in the pending section, provide certain buttons for action
+
+66. [Fixed] report number appearing under x close on top right of manage reports
+
+67. [Fixed] In create announcment and event, on keyboard show the footer section with buttons is appearing above keyboard and cant dismiss keyboard by tapping screen or swiping down
+
+68. [Fixed] In event and announcement list view where there is a new event/announcement show a blue circle in place of the right chevron, once viewed show the chevron instead
+
+69. [Fixed] In create announcement and event allow mods/admins to select a icon to display out of a pre arranged set, just some icons to desimilar them
+
+70. [Fixed]Important or featured events/announcements need a special icon or make their icon colored to differentiate
+
+71. [Fixed] Invite members need a their header being one color/look, different between top header and search area
+
+72. [Fixed] Need to make tp hit coloring as blue to match price label coloring and make tracking coloring green, need to make sure we differentiate between them properly - red/SL, green/entry/tracking, blue/TP. Make sure all references of these across the app match this coloring we pick
+
+73. Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon
+
+74. [Fixed] Deleted messages should be removed instantly from chat or add a deleted reaction icon
+
+75. [Fixed] Adjust reaction icons for chat to be more of the general/normal reactions / emojis users would submit
+
+76. [Fixed] Double check the market closure areas in symbol detailview in bottom bar, said oanda was closed as was 23.22 on friday evening but said market closes in 37mins, should be closed at 22.00
+
+77. [Fixed] Chart setting button - change bullish color doesnt seem to work
+
+78. Looking in left drawer markers section - by symbol and all sub tabs showing no markers yet 60 in live feed etc... should be populated and manual refresh should work
+
+79. [Fixed] Remove the cancel and done buttons in marker settings, dont need it already have the x/close in top right
+
+80. [Fixed] Change emoji selection in emoji marker placement mode to be circular in picker not rectangular to match more of a marker look
+
+
+
+
+
+
+81. [Fixed] Send notification to respective users on report resolution
+
+82. [Fixed] In report details for resolving change close button on top left to standard x button we use on top right
+
+83. [Fixed] Make report actions buttons better looking and more in keeping with rest of app
+
+84. Admin section - guild details allow to edit and adjust quesitons asked for closed guild
+
+85. [Fixed] Certain search boxes look different across the app - standard look should be how they are in right drawer, bottom bar watchlist search etc... but noticed certain search bars like in admin section guild watchlist search is different 
+
+86. [Fixed] In discover guilds the guild name gets cut short by certain pills like private and joined, this cant happen, name is essential to display full, so they need to go on new line
+
+87. [Fixed] Need to adjust the join guild filter section - language and location need to be dropdown like in other sections that use it and make sure all works as it should
+
+88. [Fixed] Need to add a placeholder at top of each chatroom/dm/marker/symbol chat interface. Not a full message but in the style of the Today text just a simple message saying Welcome to General Chatroom, Please abide by the rules or something professional and equivalent, same for the other chat interfaces. Just stops it looking plain. Could add a link if tapping the rules text part that shows all the standard rules for chatting in traders guild chat interfaces
+
+89. [Fixed] Need to remember if user has selected no face id and tutorial use so dont need to keep showing at beginning of app when been fully closed or removed, getting tutorial showing for a veteran user that would have seen it long before
+
+90. [Fixed] Noticed a request to join a guild from an admin, i accepted on other account and joined fine. Removed and replaced app, notification now shows same look - accept or decline invitation to join, yet i am already a memeber. If i click either button get a failed to accept invite. This shouldnt show anyway.
+
+91. [Fixed] Accept/decline friend request in members section need better buttons. Also should be able to accept from within notification section and the asking users profile. 
+
+92. [Fixed] Noticed current user not always appearing online in their profile/left drawer bottom profile selection button. But do in user list
+
+93. [Fixed] When typing password in auth/email etc... it does a bit of flashing when typing, not sure if because its trying to suggest certain passwrods or what but quite off putting
+
+94. [Fixed] Report section in mod and admin needs ui looking at, quite messy in terms of headers, tabs, report list views, can be greatly improved
+
+95. [Fixed] Bottom footer section in create announcement and event section in mod and admin panel needs looking at, doesnt go all the way to bottom has a large space underneath. Also cant scroll down far enough with keyboard open to select important button. 
+
+96. [Not Fixed] No 67 still not implemented, cant dismiss keyboard for these sections
+
+97. [Fixed] No 70 still not implemented, no special improtant icon
+
+98. [Fixed] Selected icon for announcement not showing in actual announcement, reverts to standard icon
+
+99. No 78 still not working
+
+100. [Not Fixed] Emoji picker for drawings is too high and stops interaction on chart, so cant move the chart, need to be able to move the chart and when selecting the emoji move it independently.
+
+101. [Fixed] No 80 not fixed was meant to be the emojis in the marker placement mode - reaction selection in bottom bar detail view
+
+
+
+
+
+
+
+
+102. Still getting an issue of removing a drawing and it not being removed instantly from chart info box, causing it to flash and flash in active section, a few moments later it removes correctly
+
+103. [Fixed] In create guild make selection of language and country required
+
+104. in guild details in admin panel if switch to invite only for guild show options for questions required
+
+105. [Fixed] Change important announcement to be a red border on icon rather than star and important announcement pill
+
+106. No 73 still not working - Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon - When selecting a marker from marker section in left drawer get taken to correnct marker and everything appears fine other than the actual marker icon on chart, only vertical line of position
+
+107. [Fixed] Should show pending friend request in friends section in members in left drawer and should show accept/decline in notifications for friend request
+
+108. On guild invitation request - on click in notification go to view guild info like in join guild
+
+109. [Fixed] On viewing report resolved as normal member - when clicking the notification it takes me to manage reports in the moderator panel, which it shouldnt be allowed as they are a normal member - should show a basic view outlining the results of the resolution
+
+110. [Fixed] Due to no 109 should do a check on any admin/mod panel opening that the current user is not a member role otherwise dont show, cant allow users to get access to these kinds of panels

@@ -89,3 +89,24 @@ New theme audits
 
 35. **[Done]** Tracking / marker flows use `markerPositiveForeground` → `themeAwareGreen` (same ladder as place-marker affordance).
 
+
+36. **[Done]** Lightgrey outgoing chat bubble: `chatOutgoingBubbleFill` (lighter teal on light grey; `tgAccentDark` elsewhere) in `RLChatMessageBubble`.
+
+37. **[Done]** Symbol sheet hero + selected watchlist rows: lightened light-grey `symbolSheetHeroBlueGradient*` / `symbolListRowSelectedBlueGradient*`; bullish tint uses `priceChangePositive`.
+
+38. **[Done]** Adaptive lime green removed for price direction and accuracy: `AppColors.priceChangePositive` / `RLTradingSymbolDTO.changeColor`; `UnifiedComponents` / leaderboards / `RLUserGlobalStatisticsDTO.accuracyColor` use `statusPositive*` / `moderationOrange`; `themeAwareInfoBlue` drives `statusInfo*`.
+
+39. **[Done]** Guild / reputation “light” brand: `guildReputationAccent` (drawers, switch guild, author rows, profile stats, `SwitchGuildView`); `statusInfo` / symbol sheet `.blue` replaced with `AppColors.statusInfo*`.
+
+40. **[Done]** Moderator / moderation orange: `moderationOrange` + `AppColors.memberRoleColor` via `RLMemberRole.color`; report/admin surfaces use tokens.
+
+
+
+
+41. **[Done]** Light grey palette v2 (unification): `LightGreyPalette` in [Color+Theme.swift](../../traders_guild/Extensions/Color+Theme.swift) — **brand teal** (`reputationAccent`, `outgoingChatBubbleFill`); **one nav-blue ramp** for chart tab/subtab/deep gradients, symbol sheet hero/selected row, and `markerViewingTintTimeframe`; anchor shared with `themeAwareInfoBlue`. **Adaptive chrome**: `drawerNeutralActionButton*`, `adaptiveChromeSearchField*`, `adaptiveFormControl*`, `adaptiveSearchAccessoryForeground` (`UserProfileView`, `SwitchGuildView`, `UnifiedSearchBar`). QA: chart blue tabs, symbol sheet header, guild discover search, drawer footers, marker timeframe tint.
+
+42. Light grey - auth section bottom footer holding the continue button etc... is too white, needs a greyer look
+
+43. Light grey add announcement/event bottom footer section 
+
+44. Light Grey - chat options for user and other users is too dark with the text not being visible

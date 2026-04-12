@@ -90,7 +90,7 @@ struct ChartSettingsView: View {
                 )
 
                 secondaryActionButton(title: "Reset to Default") {
-                    settings.bullishCandleColor = .green
+                    settings.bullishCandleColor = AppColors.defaultBullishCandleGreen
                     settings.bearishCandleColor = .red
                 }
             }

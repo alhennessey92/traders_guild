@@ -26,12 +26,14 @@ struct InviteMembersView: View {
                 // Header
                 AdminSheetHeader(
                     icon: "person.badge.plus",
-                    iconColor: .blue,
+                    iconColor: AppColors.statusInfo,
                     title: "Invite Members",
                     subtitle: "Search and invite users to your guild"
                 )
                 .padding(.horizontal)
                 .padding(.top, 30)
+                .padding(.bottom, 12)
+                .adminSheetChrome(edge: .top)
 
                 // Search Section
                 VStack(alignment: .leading, spacing: 8) {
@@ -39,24 +41,35 @@ struct InviteMembersView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(AppColors.whiteText)
-                        .padding(.horizontal)
+
+                    Text("Invite by username and keep an eye on pending invites below.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
 
                     ZStack(alignment: .trailing) {
                         UnifiedSearchBar(
                             text: $searchText,
                             placeholder: "Search by username..."
                         )
-                        .padding(.horizontal)
 
                         if isSearching {
                             ProgressView()
                                 .scaleEffect(0.7)
-                                .padding(.trailing, 26)
+                                .padding(.trailing, 10)
                         }
                     }
                 }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppColors.symbolSheetGroupedPanelFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(AppColors.statusInfo40.opacity(0.6), lineWidth: 0.9)
+                        )
+                )
+                .padding(.horizontal, 16)
                 .padding(.bottom, 12)
-                .adminSheetChrome(edge: .top)
 
                 // Content
                 ScrollView {
@@ -192,7 +205,7 @@ struct InviteMembersView: View {
                 Text("Invited")
                     .font(.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning72)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(AppColors.statusWarning10)

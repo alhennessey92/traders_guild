@@ -55,7 +55,7 @@ struct SwitchGuildView: View {
                     Image(systemName: "arrow.trianglehead.2.counterclockwise")
                         .font(.headline)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Switch Guild")
                             .font(.title2)
@@ -141,15 +141,9 @@ struct SwitchGuildView: View {
 
                 DrawerActionButton(
                     title: "Create a Guild",
-                    backgroundColor: ThemeManager.shared.currentTheme == .lightGrey
-                        ? AppColors.standardSearchFieldFill
-                        : AppColors.whiteText.opacity(0.8),
-                    foregroundColor: ThemeManager.shared.currentTheme == .lightGrey
-                        ? AppColors.primaryForeground
-                        : AppColors.systemBlack,
-                    strokeColor: ThemeManager.shared.currentTheme == .lightGrey
-                        ? AppColors.standardSearchFieldStroke
-                        : AppColors.systemBlack,
+                    backgroundColor: AppColors.drawerNeutralActionButtonFill,
+                    foregroundColor: AppColors.drawerNeutralActionButtonForeground,
+                    strokeColor: AppColors.drawerNeutralActionButtonStroke,
                     strokeWidth: 0.5,
                     action: {
                         showCreateGuild = true
@@ -232,16 +226,16 @@ struct GuildSwitchRow: View {
                     HStack {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.title2)
-                            .foregroundColor(AppColors.accentColor.opacity(0.6))
+                            .foregroundColor(AppColors.guildReputationAccent.opacity(0.6))
                         
                         Text(item.guild.name)
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         + Text(" Guild")
                             .font(.title2)
                             .fontWeight(.medium)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                     }
                     
                     // Member count and status
@@ -263,7 +257,7 @@ struct GuildSwitchRow: View {
                         
                         Text("Owner")
                             .font(.caption)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                             .fontWeight(.semibold)
                             .lineLimit(1)
                     }
@@ -301,11 +295,11 @@ struct GuildSwitchRow: View {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text(item.guild.reputationDisplay)
                             .font(.caption2)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text(" Guild Reputation")
                             .font(.caption)
                             .foregroundColor(AppColors.whiteText.opacity(0.6))
@@ -339,12 +333,12 @@ struct GuildSwitchRow: View {
                 VStack {
                     if isCurrentGuild {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                             .font(.system(size: 20))
                         
                         Text("Current")
                             .font(.caption2)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                     } else {
                         Image(systemName: "chevron.right")
                             .foregroundColor(AppColors.greyText.opacity(0.6))
@@ -357,14 +351,14 @@ struct GuildSwitchRow: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(
                         isCurrentGuild
-                            ? AppColors.accentColor.opacity(CGFloat(AppColors.guildSwitchRowSelectedFillOpacity))
+                            ? AppColors.guildReputationAccent.opacity(CGFloat(AppColors.guildSwitchRowSelectedFillOpacity))
                             : AppColors.gradientBackgroundDark.opacity(0.42)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
                                 isCurrentGuild
-                                    ? AppColors.accentColor.opacity(CGFloat(AppColors.guildSwitchRowSelectedStrokeOpacity))
+                                    ? AppColors.guildReputationAccent.opacity(CGFloat(AppColors.guildSwitchRowSelectedStrokeOpacity))
                                     : AppColors.whiteText.opacity(0.16),
                                 lineWidth: 1
                             )
@@ -497,50 +491,16 @@ struct JoinGuildView: View {
                 // Search bar with filter
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                .font(.subheadline)
-
-                            TextField("Search guilds...", text: $searchText)
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.whiteText)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
-                                .submitLabel(.done)
-                                .focused($isSearchFocused)
-                                .onSubmit {
-                                    Task { await loadOpenGuilds() }
-                                }
-
-                            if !searchText.isEmpty {
-                                Button(action: {
-                                    searchText = ""
-                                    Task { await loadOpenGuilds() }
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(AppColors.whiteText.opacity(0.6))
-                                        .font(.subheadline)
-                                }
+                        UnifiedSearchBar(
+                            text: $searchText,
+                            placeholder: "Search guilds...",
+                            onClear: {
+                                Task { await loadOpenGuilds() }
                             }
+                        )
+                        .onSubmit {
+                            Task { await loadOpenGuilds() }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(
-                            ThemeManager.shared.currentTheme == .lightGrey
-                                ? AppColors.standardSearchFieldFill
-                                : AppColors.unhighlightedTextBoxBackground.opacity(0.92)
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    ThemeManager.shared.currentTheme == .lightGrey
-                                        ? AppColors.standardSearchFieldStroke
-                                        : AppColors.whiteText.opacity(0.2),
-                                    lineWidth: 1
-                                )
-                        )
-                        .clipShape(Capsule())
 
                         Button(action: { showFilters = true }) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
@@ -548,16 +508,12 @@ struct JoinGuildView: View {
                                 .foregroundColor(AppColors.whiteText.opacity(0.8))
                                 .frame(width: 40, height: 40)
                                 .background(
-                                    ThemeManager.shared.currentTheme == .lightGrey
-                                        ? AppColors.standardSearchFieldFill
-                                        : AppColors.unhighlightedTextBoxBackground.opacity(0.92)
+                                    AppColors.adaptiveChromeSearchFieldFill
                                 )
                                 .overlay(
                                     Circle()
                                         .stroke(
-                                            ThemeManager.shared.currentTheme == .lightGrey
-                                                ? AppColors.standardSearchFieldStroke
-                                                : AppColors.whiteText.opacity(0.2),
+                                            AppColors.adaptiveChromeSearchFieldStroke,
                                             lineWidth: 1
                                         )
                                 )
@@ -578,11 +534,11 @@ struct JoinGuildView: View {
                         ForEach(activeFilterBadges, id: \.self) { badge in
                             Text(badge)
                                 .font(.caption2)
-                                .foregroundColor(AppColors.accentColor)
+                                .foregroundColor(AppColors.guildReputationAccent)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
                                 .background(
-                                    Capsule().fill(AppColors.accentColor.opacity(0.17))
+                                    Capsule().fill(AppColors.guildReputationAccent.opacity(0.17))
                                 )
                         }
 
@@ -830,9 +786,77 @@ struct JoinGuildFilterSheet: View {
                         }
                     }
 
-                    // Language & Location
-                    StandardTextFieldView(title: "Language", text: $languageFilter)
-                    StandardTextFieldView(title: "Location", text: $locationFilter)
+                    // Language
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Language")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Menu {
+                            Button("Any") { languageFilter = "" }
+                            Divider()
+                            ForEach(LocaleOptionCatalog.languages) { option in
+                                Button(option.label) { languageFilter = option.code }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(languageFilter.isEmpty ? "Any" : (LocaleOptionCatalog.languages.first(where: { $0.code == languageFilter })?.label ?? languageFilter))
+                                    .font(.body)
+                                    .foregroundColor(AppColors.whiteText)
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppColors.standardSearchFieldFill)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                                    )
+                            )
+                        }
+                    }
+
+                    // Location
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Location")
+                            .font(.headline)
+                            .foregroundColor(AppColors.whiteText)
+
+                        Menu {
+                            Button("Any") { locationFilter = "" }
+                            Divider()
+                            ForEach(LocaleOptionCatalog.countries) { option in
+                                Button(option.label) { locationFilter = option.code }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(locationFilter.isEmpty ? "Any" : (LocaleOptionCatalog.countries.first(where: { $0.code == locationFilter })?.label ?? locationFilter))
+                                    .font(.body)
+                                    .foregroundColor(AppColors.whiteText)
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppColors.standardSearchFieldFill)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
+                                    )
+                            )
+                        }
+                    }
                 }
                 .padding()
             }
@@ -890,7 +914,7 @@ private struct GuildFlowTitleHeader: View {
                 Image(systemName: icon)
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.title2)
@@ -933,29 +957,30 @@ struct JoinGuildRow: View {
                 // Icon circle
                 ZStack {
                     Circle()
-                        .fill(AppColors.accentColor.opacity(0.12))
+                        .fill(AppColors.guildReputationAccent.opacity(0.12))
                         .frame(width: 44, height: 44)
                     Image(systemName: "shield.pattern.checkered")
                         .font(.title3)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    // Guild name + access badge
-                    HStack(spacing: 8) {
-                        Text(guild.name)
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-                            .lineLimit(1)
+                    // Guild name
+                    Text(guild.name)
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+                        .lineLimit(2)
 
+                    // Access badge + joined pill
+                    HStack(spacing: 8) {
                         Text(guild.isOpen ? "Open" : "Private")
                             .font(.caption2)
                             .fontWeight(.semibold)
-                            .foregroundColor(guild.isOpen ? AppColors.accentColor : AppColors.whiteText.opacity(0.7))
+                            .foregroundColor(guild.isOpen ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.7))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(
-                                Capsule().fill(guild.isOpen ? AppColors.accentColor.opacity(0.18) : AppColors.whiteText.opacity(0.08))
+                                Capsule().fill(guild.isOpen ? AppColors.guildReputationAccent.opacity(0.18) : AppColors.whiteText.opacity(0.08))
                             )
 
                         if isJoined {
@@ -1005,11 +1030,11 @@ struct JoinGuildRow: View {
                         HStack(spacing: 2) {
                             Image(systemName: "shield.pattern.checkered")
                                 .font(.caption2)
-                                .foregroundColor(AppColors.accentColor)
+                                .foregroundColor(AppColors.guildReputationAccent)
                             Text(guild.reputationDisplay)
                                 .font(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundColor(AppColors.accentColor)
+                                .foregroundColor(AppColors.guildReputationAccent)
                         }
                     }
                 }
@@ -1129,11 +1154,11 @@ struct GuildDetailView: View {
                         HStack(alignment: .top, spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(AppColors.accentColor.opacity(0.12))
+                                    .fill(AppColors.guildReputationAccent.opacity(0.12))
                                     .frame(width: 48, height: 48)
                                 Image(systemName: "shield.lefthalf.filled")
                                     .font(.title3)
-                                    .foregroundColor(AppColors.accentColor)
+                                    .foregroundColor(AppColors.guildReputationAccent)
                             }
 
                             VStack(alignment: .leading, spacing: 6) {
@@ -1148,8 +1173,8 @@ struct GuildDetailView: View {
                                         .fontWeight(.semibold)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
-                                        .background(AppColors.accentColor.opacity(0.18))
-                                        .foregroundColor(AppColors.accentColor)
+                                        .background(AppColors.guildReputationAccent.opacity(0.18))
+                                        .foregroundColor(AppColors.guildReputationAccent)
                                         .clipShape(Capsule())
 
                                     Text("Created \(createdDateText)")
@@ -1219,7 +1244,7 @@ struct GuildDetailView: View {
                             .fill(AppColors.gradientBackgroundDark.opacity(0.42))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .stroke(AppColors.accentColor.opacity(0.32), lineWidth: 1)
+                                    .stroke(AppColors.guildReputationAccent.opacity(0.32), lineWidth: 1)
                             )
                     )
                     .opacity(visibleSections.contains(4) ? 1 : 0)
@@ -1366,7 +1391,7 @@ struct StatBox: View {
             Text(value)
                 .font(.title3)
                 .fontWeight(.bold)
-                .foregroundColor(AppColors.accentColor)
+                .foregroundColor(AppColors.guildReputationAccent)
             Text(label)
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
@@ -1393,7 +1418,7 @@ struct GuildInfoRow: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.subheadline)
-                .foregroundColor(AppColors.accentColor.opacity(0.85))
+                .foregroundColor(AppColors.guildReputationAccent.opacity(0.85))
                 .frame(width: 18)
             Text(title)
                 .font(.subheadline)
@@ -1461,11 +1486,11 @@ struct JoinGuildFormView: View {
                                                 Text("Required")
                                                     .font(.caption2)
                                                     .fontWeight(.semibold)
-                                                    .foregroundColor(AppColors.accentColor)
+                                                    .foregroundColor(AppColors.guildReputationAccent)
                                                     .padding(.horizontal, 6)
                                                     .padding(.vertical, 2)
                                                     .background(
-                                                        Capsule().fill(AppColors.accentColor.opacity(0.15))
+                                                        Capsule().fill(AppColors.guildReputationAccent.opacity(0.15))
                                                     )
                                             }
                                         }
@@ -1631,11 +1656,26 @@ struct CreateGuildView: View {
     @State private var joinQuestions: [String] = [""]
     @State private var visibleSections: Set<Int> = []
 
+    private var normalizedJoinQuestions: [RLGuildJoinQuestionInputDTO] {
+        joinQuestions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .enumerated()
+            .map { index, prompt in
+                RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
+            }
+    }
+
     private var canCreateGuild: Bool {
         let name = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
         let announcementTitle = initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let announcementContent = initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !name.isEmpty && !announcementTitle.isEmpty && !announcementContent.isEmpty
+        return !name.isEmpty
+            && !announcementTitle.isEmpty
+            && !announcementContent.isEmpty
+            && !selectedLanguageCode.isEmpty
+            && !selectedCountryCode.isEmpty
+            && (isOpen || !normalizedJoinQuestions.isEmpty)
     }
 
     private var selectedLanguageLabel: String {
@@ -1698,16 +1738,12 @@ struct CreateGuildView: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(
-                    ThemeManager.shared.currentTheme == .lightGrey
-                        ? AppColors.standardSearchFieldFill
-                        : AppColors.unhighlightedTextBoxBackground.opacity(0.88)
+                    AppColors.adaptiveFormControlFill
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            ThemeManager.shared.currentTheme == .lightGrey
-                                ? AppColors.standardSearchFieldStroke
-                                : AppColors.whiteText.opacity(0.15),
+                            AppColors.adaptiveFormControlStroke,
                             lineWidth: 1
                         )
                 )
@@ -1747,11 +1783,11 @@ struct CreateGuildView: View {
                         VStack(spacing: 10) {
                             ZStack {
                                 Circle()
-                                    .fill(AppColors.accentColor.opacity(0.12))
+                                    .fill(AppColors.guildReputationAccent.opacity(0.12))
                                     .frame(width: 64, height: 64)
                                 Image(systemName: "shield.lefthalf.filled")
                                     .font(.title)
-                                    .foregroundColor(AppColors.accentColor)
+                                    .foregroundColor(AppColors.guildReputationAccent)
                             }
 
                             Text(guildName.isEmpty ? "Your Guild" : guildName)
@@ -1821,15 +1857,9 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Language")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Language")
 
                             Menu {
-                                Button("Not specified") {
-                                    selectedLanguageCode = ""
-                                }
-                                Divider()
                                 ForEach(LocaleOptionCatalog.languages) { option in
                                     Button(option.label) {
                                         selectedLanguageCode = option.code
@@ -1841,15 +1871,9 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Location")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Country")
 
                             Menu {
-                                Button("Not specified") {
-                                    selectedCountryCode = ""
-                                }
-                                Divider()
                                 ForEach(LocaleOptionCatalog.countries) { option in
                                     Button(option.label) {
                                         selectedCountryCode = option.code
@@ -1884,7 +1908,7 @@ struct CreateGuildView: View {
                             Spacer()
 
                             Toggle("", isOn: $isOpen)
-                                .tint(AppColors.accentColor)
+                                .tint(AppColors.guildReputationAccent)
                         }
 
                         if !isOpen {
@@ -1899,6 +1923,10 @@ struct CreateGuildView: View {
                                         .font(.caption)
                                         .foregroundColor(AppColors.greyText)
                                 }
+
+                                Text("Add at least one question for private guild applications.")
+                                    .font(.caption)
+                                    .foregroundColor(normalizedJoinQuestions.isEmpty ? AppColors.statusNegative80 : AppColors.greyText)
 
                                 ForEach(joinQuestions.indices, id: \.self) { index in
                                     HStack(spacing: 8) {
@@ -1934,7 +1962,7 @@ struct CreateGuildView: View {
                                     } label: {
                                         Label("Add Question", systemImage: "plus.circle")
                                             .font(.subheadline)
-                                            .foregroundColor(AppColors.accentColor)
+                                            .foregroundColor(AppColors.guildReputationAccent)
                                     }
                                 }
                             }
@@ -2007,7 +2035,7 @@ struct CreateGuildView: View {
                             }
                             Spacer()
                             Toggle("", isOn: $initialAnnouncementImportant)
-                                .tint(AppColors.accentColor)
+                                .tint(AppColors.guildReputationAccent)
                         }
                     }
                     .opacity(visibleSections.contains(4) ? 1 : 0)
@@ -2057,6 +2085,24 @@ struct CreateGuildView: View {
 
     // Create guild
     private func createGuild() async {
+        guard let selectedLanguageValue,
+              let selectedCountryValue else {
+            rlAppState.showError(
+                title: "Missing Required Fields",
+                message: "Choose both a language and a country before creating your guild.",
+                style: .toast
+            )
+            return
+        }
+        guard isOpen || !normalizedJoinQuestions.isEmpty else {
+            rlAppState.showError(
+                title: "Join Question Required",
+                message: "Add at least one join question before creating a private guild.",
+                style: .toast
+            )
+            return
+        }
+
         isCreating = true
         defer { isCreating = false }
 
@@ -2067,13 +2113,7 @@ struct CreateGuildView: View {
                 isOpen: isOpen,
                 language: selectedLanguageValue,
                 location: selectedCountryValue,
-                joinQuestions: isOpen ? [] : joinQuestions
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                    .enumerated()
-                    .map { index, prompt in
-                        RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
-                    },
+                joinQuestions: isOpen ? [] : normalizedJoinQuestions,
                 initialAnnouncementTitle: initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines),
                 initialAnnouncementContent: initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines),
                 initialAnnouncementPreview: String(initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180)),

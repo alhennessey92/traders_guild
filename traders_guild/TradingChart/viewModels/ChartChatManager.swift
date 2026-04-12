@@ -23,6 +23,7 @@ class ChartChatManager: ObservableObject {
     @Published var activeChartChat: RLChartChatDTO? = nil
     @Published var isLoadingChat: Bool = false
     @Published var messages: [RLChartChatMessageDTO] = []
+    @Published var deletedMessageIDs: Set<UUID> = []
 
     private var chatCache: [String: RLChartChatDTO] = [:]
     private weak var appState: RLAppState?
@@ -81,7 +82,7 @@ class ChartChatManager: ObservableObject {
         case "message_deleted":
             if let payload = message.payload(as: WSMessageDeletedPayload.self),
                let messageId = UUID(uuidString: payload.messageId) {
-                messages.removeAll { $0.id == messageId }
+                deletedMessageIDs.insert(messageId)
             }
         case "message_reaction_updated":
             handleReactionUpdated(message)
@@ -143,6 +144,7 @@ class ChartChatManager: ObservableObject {
         // Check cache first
         if let cachedChat = chatCache[cacheKey] {
             activeChartChat = cachedChat
+            deletedMessageIDs = []
             subscribeToChat(cachedChat.id)
             await loadMessages(chatId: cachedChat.id)
             await markChatAsRead(chatId: cachedChat.id)
@@ -160,6 +162,7 @@ class ChartChatManager: ObservableObject {
 
             chatCache[cacheKey] = chartChat
             activeChartChat = chartChat
+            deletedMessageIDs = []
 
             // Subscribe to real-time updates for this chat
             subscribeToChat(chartChat.id)
@@ -249,14 +252,17 @@ class ChartChatManager: ObservableObject {
     /// Delete a message
     func deleteMessage(messageId: UUID) async throws {
         guard let chat = activeChartChat else { return }
-        
-        _ = try await api.deleteChartChatMessage(
-            chatId: chat.id,
-            messageId: messageId
-        )
-        
-        // Remove from local messages
-        messages.removeAll { $0.id == messageId }
+        deletedMessageIDs.insert(messageId)
+
+        do {
+            _ = try await api.deleteChartChatMessage(
+                chatId: chat.id,
+                messageId: messageId
+            )
+        } catch {
+            deletedMessageIDs.remove(messageId)
+            throw error
+        }
     }
 
     func toggleReaction(messageId: UUID, emoji: String) async throws {
@@ -294,6 +300,7 @@ class ChartChatManager: ObservableObject {
         unsubscribeFromChat()
         activeChartChat = nil
         messages = []
+        deletedMessageIDs = []
     }
 
     /// Clear all cached chats (e.g., on logout)
@@ -302,6 +309,7 @@ class ChartChatManager: ObservableObject {
         chatCache.removeAll()
         messages = []
         activeChartChat = nil
+        deletedMessageIDs = []
     }
     
     /// Update chat when symbol or guild changes

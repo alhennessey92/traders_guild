@@ -482,7 +482,11 @@ struct MainView: View {
                         // owns the x-axis strip; keep transparent when collapsed so controls remain visible.
                         Rectangle()
                             .fill(chartPanelsBottomLabelStripReserve > 0 ? AppColors.xAxisBackground : Color.clear)
-                            .frame(height: 100 + chartPanelsMainChartXAxisClearance)
+                            .frame(
+                                height: 100
+                                    + chartPanelsMainChartXAxisClearance
+                                    + ChartPanelReserveCalculator.panelStackBottomVisualBreathingRoom
+                            )
                             .allowsHitTesting(false)
                     }
                     .ignoresSafeArea(edges: .bottom)

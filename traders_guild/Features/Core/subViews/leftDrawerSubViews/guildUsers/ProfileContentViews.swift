@@ -186,7 +186,7 @@ struct OverviewTabContent: View {
                     subtitle: "Tier, weekly delta, contribution sources",
                     value: guildReputationProfile.map { "\($0.reputation)" } ?? "--",
                     icon: "shield.checkered",
-                    iconColor: AppColors.accentColor,
+                    iconColor: AppColors.guildReputationAccent,
                     action: onOpenGuildReputationBreakdown
                 )
             }
@@ -197,7 +197,7 @@ struct OverviewTabContent: View {
                     subtitle: "Win/loss, streaks, R:R metrics",
                     value: guildAccuracyProfile?.accuracyFormatted ?? "--",
                     icon: "target",
-                    iconColor: .green,
+                    iconColor: AppColors.statusPositive,
                     action: onOpenGuildAccuracyBreakdown
                 )
             }
@@ -469,19 +469,19 @@ struct MarkersTabContent: View {
                     value: "\(summary.totalMarkersPlaced)",
                     label: "Markers",
                     icon: "mappin.and.ellipse",
-                    color: .blue
+                    color: AppColors.statusInfo
                 )
                 SummaryStatBadge(
                     value: summary.accuracyFormatted,
                     label: "Accuracy",
                     icon: "target",
-                    color: .green
+                    color: AppColors.statusPositive
                 )
                 SummaryStatBadge(
                     value: "\(summary.totalLikesReceived)",
                     label: "Likes",
                     icon: "heart.fill",
-                    color: .red
+                    color: AppColors.statusNegative
                 )
             }
             
@@ -667,7 +667,7 @@ struct UnifiedActivityDeltaBadge: View {
     let value: Int
 
     private var tint: Color {
-        value >= 0 ? .green : .red
+        value >= 0 ? AppColors.statusPositive : AppColors.statusNegative
     }
 
     var body: some View {
@@ -704,7 +704,7 @@ extension RLActivityItem {
         case "guild": return .blue
         case "event": return .mint
         case "role": return .indigo
-        case "report": return .orange
+        case "report": return AppColors.moderationOrange
         case "moderation": return .purple
         default: return AppColors.greyText
         }
@@ -820,7 +820,7 @@ struct AwardsTabContent: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .font(.caption)
-                        .foregroundColor(.orange)
+                        .foregroundColor(AppColors.moderationOrange)
                     Text(summary.pointsFormatted)
                         .font(.title2)
                         .fontWeight(.bold)

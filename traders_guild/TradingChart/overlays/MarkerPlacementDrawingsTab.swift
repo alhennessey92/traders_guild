@@ -423,10 +423,9 @@ struct MarkerPlacementDrawingsTab: View {
                         } label: {
                             Text(emoji)
                                 .font(.system(size: 16))
-                                .frame(height: 28)
-                                .frame(maxWidth: .infinity)
+                                .frame(width: 34, height: 34)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    Circle()
                                         .fill(payload.emoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.08))
                                 )
                         }
@@ -690,9 +689,10 @@ struct MarkerPlacementDrawingsTab: View {
             }
 
             if currentEmoji != nil {
-                annotationEditorCard {
-                    let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-                    LazyVGrid(columns: columns, spacing: 8) {
+                // Compact horizontal strip — minimises vertical space so the
+                // panel stays small and horizontal scroll doesn't fight chart pan.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
                         ForEach(annotationEmojis, id: \.self) { emoji in
                             let isSelected = currentEmoji == emoji
                             Button {
@@ -700,14 +700,13 @@ struct MarkerPlacementDrawingsTab: View {
                             } label: {
                                 Text(emoji)
                                     .font(.system(size: 18))
-                                    .frame(height: 30)
-                                    .frame(maxWidth: .infinity)
+                                    .frame(width: 38, height: 38)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        Circle()
                                             .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
                                     )
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        Circle()
                                             .stroke(
                                                 AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
                                                 lineWidth: isSelected ? 1.5 : 1
@@ -717,6 +716,7 @@ struct MarkerPlacementDrawingsTab: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 4)
                 }
 
                 annotationRemoveButton("Remove Emoji") {

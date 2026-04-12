@@ -84,7 +84,8 @@ struct MACDPanelView: View {
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
                     candleSpacing: candleSpacing,
-                    minVerticalScale: zoomPolicy.minimumScale
+                    minVerticalScale: zoomPolicy.minimumScale,
+                    yAxisWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
                 ) {
                     macdContentArea
                 }
@@ -209,6 +210,7 @@ struct MACDPanelView: View {
 
         // Draw zero line
         drawZeroLine(context: context, size: size, viewport: viewport)
+        drawDomainBoundaryLines(context: context, size: size, viewport: viewport)
         
         // Draw histogram
         if config.showHistogram {
@@ -327,7 +329,10 @@ struct MACDPanelView: View {
     }
 
     private func plotEndX(totalWidth: CGFloat) -> CGFloat {
-        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+        ChartAxisMetrics.plotWidth(
+            totalWidth: totalWidth,
+            axisLaneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
+        )
     }
 
     private func visibleMACDPoints(for totalWidth: CGFloat) -> [MACDDataPoint] {
@@ -378,7 +383,7 @@ struct MACDPanelView: View {
                         
                         let text = Text(formatMACDValue(latestMACD.macdLine))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.onAccentForeground)
+                            .foregroundColor(PanelChromeTextColorResolver.textColor(for: lineColor))
                         
                         context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
@@ -418,7 +423,9 @@ struct MACDPanelView: View {
                 Spacer()
                 IndicatorPanelYAxisLane(
                     viewport: viewport,
-                    labels: viewport.dynamicLevels(emphasis: [0]).map { value in
+                    labels: viewport.dynamicLevels(
+                        emphasis: [0, viewport.rawValueRange.min, viewport.rawValueRange.max]
+                    ).map { value in
                         IndicatorPanelYAxisLabel(
                             value: value,
                             text: formatMACDValue(value),
@@ -426,7 +433,9 @@ struct MACDPanelView: View {
                                 ? AppColors.panelYAxisLaneText
                                 : AppColors.panelYAxisLaneText
                         )
-                    }
+                    },
+                    laneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth,
+                    labelWidth: ChartAxisMetrics.indicatorPanelYAxisLabelWidth
                 )
             }
         }
@@ -435,19 +444,19 @@ struct MACDPanelView: View {
     // MARK: - Header
     
     private var miniInfoOverlay: some View {
-        VStack(alignment: .leading) {
+        Group {
             if let latest = indicatorManager.latestMACD {
                 PanelMiniInfoOverlay(
                     tokens: [
                         PanelMiniInfoToken(
                             label: "M",
                             value: formatMACDValue(latest.macdLine),
-                            valueColor: macdConfig?.color.color ?? .cyan
+                            valueColor: PanelChromeTextColorResolver.readableAccentColor(macdConfig?.color.color ?? .cyan)
                         ),
                         PanelMiniInfoToken(
                             label: "S",
                             value: formatMACDValue(latest.signalLine),
-                            valueColor: macdConfig?.signalColor.color ?? .orange
+                            valueColor: PanelChromeTextColorResolver.readableAccentColor(macdConfig?.signalColor.color ?? .orange)
                         ),
                         PanelMiniInfoToken(
                             label: "H",
@@ -458,9 +467,8 @@ struct MACDPanelView: View {
                     trailingBadge: latest.crossoverType == .neutral ? nil : macdConditionBadge(crossover: latest.crossoverType)
                 )
             }
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.top, 6)
         .padding(.leading, 8)
         .allowsHitTesting(false)
@@ -478,6 +486,32 @@ struct MACDPanelView: View {
         } else {
             return String(format: "%.4f", value)
         }
+    }
+
+    private func drawDomainBoundaryLines(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: IndicatorPanelViewport
+    ) {
+        drawIndicatorPanelGuideLines(
+            context: context,
+            viewport: viewport,
+            plotWidth: plotEndX(totalWidth: size.width),
+            guides: [
+                IndicatorPanelGuideLine(
+                    value: viewport.rawValueRange.max,
+                    color: AppColors.panelYAxisLaneText.opacity(0.48),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+                IndicatorPanelGuideLine(
+                    value: viewport.rawValueRange.min,
+                    color: AppColors.panelYAxisLaneText.opacity(0.48),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+            ]
+        )
     }
     
     // MARK: - X-Axis Labels

@@ -1014,7 +1014,7 @@ struct ChatInputFooter: View {
             if let errorMessage = speechService.errorMessage {
                 Text(errorMessage)
                     .font(.caption2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning90)
                     .lineLimit(1)
             }
 
@@ -1931,6 +1931,37 @@ struct ChatDateSeparator: View {
     }
 }
 
+/// Welcome banner shown at the very top of a chat's message list.
+/// Styled like ChatDateSeparator — caption2, semibold, horizontal lines.
+struct ChatWelcomeBanner: View {
+    let text: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack {
+                line
+                Image(systemName: "sparkles")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppColors.greyText)
+                line
+            }
+            Text(text)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(AppColors.greyText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .padding(.vertical, 10)
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(AppColors.surfaceWhite15)
+            .frame(height: 0.5)
+    }
+}
+
 /// Determines whether a message should show its header (avatar + user info) or be grouped with the previous message.
 /// Messages are grouped when: same author, within 2 minutes, and on the same calendar day.
 enum ChatMessageGrouping {
@@ -2569,6 +2600,18 @@ protocol RLChatMessageDisplayable: Identifiable {
     var reactions: [RLMessageReactionDTO] { get }
 }
 
+enum ChatDeletedMessagePresentation {
+    static let tombstoneText = "Message deleted"
+
+    static func isDeleted(messageId: UUID, within deletedMessageIDs: Set<UUID>) -> Bool {
+        deletedMessageIDs.contains(messageId)
+    }
+}
+
+enum ChatQuickReactionPalette {
+    static let emojis = ["👍", "❤️", "😂", "😮", "😢", "😡", "🎉", "🔥", "👏", "🙌", "👀", "🤔"]
+}
+
 // MARK: - ================================================================================================
 // MARK: - RL MESSAGE BUBBLE
 // MARK: - ================================================================================================
@@ -2588,6 +2631,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
     let context: ChatContext
     let isRead: Bool
     let isPending: Bool
+    let isDeleted: Bool
     let isGrouped: Bool
     let onAvatarTap: (() -> Void)?
     let onAuthorTap: (() -> Void)?
@@ -2608,6 +2652,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         context: ChatContext,
         isRead: Bool = false,
         isPending: Bool = false,
+        isDeleted: Bool = false,
         isGrouped: Bool = false,
         onAvatarTap: (() -> Void)? = nil,
         onAuthorTap: (() -> Void)? = nil,
@@ -2624,6 +2669,7 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         self.context = context
         self.isRead = isRead
         self.isPending = isPending
+        self.isDeleted = isDeleted
         self.isGrouped = isGrouped
         self.onAvatarTap = onAvatarTap
         self.onAuthorTap = onAuthorTap
@@ -2684,11 +2730,12 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         VStack(alignment: message.isCurrentUserMessage ? .trailing : .leading, spacing: -6) {
             messageBubbleContent
                 .onLongPressGesture(minimumDuration: 0.4) {
+                    guard !isDeleted else { return }
                     HapticFeedback.medium.trigger()
                     chatSurfaceOverlayCoordinator.presentActions(for: message.id)
                 }
 
-            if !message.reactions.isEmpty {
+            if !isDeleted && !message.reactions.isEmpty {
                 reactionCluster
             }
         }
@@ -2791,7 +2838,16 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         return hasImage && !trimmedText.isEmpty && !textIsJustFilename
     }
 
+    @ViewBuilder
     private var messageBubbleContent: some View {
+        if isDeleted {
+            deletedMessageBubbleContent
+        } else {
+            activeMessageBubbleContent
+        }
+    }
+
+    private var activeMessageBubbleContent: some View {
         VStack(alignment: .leading, spacing: isImageOnlyMessage ? 0 : 6) {
             if let replyPreview = message.replyPreview {
                 replyPreviewView(replyPreview)
@@ -2841,10 +2897,40 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
         .padding(.vertical, isImageOnlyMessage ? 0 : (isImageWithCaptionMessage ? 3 : 8))
         .background(
             message.isCurrentUserMessage ?
-            AppColors.accentDarkColor :
+            AppColors.chatOutgoingBubbleFill :
             AppColors.surfaceGray20
         )
         .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
+    }
+
+    private var deletedMessageBubbleContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let replyPreview = message.replyPreview {
+                replyPreviewView(replyPreview)
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "trash.slash.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceWhite60)
+
+                Text(ChatDeletedMessagePresentation.tombstoneText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceWhite82)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            message.isCurrentUserMessage
+                ? AppColors.surfaceBlack45
+                : AppColors.surfaceGray20.opacity(0.82)
+        )
+        .clipShape(ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage))
+        .overlay(
+            ChatBubbleShape.bubbleShape(isFromCurrentUser: message.isCurrentUserMessage)
+                .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+        )
     }
 
     private func replyPreviewView(_ preview: RLMessageReplyPreviewDTO) -> some View {
@@ -3115,6 +3201,7 @@ private struct ReactionTabChip: View {
 
 struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
     let messages: [Message]
+    var deletedMessageIDs: Set<UUID> = []
     let reactorsState: ChatReactionReactorsState
     let onQuickReactionSelected: ((Message, String) -> Void)?
     let onReply: ((Message) -> Void)?
@@ -3144,15 +3231,19 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
 
                     switch presentation {
                     case .messageActions:
+                        let isDeleted = ChatDeletedMessagePresentation.isDeleted(
+                            messageId: message.id,
+                            within: deletedMessageIDs
+                        )
                         ChatCenteredMessageActionCard(
                             authorUsername: message.authorUsername,
-                            previewText: previewText(for: message),
+                            previewText: previewText(for: message, isDeleted: isDeleted),
                             currentUserReactions: Set(message.reactions.filter(\.reactedByCurrentUser).map(\.emoji)),
-                            canReact: !message.isCurrentUserMessage && onQuickReactionSelected != nil,
-                            canEdit: message.isCurrentUserMessage && message.canEdit && onEdit != nil,
-                            canDelete: message.isCurrentUserMessage && message.canDelete && onDelete != nil,
-                            canReport: !message.isCurrentUserMessage && onReport != nil,
-                            canReply: !message.isCurrentUserMessage && onReply != nil,
+                            canReact: !isDeleted && !message.isCurrentUserMessage && onQuickReactionSelected != nil,
+                            canEdit: !isDeleted && message.isCurrentUserMessage && message.canEdit && onEdit != nil,
+                            canDelete: !isDeleted && message.isCurrentUserMessage && message.canDelete && onDelete != nil,
+                            canReport: !isDeleted && !message.isCurrentUserMessage && onReport != nil,
+                            canReply: !isDeleted && !message.isCurrentUserMessage && onReply != nil,
                             onEmojiSelected: { emoji in
                                 onQuickReactionSelected?(message, emoji)
                                 chatSurfaceOverlayCoordinator.dismissOverlay()
@@ -3169,7 +3260,7 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
                                 pendingDeleteMessageID = message.id
                             },
                             onCopy: {
-                                UIPasteboard.general.string = previewText(for: message)
+                                UIPasteboard.general.string = previewText(for: message, isDeleted: isDeleted)
                                 onCopy?(message)
                                 chatSurfaceOverlayCoordinator.dismissOverlay()
                             },
@@ -3238,7 +3329,11 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
         }
     }
 
-    private func previewText(for message: Message) -> String {
+    private func previewText(for message: Message, isDeleted: Bool) -> String {
+        if isDeleted {
+            return ChatDeletedMessagePresentation.tombstoneText
+        }
+
         if let markerShare = MarkerShareCodec.extractAll(from: message.content) {
             let visibleText = markerShare.visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !visibleText.isEmpty {
@@ -3283,11 +3378,7 @@ private struct ChatCenteredMessageActionCard: View {
     let onCopy: () -> Void
     let onReport: () -> Void
 
-    private let quickEmojis = [
-        "👍", "🔥", "🚀", "🐂", "🐻", "📈", "📉", "😂", "🎯", "👀",
-        "❤️", "😍", "🤣", "😮", "😢", "😡", "🎉", "💯", "🙌", "💪",
-        "🤔", "👎", "✅", "❌", "💰", "💎", "⚡", "🧠", "🛑", "🏆",
-    ]
+    private let quickEmojis = ChatQuickReactionPalette.emojis
     @State private var tappedEmoji: String?
 
     private var actionItems: [(title: String, icon: String, destructive: Bool, action: () -> Void)] {
@@ -3979,7 +4070,7 @@ struct RLChatroomSettingsView: View {
                             icon: "bell.slash.fill",
                             title: "Mute Chatroom",
                             subtitle: "Silence notifications temporarily",
-                            iconColor: .orange
+                            iconColor: AppColors.statusWarning70
                         ) {
                             showMuteOptions = true
                         }
@@ -4151,7 +4242,7 @@ struct RLDMSettingsView: View {
                             icon: "bell.slash.fill",
                             title: "Mute Conversation",
                             subtitle: "Silence notifications temporarily",
-                            iconColor: .orange
+                            iconColor: AppColors.statusWarning70
                         ) {
                             showMuteOptions = true
                         }
@@ -4171,7 +4262,7 @@ struct RLDMSettingsView: View {
                                 icon: "hand.raised.slash.fill",
                                 title: "Unblock User",
                                 subtitle: "Allow messages from this user",
-                                iconColor: .green
+                                iconColor: AppColors.statusPositive
                             ) {
                                 showUnblockConfirmation = true
                             }
@@ -4190,7 +4281,7 @@ struct RLDMSettingsView: View {
                             icon: isReported ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
                             title: isReported ? "Reported" : "Report User",
                             subtitle: isReported ? "Moderators will review your report" : "Report inappropriate behavior",
-                            iconColor: isReported ? .green : .red
+                            iconColor: isReported ? AppColors.statusPositive : AppColors.statusNegative
                         ) {
                             guard !isReported else { return }
                             showReportOptions = true

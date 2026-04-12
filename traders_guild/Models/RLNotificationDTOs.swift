@@ -40,6 +40,57 @@ enum NotificationDestination: Equatable {
     case adminReports(guildId: UUID?, reportId: UUID?)
 }
 
+struct RLReportResolutionSummary: Equatable, Identifiable {
+    let reportId: UUID
+    let guildId: UUID?
+    let guildName: String?
+    let contentType: String?
+    let resolutionStatus: String
+    let reviewerDisplayName: String?
+    let resolutionNote: String?
+    let notifiedAt: Date?
+
+    var id: UUID { reportId }
+
+    var isResolved: Bool {
+        resolutionStatus.lowercased() == "resolved"
+    }
+
+    var statusTitle: String {
+        isResolved ? "Resolved" : "Dismissed"
+    }
+
+    var statusIcon: String {
+        isResolved ? "checkmark.seal.fill" : "xmark.seal.fill"
+    }
+
+    var statusColor: Color {
+        isResolved ? .green : .gray
+    }
+
+    var contentTypeDisplay: String {
+        switch contentType {
+        case "user": return "User"
+        case "chatroom_message": return "Chat Message"
+        case "dm_message": return "DM Message"
+        case "chart_chat_message": return "Chart Chat"
+        case "marker_comment": return "Marker Comment"
+        case "chart_marker": return "Marker"
+        case .some(let rawValue):
+            return rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        case .none:
+            return "Reported Content"
+        }
+    }
+
+    var outcomeSummary: String {
+        if let reviewerDisplayName, !reviewerDisplayName.isEmpty {
+            return "\(statusTitle) by \(reviewerDisplayName)"
+        }
+        return statusTitle
+    }
+}
+
 // MARK: - Notification Type Enum
 
 /// Maps to backend NotificationType enum.
@@ -229,6 +280,25 @@ struct RLPushNotificationTapPayload: Equatable {
         uuidDataValue(forAnyOf: ["marker_id", "markerId"])
     }
 
+    var contentReportResolutionSummary: RLReportResolutionSummary? {
+        guard notificationType == RLNotificationType.contentReport.rawValue,
+              let resolutionStatus = stringDataValue(forAnyOf: ["resolution_status", "resolutionStatus"]),
+              let reportId = uuidDataValue(forAnyOf: ["report_id", "reportId"]) ?? destination?.reportId else {
+            return nil
+        }
+
+        return RLReportResolutionSummary(
+            reportId: reportId,
+            guildId: uuidDataValue(forAnyOf: ["guild_id", "guildId"]) ?? destination?.guildId,
+            guildName: stringDataValue(forAnyOf: ["guild_name", "guildName"]),
+            contentType: stringDataValue(forAnyOf: ["content_type", "contentType"]),
+            resolutionStatus: resolutionStatus,
+            reviewerDisplayName: stringDataValue(forAnyOf: ["reviewer_display_name", "reviewerDisplayName"]),
+            resolutionNote: stringDataValue(forAnyOf: ["resolution_note", "resolutionNote"]),
+            notifiedAt: nil
+        )
+    }
+
     private func stringDataValue(forAnyOf keys: [String]) -> String? {
         for key in keys {
             if let value = data[key]?.stringValue {
@@ -325,6 +395,11 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
     
     /// Icon for the notification type
     var icon: String {
+        if let guildPostIcon = guildPostIconKey,
+           type == .announcement || type == .event {
+            return guildPostIcon.systemImage
+        }
+
         switch type {
         case .dm:             return "envelope.fill"
         case .chatroom:       return "bubble.left.fill"
@@ -357,6 +432,11 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
 
     /// Accent color for the notification type
     var accentColor: Color {
+        if let guildPostIcon = guildPostIconKey,
+           type == .announcement || type == .event {
+            return guildPostIcon.accentColor
+        }
+
         switch type {
         case .dm, .mention:                     return .blue
         case .chatroom:                         return .cyan
@@ -454,6 +534,21 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         data["guild_name"]?.stringValue
     }
 
+    /// Friend request ID extracted from data payload (for friend request actions)
+    var friendRequestId: UUID? {
+        uuidDataValue(for: "friend_request_id") ?? uuidDataValue(for: "friendship_id")
+    }
+
+    /// Requester membership ID when included in the payload.
+    var friendRequestFromMembershipId: UUID? {
+        uuidDataValue(for: "from_membership_id") ?? uuidDataValue(for: "requester_membership_id")
+    }
+
+    /// Requester user ID used to reconcile pending requests when the payload omits the request ID.
+    var friendRequestFromUserId: UUID? {
+        uuidDataValue(for: "from_user_id") ?? uuidDataValue(for: "requester_user_id")
+    }
+
     /// Whether this is a personal or guild notification
     var isPersonal: Bool {
         type?.isPersonal ?? true
@@ -461,6 +556,13 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
 
     var markerResultType: String? {
         stringDataValue(for: "result_type")
+    }
+
+    var guildPostIconKey: GuildPostIconKey? {
+        guard let rawValue = stringDataValue(for: "icon_key") ?? stringDataValue(for: "iconKey") else {
+            return nil
+        }
+        return GuildPostIconKey(rawValue: rawValue)
     }
 
     var markerSharePayload: MarkerSharePayloadV1? {
@@ -510,6 +612,25 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
 
     var markerId: UUID? {
         uuidDataValue(for: "marker_id")
+    }
+
+    var contentReportResolutionSummary: RLReportResolutionSummary? {
+        guard type == .contentReport,
+              let resolutionStatus = stringDataValue(for: "resolution_status"),
+              let reportId = uuidDataValue(for: "report_id") ?? destination?.reportId else {
+            return nil
+        }
+
+        return RLReportResolutionSummary(
+            reportId: reportId,
+            guildId: uuidDataValue(for: "guild_id") ?? destination?.guildId,
+            guildName: stringDataValue(for: "guild_name"),
+            contentType: stringDataValue(for: "content_type"),
+            resolutionStatus: resolutionStatus,
+            reviewerDisplayName: stringDataValue(for: "reviewer_display_name"),
+            resolutionNote: stringDataValue(for: "resolution_note"),
+            notifiedAt: createdAt
+        )
     }
     
     // MARK: - Equatable

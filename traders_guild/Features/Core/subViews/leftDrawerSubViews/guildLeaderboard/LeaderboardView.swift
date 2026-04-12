@@ -1039,10 +1039,10 @@ private struct GlobalUserAccuracyRow: View {
     }
 
     private var accuracyColor: Color {
-        if accuracyRate >= 0.7 { return .green }
-        if accuracyRate >= 0.5 { return .yellow }
-        if accuracyRate >= 0.3 { return .orange }
-        return .red
+        if accuracyRate >= 0.7 { return AppColors.statusPositive }
+        if accuracyRate >= 0.5 { return AppColors.statusHighlight80 }
+        if accuracyRate >= 0.3 { return AppColors.moderationOrange }
+        return AppColors.statusNegative
     }
 
     private var accuracyFormatted: String {
@@ -1077,7 +1077,7 @@ private struct GlobalUserAccuracyRow: View {
                     if let contextLabel, !contextLabel.isEmpty {
                         Text(contextLabel)
                             .font(.caption2)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                     }
                 }
 
@@ -1134,10 +1134,10 @@ private struct AccuracyLeaderboardRow: View {
 
     /// Color based on accuracy percentage
     private var accuracyColor: Color {
-        if member.accuracyRate >= 0.7 { return .green }
-        if member.accuracyRate >= 0.5 { return .yellow }
-        if member.accuracyRate >= 0.3 { return .orange }
-        return .red
+        if member.accuracyRate >= 0.7 { return AppColors.statusPositive }
+        if member.accuracyRate >= 0.5 { return AppColors.statusHighlight80 }
+        if member.accuracyRate >= 0.3 { return AppColors.moderationOrange }
+        return AppColors.statusNegative
     }
 
     var body: some View {
@@ -1172,7 +1172,7 @@ private struct AccuracyLeaderboardRow: View {
                         if let rr = member.rrRatioFormatted {
                             Text("R:R \(rr)")
                                 .font(.caption)
-                                .foregroundColor(.orange)
+                                .foregroundColor(AppColors.statusWarning72)
                         }
                     }
                 }

@@ -21,7 +21,7 @@ struct KeyboardPinnedFooterLayout: Equatable {
         if keyboardVisible {
             return KeyboardPinnedFooterLayout(
                 footerBottomPadding: 0,
-                contentBottomPadding: mode == .chat ? 48 : 0
+                contentBottomPadding: mode == .chat ? 48 : 20
             )
         }
 
@@ -100,7 +100,6 @@ private struct KeyboardPinnedBottomInsetModifier<Footer: View>: ViewModifier {
                             )
                     }
                 )
-                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }

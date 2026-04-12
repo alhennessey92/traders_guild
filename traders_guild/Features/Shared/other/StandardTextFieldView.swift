@@ -75,16 +75,19 @@ struct StandardTextFieldView: View {
         HStack(spacing: 10) {
             Group {
                 if isSecure {
-                    if isSecureTextVisible {
+                    // Both fields exist simultaneously; opacity swap avoids
+                    // the view-destroy/create flash that if/else causes.
+                    ZStack {
                         TextField(title, text: $text)
                             .textContentType(secureContentType)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                    } else {
+                            .opacity(isSecureTextVisible ? 1 : 0)
                         SecureField(title, text: $text)
                             .textContentType(secureContentType)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .opacity(isSecureTextVisible ? 0 : 1)
                     }
                 } else {
                     TextField(title, text: $text)

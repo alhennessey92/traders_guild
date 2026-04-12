@@ -151,7 +151,7 @@ struct ManageChatroomsView: View {
                         if chatroom.isMuted {
                             Image(systemName: "speaker.slash.fill")
                                 .font(.caption2)
-                                .foregroundColor(.orange)
+                                .foregroundColor(AppColors.statusWarning72)
                         }
                     }
                     Text(chatroom.description?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? (chatroom.description ?? "") : "No description yet")

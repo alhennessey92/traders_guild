@@ -580,7 +580,7 @@ struct MarkerViewingGeneralTab: View {
                 if let pnl = outcome.pnl {
                     Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
                         .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                        .foregroundColor(pnl >= 0 ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
+                        .foregroundColor(pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
@@ -600,8 +600,8 @@ struct MarkerViewingGeneralTab: View {
                         }
                         .foregroundColor(
                             (outcome.guildRepDelta ?? 0) >= 0
-                                ? AppColors.markerPositiveForeground
-                                : AppColors.statusNegative85
+                                ? outcome.state.color
+                                : RLComponentType.levelSl.color
                         )
                     }
                 }
@@ -629,7 +629,7 @@ struct MarkerViewingGeneralTab: View {
                     }
                     .foregroundColor(
                         outcome.affectsPerformance
-                            ? (outcome.isWin ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
+                            ? (outcome.isWin ? outcome.state.color : RLComponentType.levelSl.color)
                             : AppColors.greyText
                     )
                 }

@@ -73,8 +73,13 @@ struct UserListView: View {
         }
         .task {
             await loadGuildMembersIfNeeded()
-            await loadFriendRequestsIfNeeded()
-            await loadFriendsIfNeeded()
+            await refreshFriendRelationships()
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            guard newTab == .friends else { return }
+            Task {
+                await refreshFriendRelationships()
+            }
         }
     }
     
@@ -92,18 +97,10 @@ struct UserListView: View {
         guard leftDrawerViewModel.guildMembers.isEmpty else { return }
         await leftDrawerViewModel.refreshGuildMembers(guildId: guild.id, rlAppState: rlAppState)
     }
-    
-    private func loadFriendRequestsIfNeeded() async {
+
+    private func refreshFriendRelationships() async {
         guard let guild = rlAppState.currentGuild else { return }
-        guard leftDrawerViewModel.pendingFriendRequestsIncoming.isEmpty,
-              leftDrawerViewModel.pendingFriendRequestsOutgoing.isEmpty else { return }
-        await leftDrawerViewModel.refreshFriendRequests(guildId: guild.id, rlAppState: rlAppState)
-    }
-    
-    private func loadFriendsIfNeeded() async {
-        guard let guild = rlAppState.currentGuild else { return }
-        guard leftDrawerViewModel.friendsRL.isEmpty else { return }
-        await leftDrawerViewModel.refreshFriends(guildId: guild.id, rlAppState: rlAppState)
+        await leftDrawerViewModel.refreshFriendRelationshipCaches(guildId: guild.id, rlAppState: rlAppState)
     }
     
     // MARK: - Tab Counts
@@ -303,15 +300,29 @@ struct PendingRequestRow: View {
             Spacer()
             
             HStack(spacing: 8) {
-                Button("Accept") {
+                Button {
                     Task { await onAccept(request) }
+                } label: {
+                    Text("Accept")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.onAccentForeground)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(AppColors.friendAccent.opacity(0.8)))
                 }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Decline") {
+                .buttonStyle(.plain)
+
+                Button {
                     Task { await onDecline(request) }
+                } label: {
+                    Text("Decline")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(AppColors.panelFillEmphasis))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12)
@@ -554,28 +565,28 @@ struct GuildUserDetailViewRL: View {
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
                 icon: "shield.checkered",
-                color: AppColors.accentColor,
+                color: AppColors.guildReputationAccent,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Global Reputation",
                 value: "\(member.globalReputation)",
                 icon: "globe",
-                color: .blue,
+                color: AppColors.statusInfo,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Days in Guild",
                 value: "\(member.daysInGuild)",
                 icon: "calendar",
-                color: .green,
+                color: AppColors.statusInfo,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Contribution",
                 value: "\(member.contributionScore)%",
                 icon: "chart.bar.fill",
-                color: .orange,
+                color: AppColors.statusWarning70,
                 trend: nil
             )
         ]
@@ -714,6 +725,7 @@ struct GuildUserActionButtonsRL: View {
     @State private var showUnBlockUserConfirmation = false
     @State private var showAddFriendConfirmation = false
     @State private var showRemoveFriendConfirmation = false
+    @State private var showAcceptFriendRequestConfirmation = false
     @State private var isOpeningChat = false
     @State private var showReportReasonSheet = false
     
@@ -756,7 +768,9 @@ struct GuildUserActionButtonsRL: View {
                 action: {
                     if member.isFriend {
                         showRemoveFriendConfirmation = true
-                    } else if member.hasPendingIncomingRequest || member.hasPendingOutgoingRequest {
+                    } else if member.hasPendingIncomingRequest {
+                        showAcceptFriendRequestConfirmation = true
+                    } else if member.hasPendingOutgoingRequest {
                         rlAppState.showInfo(member.friendshipStatusDisplay)
                     } else if member.canSendFriendRequest {
                         showAddFriendConfirmation = true
@@ -791,9 +805,9 @@ struct GuildUserActionButtonsRL: View {
                 DrawerActionButton(
                     title: isReported ? "Reported" : nil,
                     imageName: isReported ? "checkmark.shield.fill" : "flag",
-                    backgroundColor: isReported ? AppColors.statusPositive08 : AppColors.gradientBackgroundDark.opacity(0.05),
-                    foregroundColor: isReported ? AppColors.statusPositive90 : AppColors.whiteText.opacity(0.8),
-                    strokeColor: isReported ? AppColors.statusPositive35 : AppColors.whiteText.opacity(0.3),
+                    backgroundColor: isReported ? AppColors.moderationOrange.opacity(0.14) : AppColors.gradientBackgroundDark.opacity(0.05),
+                    foregroundColor: isReported ? AppColors.moderationOrange : AppColors.whiteText.opacity(0.8),
+                    strokeColor: isReported ? AppColors.moderationOrange.opacity(0.45) : AppColors.whiteText.opacity(0.3),
                     strokeWidth: 0.5,
                     action: {
                         guard !isReported else { return }
@@ -845,6 +859,17 @@ struct GuildUserActionButtonsRL: View {
             }
         } message: {
             Text("Un-friend User: \(member.username)?")
+        }
+        .alert("Friend Request", isPresented: $showAcceptFriendRequestConfirmation) {
+            Button("Decline", role: .destructive) {
+                declineIncomingFriendRequest()
+            }
+            Button("Accept") {
+                acceptIncomingFriendRequest()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("\(member.displayName ?? member.username) sent you a friend request.")
         }
     }
 
@@ -951,6 +976,43 @@ struct GuildUserActionButtonsRL: View {
                 _ = try await rlAppState.removeFriend(membershipId: member.membershipId)
                 applyMemberUpdate { current in
                     current.updating(isFriend: false, friendshipStatus: nil)
+                }
+            } catch { }
+        }
+    }
+
+    private func acceptIncomingFriendRequest() {
+        guard let request = leftDrawerViewModel.pendingFriendRequestsIncoming.first(where: { $0.fromMembershipId == member.membershipId }) else {
+            rlAppState.showError(title: "Friend Request", message: "Could not find the friend request")
+            return
+        }
+        Task {
+            do {
+                _ = try await rlAppState.acceptFriendRequest(requestId: request.id)
+                applyMemberUpdate { current in
+                    current.updating(isFriend: true, friendshipStatus: "accepted")
+                }
+                if let guildId = rlAppState.currentGuild?.id {
+                    await leftDrawerViewModel.refreshFriendRequests(guildId: guildId, rlAppState: rlAppState)
+                    await leftDrawerViewModel.refreshFriends(guildId: guildId, rlAppState: rlAppState)
+                }
+            } catch { }
+        }
+    }
+
+    private func declineIncomingFriendRequest() {
+        guard let request = leftDrawerViewModel.pendingFriendRequestsIncoming.first(where: { $0.fromMembershipId == member.membershipId }) else {
+            rlAppState.showError(title: "Friend Request", message: "Could not find the friend request")
+            return
+        }
+        Task {
+            do {
+                _ = try await rlAppState.declineFriendRequest(requestId: request.id)
+                applyMemberUpdate { current in
+                    current.updating(isFriend: false, friendshipStatus: nil)
+                }
+                if let guildId = rlAppState.currentGuild?.id {
+                    await leftDrawerViewModel.refreshFriendRequests(guildId: guildId, rlAppState: rlAppState)
                 }
             } catch { }
         }

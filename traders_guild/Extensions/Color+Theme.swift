@@ -22,6 +22,35 @@ enum AppColors {
     /// Base color used for adaptive overlays: white on dark themes, black on light.
     private static var overlayBase: Color { isLightGrey ? .black : .white }
 
+    /// Light grey accent anchors + shared ramps (palette audit §41): one nav-blue family for chart tabs + symbol sheet; brand teal for guild/chat.
+    private enum LightGreyPalette {
+        static var reputationAccent: Color {
+            Color(red: 10.0 / 255, green: 138.0 / 255, blue: 158.0 / 255)
+        }
+
+        /// Same hue as `reputationAccent`, shifted for outgoing bubble on pale threads.
+        static var outgoingChatBubbleFill: Color {
+            Color(red: 32.0 / 255, green: 137.0 / 255, blue: 155.0 / 255)
+        }
+
+        /// Anchor matches `themeAwareInfoBlue` on light grey — links + nav chrome ladder.
+        static var infoBlueAnchor: Color {
+            Color(red: 28.0 / 255, green: 82.0 / 255, blue: 168.0 / 255)
+        }
+
+        static var navBlueRampTabStart: Color { Color(red: 120.0 / 255, green: 158.0 / 255, blue: 218.0 / 255) }
+        static var navBlueRampTabEnd: Color { Color(red: 94.0 / 255, green: 132.0 / 255, blue: 202.0 / 255) }
+        static var navBlueRampSubTabStart: Color { Color(red: 88.0 / 255, green: 124.0 / 255, blue: 192.0 / 255) }
+        static var navBlueRampSubTabEnd: Color { Color(red: 64.0 / 255, green: 102.0 / 255, blue: 174.0 / 255) }
+        static var navBlueRampDeepStart: Color { Color(red: 52.0 / 255, green: 88.0 / 255, blue: 158.0 / 255) }
+        static var navBlueRampDeepEnd: Color { Color(red: 36.0 / 255, green: 70.0 / 255, blue: 138.0 / 255) }
+
+        static var symbolHeroLeading: Color { navBlueRampTabStart }
+        static var symbolHeroTrailing: Color { navBlueRampTabEnd }
+        static var symbolRowSelectedLeading: Color { navBlueRampSubTabStart }
+        static var symbolRowSelectedTrailing: Color { navBlueRampSubTabEnd }
+    }
+
     // MARK: - Foundation Assets (theme-aware backgrounds)
 
     /// TGGradientBackground. Dark: #010105, MidGrey: #181C28, LightGrey: #C0C2C9.
@@ -154,15 +183,39 @@ enum AppColors {
     /// System `Color.green` wrapper (use `themeAwareGreen` for semantic positive UI).
     static let systemGreen = Color.green
 
-    /// Canonical positive green: iOS system green on dark/mid; darker forest green on light grey (audit 23/27/35).
+    /// Default bullish chart candle and light-grey semantic positive (RGB **88, 185, 138**).
+    static let defaultBullishCandleGreen = Color(red: 88.0 / 255, green: 185.0 / 255, blue: 138.0 / 255)
+
+    /// Canonical positive green: iOS system green on dark/mid; sage green on light grey (matches default bull candle).
     private static var themeAwareGreen: Color {
         switch theme {
         case .lightGrey:
-            return Color(red: 22.0 / 255, green: 120.0 / 255, blue: 72.0 / 255)
+            return defaultBullishCandleGreen
         case .midGrey, .dark:
             return systemGreen
         }
     }
+
+    /// Info / link blue: system blue on dark/mid; deeper blue on light grey (audit 39).
+    private static var themeAwareInfoBlue: Color {
+        switch theme {
+        case .lightGrey:
+            return LightGreyPalette.infoBlueAnchor
+        case .midGrey, .dark:
+            return systemBlue
+        }
+    }
+
+    /// Reports / moderator orange: system orange on dark/mid; darker amber on light grey (audit 40).
+    private static var themeAwareModerationOrange: Color {
+        switch theme {
+        case .lightGrey:
+            return Color(red: 196.0 / 255, green: 92.0 / 255, blue: 22.0 / 255)
+        case .midGrey, .dark:
+            return systemOrange
+        }
+    }
+
     /// System `Color.blue` wrapper.
     static let systemBlue = Color.blue
     /// System `Color.orange` wrapper.
@@ -286,7 +339,7 @@ enum AppColors {
 
     static var statusPositive: Color { themeAwareGreen }
     static let statusNegative = systemRed
-    static let statusInfo = systemBlue
+    static var statusInfo: Color { themeAwareInfoBlue }
     static let statusWarning = systemOrange
 
     static let statusNegative08 = systemRed.opacity(0.08)
@@ -330,30 +383,30 @@ enum AppColors {
     static var statusPositive90: Color { themeAwareGreen.opacity(0.9) }
     static var statusPositive95: Color { themeAwareGreen.opacity(0.95) }
 
-    static let statusInfo08 = systemBlue.opacity(0.08)
-    static let statusInfo10 = systemBlue.opacity(0.1)
-    static let statusInfo15 = systemBlue.opacity(0.15)
-    static let statusInfo16 = systemBlue.opacity(0.16)
-    static let statusInfo20 = systemBlue.opacity(0.2)
-    static let statusInfo22 = systemBlue.opacity(0.22)
-    static let statusInfo24 = systemBlue.opacity(0.24)
-    static let statusInfo25 = systemBlue.opacity(0.25)
-    static let statusInfo35 = systemBlue.opacity(0.35)
-    static let statusInfo40 = systemBlue.opacity(0.4)
-    static let statusInfo45 = systemBlue.opacity(0.45)
-    static let statusInfo50 = systemBlue.opacity(0.5)
-    static let statusInfo52 = systemBlue.opacity(0.52)
-    static let statusInfo55 = systemBlue.opacity(0.55)
-    static let statusInfo60 = systemBlue.opacity(0.6)
-    static let statusInfo62 = systemBlue.opacity(0.62)
-    static let statusInfo65 = systemBlue.opacity(0.65)
-    static let statusInfo70 = systemBlue.opacity(0.7)
-    static let statusInfo75 = systemBlue.opacity(0.75)
-    static let statusInfo80 = systemBlue.opacity(0.8)
-    static let statusInfo85 = systemBlue.opacity(0.85)
-    static let statusInfo90 = systemBlue.opacity(0.9)
-    static let statusInfo92 = systemBlue.opacity(0.92)
-    static let statusInfo95 = systemBlue.opacity(0.95)
+    static var statusInfo08: Color { themeAwareInfoBlue.opacity(0.08) }
+    static var statusInfo10: Color { themeAwareInfoBlue.opacity(0.1) }
+    static var statusInfo15: Color { themeAwareInfoBlue.opacity(0.15) }
+    static var statusInfo16: Color { themeAwareInfoBlue.opacity(0.16) }
+    static var statusInfo20: Color { themeAwareInfoBlue.opacity(0.2) }
+    static var statusInfo22: Color { themeAwareInfoBlue.opacity(0.22) }
+    static var statusInfo24: Color { themeAwareInfoBlue.opacity(0.24) }
+    static var statusInfo25: Color { themeAwareInfoBlue.opacity(0.25) }
+    static var statusInfo35: Color { themeAwareInfoBlue.opacity(0.35) }
+    static var statusInfo40: Color { themeAwareInfoBlue.opacity(0.4) }
+    static var statusInfo45: Color { themeAwareInfoBlue.opacity(0.45) }
+    static var statusInfo50: Color { themeAwareInfoBlue.opacity(0.5) }
+    static var statusInfo52: Color { themeAwareInfoBlue.opacity(0.52) }
+    static var statusInfo55: Color { themeAwareInfoBlue.opacity(0.55) }
+    static var statusInfo60: Color { themeAwareInfoBlue.opacity(0.6) }
+    static var statusInfo62: Color { themeAwareInfoBlue.opacity(0.62) }
+    static var statusInfo65: Color { themeAwareInfoBlue.opacity(0.65) }
+    static var statusInfo70: Color { themeAwareInfoBlue.opacity(0.7) }
+    static var statusInfo75: Color { themeAwareInfoBlue.opacity(0.75) }
+    static var statusInfo80: Color { themeAwareInfoBlue.opacity(0.8) }
+    static var statusInfo85: Color { themeAwareInfoBlue.opacity(0.85) }
+    static var statusInfo90: Color { themeAwareInfoBlue.opacity(0.9) }
+    static var statusInfo92: Color { themeAwareInfoBlue.opacity(0.92) }
+    static var statusInfo95: Color { themeAwareInfoBlue.opacity(0.95) }
 
     static let statusWarning10 = systemOrange.opacity(0.1)
     static let statusWarning14 = systemOrange.opacity(0.14)
@@ -374,6 +427,54 @@ enum AppColors {
     static let statusWarning90 = systemOrange.opacity(0.9)
     static let statusWarning92 = systemOrange.opacity(0.92)
     static let statusWarning95 = systemOrange.opacity(0.95)
+
+    // MARK: - Audits 36–40 (light grey readability)
+
+    /// Moderation UI, filed reports, moderator role tint (audit 40).
+    static var moderationOrange: Color { themeAwareModerationOrange }
+
+    /// Reaction marker intent / labels — saturated amber on dark/mid; deeper amber on light grey (readable on pale chrome).
+    static var markerReactionAccent: Color {
+        isLightGrey ? moderationOrange : Color(red: 245.0 / 255, green: 158.0 / 255, blue: 11.0 / 255)
+    }
+
+    /// Guild switch, drawer guild chrome, reputation numerals — same hue as `TGAccent` (#0F9EB4), slightly deeper on light grey so it’s not as bright on pale chrome; `TGAccent` on dark/mid.
+    static var guildReputationAccent: Color {
+        switch theme {
+        case .lightGrey:
+            return LightGreyPalette.reputationAccent
+        case .midGrey, .dark:
+            return tgAccent
+        }
+    }
+
+    /// Outgoing chat bubble background (audit 36); dark/mid unchanged from `tgAccentDark`.
+    static var chatOutgoingBubbleFill: Color {
+        switch theme {
+        case .lightGrey:
+            return LightGreyPalette.outgoingChatBubbleFill
+        case .midGrey, .dark:
+            return tgAccentDark
+        }
+    }
+
+    /// Watchlist / symbol sheet price direction (audit 38); avoids adaptive `.green` on light color scheme.
+    static var priceChangePositive: Color { statusPositive }
+    static let priceChangeNegative = statusNegative
+
+    /// Role pill colors; use instead of `RLMemberRole.color` where theme matters (audit 40).
+    static func memberRoleColor(_ role: RLMemberRole) -> Color {
+        switch role {
+        case .member:
+            return isLightGrey ? tgMidGrey : systemGray
+        case .moderator:
+            return moderationOrange
+        case .admin:
+            return systemRed
+        case .owner:
+            return isLightGrey ? Color(red: 176.0 / 255, green: 138.0 / 255, blue: 28.0 / 255) : systemYellow
+        }
+    }
 
     static let statusHighlight20 = systemYellow.opacity(0.2)
     static let statusHighlight40 = systemYellow.opacity(0.4)
@@ -406,17 +507,17 @@ enum AppColors {
 
     // MARK: - Chart / Indicator Literal Tokens
 
-    /// Primary blue tab gradient; lightGrey uses a lighter sky-navy so dark text stays legible.
+    /// Primary blue tab gradient; lightGrey uses shared nav-blue ramp (palette §41).
     static var chartTabGradientStart: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.50, green: 0.66, blue: 0.94)
+        case .lightGrey: return LightGreyPalette.navBlueRampTabStart
         case .midGrey, .dark: return Color(red: 0.20, green: 0.40, blue: 0.80)
         }
     }
 
     static var chartTabGradientEnd: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.40, green: 0.55, blue: 0.86)
+        case .lightGrey: return LightGreyPalette.navBlueRampTabEnd
         case .midGrey, .dark: return Color(red: 0.15, green: 0.25, blue: 0.50)
         }
     }
@@ -436,52 +537,52 @@ enum AppColors {
         }
     }
 
-    // Green gradient for marker "Add" tab — aligns with `themeAwareGreen` on light grey (audit 34/35).
+    // Green gradient for marker "Add" tab — light grey: lighter/darker companions around `defaultBullishCandleGreen`.
     static var chartGreenGradientStart: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.34, green: 0.62, blue: 0.44)
+        case .lightGrey: return Color(red: 108.0 / 255, green: 200.0 / 255, blue: 158.0 / 255)
         case .midGrey, .dark: return Color(red: 0.14, green: 0.52, blue: 0.28)
         }
     }
 
     static var chartGreenGradientEnd: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.22, green: 0.52, blue: 0.36)
+        case .lightGrey: return Color(red: 58.0 / 255, green: 145.0 / 255, blue: 108.0 / 255)
         case .midGrey, .dark: return Color(red: 0.09, green: 0.36, blue: 0.18)
         }
     }
 
     static var chartSubTabGradientStart: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.42, green: 0.58, blue: 0.90)
+        case .lightGrey: return LightGreyPalette.navBlueRampSubTabStart
         case .midGrey, .dark: return Color(red: 0.12, green: 0.18, blue: 0.38)
         }
     }
 
     static var chartSubTabGradientEnd: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.32, green: 0.46, blue: 0.80)
+        case .lightGrey: return LightGreyPalette.navBlueRampSubTabEnd
         case .midGrey, .dark: return Color(red: 0.08, green: 0.12, blue: 0.28)
         }
     }
 
     static var chartDeepSubTabGradientStart: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.36, green: 0.50, blue: 0.84)
+        case .lightGrey: return LightGreyPalette.navBlueRampDeepStart
         case .midGrey, .dark: return Color(red: 0.08, green: 0.12, blue: 0.25)
         }
     }
 
     static var chartDeepSubTabGradientEnd: Color {
         switch theme {
-        case .lightGrey: return Color(red: 0.28, green: 0.40, blue: 0.74)
+        case .lightGrey: return LightGreyPalette.navBlueRampDeepEnd
         case .midGrey, .dark: return Color(red: 0.05, green: 0.08, blue: 0.18)
         }
     }
 
-    /// Bullish candle on light-grey chart (solid fill, higher contrast vs panel).
+    /// Bullish candle on light-grey chart (solid fill); same as `defaultBullishCandleGreen` / `statusPositive`.
     static var chartBullCandleLightGrey: Color {
-        Color(red: 28.0 / 255, green: 108.0 / 255, blue: 72.0 / 255)
+        defaultBullishCandleGreen
     }
 
     /// Honeycomb strength for admin / chart-settings sheets only (lighter on lightGrey).
@@ -665,7 +766,7 @@ enum AppColors {
     /// Indicator panel plot canvas — stronger separation from the main chart wash on light grey (audit 25).
     static var indicatorPanelPlotBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 122.0 / 255, green: 126.0 / 255, blue: 142.0 / 255)
+        case .lightGrey: return chartPanelBackground
         case .midGrey, .dark: return chartPanelBackground
         }
     }
@@ -679,9 +780,9 @@ enum AppColors {
     /// Timeframe panel resize handle chrome.
     static var timeframePanelHandleBackground: Color {
         switch theme {
-        case .lightGrey: return Color(red: 197.0 / 255, green: 201.0 / 255, blue: 209.0 / 255)
-        case .midGrey: return Color(red: 28.0 / 255, green: 32.0 / 255, blue: 44.0 / 255)
-        case .dark: return Color(red: 18.0 / 255, green: 18.0 / 255, blue: 24.0 / 255)
+        case .lightGrey: return Color(red: 145.0 / 255, green: 149.0 / 255, blue: 163.0 / 255)
+        case .midGrey: return panelHeaderBackground
+        case .dark: return panelHeaderBackground
         }
     }
 
@@ -789,9 +890,14 @@ enum AppColors {
         primaryForeground
     }
 
-    /// Suffix label (“Timeframe” / “Indicator”) on panel resize bars.
-    static var panelResizeHandleSuffixForeground: Color {
-        isLightGrey ? secondaryForeground.opacity(0.92) : surfaceWhite50
+    /// Suffix label (“Indicator”) on indicator resize bars.
+    static var panelResizeHandleIndicatorSuffixForeground: Color {
+        isLightGrey ? Color.white.opacity(0.96) : surfaceWhite80
+    }
+
+    /// Suffix label (“Timeframe”) on timeframe resize bars.
+    static var panelResizeHandleTimeframeSuffixForeground: Color {
+        isLightGrey ? Color.white.opacity(0.82) : surfaceWhite68
     }
 
     /// Chevron on panel resize bars when collapsed.
@@ -1264,7 +1370,7 @@ enum AppColors {
     static var symbolSheetHeroBlueGradientLeading: Color {
         switch theme {
         case .lightGrey:
-            return Color(red: 96.0 / 255, green: 132.0 / 255, blue: 196.0 / 255)
+            return LightGreyPalette.symbolHeroLeading
         case .midGrey:
             return Color(red: 58.0 / 255, green: 92.0 / 255, blue: 142.0 / 255)
         case .dark:
@@ -1275,7 +1381,7 @@ enum AppColors {
     static var symbolSheetHeroBlueGradientTrailing: Color {
         switch theme {
         case .lightGrey:
-            return Color(red: 52.0 / 255, green: 86.0 / 255, blue: 158.0 / 255)
+            return LightGreyPalette.symbolHeroTrailing
         case .midGrey:
             return Color(red: 28.0 / 255, green: 52.0 / 255, blue: 96.0 / 255)
         case .dark:
@@ -1294,7 +1400,7 @@ enum AppColors {
     static var symbolListRowSelectedBlueGradientLeading: Color {
         switch theme {
         case .lightGrey:
-            return Color(red: 88.0 / 255, green: 124.0 / 255, blue: 190.0 / 255)
+            return LightGreyPalette.symbolRowSelectedLeading
         case .midGrey:
             return Color(red: 50.0 / 255, green: 82.0 / 255, blue: 132.0 / 255)
         case .dark:
@@ -1305,7 +1411,7 @@ enum AppColors {
     static var symbolListRowSelectedBlueGradientTrailing: Color {
         switch theme {
         case .lightGrey:
-            return Color(red: 48.0 / 255, green: 78.0 / 255, blue: 148.0 / 255)
+            return LightGreyPalette.symbolRowSelectedTrailing
         case .midGrey:
             return Color(red: 24.0 / 255, green: 46.0 / 255, blue: 88.0 / 255)
         case .dark:
@@ -1537,7 +1643,7 @@ enum AppColors {
         isLightGrey ? Color(red: 0.06, green: 0.52, blue: 0.48) : Color(red: 20.0 / 255, green: 184.0 / 255, blue: 166.0 / 255)
     }
     static var markerViewingTintTimeframe: Color {
-        isLightGrey ? Color(red: 0.10, green: 0.52, blue: 0.78) : Color(red: 56.0 / 255, green: 189.0 / 255, blue: 248.0 / 255)
+        isLightGrey ? LightGreyPalette.navBlueRampDeepEnd : Color(red: 56.0 / 255, green: 189.0 / 255, blue: 248.0 / 255)
     }
     static var markerViewingTintPrimaryStar: Color {
         isLightGrey ? Color(red: 0.72, green: 0.52, blue: 0.06) : Color(red: 251.0 / 255, green: 191.0 / 255, blue: 36.0 / 255)
@@ -1554,6 +1660,44 @@ enum AppColors {
 
     static var standardSearchFieldAccessory: Color {
         isLightGrey ? tgMidGrey : surfaceWhite50
+    }
+
+    // MARK: - Light grey adaptive drawer / form chrome (palette §41)
+
+    /// Footer neutral actions (Switch Guild, Create Guild, etc.).
+    static var drawerNeutralActionButtonFill: Color {
+        isLightGrey ? standardSearchFieldFill : whiteText.opacity(0.8)
+    }
+
+    static var drawerNeutralActionButtonForeground: Color {
+        isLightGrey ? primaryForeground : systemBlack
+    }
+
+    static var drawerNeutralActionButtonStroke: Color {
+        isLightGrey ? standardSearchFieldStroke : systemBlack
+    }
+
+    /// Discover / filter search row backgrounds.
+    static var adaptiveChromeSearchFieldFill: Color {
+        isLightGrey ? standardSearchFieldFill : unhighlightedTextBoxBackground.opacity(0.92)
+    }
+
+    static var adaptiveChromeSearchFieldStroke: Color {
+        isLightGrey ? standardSearchFieldStroke : whiteText.opacity(0.2)
+    }
+
+    /// Dropdown / form control wells (create guild, etc.).
+    static var adaptiveFormControlFill: Color {
+        isLightGrey ? standardSearchFieldFill : unhighlightedTextBoxBackground.opacity(0.88)
+    }
+
+    static var adaptiveFormControlStroke: Color {
+        isLightGrey ? standardSearchFieldStroke : whiteText.opacity(0.15)
+    }
+
+    /// Magnifyingglass / accessory on unified search: light grey uses search-field ink; dark/mid use panel white.
+    static var adaptiveSearchAccessoryForeground: Color {
+        isLightGrey ? standardSearchFieldAccessory : surfaceWhite50
     }
 
     /// Unselected capsule tabs (UnifiedTabButton / UnifiedCategoryTabButton).

@@ -127,7 +127,8 @@ struct GenericIndicatorPanelView: View {
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
                     candleSpacing: candleSpacing,
-                    minVerticalScale: zoomPolicy.minimumScale
+                    minVerticalScale: zoomPolicy.minimumScale,
+                    yAxisWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
                 ) {
                     panelContentArea
                 }
@@ -272,7 +273,9 @@ struct GenericIndicatorPanelView: View {
                 Spacer()
                 IndicatorPanelYAxisLane(
                     viewport: viewport,
-                    labels: yAxisLabels(for: viewport)
+                    labels: yAxisLabels(for: viewport),
+                    laneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth,
+                    labelWidth: ChartAxisMetrics.indicatorPanelYAxisLabelWidth
                 )
             }
         }
@@ -297,7 +300,7 @@ struct GenericIndicatorPanelView: View {
                     // Current value label
                     Text(formatValue(currentValue))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(AppColors.onAccentForeground)
+                        .foregroundColor(PanelChromeTextColorResolver.textColor(for: lineColor))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(lineColor.opacity(0.8))
@@ -309,7 +312,7 @@ struct GenericIndicatorPanelView: View {
     }
     
     private var miniInfoOverlay: some View {
-        VStack(alignment: .leading) {
+        Group {
             let state = panelHeaderState
             if !state.tokens.isEmpty || state.badge != nil {
                 PanelMiniInfoOverlay(
@@ -317,8 +320,8 @@ struct GenericIndicatorPanelView: View {
                     trailingBadge: state.badge
                 )
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.top, 6)
         .padding(.leading, 8)
         .allowsHitTesting(false)
@@ -499,6 +502,8 @@ struct GenericIndicatorPanelView: View {
         default:
             break
         }
+
+        drawDomainBoundaryLines(context: context, size: size, viewport: viewport)
     }
     
     // MARK: - CCI Drawing
@@ -729,7 +734,10 @@ struct GenericIndicatorPanelView: View {
     }
 
     private func plotEndX(totalWidth: CGFloat) -> CGFloat {
-        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+        ChartAxisMetrics.plotWidth(
+            totalWidth: totalWidth,
+            axisLaneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
+        )
     }
 
     private func visibleIndexBounds(totalWidth: CGFloat) -> ClosedRange<Int>? {
@@ -822,13 +830,41 @@ struct GenericIndicatorPanelView: View {
     }
 
     private func yAxisLabels(for viewport: IndicatorPanelViewport) -> [IndicatorPanelYAxisLabel] {
-        viewport.dynamicLevels(emphasis: emphasisValues).map { value in
+        viewport.dynamicLevels(
+            emphasis: emphasisValues + [viewport.rawValueRange.min, viewport.rawValueRange.max]
+        ).map { value in
             IndicatorPanelYAxisLabel(
                 value: value,
                 text: formatValue(value),
                 color: axisLabelColor(for: value)
             )
         }
+    }
+
+    private func drawDomainBoundaryLines(
+        context: GraphicsContext,
+        size: CGSize,
+        viewport: IndicatorPanelViewport
+    ) {
+        drawIndicatorPanelGuideLines(
+            context: context,
+            viewport: viewport,
+            plotWidth: plotEndX(totalWidth: size.width),
+            guides: [
+                IndicatorPanelGuideLine(
+                    value: viewport.rawValueRange.max,
+                    color: AppColors.panelYAxisLaneText.opacity(0.48),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+                IndicatorPanelGuideLine(
+                    value: viewport.rawValueRange.min,
+                    color: AppColors.panelYAxisLaneText.opacity(0.48),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+            ]
+        )
     }
 
     private func axisLabelColor(for value: Double) -> Color {

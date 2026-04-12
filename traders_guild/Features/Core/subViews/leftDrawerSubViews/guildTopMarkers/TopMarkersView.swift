@@ -28,6 +28,7 @@ struct TopMarkersView: View {
 
     @State private var recentCache: [String: [RLMarkerActivityItemDTO]] = [:]
     @State private var archiveCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var archiveTotalCountCache: [String: Int] = [:]
     @State private var setupsCache: [String: TopMarkerSetupCacheEntry] = [:]
 
     @State private var symbolCache: [UUID: RLTradingSymbolDTO] = [:]
@@ -36,6 +37,8 @@ struct TopMarkersView: View {
     @State private var loadError: String?
     @State private var likedMarkerId: UUID?
     @State private var activeLoadRequestId = 0
+    @State private var archiveTotalCount = 0
+    @State private var refreshNonce = 0
 
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
 
@@ -46,7 +49,7 @@ struct TopMarkersView: View {
     }
 
     private var visibleLoadKey: String {
-        "\(reloadKey)|\(selectedTab.rawValue)|\(selectedScope.rawValue)"
+        "\(reloadKey)|\(selectedTab.rawValue)|\(selectedScope.rawValue)|\(refreshNonce)"
     }
 
     private var currentTotalCount: Int {
@@ -56,7 +59,7 @@ struct TopMarkersView: View {
         case .setups:
             return setupsLiveMarkers.count + setupsResolvedMarkers.count
         case .bySymbol, .all:
-            return archiveMarkers.count
+            return archiveTotalCount
         }
     }
 
@@ -92,26 +95,27 @@ struct TopMarkersView: View {
             }
         }
         .task(id: visibleLoadKey) {
-            await loadActivity(forceRefresh: false)
+            // refreshNonce > 0 means a notification triggered this reload — treat as forced
+            await loadActivity(forceRefresh: refreshNonce > 0)
         }
         .onReceive(NotificationCenter.default.publisher(for: .markerCreatedSuccessfully)) { _ in
-            Task { await loadActivity(forceRefresh: true) }
+            refreshNonce += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .markerActivityDidChange)) { notification in
             guard shouldRefresh(for: notification) else { return }
-            Task { await loadActivity(forceRefresh: true) }
+            refreshNonce += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .reputationDidUpdate)) { notification in
             guard shouldRefresh(for: notification) else { return }
-            Task { await loadActivity(forceRefresh: true) }
+            refreshNonce += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .accuracyDidUpdate)) { notification in
             guard shouldRefresh(for: notification) else { return }
-            Task { await loadActivity(forceRefresh: true) }
+            refreshNonce += 1
         }
         .onReceive(NotificationCenter.default.publisher(for: .guildMemberPerformanceDidUpdate)) { notification in
             guard shouldRefresh(for: notification) else { return }
-            Task { await loadActivity(forceRefresh: true) }
+            refreshNonce += 1
         }
     }
 
@@ -384,11 +388,26 @@ struct TopMarkersView: View {
                 if let cachedMarkers = archiveCache[loadKey] {
                     applyIfCurrentRequest(requestId) {
                         archiveMarkers = cachedMarkers
+                        archiveTotalCount = archiveTotalCountCache[loadKey] ?? cachedMarkers.count
                         loadError = nil
                         isLoading = false
                     }
                     enqueueSymbolLoad(for: cachedMarkers)
                     return
+                }
+            }
+        }
+
+        if forceRefresh {
+            applyIfCurrentRequest(requestId) {
+                switch requestTab {
+                case .liveFeed:
+                    recentCache.removeValue(forKey: loadKey)
+                case .setups:
+                    setupsCache.removeValue(forKey: loadKey)
+                case .bySymbol, .all:
+                    archiveCache.removeValue(forKey: loadKey)
+                    archiveTotalCountCache.removeValue(forKey: loadKey)
                 }
             }
         }
@@ -446,22 +465,24 @@ struct TopMarkersView: View {
                 enqueueSymbolLoad(for: live + resolved)
 
             case .bySymbol, .all:
-                let markers = try await loadMarkers(
+                let snapshot = try await loadArchiveSnapshot(
                     guildId: guildId,
-                    scope: scope,
-                    loadMode: .archive
+                    scope: scope
                 )
 
                 guard isCurrentRequest(requestId) else { return }
 
                 applyIfCurrentRequest(requestId) {
+                    let markers = MarkerActivityNavigation.sortedByActivity(snapshot.markersByScope[scope] ?? [])
                     archiveCache[loadKey] = markers
+                    archiveTotalCountCache[loadKey] = snapshot.totalCountByScope[scope] ?? markers.count
                     archiveMarkers = markers
+                    archiveTotalCount = snapshot.totalCountByScope[scope] ?? markers.count
                     loadError = nil
                     isLoading = false
                 }
 
-                enqueueSymbolLoad(for: markers)
+                enqueueSymbolLoad(for: MarkerActivityNavigation.sortedByActivity(snapshot.markersByScope[scope] ?? []))
             }
         } catch {
             guard !isCancellationError(error) else { return }
@@ -488,6 +509,20 @@ struct TopMarkersView: View {
 
         guard !Task.isCancelled else { return [] }
         return MarkerActivityNavigation.sortedByActivity(snapshot.markersByScope[scope] ?? [])
+    }
+
+    private func loadArchiveSnapshot(
+        guildId: UUID,
+        scope: RLMarkerActivityScope
+    ) async throws -> MarkerActivityFeedSnapshot {
+        try await MarkerActivityFeedLoader.loadForScope(
+            api: rlAppState.realApi,
+            guildId: guildId,
+            scope: scope,
+            state: MarkerActivityListLoadMode.archive.state,
+            limit: MarkerActivityListLoadMode.archive.limit,
+            fetchAllPages: MarkerActivityListLoadMode.archive.fetchAllPages
+        )
     }
 
     private func loadLiveSymbols(for markers: [RLMarkerActivityItemDTO], forceReload: Bool = false) async {
@@ -611,10 +646,12 @@ struct TopMarkersView: View {
     private func resetAllState() {
         recentMarkers = []
         archiveMarkers = []
+        archiveTotalCount = 0
         setupsLiveMarkers = []
         setupsResolvedMarkers = []
         recentCache = [:]
         archiveCache = [:]
+        archiveTotalCountCache = [:]
         setupsCache = [:]
     }
 

@@ -2387,7 +2387,8 @@ struct ChartMarkerSystem {
 
         // 5. Icon — palette rendering via pre-resolved SwiftUI symbols
         let iconSize = MarkerVisualSpec.iconSize(for: diameter, intent: marker.intent)
-        if marker.intent == .reaction, let iconChar = emojiOverride ?? marker.selectedEmoji {
+        let reactionEmoji = MarkerEmojiNormalization.normalized(emojiOverride) ?? marker.selectedEmoji
+        if marker.intent == .reaction, let iconChar = reactionEmoji {
             let iconColor = MarkerVisualSpec.iconPrimaryColor(for: marker.intent, severity: markerSeverity)
             drawContext.draw(
                 Text(iconChar)

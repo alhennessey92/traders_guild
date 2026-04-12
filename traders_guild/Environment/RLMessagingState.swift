@@ -215,6 +215,8 @@ struct RLMessagingSheet: View {
     @State private var reportTarget: MessagingReportTarget? = nil
     @State private var reactionReactorsState = ChatReactionReactorsState()
     @StateObject private var chatSurfaceOverlayCoordinator = ChatSurfaceOverlayCoordinator()
+    @State private var deletedChatroomMessageIDs: Set<UUID> = []
+    @State private var deletedDMMessageIDs: Set<UUID> = []
 
     // Scroll tracking
     @State private var isNearBottom = true
@@ -513,9 +515,9 @@ struct RLMessagingSheet: View {
         .onReceive(messagingManager.deletedMessageSubject) { deletedId in
             switch contentType {
             case .chatroom:
-                chatroomMessages.removeAll { $0.id == deletedId }
+                deletedChatroomMessageIDs.insert(deletedId)
             case .dmThread:
-                dmMessages.removeAll { $0.id == deletedId }
+                deletedDMMessageIDs.insert(deletedId)
             }
         }
         .onReceive(messagingManager.reactionUpdatedSubject) { payload in
@@ -687,6 +689,20 @@ struct RLMessagingSheet: View {
 
     // MARK: - Messages List
     
+    @ViewBuilder
+    private var chatWelcomeBanner: some View {
+        switch contentType {
+        case .chatroom(let chatroom):
+            ChatWelcomeBanner(
+                text: "Welcome to \(chatroom.name)! This is the start of the conversation. Be respectful and follow guild rules."
+            )
+        case .dmThread(let thread):
+            ChatWelcomeBanner(
+                text: "This is the beginning of your conversation with \(thread.participant.username). Messages are private to you both."
+            )
+        }
+    }
+
     private var messagesListView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -709,6 +725,11 @@ struct RLMessagingSheet: View {
                         }
                     }
                     
+                    // Welcome banner at the very beginning of the conversation
+                    if !hasMoreMessages {
+                        chatWelcomeBanner
+                    }
+
                     switch contentType {
                     case .chatroom:
                         ForEach(Array(chatroomMessages.enumerated()), id: \.element.id) { index, message in
@@ -722,6 +743,7 @@ struct RLMessagingSheet: View {
                                 message: message,
                                 isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
                                 isPending: pendingMessageIds.contains(message.id),
+                                isDeleted: deletedChatroomMessageIDs.contains(message.id),
                                 onReply: { replyDraft = ChatReplyDraft(message: message) },
                                 onReactionSelected: { emoji in
                                     Task { await toggleChatroomReaction(messageId: message.id, emoji: emoji) }
@@ -748,6 +770,7 @@ struct RLMessagingSheet: View {
                                 message: message,
                                 isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
                                 isPending: pendingMessageIds.contains(message.id),
+                                isDeleted: deletedDMMessageIDs.contains(message.id),
                                 onReply: { replyDraft = ChatReplyDraft(message: message) },
                                 onReactionSelected: { emoji in
                                     Task { await toggleDMReaction(messageId: message.id, emoji: emoji) }
@@ -842,6 +865,7 @@ struct RLMessagingSheet: View {
                 case .chatroom:
                     ChatSurfaceOverlayHost(
                         messages: chatroomMessages,
+                        deletedMessageIDs: deletedChatroomMessageIDs,
                         reactorsState: reactionReactorsState,
                         onQuickReactionSelected: { message, emoji in
                             Task { await toggleChatroomReaction(messageId: message.id, emoji: emoji) }
@@ -868,6 +892,7 @@ struct RLMessagingSheet: View {
                 case .dmThread:
                     ChatSurfaceOverlayHost(
                         messages: dmMessages,
+                        deletedMessageIDs: deletedDMMessageIDs,
                         reactorsState: reactionReactorsState,
                         onQuickReactionSelected: { message, emoji in
                             Task { await toggleDMReaction(messageId: message.id, emoji: emoji) }
@@ -1077,23 +1102,27 @@ struct RLMessagingSheet: View {
     }
 
     private func deleteChatroomMessage(_ message: RLChatroomMessageDTO) async {
+        deletedChatroomMessageIDs.insert(message.id)
         do {
             try await appState.deleteChatroomMessage(
                 chatroomId: message.chatroomId,
                 messageId: message.id
             )
         } catch {
+            deletedChatroomMessageIDs.remove(message.id)
             appState.showError(error, title: "Failed to Delete", style: .toast)
         }
     }
 
     private func deleteDMMessage(_ message: RLDMMessageDTO) async {
+        deletedDMMessageIDs.insert(message.id)
         do {
             try await appState.deleteDMMessage(
                 threadId: message.dmId,
                 messageId: message.id
             )
         } catch {
+            deletedDMMessageIDs.remove(message.id)
             appState.showError(error, title: "Failed to Delete", style: .toast)
         }
     }
@@ -1155,6 +1184,8 @@ struct RLMessagingSheet: View {
         reportTarget = nil
         reactionReactorsState = ChatReactionReactorsState()
         pendingMessageIds = []
+        deletedChatroomMessageIDs = []
+        deletedDMMessageIDs = []
     }
 
     private func initializeMetadataSignature() {
@@ -1283,35 +1314,35 @@ struct RLMessagingSheet: View {
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
                 icon: "shield.checkered",
-                color: AppColors.accentColor,
+                color: AppColors.guildReputationAccent,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Accuracy",
                 value: member.accuracyFormatted ?? "--",
                 icon: "target",
-                color: .green,
+                color: AppColors.statusPositive,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Global Reputation",
                 value: "\(member.globalReputation)",
                 icon: "globe",
-                color: .blue,
+                color: AppColors.statusInfo,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Days in Guild",
                 value: "\(member.daysInGuild)",
                 icon: "calendar",
-                color: .cyan,
+                color: AppColors.statusInfo,
                 trend: nil
             ),
             ProfileStatDTO(
                 label: "Contribution",
                 value: "\(member.contributionScore)%",
                 icon: "chart.bar.fill",
-                color: .orange,
+                color: AppColors.statusWarning70,
                 trend: nil
             ),
         ]
@@ -1618,6 +1649,7 @@ struct RLChatroomMessageView: View {
     let message: RLChatroomMessageDTO
     let isGrouped: Bool
     let isPending: Bool
+    let isDeleted: Bool
     let onReply: () -> Void
     let onReactionSelected: (String) -> Void
     let onVisibleReactionTap: () -> Void
@@ -1627,6 +1659,7 @@ struct RLChatroomMessageView: View {
         message: RLChatroomMessageDTO,
         isGrouped: Bool = false,
         isPending: Bool = false,
+        isDeleted: Bool = false,
         onReply: @escaping () -> Void,
         onReactionSelected: @escaping (String) -> Void,
         onVisibleReactionTap: @escaping () -> Void,
@@ -1635,6 +1668,7 @@ struct RLChatroomMessageView: View {
         self.message = message
         self.isGrouped = isGrouped
         self.isPending = isPending
+        self.isDeleted = isDeleted
         self.onReply = onReply
         self.onReactionSelected = onReactionSelected
         self.onVisibleReactionTap = onVisibleReactionTap
@@ -1648,6 +1682,7 @@ struct RLChatroomMessageView: View {
             message: message,
             context: .guildChatroom,
             isPending: isPending,
+            isDeleted: isDeleted,
             isGrouped: isGrouped,
             onAvatarTap: onAvatarTap,
             onAuthorTap: onAvatarTap,
@@ -1671,6 +1706,7 @@ struct RLDMMessageView: View {
     let message: RLDMMessageDTO
     let isGrouped: Bool
     let isPending: Bool
+    let isDeleted: Bool
     let onReply: () -> Void
     let onReactionSelected: (String) -> Void
     let onVisibleReactionTap: () -> Void
@@ -1682,6 +1718,7 @@ struct RLDMMessageView: View {
         message: RLDMMessageDTO,
         isGrouped: Bool = false,
         isPending: Bool = false,
+        isDeleted: Bool = false,
         onReply: @escaping () -> Void,
         onReactionSelected: @escaping (String) -> Void,
         onVisibleReactionTap: @escaping () -> Void,
@@ -1690,6 +1727,7 @@ struct RLDMMessageView: View {
         self.message = message
         self.isGrouped = isGrouped
         self.isPending = isPending
+        self.isDeleted = isDeleted
         self.onReply = onReply
         self.onReactionSelected = onReactionSelected
         self.onVisibleReactionTap = onVisibleReactionTap
@@ -1702,6 +1740,7 @@ struct RLDMMessageView: View {
             context: .directMessage,
             isRead: message.isRead,
             isPending: isPending,
+            isDeleted: isDeleted,
             isGrouped: isGrouped,
             onAuthorTap: onAuthorTap,
             onReply: onReply,

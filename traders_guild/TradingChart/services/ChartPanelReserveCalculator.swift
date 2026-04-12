@@ -105,6 +105,8 @@ enum ChartPanelReserveCalculator {
         panelXAxisTimeLabelAreaHeight + panelXAxisLabelBottomFootHeight
     /// Consistent gap between chart layout and floating panel stack (avoids jumps when panels expand/collapse).
     static let panelStackChartUniformGap: CGFloat = 4
+    /// Visual breathing room under the bottom-most panel without changing main chart reserve math.
+    static let panelStackBottomVisualBreathingRoom: CGFloat = 8
     /// No-panel state uses TradingChartView's native bottom control baseline.
     static var mainChartControlRowBaselineClearance: CGFloat {
         0

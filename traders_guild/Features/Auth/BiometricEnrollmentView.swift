@@ -49,8 +49,8 @@ struct BiometricEnrollmentView: View {
                 .disabled(isEnrolling)
 
                 Button {
-                    // User declined — remember this so we don't ask again this session
-                    UserDefaults.standard.set(true, forKey: "traders_guild_biometric_declined")
+                    // User declined — persist in Keychain so it survives app reinstall
+                    KeychainPreferences.setBool(true, forKey: "traders_guild_biometric_declined")
                     dismiss()
                 } label: {
                     Text("Not now")

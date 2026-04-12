@@ -26,7 +26,7 @@ class ChartSettings: ObservableObject {
 
     // MARK: - Candle Color Settings
 
-    @Published var bullishCandleColor: Color = .green
+    @Published var bullishCandleColor: Color = AppColors.defaultBullishCandleGreen
     @Published var bearishCandleColor: Color = .red
 
     // MARK: - Viewport Window Settings (timeframe panel)

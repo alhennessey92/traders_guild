@@ -704,7 +704,7 @@ struct chartSheetMarkersView: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
-                .foregroundColor(.orange)
+                .foregroundColor(AppColors.statusWarning80)
             Text(text)
                 .font(.caption)
                 .foregroundColor(AppColors.statusWarning95)
@@ -1311,16 +1311,8 @@ private struct MarkerFilterSettingsSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .padding(.bottom, 20)
                 }
-
-                AdminFooterActions(
-                    primaryTitle: "Done",
-                    onCancel: { isPresented = false },
-                    onPrimary: { isPresented = false }
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .adminSheetChrome(edge: .bottom)
             }
 
             SheetCloseButton(action: { isPresented = false })

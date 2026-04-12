@@ -6108,7 +6108,7 @@ struct TradingChartView: View {
                     .font(.system(size: symbol.effectiveIsMarketOpen ? 7 : 8, weight: .semibold))
                     .foregroundColor(
                         symbol.effectiveIsMarketOpen
-                            ? (ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : Color.green)
+                            ? RLComponentType.levelEntry.color
                             : AppColors.surfaceGray75
                     )
             }
@@ -6166,8 +6166,8 @@ struct TradingChartView: View {
             }
             .foregroundColor(
                 change >= 0
-                    ? (ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : Color.green)
-                    : Color.red
+                    ? RLComponentType.levelEntry.color
+                    : RLComponentType.levelSl.color
             )
         }
     }
@@ -6616,7 +6616,7 @@ struct TradingChartView: View {
             scaledHeight - totalVerticalOffset
         
         let isLightGreyChart = ThemeManager.shared.currentTheme == .lightGrey
-        let bullishColor = isLightGreyChart ? AppColors.chartBullCandleLightGrey : chartSettings.bullishCandleColor
+        let bullishColor = chartSettings.bullishCandleColor
         let candleColor = candle.close >= candle.open ? bullishColor : chartSettings.bearishCandleColor
 
         // Draw wick

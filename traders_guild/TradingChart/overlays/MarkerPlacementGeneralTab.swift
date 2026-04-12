@@ -230,7 +230,7 @@ struct MarkerPlacementGeneralTab: View {
                     subtitle: "Intent-specific fields",
                     icon: "list.bullet.clipboard",
                     tint: placementState.intent == .setup && placementState.trackingEnabled
-                        ? AppColors.markerPositiveForeground
+                        ? RLComponentType.levelEntry.color
                         : (placementState.intent == .alert
                             ? (placementState.alertSeverity?.color ?? placementState.intent.color)
                             : placementState.intent.color)
@@ -277,7 +277,7 @@ struct MarkerPlacementGeneralTab: View {
                             .font(.caption)
                     }
                 }
-                .tint(placementState.trackingEnabled ? AppColors.markerPositiveForeground : placementState.intent.color)
+                .tint(placementState.trackingEnabled ? RLComponentType.levelEntry.color : placementState.intent.color)
 
                 if placementState.trackingEnabled {
                     trackedSetupBanner
@@ -353,15 +353,15 @@ struct MarkerPlacementGeneralTab: View {
             }
 
         case .reaction:
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Self.emojiCategories, id: \.title) { category in
-                        Text(category.title)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(AppColors.greyText)
-                            .textCase(.uppercase)
-                        LazyVGrid(columns: columns, spacing: 8) {
+            // Horizontal strips per category — avoids vertical scroll competing with chart pan/zoom
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Self.emojiCategories, id: \.title) { category in
+                    Text(category.title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(AppColors.greyText)
+                        .textCase(.uppercase)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
                             ForEach(category.emojis, id: \.self) { emoji in
                                 Button {
                                     placementState.upsertComponent(
@@ -374,29 +374,28 @@ struct MarkerPlacementGeneralTab: View {
                                 } label: {
                                     Text(emoji)
                                         .font(.system(size: 19))
-                                        .frame(height: 34)
-                                        .frame(maxWidth: .infinity)
+                                        .frame(width: 38, height: 38)
                                         .background(
-                                            RoundedRectangle(cornerRadius: 8)
+                                            Circle()
                                                 .fill(currentReactionEmoji == emoji ? placementState.intent.color.opacity(0.35) : AppColors.whiteText.opacity(0.07))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(
-                                                            currentReactionEmoji == emoji
-                                                                ? placementState.intent.color.opacity(0.6)
-                                                                : AppColors.whiteText.opacity(0.08),
-                                                            lineWidth: 1
-                                                        )
+                                        )
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    currentReactionEmoji == emoji
+                                                        ? placementState.intent.color.opacity(0.6)
+                                                        : AppColors.whiteText.opacity(0.08),
+                                                    lineWidth: 1
                                                 )
                                         )
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                        .padding(.horizontal, 2)
                     }
                 }
             }
-            .frame(maxHeight: 220)
 
         case .personal:
             Text("No additional requirements")
@@ -518,14 +517,14 @@ struct MarkerPlacementGeneralTab: View {
         HStack(spacing: 8) {
             Image(systemName: "scope")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(AppColors.markerPositiveForeground)
+                .foregroundColor(RLComponentType.levelEntry.color)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tracking Mode Active")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.primaryForeground)
                 Text("Estimated reputation impact now shown")
                     .font(.caption2)
-                    .foregroundColor(AppColors.markerPositiveForegroundMuted)
+                    .foregroundColor(RLComponentType.levelEntry.color.opacity(0.78))
             }
             Spacer(minLength: 0)
         }
@@ -533,10 +532,10 @@ struct MarkerPlacementGeneralTab: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.markerPositiveFill)
+                .fill(RLComponentType.levelEntry.color.opacity(0.14))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.markerPositiveForeground.opacity(0.38), lineWidth: 1)
+                        .stroke(RLComponentType.levelEntry.color.opacity(0.38), lineWidth: 1)
                 )
         )
     }
@@ -546,12 +545,12 @@ struct MarkerPlacementGeneralTab: View {
             trackedRepChip(
                 title: "Rep + (est)",
                 value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
-                tint: AppColors.markerPositiveForeground
+                tint: RLComponentType.levelEntry.color
             )
             trackedRepChip(
                 title: "Rep - (est)",
                 value: placementState.estimatedTrackingRepLoss.map { "-\($0)" } ?? "—",
-                tint: .red
+                tint: RLComponentType.levelSl.color
             )
         }
     }

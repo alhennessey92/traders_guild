@@ -155,7 +155,7 @@ struct UserGlobalSheetView: View {
                     if rlAppState.currentUser?.isVerified == true {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.blue)
+                            .foregroundColor(AppColors.statusPositive)
                             .background(Circle().fill(AppColors.sheetBackground).padding(-2))
                     }
                 }
@@ -173,11 +173,11 @@ struct UserGlobalSheetView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "globe")
                             .font(.caption)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text("\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)")
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text("Global Reputation")
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
@@ -186,11 +186,11 @@ struct UserGlobalSheetView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "target")
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(AppColors.statusPositive90)
                         Text(globalAccuracyDisplay)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(.green)
+                            .foregroundColor(AppColors.statusPositive90)
                         Text("Global Accuracy")
                             .font(.caption)
                             .foregroundColor(AppColors.greyText)
@@ -206,7 +206,7 @@ struct UserGlobalSheetView: View {
             if let loadError {
                 Text(loadError)
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning90)
                     .padding(.horizontal, 25)
                     .padding(.bottom, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -253,7 +253,7 @@ struct UserGlobalSheetView: View {
         VStack(spacing: 24) {
             if isLoading && globalRepData == nil && globalStats == nil {
                 ProgressView()
-                    .tint(AppColors.accentColor)
+                    .tint(AppColors.guildReputationAccent)
                     .padding(.top, 36)
             }
 
@@ -265,42 +265,42 @@ struct UserGlobalSheetView: View {
                     title: "Global Reputation",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
                     icon: "globe",
-                    color: AppColors.accentColor
+                    color: AppColors.guildReputationAccent
                 )
 
                 GlobalStatCard(
                     title: "Global Accuracy",
                     value: globalAccuracyDisplay,
                     icon: "target",
-                    color: .green
+                    color: AppColors.statusPositive
                 )
 
                 GlobalStatCard(
                     title: "Guilds Joined",
                     value: "\(globalStats?.totalGuildsJoined ?? userGuilds.count)",
                     icon: "person.3.fill",
-                    color: .blue
+                    color: AppColors.statusInfo
                 )
 
                 GlobalStatCard(
                     title: "Markers Placed",
                     value: "\(globalStats?.totalMarkersPlaced ?? 0)",
                     icon: "mappin.circle.fill",
-                    color: .red
+                    color: AppColors.statusNegative
                 )
 
                 GlobalStatCard(
                     title: "Active Streak",
                     value: "\(globalRepData?.consecutiveActiveDays ?? globalStats?.currentStreakDays ?? 0)d",
                     icon: "flame.fill",
-                    color: .orange
+                    color: AppColors.moderationOrange
                 )
 
                 GlobalStatCard(
                     title: "Awards Earned",
                     value: "\(globalStats?.totalAwardsEarned ?? 0)",
                     icon: "medal.fill",
-                    color: .yellow
+                    color: AppColors.statusHighlight80
                 )
             }
             .padding(.horizontal, 25)
@@ -320,7 +320,7 @@ struct UserGlobalSheetView: View {
                             Text("\(rep.weeklyDelta >= 0 ? "+" : "")\(rep.weeklyDelta)")
                                 .font(.title3)
                                 .fontWeight(.bold)
-                                .foregroundColor(rep.weeklyDelta >= 0 ? .green : .red)
+                                .foregroundColor(rep.weeklyDelta >= 0 ? AppColors.statusPositive : AppColors.statusNegative)
                         }
 
                         Spacer()
@@ -332,7 +332,7 @@ struct UserGlobalSheetView: View {
                             Text(rep.modifiers.totalModifierFormatted)
                                 .font(.title3)
                                 .fontWeight(.bold)
-                                .foregroundColor(AppColors.accentColor)
+                                .foregroundColor(AppColors.guildReputationAccent)
                         }
                     }
                 }
@@ -348,7 +348,7 @@ struct UserGlobalSheetView: View {
                     subtitle: "Tier, weekly delta, guild contributions",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
                     icon: "shield.checkered",
-                    iconColor: AppColors.accentColor,
+                    iconColor: AppColors.guildReputationAccent,
                     action: { showGlobalReputationBreakdown = true }
                 )
 
@@ -357,7 +357,7 @@ struct UserGlobalSheetView: View {
                     subtitle: "Win/loss, streaks, R:R metrics",
                     value: globalAccuracyData?.accuracyFormatted ?? "--",
                     icon: "target",
-                    iconColor: .green,
+                    iconColor: AppColors.statusPositive,
                     action: { showGlobalAccuracyBreakdown = true }
                 )
             }
@@ -420,7 +420,7 @@ struct UserGlobalSheetView: View {
                     Text("\(userGuilds.reduce(0) { $0 + $1.membership.reputation })")
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(AppColors.guildReputationAccent)
                     Text("Combined Guild Rep")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
@@ -433,7 +433,7 @@ struct UserGlobalSheetView: View {
 
             if isLoading && userGuilds.isEmpty {
                 ProgressView()
-                    .tint(AppColors.accentColor)
+                    .tint(AppColors.guildReputationAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
             } else if userGuilds.isEmpty {
@@ -479,7 +479,7 @@ struct UserGlobalSheetView: View {
 
             if isLoading && recentActivity.isEmpty {
                 ProgressView()
-                    .tint(AppColors.accentColor)
+                    .tint(AppColors.guildReputationAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
             } else if recentActivity.isEmpty {
@@ -606,7 +606,14 @@ struct UserGlobalSheetView: View {
     }
 
     private func guildColor(for index: Int) -> Color {
-        let palette: [Color] = [.blue, .orange, .green, .pink, .cyan, .yellow]
+        let palette: [Color] = [
+            AppColors.statusInfo,
+            AppColors.moderationOrange,
+            AppColors.statusPositive,
+            AppColors.guildReputationAccent,
+            AppColors.statusWarning70,
+            AppColors.statusHighlight80
+        ]
         return palette[index % palette.count]
     }
 
@@ -732,7 +739,7 @@ struct AccountInfoRow: View {
                     if isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(AppColors.statusPositive)
                     }
                 }
             }
@@ -772,10 +779,10 @@ struct GlobalGuildCard: View {
                         Text("CURRENT")
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(AppColors.accentColor.opacity(0.2))
+                            .background(AppColors.guildReputationAccent.opacity(0.2))
                             .cornerRadius(4)
                     }
                 }
@@ -793,21 +800,21 @@ struct GlobalGuildCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.caption2)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text("\(guildWithMembership.membership.reputation)")
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                     }
 
                     if let accuracy = guildWithMembership.membership.accuracyFormatted {
                         HStack(spacing: 4) {
                             Image(systemName: "target")
                                 .font(.caption2)
-                                .foregroundColor(.green)
+                                .foregroundColor(AppColors.statusPositive90)
                             Text(accuracy)
                                 .font(.caption)
-                                .foregroundColor(.green)
+                                .foregroundColor(AppColors.statusPositive90)
                         }
                     }
                 }

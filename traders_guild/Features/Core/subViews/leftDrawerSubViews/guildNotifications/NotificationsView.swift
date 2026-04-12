@@ -83,6 +83,10 @@ struct NotificationsListView: View {
         }
         .task {
             await leftDrawerViewModel.refreshNotificationsIfNeeded(rlAppState: rlAppState)
+            await leftDrawerViewModel.refreshFriendRequests(
+                guildId: rlAppState.currentGuild?.id,
+                rlAppState: rlAppState
+            )
         }
     }
     
@@ -219,6 +223,8 @@ struct NotificationCard: View {
     @State private var showAsUnread: Bool
     @State private var inviteActionTaken = false
     @State private var isProcessingInvite = false
+    @State private var friendRequestActionTaken = false
+    @State private var isProcessingFriendRequest = false
 
     @EnvironmentObject var rlAppState: RLAppState     // <<< Add rlAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
@@ -271,6 +277,10 @@ struct NotificationCard: View {
     private var showsSemanticBorder: Bool {
         showAsUnread && notification.semanticBorderColor != nil
     }
+
+    private var incomingFriendRequest: RLFriendRequestIncomingDTO? {
+        leftDrawerViewModel.incomingFriendRequest(for: notification)
+    }
     
     var body: some View {
         Button(action: handleTap) {
@@ -316,41 +326,97 @@ struct NotificationCard: View {
                         .multilineTextAlignment(.leading)
 
                     // Guild Invite Action Buttons
-                    if notification.isGuildInvite && !inviteActionTaken {
-                        HStack(spacing: 8) {
-                            Button(action: acceptInvite) {
-                                HStack(spacing: 4) {
-                                    if isProcessingInvite {
-                                        ProgressView()
-                                            .scaleEffect(0.6)
-                                            .tint(AppColors.onAccentForeground)
+                    if notification.isGuildInvite {
+                        if let guildId = notification.guildId,
+                           rlAppState.userGuilds.contains(where: { $0.guild.id == guildId }) {
+                            Text("Already a member")
+                                .font(.system(size: 11))
+                                .foregroundColor(AppColors.whiteText.opacity(0.4))
+                                .padding(.top, 2)
+                        } else if !inviteActionTaken {
+                            HStack(spacing: 8) {
+                                Button(action: acceptInvite) {
+                                    HStack(spacing: 4) {
+                                        if isProcessingInvite {
+                                            ProgressView()
+                                                .scaleEffect(0.6)
+                                                .tint(AppColors.onAccentForeground)
+                                        }
+                                        Text("Accept")
+                                            .font(.system(size: 11, weight: .semibold))
                                     }
-                                    Text("Accept")
-                                        .font(.system(size: 11, weight: .semibold))
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(AppColors.statusPositive80)
-                                .foregroundColor(AppColors.onAccentForeground)
-                                .cornerRadius(6)
-                            }
-                            .disabled(isProcessingInvite)
-
-                            Button(action: declineInvite) {
-                                Text("Decline")
-                                    .font(.system(size: 11, weight: .semibold))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(AppColors.panelFillEmphasis)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                    .background(AppColors.statusPositive80)
+                                    .foregroundColor(AppColors.onAccentForeground)
                                     .cornerRadius(6)
-                            }
-                            .disabled(isProcessingInvite)
+                                }
+                                .disabled(isProcessingInvite)
 
-                            Spacer()
+                                Button(action: declineInvite) {
+                                    Text("Decline")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(AppColors.panelFillEmphasis)
+                                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                        .cornerRadius(6)
+                                }
+                                .disabled(isProcessingInvite)
+
+                                Spacer()
+                            }
+                            .padding(.top, 4)
+                        } else {
+                            Text("Responded")
+                                .font(.system(size: 11))
+                                .foregroundColor(AppColors.whiteText.opacity(0.4))
+                                .padding(.top, 2)
                         }
-                        .padding(.top, 4)
-                    } else if notification.isGuildInvite && inviteActionTaken {
+                    }
+
+                    // Friend Request Action Buttons
+                    if notification.type == .friendRequest && !friendRequestActionTaken {
+                        if let request = incomingFriendRequest {
+                            HStack(spacing: 8) {
+                                Button {
+                                    Task { await acceptFriendRequest(request: request) }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if isProcessingFriendRequest {
+                                            ProgressView()
+                                                .scaleEffect(0.6)
+                                                .tint(AppColors.onAccentForeground)
+                                        }
+                                        Text("Accept")
+                                            .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(AppColors.friendAccent.opacity(0.8))
+                                    .foregroundColor(AppColors.onAccentForeground)
+                                    .cornerRadius(6)
+                                }
+                                .disabled(isProcessingFriendRequest)
+
+                                Button {
+                                    Task { await declineFriendRequest(request: request) }
+                                } label: {
+                                    Text("Decline")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(AppColors.panelFillEmphasis)
+                                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                        .cornerRadius(6)
+                                }
+                                .disabled(isProcessingFriendRequest)
+
+                                Spacer()
+                            }
+                            .padding(.top, 4)
+                        }
+                    } else if notification.type == .friendRequest && friendRequestActionTaken {
                         Text("Responded")
                             .font(.system(size: 11))
                             .foregroundColor(AppColors.whiteText.opacity(0.4))
@@ -512,6 +578,62 @@ struct NotificationCard: View {
             }
             isProcessingInvite = false
         }
+    }
+
+    // MARK: - Friend Request Actions
+
+    private func acceptFriendRequest(request: RLFriendRequestIncomingDTO) async {
+        isProcessingFriendRequest = true
+        HapticFeedback.light.trigger()
+
+        do {
+            _ = try await rlAppState.acceptFriendRequest(requestId: request.id)
+            withAnimation {
+                friendRequestActionTaken = true
+                showAsUnread = false
+            }
+            leftDrawerViewModel.updateGuildMember(membershipId: request.fromMembershipId) { member in
+                member.updating(isFriend: true, friendshipStatus: "accepted")
+            }
+            leftDrawerViewModel.markNotificationAsRead(
+                notificationId: notification.id,
+                rlAppState: rlAppState
+            )
+            await leftDrawerViewModel.refreshFriendRelationshipCaches(
+                guildId: rlAppState.currentGuild?.id,
+                rlAppState: rlAppState
+            )
+        } catch {
+            // Error shown by appState
+        }
+        isProcessingFriendRequest = false
+    }
+
+    private func declineFriendRequest(request: RLFriendRequestIncomingDTO) async {
+        isProcessingFriendRequest = true
+        HapticFeedback.light.trigger()
+
+        do {
+            _ = try await rlAppState.declineFriendRequest(requestId: request.id)
+            withAnimation {
+                friendRequestActionTaken = true
+                showAsUnread = false
+            }
+            leftDrawerViewModel.updateGuildMember(membershipId: request.fromMembershipId) { member in
+                member.updating(isFriend: false, friendshipStatus: nil)
+            }
+            leftDrawerViewModel.markNotificationAsRead(
+                notificationId: notification.id,
+                rlAppState: rlAppState
+            )
+            await leftDrawerViewModel.refreshFriendRelationshipCaches(
+                guildId: rlAppState.currentGuild?.id,
+                rlAppState: rlAppState
+            )
+        } catch {
+            // Error shown by appState
+        }
+        isProcessingFriendRequest = false
     }
 }
 // struct NotificationCard: View {

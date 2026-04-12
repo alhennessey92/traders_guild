@@ -73,16 +73,13 @@ struct MarkerViewingInfoBox: View {
     }
 
     private var setupOutcomePnlColor: Color {
-        guard let pnl = setupOutcome?.pnl else { return AppColors.primaryForeground }
-        return pnl >= 0
-            ? AppColors.markerPositiveForeground
-            : AppColors.statusNegative85
+        guard let outcome = setupOutcome, let pnl = outcome.pnl else { return AppColors.primaryForeground }
+        return pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color
     }
 
     private var setupOutcomeRepTint: Color {
-        (setupOutcome?.guildRepDelta ?? 0) >= 0
-            ? AppColors.markerPositiveForeground
-            : AppColors.statusNegative85
+        guard let outcome = setupOutcome else { return AppColors.primaryForeground }
+        return (outcome.guildRepDelta ?? 0) >= 0 ? outcome.state.color : RLComponentType.levelSl.color
     }
 
     private var reactionEmoji: String? {

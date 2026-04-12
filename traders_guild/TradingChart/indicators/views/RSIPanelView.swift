@@ -105,7 +105,7 @@ struct ChartPanelResizeHandleLabel: View {
                     .foregroundColor(AppColors.panelResizeHandlePrimaryLabel)
                  + Text("  \(suffixText)")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(AppColors.panelResizeHandleSuffixForeground))
+                    .foregroundColor(suffixForeground))
                     .lineLimit(1)
 
                 if isCollapsed {
@@ -129,6 +129,15 @@ struct ChartPanelResizeHandleLabel: View {
             return AppColors.indicatorPanelHandleBackground
         case .timeframe:
             return AppColors.timeframePanelHandleBackground
+        }
+    }
+
+    private var suffixForeground: Color {
+        switch style {
+        case .indicator:
+            return AppColors.panelResizeHandleIndicatorSuffixForeground
+        case .timeframe:
+            return AppColors.panelResizeHandleTimeframeSuffixForeground
         }
     }
 }
@@ -233,7 +242,8 @@ struct RSIPanelView: View {
                     candleCount: chartData.candles.count,
                     baseCandleWidth: baseCandleWidth,
                     candleSpacing: candleSpacing,
-                    minVerticalScale: zoomPolicy.minimumScale
+                    minVerticalScale: zoomPolicy.minimumScale,
+                    yAxisWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
                 ) {
                     rsiContentArea
                 }
@@ -399,7 +409,7 @@ struct RSIPanelView: View {
                         
                         let text = Text(String(format: "%.1f", rsiValue))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.onAccentForeground)
+                            .foregroundColor(PanelChromeTextColorResolver.textColor(for: lineColor))
                         
                         context.draw(text, at: CGPoint(x: labelRect.midX, y: y))
                     }
@@ -423,7 +433,7 @@ struct RSIPanelView: View {
     }
     
     private var miniInfoOverlay: some View {
-        VStack(alignment: .leading) {
+        Group {
             if let latest = indicatorManager.latestRSI {
                 let condition = rsiCondition(for: latest.value)
                 PanelMiniInfoOverlay(
@@ -439,9 +449,8 @@ struct RSIPanelView: View {
                         : PanelMiniInfoBadge(text: condition.label, color: condition.color.opacity(0.88))
                 )
             }
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.top, 6)
         .padding(.leading, 8)
         .allowsHitTesting(false)
@@ -455,23 +464,9 @@ struct RSIPanelView: View {
                 Spacer()
                 IndicatorPanelYAxisLane(
                     viewport: transformedViewport(height: geometry.size.height),
-                    labels: [
-                        IndicatorPanelYAxisLabel(
-                            value: rsiConfig?.overboughtLevel ?? 70,
-                            text: String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70),
-                            color: AppColors.statusNegative85
-                        ),
-                        IndicatorPanelYAxisLabel(
-                            value: 50,
-                            text: "50",
-                            color: AppColors.panelYAxisLaneText
-                        ),
-                        IndicatorPanelYAxisLabel(
-                            value: rsiConfig?.oversoldLevel ?? 30,
-                            text: String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30),
-                            color: AppColors.statusPositive85
-                        ),
-                    ]
+                    labels: yAxisLabels,
+                    laneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth,
+                    labelWidth: ChartAxisMetrics.indicatorPanelYAxisLabelWidth
                 )
             }
         }
@@ -517,25 +512,45 @@ struct RSIPanelView: View {
     }
     
     private func drawReferenceLevels(context: GraphicsContext, size: CGSize, config: RSIConfig, viewport: IndicatorPanelViewport) {
-        let overboughtY = viewport.yPosition(for: config.overboughtLevel)
-        let oversoldY = viewport.yPosition(for: config.oversoldLevel)
-        let middleY = viewport.yPosition(for: 50)
         let lineEndX = plotEndX(totalWidth: size.width)
-        
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: overboughtY))
-        path.addLine(to: CGPoint(x: lineEndX, y: overboughtY))
-        context.stroke(path, with: .color(AppColors.statusNegative40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
-        
-        path = Path()
-        path.move(to: CGPoint(x: 0, y: middleY))
-        path.addLine(to: CGPoint(x: lineEndX, y: middleY))
-        context.stroke(path, with: .color(AppColors.surfaceGray30), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-        
-        path = Path()
-        path.move(to: CGPoint(x: 0, y: oversoldY))
-        path.addLine(to: CGPoint(x: lineEndX, y: oversoldY))
-        context.stroke(path, with: .color(AppColors.statusPositive40), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+
+        drawIndicatorPanelGuideLines(
+            context: context,
+            viewport: viewport,
+            plotWidth: lineEndX,
+            guides: [
+                IndicatorPanelGuideLine(
+                    value: 100,
+                    color: AppColors.panelYAxisLaneText.opacity(0.5),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+                IndicatorPanelGuideLine(
+                    value: config.overboughtLevel,
+                    color: AppColors.statusNegative40,
+                    lineWidth: 0.5,
+                    dash: [4, 4]
+                ),
+                IndicatorPanelGuideLine(
+                    value: 50,
+                    color: AppColors.surfaceGray30,
+                    lineWidth: 0.5,
+                    dash: [2, 2]
+                ),
+                IndicatorPanelGuideLine(
+                    value: config.oversoldLevel,
+                    color: AppColors.statusPositive40,
+                    lineWidth: 0.5,
+                    dash: [4, 4]
+                ),
+                IndicatorPanelGuideLine(
+                    value: 0,
+                    color: AppColors.panelYAxisLaneText.opacity(0.5),
+                    lineWidth: 0.7,
+                    dash: [3, 3]
+                ),
+            ]
+        )
     }
     
     private func drawRSILine(context: GraphicsContext, size: CGSize, config: RSIConfig, viewport: IndicatorPanelViewport) {
@@ -586,7 +601,42 @@ struct RSIPanelView: View {
     }
 
     private func plotEndX(totalWidth: CGFloat) -> CGFloat {
-        ChartAxisMetrics.plotWidth(totalWidth: totalWidth)
+        ChartAxisMetrics.plotWidth(
+            totalWidth: totalWidth,
+            axisLaneWidth: ChartAxisMetrics.indicatorPanelYAxisLaneWidth
+        )
+    }
+
+    private var yAxisLabels: [IndicatorPanelYAxisLabel] {
+        deduplicatedLabels([
+            IndicatorPanelYAxisLabel(value: 100, text: "100", color: AppColors.panelYAxisLaneText),
+            IndicatorPanelYAxisLabel(
+                value: rsiConfig?.overboughtLevel ?? 70,
+                text: String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70),
+                color: AppColors.statusNegative85
+            ),
+            IndicatorPanelYAxisLabel(value: 50, text: "50", color: AppColors.panelYAxisLaneText),
+            IndicatorPanelYAxisLabel(
+                value: rsiConfig?.oversoldLevel ?? 30,
+                text: String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30),
+                color: AppColors.statusPositive85
+            ),
+            IndicatorPanelYAxisLabel(value: 0, text: "0", color: AppColors.panelYAxisLaneText),
+        ])
+    }
+
+    private func deduplicatedLabels(
+        _ labels: [IndicatorPanelYAxisLabel],
+        tolerance: Double = 0.25
+    ) -> [IndicatorPanelYAxisLabel] {
+        var filtered: [IndicatorPanelYAxisLabel] = []
+
+        for label in labels {
+            guard !filtered.contains(where: { abs($0.value - label.value) <= tolerance }) else { continue }
+            filtered.append(label)
+        }
+
+        return filtered
     }
     
     private func rsiValueColor(_ value: Double) -> Color {

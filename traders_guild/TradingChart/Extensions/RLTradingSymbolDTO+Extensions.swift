@@ -12,7 +12,7 @@ import SwiftUI
 extension RLTradingSymbolDTO {
     /// Color for price change indicator
     var changeColor: Color {
-        (isUp ?? true) ? .green : .red
+        (isUp ?? true) ? AppColors.priceChangePositive : AppColors.priceChangeNegative
     }
     
     /// Arrow indicator for change direction
@@ -136,6 +136,16 @@ extension RLTradingSymbolDTO {
         case .crypto:
             return .always
         case .forex:
+            if usesOandaForexSessionBoundaries {
+                return MarketSession(
+                    openHour: 22,
+                    openMinute: 0,
+                    closeHour: 22,
+                    closeMinute: 0,
+                    isContinuous: true,
+                    closedWeekend: true
+                )
+            }
             return .forexWeekday
         case .stocks, .indices:
             if let exchange, !exchange.isEmpty {
@@ -176,5 +186,18 @@ extension RLTradingSymbolDTO {
         }
 
         return nil
+    }
+
+    var usesOandaForexSessionBoundaries: Bool {
+        guard assetClassEnum == .forex else { return false }
+        let providerText = [
+            activeMarketProvider?.uppercased(),
+            activeProviderDisplayName?.uppercased(),
+            exchange?.uppercased(),
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
+
+        return providerText.contains("OANDA")
     }
 }

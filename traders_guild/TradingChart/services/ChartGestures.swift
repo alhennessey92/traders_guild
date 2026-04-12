@@ -501,6 +501,7 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
     let baseCandleWidth: CGFloat
     let candleSpacing: CGFloat
     let minVerticalScale: CGFloat
+    var yAxisWidth: CGFloat = ChartAxisMetrics.indicatorPanelYAxisLaneWidth
     @ViewBuilder let content: () -> Content
 
     @State private var lastDragTranslation: CGSize = .zero
@@ -513,7 +514,6 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
     @State private var initialPriceScale: CGFloat = 1.0
     @State private var initialVerticalOffset: CGFloat = 0
 
-    private let yAxisWidth: CGFloat = ChartAxisMetrics.yAxisLaneWidth
     private let pinchSensitivity: CGFloat = 0.7
     private let yAxisSensitivity: CGFloat = 0.7
     private let panDragSensitivity: CGFloat = 0.78

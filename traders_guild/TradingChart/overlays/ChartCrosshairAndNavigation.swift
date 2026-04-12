@@ -293,7 +293,7 @@ struct CrosshairInfoPopupCompact: View {
     var timeframe: RLChartTimeframe = .h1
 
     private var crosshairSemanticGreen: Color {
-        ThemeManager.shared.currentTheme == .lightGrey ? AppColors.markerPositiveForeground : .green
+        AppColors.statusPositive
     }
 
     private var popupPosition: CGPoint {

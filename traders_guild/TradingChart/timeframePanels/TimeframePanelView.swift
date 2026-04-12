@@ -722,7 +722,7 @@ struct TimeframePanelView: View {
         let lineEndX = size.width - yAxisOverlayWidth
         let isLightGreyChart = ThemeManager.shared.currentTheme == .lightGrey
         let chartSettings = ChartSettings.shared
-        let bullishPaint = isLightGreyChart ? AppColors.chartBullCandleLightGrey : chartSettings.bullishCandleColor
+        let bullishPaint = chartSettings.bullishCandleColor
 
         for i in visibleStartIndex..<visibleEndIndex {
             guard i < candles.count else { continue }
@@ -820,7 +820,7 @@ struct TimeframePanelView: View {
     // MARK: - Panel Header
 
     private var miniInfoOverlay: some View {
-        VStack(alignment: .leading) {
+        Group {
             if let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close {
                 PanelMiniInfoOverlay(
                     leadingBadge: PanelMiniInfoBadge(
@@ -836,8 +836,8 @@ struct TimeframePanelView: View {
                     ]
                 )
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.top, 6)
         .padding(.leading, 8)
         .allowsHitTesting(false)

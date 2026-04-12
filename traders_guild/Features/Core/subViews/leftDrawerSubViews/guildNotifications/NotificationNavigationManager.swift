@@ -12,6 +12,7 @@ enum NotificationDrawerRoute: Equatable, Identifiable {
     case currentUserProfile
     case guildMemberProfile(userId: UUID)
     case adminReports(guildId: UUID?, reportId: UUID?)
+    case reportResolution(summary: RLReportResolutionSummary)
 
     var id: String {
         switch self {
@@ -25,6 +26,8 @@ enum NotificationDrawerRoute: Equatable, Identifiable {
             return "guild-member-\(userId.uuidString)"
         case .adminReports(let guildId, let reportId):
             return "admin-reports-\(guildId?.uuidString ?? "none")-\(reportId?.uuidString ?? "none")"
+        case .reportResolution(let summary):
+            return "report-resolution-\(summary.reportId.uuidString)"
         }
     }
 }
@@ -79,6 +82,8 @@ class NotificationNavigationManager: ObservableObject {
     
     /// Main entry point: Handle navigation for a notification
     func navigate(to notification: RLNotificationDTO) async {
+        let reportResolutionSummary = notification.contentReportResolutionSummary
+
         if let payload = notification.markerNavigationPayload {
             openMarker(payload)
             return
@@ -101,10 +106,12 @@ class NotificationNavigationManager: ObservableObject {
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
-        await navigate(to: destination)
+        await navigate(to: destination, reportResolutionSummary: reportResolutionSummary)
     }
 
     func navigate(to pushPayload: RLPushNotificationTapPayload) async {
+        let reportResolutionSummary = pushPayload.contentReportResolutionSummary
+
         if let payload = pushPayload.markerNavigationPayload {
             openMarker(payload)
             return
@@ -127,11 +134,14 @@ class NotificationNavigationManager: ObservableObject {
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
-        await navigate(to: destination)
+        await navigate(to: destination, reportResolutionSummary: reportResolutionSummary)
     }
     
     /// Navigate to a specific destination
-    func navigate(to destination: NotificationDestination) async {
+    func navigate(
+        to destination: NotificationDestination,
+        reportResolutionSummary: RLReportResolutionSummary? = nil
+    ) async {
         guard let rlAppState = rlAppState,
               let messagingManager = messagingManager else {
             print("⚠️ NotificationNavigationManager not properly configured")
@@ -201,7 +211,13 @@ class NotificationNavigationManager: ObservableObject {
                 presentLeftDrawerRoute?(.event(eventId: eventId))
 
             case .adminReports(let guildId, let reportId):
-                presentLeftDrawerRoute?(.adminReports(guildId: guildId, reportId: reportId))
+                if rlAppState.canModerate {
+                    presentLeftDrawerRoute?(.adminReports(guildId: guildId, reportId: reportId))
+                } else if let reportResolutionSummary {
+                    presentLeftDrawerRoute?(.reportResolution(summary: reportResolutionSummary))
+                } else {
+                    rlAppState.showInfo("This report update is no longer available")
+                }
             }
             
         } catch is CancellationError {

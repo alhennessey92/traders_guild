@@ -383,6 +383,56 @@ struct ChartComponentReactivityTests {
         }
     }
 
+    @Test
+    func markerEmojiNormalizationRejectsBlankAndNonEmojiPayloads() {
+        #expect(MarkerEmojiNormalization.normalized("   ") == nil)
+        #expect(MarkerEmojiNormalization.normalized("not-an-emoji") == nil)
+        #expect(MarkerEmojiNormalization.normalized("🔥") == "🔥")
+        #expect(MarkerEmojiNormalization.normalized("🔥 extra") == "🔥")
+    }
+
+    @Test
+    func oandaForexSymbolsUseSundayFridaySessionBoundaries() {
+        let symbol = RLTradingSymbolDTO(
+            id: UUID(),
+            ticker: "EUR/USD",
+            displayName: "Euro / US Dollar",
+            assetClass: "forex",
+            exchange: "OANDA",
+            tickSize: 0.0001,
+            lotSize: 1,
+            decimalPlaces: 5,
+            isActive: true,
+            iconName: nil,
+            iconUrl: nil,
+            primaryColor: "#003399",
+            secondaryColor: "#FFD700",
+            currentPrice: 1.0842,
+            priceFormatted: "1.08420",
+            change24h: 0.0012,
+            changePercent24h: 0.11,
+            changeFormatted: "+0.00120 (+0.11%)",
+            isUp: true,
+            high24h: nil,
+            low24h: nil,
+            volume24h: nil,
+            volumeFormatted: nil,
+            inPersonalWatchlist: nil,
+            inGuildWatchlist: nil,
+            isRequestedForGuild: nil,
+            activeMarketProvider: "oanda",
+            isSupportedByActiveProvider: true,
+            isMarketOpen: true,
+            marketStatusUpdatedAt: nil,
+            activityBadges: nil
+        )
+
+        #expect(symbol.usesOandaForexSessionBoundaries)
+        #expect(symbol.marketSession.openHour == 22)
+        #expect(symbol.marketSession.closeHour == 22)
+        #expect(symbol.marketSession.closedWeekend)
+    }
+
     private func makeCandle(open: Double, close: Double) -> RLCandleDTO {
         RLCandleDTO(
             timestamp: Date(timeIntervalSince1970: 0),

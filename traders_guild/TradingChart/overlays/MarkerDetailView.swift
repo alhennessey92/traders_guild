@@ -1348,7 +1348,7 @@ struct MarkerInfoContent: View {
                     if let pnl = outcome.pnl {
                         Text(String(format: "%+.2f%%", pnl))
                             .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                            .foregroundColor(pnl >= 0 ? AppColors.markerPositiveForeground : AppColors.statusNegative85)
+                            .foregroundColor(pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color)
                     }
                 }
 
@@ -1367,8 +1367,8 @@ struct MarkerInfoContent: View {
                             .font(.system(size: 14, weight: .heavy, design: .monospaced))
                             .foregroundColor(
                                 (outcome.guildRepDelta ?? 0) >= 0
-                                    ? AppColors.markerPositiveForeground
-                                    : AppColors.statusNegative85
+                                    ? outcome.state.color
+                                    : RLComponentType.levelSl.color
                             )
                     }
                 }
@@ -1404,9 +1404,9 @@ struct MarkerInfoContent: View {
         let resolvedNode: SetupTimelineNode? = {
             switch current {
             case .tpHit:
-                return SetupTimelineNode(state: .tpHit, icon: "checkmark.circle.fill", overrideLabel: "TP Hit", overrideColor: AppColors.markerPositiveForeground)
+                return SetupTimelineNode(state: .tpHit, icon: "checkmark.circle.fill", overrideLabel: "TP Hit", overrideColor: RLComponentType.levelTp.color)
             case .slHit:
-                return SetupTimelineNode(state: .slHit, icon: "xmark.circle.fill", overrideLabel: "SL Hit", overrideColor: .red)
+                return SetupTimelineNode(state: .slHit, icon: "xmark.circle.fill", overrideLabel: "SL Hit", overrideColor: RLComponentType.levelSl.color)
             case .expired:
                 return SetupTimelineNode(state: .expired, icon: "clock.badge.exclamationmark", overrideLabel: "Expired", overrideColor: .gray)
             default:

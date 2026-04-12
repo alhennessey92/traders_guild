@@ -791,8 +791,8 @@ extension RealAPIService {
         name: String,
         description: String?,
         isOpen: Bool,
-        language: String? = nil,
-        location: String? = nil,
+        language: String,
+        location: String,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
         initialAnnouncementTitle: String,
         initialAnnouncementContent: String,
@@ -930,12 +930,20 @@ extension RealAPIService {
     }
     
     /// Create announcement (admin/mod only)
-    func createAnnouncement(guildId: UUID, title: String, content: String, preview: String?, isImportant: Bool) async throws -> RLGuildAnnouncementWithAuthorDTO {
+    func createAnnouncement(
+        guildId: UUID,
+        title: String,
+        content: String,
+        preview: String,
+        isImportant: Bool,
+        iconKey: GuildPostIconKey?
+    ) async throws -> RLGuildAnnouncementWithAuthorDTO {
         let requestBody = RLCreateGuildAnnouncementRequestDTO(
             title: title,
             content: content,
             preview: preview,
-            isImportant: isImportant
+            isImportant: isImportant,
+            iconKey: iconKey
         )
         
         return try await request(
@@ -1025,13 +1033,22 @@ extension RealAPIService {
     
     /// Create event (admin/mod only)
     /// NOTE: Backend returns GuildEventResponse, we return the raw response
-    func createEvent(guildId: UUID, title: String, content: String, preview: String, eventDate: Date, isImportant: Bool) async throws -> RLGuildEventResponseDTO {
+    func createEvent(
+        guildId: UUID,
+        title: String,
+        content: String,
+        preview: String,
+        eventDate: Date,
+        isImportant: Bool,
+        iconKey: GuildPostIconKey?
+    ) async throws -> RLGuildEventResponseDTO {
         let requestBody = RLCreateGuildEventRequestDTO(
             title: title,
             content: content,
             preview: preview,
             eventDate: eventDate,
-            isImportant: isImportant
+            isImportant: isImportant,
+            iconKey: iconKey
         )
         
         return try await request(

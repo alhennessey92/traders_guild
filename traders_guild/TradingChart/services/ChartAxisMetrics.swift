@@ -2,6 +2,8 @@ import CoreGraphics
 
 enum ChartAxisMetrics {
     static let yAxisLaneWidth: CGFloat = 59
+    static let indicatorPanelYAxisLaneWidth: CGFloat = 48
+    static let indicatorPanelYAxisLabelWidth: CGFloat = 44
 
     static let horizontalPriceChipHeight: CGFloat = 24
     static let horizontalPriceChipHorizontalPadding: CGFloat = 6
@@ -32,8 +34,8 @@ enum ChartAxisMetrics {
     static let directionalArrowChipHeight: CGFloat = 28
     static let currentPriceChipHeight: CGFloat = 24
 
-    static func plotWidth(totalWidth: CGFloat) -> CGFloat {
-        max(0, totalWidth - yAxisLaneWidth)
+    static func plotWidth(totalWidth: CGFloat, axisLaneWidth: CGFloat = yAxisLaneWidth) -> CGFloat {
+        max(0, totalWidth - axisLaneWidth)
     }
 
     static func horizontalLineEndX(totalWidth: CGFloat, labelWidth: CGFloat? = nil) -> CGFloat {
@@ -43,8 +45,8 @@ enum ChartAxisMetrics {
         return trailingLabelMaxX(totalWidth: totalWidth, width: labelWidth)
     }
 
-    static func yAxisLaneCenterX(totalWidth: CGFloat) -> CGFloat {
-        max(0, totalWidth - (yAxisLaneWidth * 0.5))
+    static func yAxisLaneCenterX(totalWidth: CGFloat, axisLaneWidth: CGFloat = yAxisLaneWidth) -> CGFloat {
+        max(0, totalWidth - (axisLaneWidth * 0.5))
     }
 
     static func trailingLabelMinX(totalWidth: CGFloat, width: CGFloat) -> CGFloat {

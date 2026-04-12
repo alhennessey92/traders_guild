@@ -57,11 +57,11 @@ struct CachedAvatarImage: View {
 
     private var initialsPlaceholder: some View {
         Circle()
-            .fill(AppColors.accentColor.opacity(0.3))
+            .fill(AppColors.guildReputationAccent.opacity(0.3))
             .overlay(
                 Text(initials)
                     .font(.system(size: size * 0.35, weight: .bold))
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
             )
     }
 

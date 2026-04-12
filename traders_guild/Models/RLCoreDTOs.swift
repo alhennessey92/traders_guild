@@ -596,8 +596,8 @@ struct RLCreateGuildRequestDTO: Codable {
     let name: String
     let description: String?
     let isOpen: Bool                 // backend: is_open
-    let language: String?
-    let location: String?
+    let language: String
+    let location: String
     let joinQuestions: [RLGuildJoinQuestionInputDTO]
     let initialAnnouncementTitle: String
     let initialAnnouncementContent: String
@@ -708,13 +708,69 @@ struct RLJoinGuildResponseDTO: Codable {
 // MARK: - Guild Announcements DTOs
 // ================================================================================================
 
+enum GuildPostIconKey: String, Codable, CaseIterable, Identifiable {
+    case megaphone
+    case calendar
+    case bell
+    case chart
+    case flag
+    case bolt
+    case star
+    case trophy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .megaphone: return "Megaphone"
+        case .calendar: return "Calendar"
+        case .bell: return "Bell"
+        case .chart: return "Chart"
+        case .flag: return "Flag"
+        case .bolt: return "Bolt"
+        case .star: return "Star"
+        case .trophy: return "Trophy"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .megaphone: return "megaphone.fill"
+        case .calendar: return "calendar"
+        case .bell: return "bell.fill"
+        case .chart: return "chart.line.uptrend.xyaxis"
+        case .flag: return "flag.fill"
+        case .bolt: return "bolt.fill"
+        case .star: return "star.fill"
+        case .trophy: return "trophy.fill"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .megaphone: return .orange
+        case .calendar: return .green
+        case .bell: return .blue
+        case .chart: return .teal
+        case .flag: return .red
+        case .bolt: return .yellow
+        case .star: return .pink
+        case .trophy: return .indigo
+        }
+    }
+
+    static let announcementDefault: GuildPostIconKey = .megaphone
+    static let eventDefault: GuildPostIconKey = .calendar
+}
+
 
 /// Create Guild Announcement
 struct RLCreateGuildAnnouncementRequestDTO: Codable {
     let title: String
     let content: String
-    let preview: String?
+    let preview: String
     let isImportant: Bool
+    let iconKey: GuildPostIconKey?
 }
 
 /// Guild Announcement Response - matches backend GuildAnnouncementResponse exactly
@@ -727,6 +783,7 @@ struct RLGuildAnnouncementResponseDTO: Codable, Identifiable {
     let preview: String?
     let postedAt: Date                   // backend: posted_at
     let isImportant: Bool                // backend: is_important
+    let iconKey: GuildPostIconKey?
     let readCount: Int                   // backend: read_count
     let status: String
     var isRead: Bool                     // backend: is_read (var for local cache updates)
@@ -750,7 +807,8 @@ struct RLGuildAnnouncementWithAuthorDTO: Codable, Identifiable {
     var isImportant: Bool { announcement.isImportant }
     var postedAt: Date { announcement.postedAt }
     var readCount: Int { announcement.readCount }
-    
+    var iconKey: GuildPostIconKey { announcement.iconKey ?? .announcementDefault }
+
     // Mutable for local cache updates
     var isRead: Bool {
         get { announcement.isRead }
@@ -812,6 +870,7 @@ struct RLCreateGuildEventRequestDTO: Codable {
     let preview: String
     let eventDate: Date           // backend: event_date
     let isImportant: Bool         // backend: is_important
+    let iconKey: GuildPostIconKey?
 }
 
 
@@ -826,6 +885,7 @@ struct RLGuildEventResponseDTO: Codable, Identifiable {
     let eventDate: Date                  // backend: event_date
     let postedAt: Date                   // backend: posted_at
     let isImportant: Bool                // backend: is_important
+    let iconKey: GuildPostIconKey?
     var attendeeCount: Int               // backend: attendee_count (var for local cache updates)
     var isAttending: Bool                // backend: is_attending (var for local cache updates)
     let status: String
@@ -848,6 +908,7 @@ struct RLGuildEventWithAuthorDTO: Codable, Identifiable {
     var eventDate: Date { event.eventDate }
     var postedAt: Date { event.postedAt }
     var isImportant: Bool { event.isImportant }
+    var iconKey: GuildPostIconKey { event.iconKey ?? .eventDefault }
     
     // Mutable for local cache updates
     var attendeeCount: Int {
@@ -877,6 +938,10 @@ struct RLGuildEventWithAuthorDTO: Codable, Identifiable {
     /// Check if event has already happened
     var isPastEvent: Bool {
         eventDate < Date()
+    }
+
+    var isActiveEvent: Bool {
+        !isPastEvent
     }
     
     /// User-friendly attendance display
@@ -1322,9 +1387,9 @@ struct RLUserGlobalStatisticsDTO: Codable, Equatable {
     }
     
     var accuracyColor: Color {
-        if accuracyRate >= 0.7 { return .green }
-        else if accuracyRate >= 0.5 { return .orange }
-        else { return .red }
+        if accuracyRate >= 0.7 { return AppColors.statusPositive }
+        else if accuracyRate >= 0.5 { return AppColors.moderationOrange }
+        else { return AppColors.statusNegative }
     }
     
     var failedMarkers: Int {
@@ -1783,12 +1848,7 @@ enum RLMemberRole: String, Codable, CaseIterable {
     }
 
     var color: Color {
-        switch self {
-        case .member: return .gray
-        case .moderator: return .orange
-        case .admin: return .red
-        case .owner: return .yellow
-        }
+        AppColors.memberRoleColor(self)
     }
 
     var icon: String {
@@ -2002,6 +2062,13 @@ struct RLContentReportDTO: Codable, Identifiable {
         default: return .secondary
         }
     }
+
+    var shortReference: String {
+        let compact = id.uuidString
+            .replacingOccurrences(of: "-", with: "")
+            .uppercased()
+        return "#\(String(compact.prefix(8)))"
+    }
 }
 
 /// List of content reports
@@ -2167,6 +2234,7 @@ struct RLPushNotificationPreferences: Codable, Equatable {
     var markerEngagement: Bool
     var announcement: Bool
     var event: Bool
+    var eventReminder: Bool
     var friendRequest: Bool
 
     init(
@@ -2176,6 +2244,7 @@ struct RLPushNotificationPreferences: Codable, Equatable {
         markerEngagement: Bool = true,
         announcement: Bool = true,
         event: Bool = true,
+        eventReminder: Bool = true,
         friendRequest: Bool = true
     ) {
         self.dm = dm
@@ -2184,6 +2253,7 @@ struct RLPushNotificationPreferences: Codable, Equatable {
         self.markerEngagement = markerEngagement
         self.announcement = announcement
         self.event = event
+        self.eventReminder = eventReminder
         self.friendRequest = friendRequest
     }
 }
@@ -2195,6 +2265,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
     let markerEngagement: Bool?
     let announcement: Bool?
     let event: Bool?
+    let eventReminder: Bool?
     let friendRequest: Bool?
 
     init(
@@ -2204,6 +2275,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
         markerEngagement: Bool? = nil,
         announcement: Bool? = nil,
         event: Bool? = nil,
+        eventReminder: Bool? = nil,
         friendRequest: Bool? = nil
     ) {
         self.dm = dm
@@ -2212,6 +2284,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
         self.markerEngagement = markerEngagement
         self.announcement = announcement
         self.event = event
+        self.eventReminder = eventReminder
         self.friendRequest = friendRequest
     }
 }

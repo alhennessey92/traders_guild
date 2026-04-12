@@ -302,14 +302,13 @@ struct ManageGuildWatchlistView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(AppColors.greyText)
 
-            AdminInputField(
-                title: "Search Symbols",
+            UnifiedSearchBar(
+                text: $searchText,
                 placeholder: "Search symbols...",
-                text: $searchText
+                onTextChange: { query in
+                    performSearch(query: query)
+                }
             )
-            .onChange(of: searchText) { query in
-                performSearch(query: query)
-            }
 
             if isSearching {
                 ProgressView("Searching...")

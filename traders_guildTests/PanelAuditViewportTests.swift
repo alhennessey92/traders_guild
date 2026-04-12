@@ -113,7 +113,7 @@ struct PanelAuditViewportTests {
     }
 
     @Test
-    func themeTokensSeparateAxisBorderAndKeepLightGreyChromeLighterThanPlot() {
+    func themeTokensSeparateAxisBorderAndKeepLightGreyPanelChromeAligned() {
         let manager = ThemeManager.shared
         let originalTheme = manager.currentTheme
         defer { manager.currentTheme = originalTheme }
@@ -122,8 +122,21 @@ struct PanelAuditViewportTests {
         #expect(colorDistance(AppColors.timeframePanelAxisFrameBorder, AppColors.timeframePanelAxisLabelPrimary) > 0.1)
 
         manager.currentTheme = .lightGrey
-        #expect(colorDistance(AppColors.panelYAxisLaneBackground, AppColors.indicatorPanelPlotBackground) > 0.08)
-        #expect(colorDistance(AppColors.timeframePanelHandleBackground, AppColors.indicatorPanelHandleBackground) > 0.04)
+        #expect(colorDistance(AppColors.indicatorPanelPlotBackground, AppColors.chartPanelBackground) < 0.001)
+        #expect(colorDistance(AppColors.panelYAxisLaneBackground, AppColors.indicatorPanelPlotBackground) > 0.03)
+        #expect(colorDistance(AppColors.panelResizeHandleIndicatorSuffixForeground, .white) < 0.08)
+    }
+
+    @Test
+    func indicatorPanelsUseTimeframeYAxisSizing() {
+        #expect(ChartAxisMetrics.indicatorPanelYAxisLaneWidth == 48)
+        #expect(ChartAxisMetrics.indicatorPanelYAxisLabelWidth == 44)
+    }
+
+    @Test
+    func brightPanelAccentsSwitchToDarkForeground() {
+        #expect(colorDistance(PanelChromeTextColorResolver.textColor(for: .yellow), AppColors.primaryForeground) < 0.001)
+        #expect(colorDistance(PanelChromeTextColorResolver.readableAccentColor(.yellow), AppColors.primaryForeground) < 0.001)
     }
 }
 

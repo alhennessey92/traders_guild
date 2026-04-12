@@ -146,7 +146,7 @@ struct RLRightDrawerMainView: View {
                                 .foregroundColor(AppColors.onAccentForeground)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.accentColor)
+                                .background(AppColors.guildReputationAccent)
                                 .clipShape(Capsule())
                         }
                     }
@@ -156,15 +156,15 @@ struct RLRightDrawerMainView: View {
                         Image(systemName: "shield.pattern.checkered")
                             .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Text("\(guild.name)")
                             .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         + Text(" Guild")
                             .font(.headline)
                             .fontWeight(.medium)
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.guildReputationAccent)
                         Spacer()
                     }
                     .padding(.leading, 35)
@@ -413,7 +413,7 @@ struct RLChatroomDisclosureGroup: View {
             title: "Guild Chatrooms",
             count: chatrooms.count,
             icon: "shield.pattern.checkered",
-            iconColor: AppColors.accentColor,
+            iconColor: AppColors.guildReputationAccent,
             isExpandedByDefault: true
         ) {
             VStack(spacing: 6) {
@@ -572,13 +572,13 @@ struct RLMemberRowView: View {
 
     private var avatarPlaceholder: some View {
         Circle()
-            .fill(AppColors.accentColor.opacity(0.3))
+            .fill(AppColors.guildReputationAccent.opacity(0.3))
             .frame(width: 40, height: 40)
             .overlay(
                 Text(member.username.prefix(2))
                     .font(.caption)
                     .fontWeight(.bold)
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(AppColors.guildReputationAccent)
             )
     }
 }

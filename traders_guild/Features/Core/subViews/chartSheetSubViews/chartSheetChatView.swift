@@ -178,6 +178,10 @@ struct ImprovedChartSheetChatView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 12) {
+                    ChatWelcomeBanner(
+                        text: "Welcome to the \(chartChatManager.activeChartChat?.symbolTicker ?? "symbol") chat! Share your analysis and discuss trades with your guild."
+                    )
+
                     ForEach(Array(chartChatManager.messages.enumerated()), id: \.element.id) { index, message in
                         let previousMessage = index > 0 ? chartChatManager.messages[index - 1] : nil
 
@@ -187,6 +191,7 @@ struct ImprovedChartSheetChatView: View {
 
                         ChartMessageRow(
                             message: message,
+                            isDeleted: chartChatManager.deletedMessageIDs.contains(message.id),
                             isGrouped: !ChatMessageGrouping.shouldShowHeader(message: message, previousMessage: previousMessage),
                             onAuthorTap: { member in
                                 selectedAuthor = member
@@ -269,6 +274,7 @@ struct ImprovedChartSheetChatView: View {
         .overlay {
             ChatSurfaceOverlayHost(
                 messages: chartChatManager.messages,
+                deletedMessageIDs: chartChatManager.deletedMessageIDs,
                 reactorsState: reactionReactorsState,
                 onQuickReactionSelected: { message, emoji in
                     Task { await toggleReaction(message, emoji: emoji) }
@@ -385,6 +391,7 @@ struct ImprovedChartSheetChatView: View {
 
 struct ChartMessageRow: View {
     let message: RLChartChatMessageDTO
+    let isDeleted: Bool
     let isGrouped: Bool
     let onAuthorTap: (RLGuildMemberDTO) -> Void
     let onDelete: () -> Void
@@ -396,6 +403,7 @@ struct ChartMessageRow: View {
 
     init(
         message: RLChartChatMessageDTO,
+        isDeleted: Bool = false,
         isGrouped: Bool = false,
         onAuthorTap: @escaping (RLGuildMemberDTO) -> Void,
         onDelete: @escaping () -> Void,
@@ -406,6 +414,7 @@ struct ChartMessageRow: View {
         onReport: @escaping () -> Void
     ) {
         self.message = message
+        self.isDeleted = isDeleted
         self.isGrouped = isGrouped
         self.onAuthorTap = onAuthorTap
         self.onDelete = onDelete
@@ -422,6 +431,7 @@ struct ChartMessageRow: View {
         RLChatMessageBubble(
             message: message,
             context: .chartChat,
+            isDeleted: isDeleted,
             isGrouped: isGrouped,
             onAvatarTap: { onAuthorTap(message.author) },
             onAuthorTap: { onAuthorTap(message.author) },

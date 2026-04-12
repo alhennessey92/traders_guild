@@ -415,7 +415,7 @@ struct ManageMembersView: View {
                 if let mutedUntil = member.mutedUntil {
                     Text("Expires \(mutedUntil, style: .relative)")
                         .font(.caption2)
-                        .foregroundColor(.orange)
+                        .foregroundColor(AppColors.statusWarning72)
                 }
             }
 
@@ -434,7 +434,7 @@ struct ManageMembersView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.green)
+            .tint(AppColors.statusPositive)
             .disabled(processingUserId == member.userId)
         }
         .padding(.horizontal, 12)
@@ -485,7 +485,7 @@ struct ManageMembersView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.green)
+            .tint(AppColors.statusPositive)
             .disabled(processingUserId == member.userId)
         }
         .padding(.horizontal, 12)
@@ -540,7 +540,7 @@ struct ManageMembersView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.green)
+            .tint(AppColors.statusPositive)
             .disabled(unbanningId == ban.id)
         }
         .padding(.horizontal, 12)
