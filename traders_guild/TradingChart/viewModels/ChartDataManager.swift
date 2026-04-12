@@ -190,7 +190,7 @@ class ChartDataManager: ObservableObject {
     
     /// Format a price using the current symbol's conventions
     func formatPrice(_ price: Double) -> String {
-        if let symbol = currentSymbol {
+        if currentSymbol != nil {
             // RLTradingSymbolDTO doesn't have formatPrice method, use decimal places
             let decimals = priceDecimalPlaces
             return String(format: "%.\(decimals)f", price)

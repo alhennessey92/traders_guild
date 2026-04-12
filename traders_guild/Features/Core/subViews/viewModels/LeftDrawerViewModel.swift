@@ -404,7 +404,7 @@ class LeftDrawerViewModel: ObservableObject {
             }
             
             // Personal Trading Watchlist
-            if let userId = userId {
+            if userId != nil {
                 group.addTask {
                     do {
                         let fetched = try await rlAppState.realApi.getPersonalWatchlist()
@@ -1411,7 +1411,7 @@ class LeftDrawerViewModel: ObservableObject {
         awards: [RLUserAwardDTO],
         awardsSummary: RLAwardsSummaryDTO?
     ) {
-        guard let userId = rlAppState.currentUser?.id else {
+        guard rlAppState.currentUser?.id != nil else {
             return (nil, nil, [], [], nil)
         }
         

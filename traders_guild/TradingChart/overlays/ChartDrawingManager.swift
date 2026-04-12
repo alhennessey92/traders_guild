@@ -114,6 +114,13 @@ final class ChartDrawingManager: ObservableObject {
     @Published var pendingDrawingFirstPoint: ChartDrawingPoint?
     @Published var editingDrawingId: UUID?
     @Published var activeDrawingType: ChartDrawingType?
+    
+    var storageNamespace: String? {
+        didSet {
+            guard oldValue != storageNamespace else { return }
+            load()
+        }
+    }
 
     var symbolId: UUID? {
         didSet {
@@ -270,6 +277,9 @@ final class ChartDrawingManager: ObservableObject {
 
     private var storageKey: String? {
         guard let symbolId else { return nil }
+        if let storageNamespace, !storageNamespace.isEmpty {
+            return "chartDrawings_\(storageNamespace)_\(symbolId.uuidString.lowercased())"
+        }
         return "chartDrawings_\(symbolId.uuidString.lowercased())"
     }
 

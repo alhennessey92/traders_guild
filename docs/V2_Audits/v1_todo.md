@@ -220,7 +220,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 77. [Fixed] Chart setting button - change bullish color doesnt seem to work
 
-78. Looking in left drawer markers section - by symbol and all sub tabs showing no markers yet 60 in live feed etc... should be populated and manual refresh should work
+78. [Fixed] Looking in left drawer markers section - by symbol and all sub tabs showing no markers yet 60 in live feed etc... should be populated and manual refresh should work
 
 79. [Fixed] Remove the cancel and done buttons in marker settings, dont need it already have the x/close in top right
 
@@ -261,15 +261,15 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 95. [Fixed] Bottom footer section in create announcement and event section in mod and admin panel needs looking at, doesnt go all the way to bottom has a large space underneath. Also cant scroll down far enough with keyboard open to select important button. 
 
-96. [Not Fixed] No 67 still not implemented, cant dismiss keyboard for these sections
+96. [Fixed] No 67 still not implemented, cant dismiss keyboard for these sections
 
 97. [Fixed] No 70 still not implemented, no special improtant icon
 
 98. [Fixed] Selected icon for announcement not showing in actual announcement, reverts to standard icon
 
-99. No 78 still not working
+99. [Fixed] No 78 still not working
 
-100. [Not Fixed] Emoji picker for drawings is too high and stops interaction on chart, so cant move the chart, need to be able to move the chart and when selecting the emoji move it independently.
+100. [Not Fixed] Emoji picker on chart for drawings/annotations is too high and stops interaction on chart, so cant move the chart, need to be able to move the chart and when selecting the emoji move it independently. Also the picker needs to be less high - reduce the height a bit, but obviously make the content scrollable
 
 101. [Fixed] No 80 not fixed was meant to be the emojis in the marker placement mode - reaction selection in bottom bar detail view
 
@@ -280,15 +280,15 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 
 
-102. Still getting an issue of removing a drawing and it not being removed instantly from chart info box, causing it to flash and flash in active section, a few moments later it removes correctly
+102. [Fixed] Still getting an issue of removing a drawing and it not being removed instantly from chart info box, causing it to flash and flash in active section, a few moments later it removes correctly. Its like it gets stuck and cant dismiss from chart. Also noticed the drawing becuase sometimes i cant delete it appears on the latest candle across different accounts, like its getting stuck in the background of the app. For example i have deleted on chart but still appears in chart info box. If i got to active drawings in bottom bar it starts flickering and bugging out
 
 103. [Fixed] In create guild make selection of language and country required
 
-104. in guild details in admin panel if switch to invite only for guild show options for questions required
+104. in guild details in admin panel if user switches  to invite only for guild, show options for questions required and make it a requirement to fill at least one quesiton out
 
 105. [Fixed] Change important announcement to be a red border on icon rather than star and important announcement pill
 
-106. No 73 still not working - Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon - When selecting a marker from marker section in left drawer get taken to correnct marker and everything appears fine other than the actual marker icon on chart, only vertical line of position
+106. [Fixed] No 73 still not working - Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon - When selecting a marker from marker section in left drawer get taken to correnct marker and everything appears fine other than the actual marker icon on chart, only vertical line of position
 
 107. [Fixed] Should show pending friend request in friends section in members in left drawer and should show accept/decline in notifications for friend request
 
@@ -297,3 +297,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 109. [Fixed] On viewing report resolved as normal member - when clicking the notification it takes me to manage reports in the moderator panel, which it shouldnt be allowed as they are a normal member - should show a basic view outlining the results of the resolution
 
 110. [Fixed] Due to no 109 should do a check on any admin/mod panel opening that the current user is not a member role otherwise dont show, cant allow users to get access to these kinds of panels
+
+111. [Fixed] Looking in left drawer markers section - by symbol and all sub tabs showing no markers, yet 60 in live feed etc... should be populated and manual refresh should work. Been trying to get this working for a bit now.
+
+

@@ -233,7 +233,7 @@ struct ImprovedChartSheetChatView: View {
                 chatSurfaceOverlayCoordinator.dismissAll()
                 onBackgroundTap?()
             }
-            .onChange(of: chartChatManager.messages.count) { _ in
+            .onChange(of: chartChatManager.messages.count) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     proxy.scrollTo("bottomAnchor", anchor: .bottom)
                 }

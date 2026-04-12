@@ -555,7 +555,7 @@ struct WatchlistView: View {
         
         Task {
             do {
-                try await rlAppState.addToPersonalWatchlist(symbolId: symbol.id)
+                _ = try await rlAppState.addToPersonalWatchlist(symbolId: symbol.id)
                 await MainActor.run {
                     if !leftDrawerViewModel.personalTradingWatchlist.contains(where: { $0.id == symbol.id }) {
                         leftDrawerViewModel.personalTradingWatchlist.append(symbol)

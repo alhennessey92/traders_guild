@@ -766,7 +766,7 @@ struct UserSettingsSheetView: View {
     
     private func loadUserSettingsIfNeeded() async {
         if rlAppState.userSettings == nil {
-            try? await rlAppState.fetchUserSettings()
+            _ = try? await rlAppState.fetchUserSettings()
         }
     }
     
@@ -805,7 +805,7 @@ struct UserSettingsSheetView: View {
     private func requestAppReview() {
         if let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            SKStoreReviewController.requestReview(in: scene)
+            AppStore.requestReview(in: scene)
         }
     }
 

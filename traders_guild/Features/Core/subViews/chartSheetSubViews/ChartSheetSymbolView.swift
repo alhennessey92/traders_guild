@@ -124,7 +124,7 @@ struct ChartSheetSymbolView: View {
                 await reloadGuildRequestState()
             }
         }
-        .onChange(of: rlAppState.currentGuild?.id) { _ in
+        .onChange(of: rlAppState.currentGuild?.id) {
             Task {
                 await reloadGuildRequestState()
             }

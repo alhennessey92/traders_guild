@@ -531,7 +531,7 @@ struct AvatarSelectionView: View {
     private func removeAvatar() {
         Task {
             do {
-                try await rlAppState.removeAvatar()
+                _ = try await rlAppState.removeAvatar()
                 selectedImage = nil
                 onBack()
             } catch {
@@ -732,7 +732,7 @@ struct ChangeEmailView: View {
         
         Task {
             do {
-                try await rlAppState.requestEmailChange(newEmail: newEmail, currentPassword: password)
+                _ = try await rlAppState.requestEmailChange(newEmail: newEmail, currentPassword: password)
                 
                 await MainActor.run {
                     isSaving = false
@@ -882,7 +882,7 @@ struct ChangePasswordView: View {
         
         Task {
             do {
-                try await rlAppState.changePassword(
+                _ = try await rlAppState.changePassword(
                     currentPassword: currentPassword,
                     newPassword: newPassword
                 )
@@ -1077,7 +1077,7 @@ struct DateOfBirthView: View {
         
         Task {
             do {
-                try await rlAppState.updateDateOfBirth(selectedDate)
+                _ = try await rlAppState.updateDateOfBirth(selectedDate)
                 
                 await MainActor.run {
                     isSaving = false
@@ -1390,7 +1390,7 @@ struct BlockedUsersView: View {
         
         Task {
             do {
-                try await rlAppState.unblockUser(membershipId: user.membershipId)
+                _ = try await rlAppState.unblockUser(membershipId: user.membershipId)
                 if let guildId = rlAppState.currentGuild?.id {
                     await leftDrawerViewModel.refreshGuildMembers(
                         guildId: guildId,
@@ -1640,7 +1640,7 @@ struct DataPrivacyView: View {
     
     private func loadUserSettingsIfNeeded() async {
         if rlAppState.userSettings == nil {
-            try? await rlAppState.fetchUserSettings()
+            _ = try? await rlAppState.fetchUserSettings()
         }
     }
     
@@ -1681,7 +1681,7 @@ struct DataPrivacyView: View {
     private func requestDataExport() {
         Task {
             do {
-                try await rlAppState.requestDataExportForUser()
+                _ = try await rlAppState.requestDataExportForUser()
             } catch {
                 print("Failed to request data export: \(error)")
             }
@@ -2077,7 +2077,7 @@ struct ContactSupportView: View {
 
         Task {
             do {
-                try await rlAppState.submitSupportTicket(
+                _ = try await rlAppState.submitSupportTicket(
                     category: category,
                     subject: subject,
                     message: message,

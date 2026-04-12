@@ -404,7 +404,7 @@ struct MarkerShareSheet: View {
     }
 
     private func loadDestinations() async {
-        guard let guildId = rlAppState.currentGuild?.id else {
+        guard rlAppState.currentGuild?.id != nil else {
             loadError = "No guild selected"
             isLoading = false
             return
@@ -633,12 +633,12 @@ struct CommentsView: View {
                     isCommentInputFocused = false
                     chatSurfaceOverlayCoordinator.dismissAll()
                 }
-                .onChange(of: comments.count) { _ in
+                .onChange(of: comments.count) {
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("bottom", anchor: UnitPoint.bottom)
                     }
                 }
-                .onChange(of: isCommentInputFocused) { focused in
+                .onChange(of: isCommentInputFocused) { _, focused in
                     if focused {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             withAnimation(.easeOut(duration: 0.2)) {

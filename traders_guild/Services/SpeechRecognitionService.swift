@@ -102,7 +102,7 @@ final class SpeechRecognitionService: ObservableObject {
             try audioSession.setCategory(
                 .playAndRecord,
                 mode: .measurement,
-                options: [.mixWithOthers, .allowBluetooth]
+                options: [.mixWithOthers, .allowBluetoothHFP]
             )
             try audioSession.setActive(true)
         } catch {

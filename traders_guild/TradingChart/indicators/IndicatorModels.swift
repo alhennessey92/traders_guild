@@ -280,7 +280,7 @@ struct MovingAverageConfig: IndicatorConfiguration {
 
 struct RSIConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .rsi
+    var type: IndicatorType { .rsi }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -322,7 +322,7 @@ struct RSIConfig: IndicatorConfiguration {
 
 struct MACDConfig: IndicatorConfiguration, Identifiable {
     let id: UUID
-    let type: IndicatorType = .macd
+    var type: IndicatorType { .macd }
     var isEnabled: Bool
     var color: CodableColor  // MACD line color
     var lineWidth: CGFloat
@@ -379,7 +379,7 @@ struct MACDConfig: IndicatorConfiguration, Identifiable {
 
 struct StochasticConfig: IndicatorConfiguration, Identifiable {
     let id: UUID
-    let type: IndicatorType = .stochastic
+    var type: IndicatorType { .stochastic }
     var isEnabled: Bool
     var color: CodableColor  // %K line color
     var lineWidth: CGFloat
@@ -611,7 +611,7 @@ struct CodableColor: Codable, Hashable {
 
 struct BollingerBandsConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .bollingerBands
+    var type: IndicatorType { .bollingerBands }
     var isEnabled: Bool
     var color: CodableColor  // Middle band color
     var lineWidth: CGFloat
@@ -666,7 +666,7 @@ struct BollingerBandsDataPoint: Identifiable {
 
 struct VWAPConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .vwap
+    var type: IndicatorType { .vwap }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -709,7 +709,7 @@ struct VWAPDataPoint: Identifiable {
 
 struct DonchianChannelsConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .donchianChannels
+    var type: IndicatorType { .donchianChannels }
     var isEnabled: Bool
     var color: CodableColor  // Middle line color
     var lineWidth: CGFloat
@@ -760,7 +760,7 @@ struct DonchianChannelsDataPoint: Identifiable {
 
 struct KeltnerChannelsConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .keltnerChannels
+    var type: IndicatorType { .keltnerChannels }
     var isEnabled: Bool
     var color: CodableColor  // EMA color
     var lineWidth: CGFloat
@@ -814,7 +814,7 @@ struct KeltnerChannelsDataPoint: Identifiable {
 
 struct ParabolicSARConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .parabolicSAR
+    var type: IndicatorType { .parabolicSAR }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -861,7 +861,7 @@ struct ParabolicSARDataPoint: Identifiable {
 
 struct CCIConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .cci
+    var type: IndicatorType { .cci }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -936,7 +936,7 @@ enum CCICondition {
 
 struct WilliamsRConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .williamsR
+    var type: IndicatorType { .williamsR }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -1003,7 +1003,7 @@ enum WilliamsRCondition {
 
 struct ATRConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .atr
+    var type: IndicatorType { .atr }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat
@@ -1037,7 +1037,7 @@ struct ATRDataPoint: Identifiable {
 
 struct VolumeConfig: IndicatorConfiguration {
     let id: UUID
-    let type: IndicatorType = .volume
+    var type: IndicatorType { .volume }
     var isEnabled: Bool
     var color: CodableColor
     var lineWidth: CGFloat

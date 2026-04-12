@@ -117,8 +117,8 @@ struct RLRightDrawerMainView: View {
     }
     
     var body: some View {
-        if let user = appState.currentUser,
-           let guild = appState.currentGuild {
+        if let guild = appState.currentGuild,
+           appState.currentUser != nil {
             VStack(alignment: .leading, spacing: 0) {
                 // Header section
                 VStack {

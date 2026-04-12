@@ -239,7 +239,7 @@ struct NewsLinkPreviewCard: View {
 
                 Spacer(minLength: 0)
 
-                if let openTarget = preview?.resolvedURL ?? url {
+                if preview?.resolvedURL ?? url != nil {
                     Button(displayMode == .compact ? "Read" : "Expand") {
                         isExpandedArticlePresented = true
                     }

@@ -961,13 +961,13 @@ struct WSIncomingMessage: Codable {
 }
 
 /// Outgoing WebSocket message for subscription
-struct WSSubscribeMessage: Codable {
+struct WSSubscribeMessage: Encodable {
     let type: String = "subscribe"
     let channels: [String]
 }
 
 /// Outgoing WebSocket message for unsubscription
-struct WSUnsubscribeMessage: Codable {
+struct WSUnsubscribeMessage: Encodable {
     let type: String = "unsubscribe"
     let channels: [String]
 }
@@ -986,7 +986,7 @@ struct WSTypingMessage: Codable {
 }
 
 /// Outgoing WebSocket ping message
-struct WSPingMessage: Codable {
+struct WSPingMessage: Encodable {
     let type: String = "ping"
 }
 

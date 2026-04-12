@@ -10,6 +10,7 @@ import SwiftUI
 import Combine
 import UIKit
 import Network
+import UserNotifications
 
 @MainActor
 class RLAppState: ObservableObject {
@@ -481,7 +482,12 @@ class RLAppState: ObservableObject {
     }
 
     private func syncNotificationBadge() {
-        UIApplication.shared.applicationIconBadgeNumber = max(notificationStats?.unreadCount ?? 0, 0)
+        let badgeCount = max(notificationStats?.unreadCount ?? 0, 0)
+        UNUserNotificationCenter.current().setBadgeCount(badgeCount) { error in
+            if let error {
+                print("Failed to update badge count: \(error)")
+            }
+        }
     }
     
     // ================================================================================================

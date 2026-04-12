@@ -19,9 +19,9 @@ enum LocaleOptionCatalog {
 
     static let languages: [LocaleOption] = {
         let locale = Locale.current
-        let options = Locale.isoLanguageCodes
+        let options = Locale.LanguageCode.isoLanguageCodes
             .compactMap { code -> LocaleOption? in
-                let codeValue = String(describing: code)
+                let codeValue = code.identifier
                 guard let label = locale.localizedString(forLanguageCode: codeValue) else { return nil }
                 let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return nil }
@@ -32,9 +32,9 @@ enum LocaleOptionCatalog {
 
     static let countries: [LocaleOption] = {
         let locale = Locale.current
-        let options = Locale.isoRegionCodes
+        let options = Locale.Region.isoRegions
             .compactMap { code -> LocaleOption? in
-                let codeValue = String(describing: code)
+                let codeValue = code.identifier
                 guard let label = locale.localizedString(forRegionCode: codeValue) else { return nil }
                 let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return nil }
@@ -46,12 +46,12 @@ enum LocaleOptionCatalog {
     static func defaultLanguageCode() -> String {
         let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
         let locale = Locale(identifier: preferred)
-        let code = locale.languageCode ?? preferred.components(separatedBy: "-").first ?? ""
+        let code = locale.language.languageCode?.identifier ?? preferred.components(separatedBy: "-").first ?? ""
         return languages.contains(where: { $0.code == code }) ? code : ""
     }
 
     static func defaultCountryCode() -> String {
-        let code = Locale.current.regionCode ?? ""
+        let code = Locale.current.region?.identifier ?? ""
         return countries.contains(where: { $0.code == code }) ? code : ""
     }
 

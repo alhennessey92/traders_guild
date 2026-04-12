@@ -91,6 +91,8 @@ class ChartViewModel: ObservableObject {
 
     private var isSyncingChartDrawingPlacementFromManager = false
     private var isApplyingChartDrawingPlacementToManager = false
+    private var syncChartDrawingPlacementFromManagerScheduled = false
+    private var applyChartDrawingPlacementToManagerScheduled = false
     
     // In ChartViewModel.swift, add:
     var totalCandleWidth: CGFloat {
@@ -600,9 +602,12 @@ class ChartViewModel: ObservableObject {
     }
 
     private func syncChartDrawingStorageContext() {
+        let storageNamespace = appState.currentUser?.id.uuidString.lowercased()
+        chartDrawingManager.storageNamespace = storageNamespace
+        chartTimeframeLinkManager.storageNamespace = storageNamespace
         chartDrawingManager.symbolId = currentSymbol?.id
         chartTimeframeLinkManager.symbolId = currentSymbol?.id
-        syncChartDrawingPlacementFromManager()
+        scheduleSyncChartDrawingPlacementFromManager()
     }
 
     func updateChartDrawingPlacementAnchor(time: Date?, price: Double?) {
@@ -623,16 +628,36 @@ class ChartViewModel: ObservableObject {
         chartDrawingManager.$drawings
             .dropFirst()
             .sink { [weak self] _ in
-                self?.syncChartDrawingPlacementFromManager()
+                self?.scheduleSyncChartDrawingPlacementFromManager()
             }
             .store(in: &cancellables)
 
         chartComponentsPlacementState.$components
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applyChartDrawingPlacementToManager()
+                self?.scheduleApplyChartDrawingPlacementToManager()
             }
             .store(in: &cancellables)
+    }
+    
+    private func scheduleSyncChartDrawingPlacementFromManager() {
+        guard !syncChartDrawingPlacementFromManagerScheduled else { return }
+        syncChartDrawingPlacementFromManagerScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.syncChartDrawingPlacementFromManagerScheduled = false
+            self.syncChartDrawingPlacementFromManager()
+        }
+    }
+    
+    private func scheduleApplyChartDrawingPlacementToManager() {
+        guard !applyChartDrawingPlacementToManagerScheduled else { return }
+        applyChartDrawingPlacementToManagerScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.applyChartDrawingPlacementToManagerScheduled = false
+            self.applyChartDrawingPlacementToManager()
+        }
     }
 
     private func syncChartDrawingPlacementFromManager() {
@@ -688,12 +713,11 @@ class ChartViewModel: ObservableObject {
         defer { isApplyingChartDrawingPlacementToManager = false }
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
-
-        chartDrawingManager.setDrawings(
-            chartComponentsPlacementState.components.compactMap {
-                ChartDrawingBridge.chartDrawing(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
-            }
-        )
+        let nextDrawings = chartComponentsPlacementState.components.compactMap {
+            ChartDrawingBridge.chartDrawing(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
+        }
+        guard nextDrawings != chartDrawingManager.drawings else { return }
+        chartDrawingManager.setDrawings(nextDrawings)
     }
 
     private func isChartDrawingPlacementComponent(_ componentType: RLComponentType) -> Bool {

@@ -291,10 +291,10 @@ struct ManageReportsView: View {
         .onAppear {
             loadReports()
         }
-        .onChange(of: selectedStatus) { _ in
+        .onChange(of: selectedStatus) {
             loadReports()
         }
-        .onChange(of: selectedContentType) { _ in
+        .onChange(of: selectedContentType) {
             loadReports()
         }
         .sheet(item: $selectedReport) { report in

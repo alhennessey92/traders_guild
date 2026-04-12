@@ -275,7 +275,7 @@ struct BetaFeedbackView: View {
 
         Task {
             do {
-                try await rlAppState.submitSupportTicket(
+                _ = try await rlAppState.submitSupportTicket(
                     category: category,
                     subject: subject,
                     message: message,

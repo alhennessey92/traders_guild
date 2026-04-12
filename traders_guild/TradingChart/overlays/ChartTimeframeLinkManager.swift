@@ -4,6 +4,13 @@ import Combine
 @MainActor
 final class ChartTimeframeLinkManager: ObservableObject {
     @Published private(set) var linkedTimeframes: [String] = []
+    
+    var storageNamespace: String? {
+        didSet {
+            guard oldValue != storageNamespace else { return }
+            load()
+        }
+    }
 
     var symbolId: UUID? {
         didSet {
@@ -95,6 +102,9 @@ final class ChartTimeframeLinkManager: ObservableObject {
 
     private var storageKey: String? {
         guard let symbolId else { return nil }
+        if let storageNamespace, !storageNamespace.isEmpty {
+            return "chartTimeframes_\(storageNamespace)_\(symbolId.uuidString.lowercased())"
+        }
         return "chartTimeframes_\(symbolId.uuidString.lowercased())"
     }
 

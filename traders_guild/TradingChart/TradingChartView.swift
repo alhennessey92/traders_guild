@@ -1381,7 +1381,7 @@ struct TradingChartView: View {
             baseCandleWidth: baseCandleWidth,
             candleSpacing: candleSpacing
         )
-        _ = coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
+        coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
         return coordinateSystem
     }
     
@@ -2042,7 +2042,7 @@ struct TradingChartView: View {
     private func previewMarkerContent(x: CGFloat, y: CGFloat, coordinateSystem: ChartCoordinateSystem) -> some View {
         let markerIntent = effectiveMarkerIntent ?? .analysis
         let displayColor = markerPreviewDisplayColor(for: markerIntent)
-        return ZStack {
+        ZStack {
             Circle()
                 .fill(Color.clear)
                 .frame(width: 92, height: 92)

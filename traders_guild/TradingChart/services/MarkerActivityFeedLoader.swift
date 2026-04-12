@@ -152,18 +152,24 @@ enum MarkerActivityFeedLoader {
         var lastUpdated = firstPage.lastUpdated
 
         while let nextCursor = cursor, !nextCursor.isEmpty {
-            let nextPage = try await api.getMarkerActivity(
-                guildId: guildId,
-                symbolId: symbolId,
-                scope: scope,
-                state: state,
-                window: window,
-                startTime: startTime,
-                endTime: endTime,
-                intent: intent,
-                limit: limit,
-                cursor: nextCursor
-            )
+            let nextPage: RLMarkerActivityListDTO
+            do {
+                nextPage = try await api.getMarkerActivity(
+                    guildId: guildId,
+                    symbolId: symbolId,
+                    scope: scope,
+                    state: state,
+                    window: window,
+                    startTime: startTime,
+                    endTime: endTime,
+                    intent: intent,
+                    limit: limit,
+                    cursor: nextCursor
+                )
+            } catch {
+                print("Marker activity pagination failed for scope \(scope.rawValue): \(error)")
+                break
+            }
             markers.append(contentsOf: nextPage.markers)
             if nextPage.lastUpdated > lastUpdated {
                 lastUpdated = nextPage.lastUpdated

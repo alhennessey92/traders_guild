@@ -869,7 +869,7 @@ struct GuildUserActionButtonsRL: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("\(member.displayName ?? member.username) sent you a friend request.")
+            Text("\(member.displayName) sent you a friend request.")
         }
     }
 

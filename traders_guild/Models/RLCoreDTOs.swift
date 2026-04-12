@@ -2542,12 +2542,12 @@ struct RLSignupData {
     static func defaultLanguage() -> String {
         let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
         let locale = Locale(identifier: preferred)
-        let code = locale.languageCode ?? preferred.components(separatedBy: "-").first ?? preferred
+        let code = locale.language.languageCode?.identifier ?? preferred.components(separatedBy: "-").first ?? preferred
         return Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code.uppercased()
     }
 
     static func defaultLocation() -> String {
-        if let regionCode = Locale.current.regionCode {
+        if let regionCode = Locale.current.region?.identifier {
             return Locale.current.localizedString(forRegionCode: regionCode) ?? regionCode
         }
         let fallback = TimeZone.current.identifier.components(separatedBy: "/").last ?? ""

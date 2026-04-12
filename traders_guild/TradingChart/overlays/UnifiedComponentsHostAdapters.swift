@@ -108,7 +108,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
     private var applyToHostScheduled = false
     private var indicatorIDsByName: [String: UUID] = [:]
     private var timeframeIDsByBackend: [String: UUID] = [:]
-    private var mirroredHostDrawingIDs = Set<UUID>()
 
     init(
         placementState: MarkerPlacementState,
@@ -140,9 +139,8 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         )
 
         timeframeLinkManager.symbolId = symbolId
-        placementState.intent = .analysis
         setupSubscriptions()
-        syncFromHost()
+        scheduleSyncFromHost()
     }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe) {
@@ -173,7 +171,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
 
         if previousSymbol != symbolId {
             timeframeLinkManager.symbolId = symbolId
-            syncFromHost()
+            scheduleSyncFromHost()
         }
     }
 
@@ -192,7 +190,6 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
             .sink { [weak self] _ in
                 guard let self, !self.isApplyingToHost else { return }
                 self.refreshSnapshot()
-                self.scheduleSyncFromHost()
             }
             .store(in: &cancellables)
 
@@ -244,32 +241,14 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         defer { isSyncingFromHost = false }
         refreshSnapshot()
 
-        let activeEditingDraftId = placementState.editingDrawingId
-        let previousMirroredHostDrawingIDs = mirroredHostDrawingIDs
-        let hostDrawingDrafts = drawingManager.activeDrawings.map { drawing in
-            ChartDrawingBridge.markerDraft(
-                from: drawing,
-                anchorTime: anchorTime,
-                anchorPrice: anchorPrice
-            )
-        }
-        let hostDrawingIDs = Set(hostDrawingDrafts.map(\.id))
-        mirroredHostDrawingIDs = hostDrawingIDs
         let preservedDrawingComponents = placementState.components.filter {
-            guard isChartDrawingPlacementComponent($0.componentType) else { return false }
-            guard !hostDrawingIDs.contains($0.id) else { return false }
-            return !previousMirroredHostDrawingIDs.contains($0.id)
+            isChartDrawingPlacementComponent($0.componentType)
         }
         var nextComponents: [MarkerComponentDraft] = [anchorDraft()]
         nextComponents.append(contentsOf: indicatorDraftsFromHost())
-        nextComponents.append(contentsOf: hostDrawingDrafts)
         nextComponents.append(contentsOf: preservedDrawingComponents)
         nextComponents.append(contentsOf: timeframeDraftsFromHost())
         placementState.components = nextComponents
-        if let activeEditingDraftId,
-           !nextComponents.contains(where: { $0.id == activeEditingDraftId }) {
-            placementState.commitDrawingAndExit()
-        }
     }
 
     private func applyToHostIfNeeded() {

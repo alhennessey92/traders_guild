@@ -419,7 +419,7 @@ struct MainView: View {
     // MARK: - Body
     var body: some View {
         if let user = rlAppState.currentUser,
-           let guild = rlAppState.currentGuild {
+           rlAppState.currentGuild != nil {
             ZStack {
                 // MARK: - Main Content Layer
                 mainContentStack
@@ -2302,13 +2302,13 @@ struct ChartBottomSheet: View {
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
-        .onChange(of: chartViewModel.currentSymbol) { _ in
+        .onChange(of: chartViewModel.currentSymbol) {
             loadChatForCurrentSymbol()
         }
-        .onChange(of: rlAppState.currentGuild?.id) { _ in
+        .onChange(of: rlAppState.currentGuild?.id) {
             loadChatForCurrentSymbol()
         }
-        .onChange(of: selectedView) { newView in
+        .onChange(of: selectedView) { _, newView in
             chatSurfaceOverlayCoordinator.dismissAll()
             if newView == .chat {
                 loadChatForCurrentSymbol()

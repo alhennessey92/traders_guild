@@ -647,9 +647,9 @@ struct ManageMembersView: View {
     private func handleMuteNotification(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let userId = userInfo["userId"] as? UUID,
-              let action = userInfo["action"] as? String else { return }
+              let _ = userInfo["action"] as? String else { return }
 
-        if let index = members.firstIndex(where: { $0.userId == userId }) {
+        if members.contains(where: { $0.userId == userId }) {
             // Refresh to get updated muted_until from server
             loadData()
         }
@@ -659,7 +659,7 @@ struct ManageMembersView: View {
         guard let userInfo = notification.userInfo,
               let userId = userInfo["userId"] as? UUID else { return }
 
-        if let index = members.firstIndex(where: { $0.userId == userId }) {
+        if members.contains(where: { $0.userId == userId }) {
             loadData()
         }
     }

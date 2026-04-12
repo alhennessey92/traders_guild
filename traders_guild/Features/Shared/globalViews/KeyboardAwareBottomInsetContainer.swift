@@ -100,6 +100,7 @@ private struct KeyboardPinnedBottomInsetModifier<Footer: View>: ViewModifier {
                             )
                     }
                 )
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }

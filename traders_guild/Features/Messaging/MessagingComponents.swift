@@ -2118,7 +2118,7 @@ struct ChatScrollView<Message: RLChatMessageDisplayable, Content: View>: View {
                 .padding(.bottom, 32)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.count) { _ in
+            .onChange(of: messages.count) {
                 scrollToBottom(proxy: proxy)
             }
             .onAppear {

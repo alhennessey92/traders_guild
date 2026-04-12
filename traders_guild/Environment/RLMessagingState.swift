@@ -541,19 +541,24 @@ struct RLMessagingSheet: View {
             UnifiedEditMessageSheet(originalContent: target.originalContent) { newContent in
                 switch target {
                 case .chatroom(let message):
-                    try await appState.editChatroomMessage(
+                    let updatedMessage = try await appState.editChatroomMessage(
                         chatroomId: message.chatroomId,
                         messageId: message.id,
                         content: newContent
                     )
+                    if let index = chatroomMessages.firstIndex(where: { $0.id == updatedMessage.id }) {
+                        chatroomMessages[index] = updatedMessage
+                    }
                 case .dm(let message):
-                    try await appState.editDMMessage(
+                    let updatedMessage = try await appState.editDMMessage(
                         threadId: message.dmId,
                         messageId: message.id,
                         content: newContent
                     )
+                    if let index = dmMessages.firstIndex(where: { $0.id == updatedMessage.id }) {
+                        dmMessages[index] = updatedMessage
+                    }
                 }
-                appState.showSuccess(RLUserFacingCopy.text(.successMessageUpdated))
             }
         }
         .sheet(item: $reportTarget) { target in
@@ -1309,7 +1314,7 @@ struct RLMessagingSheet: View {
     }
 
     private func buildProfileStats(for member: RLGuildMemberDTO) -> [ProfileStatDTO] {
-        var stats = [
+        let stats = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
