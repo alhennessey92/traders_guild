@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct MarkerPlacementGeneralTab: View {
     @ObservedObject var placementState: MarkerPlacementState
     @State private var intentChangeWarning: String?
     @State private var pendingIntentSwitch: PendingIntentSwitch?
     @State private var isIntentPickerExpanded = false
+    @State private var keyboardInset: CGFloat = 0
     @FocusState private var focusedInput: PlacementInputFocus?
 
     private static let priceFormatter: NumberFormatter = {
@@ -95,6 +97,7 @@ struct MarkerPlacementGeneralTab: View {
                 generalSection
             }
             .padding(.trailing, 2)
+            .padding(.bottom, max(keyboardInset + 24, 24))
         }
         .scrollDismissesKeyboard(.interactively)
         .dismissKeyboardOnTapAndDragBackground()
@@ -110,6 +113,15 @@ struct MarkerPlacementGeneralTab: View {
         }
         .onDisappear {
             placementState.isTextInputFocused = false
+            keyboardInset = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            updateKeyboardInset(from: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.2)) {
+                keyboardInset = 0
+            }
         }
         .alert(item: $pendingIntentSwitch) { pending in
             Alert(
@@ -122,6 +134,21 @@ struct MarkerPlacementGeneralTab: View {
                     pendingIntentSwitch = nil
                 }
             )
+        }
+    }
+
+    private func updateKeyboardInset(from notification: Notification) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first(where: \.isKeyWindow),
+              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let convertedEndFrame = window.convert(endFrame, from: nil)
+        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            keyboardInset = overlap
         }
     }
 

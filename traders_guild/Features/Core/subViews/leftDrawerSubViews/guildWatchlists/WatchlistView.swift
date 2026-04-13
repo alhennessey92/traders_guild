@@ -103,10 +103,23 @@ struct WatchlistView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .dismissKeyboardOnTapAndDragBackground()
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    dismissKeyboard()
+                },
+                including: .subviews
+            )
             .refreshable {
                 await refreshWatchlist()
             }
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissKeyboard()
+            },
+            including: .subviews
+        )
         .confirmationDialog(
             "Remove from Personal Watchlist?",
             isPresented: $showRemoveConfirmation,

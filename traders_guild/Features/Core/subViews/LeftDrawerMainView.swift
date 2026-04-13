@@ -298,6 +298,7 @@ struct LeftDrawerMainView: View {
                 BottomSheetView(content: content, selectedDetent: $selectedDetent, bottomSheetContent: $bottomSheetContent)
                     
                     .presentationDetents(detentsForContent(content), selection: $selectedDetent)  // ADD selection
+                    .presentationContentInteraction(.scrolls)
     //                .presentationBackground { AppColors.drawerBackground.opacity(0.9) }
                     .presentationBackground {
                         LinearGradient(

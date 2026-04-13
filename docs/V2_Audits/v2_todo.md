@@ -1,6 +1,6 @@
-1. Still not happy about how the keyboard dismisses in create announcement, create events and search for symbols in watchlist section in bottom bar symbol detail view. Need to be able to scroll on screen, but should dismiss keyboard by either tapping outside or swiping the keyboard down. We do this correctly for message input in all chat interfaces, so should copy same functionality
+1. [Fixed] Still not happy about how the keyboard dismisses in create announcement, create events and search for symbols in watchlist section in bottom bar symbol detail view. Need to be able to scroll on screen, but should dismiss keyboard by either tapping outside or swiping the keyboard down. We do this correctly for message input in all chat interfaces, so should copy same functionality
 
-2. Create announcement and events still need a solid footer at bottom for cancel/post buttons, but needs to extend fully to bottom of screen - remove the cancel button as well at the bottom already have close button at the top
+2. [Fixed] Create announcement and events still need a solid footer at bottom for cancel/post buttons, but needs to extend fully to bottom of screen - remove the cancel button as well at the bottom already have close button at the top
 
 3. Need to address the annotations
 Text input needs to just be the text on the chart. Need to allow sizing of text and make sure where we place it is where it stays. Keeps moving to latest candle after refresh for some reason should stay where user leaves it
@@ -9,7 +9,7 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
 
 5. Shouldn’t be allowed to edit setup marker being tracked once placed
 
-6. Adjust keyboard in bottom bar for searching for symbols. Need to allow further scrolling down past the search box to view results with the keyboard still on show.
+6. [Fixed] Adjust keyboard in bottom bar for searching for symbols. Need to allow further scrolling down past the search box to view results with the keyboard still on show.
 
 7. Potentially move watchlist sub tabs down under watchlist name to see all options in bottom bar symbol detail view
 
@@ -24,3 +24,7 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
 12. Change event detail view to show list of attending users rather than the no attending at the top, could do it under the description
 
 13. Adapt the event to allow users to select location of the event such as a certain symbol or a chatroom. This way when the reminder notification shows it takes the user to that location. Also when open a button appears in the event view "Go to Event" and take them to the location - at the moment just says location is Guild Hall which is irrelevant in the app
+
+14. Last few updates to light grey theme
+
+15. Still need the create annoucnement and events fixed in terms of footer and making the icon selection more professional looking 

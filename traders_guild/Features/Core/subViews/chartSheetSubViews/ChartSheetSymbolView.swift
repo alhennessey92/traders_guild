@@ -60,6 +60,7 @@ struct ChartSheetSymbolView: View {
     @State private var showGuildRequestAlert: Bool = false
     @State private var symbolToRequest: RLTradingSymbolDTO? = nil
     @State private var isSymbolDetailsExpanded: Bool = true
+    @State private var keyboardInset: CGFloat = 0
     
     // Helper to get current symbol as DTO
     private var currentSymbolDTO: RLTradingSymbolDTO? {
@@ -86,10 +87,17 @@ struct ChartSheetSymbolView: View {
                 // Watchlist Section with Tabs
                 watchlistSection
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, selectedWatchlistTab == .search ? max(keyboardInset + 32, 32) : 32)
         }
+        .contentShape(Rectangle())
         .scrollDismissesKeyboard(.interactively)
         .dismissKeyboardOnTapAndDragBackground()
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissKeyboard()
+            },
+            including: .subviews
+        )
         //.background(UnifiedStaticBackground())
         .confirmationDialog(
             "Remove from Personal Watchlist?",
@@ -118,6 +126,15 @@ struct ChartSheetSymbolView: View {
         }
         .onDisappear {
             dismissKeyboard()
+            keyboardInset = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            updateKeyboardInset(from: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.2)) {
+                keyboardInset = 0
+            }
         }
         .onAppear {
             Task {
@@ -675,6 +692,7 @@ struct ChartSheetSymbolView: View {
                         searchText = ""
                         isSearching = false
                     }
+                    dismissKeyboard()
                 }
             }
             
@@ -843,6 +861,21 @@ struct ChartSheetSymbolView: View {
     
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private func updateKeyboardInset(from notification: Notification) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first(where: \.isKeyWindow),
+              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let convertedEndFrame = window.convert(endFrame, from: nil)
+        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            keyboardInset = overlap
+        }
     }
     
     private func performSearch(query: String) {

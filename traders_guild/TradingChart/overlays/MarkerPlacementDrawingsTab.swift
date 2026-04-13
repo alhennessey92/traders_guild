@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private struct DrawingColorOption: Identifiable {
     let name: String
@@ -27,6 +28,7 @@ struct MarkerPlacementDrawingsTab: View {
     @State private var colorEditorDraftID: UUID?
     @State private var pendingDrawingColorHex: String?
     @State private var pendingDrawingLineStyle: MarkerDrawingLineStyle = .dashed
+    @State private var keyboardInset: CGFloat = 0
 
     private let annotationEmojis: [String] = [
         "🎯", "🔥", "🐻", "🐂", "✅", "❌",
@@ -82,7 +84,10 @@ struct MarkerPlacementDrawingsTab: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, max(keyboardInset + 24, 24))
         }
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnTapAndDragBackground()
         .sheet(isPresented: Binding(
             get: { colorEditorDraftID != nil },
             set: { isPresented in
@@ -94,6 +99,32 @@ struct MarkerPlacementDrawingsTab: View {
             }
         )) {
             drawingColorEditorSheet
+        }
+        .onDisappear {
+            keyboardInset = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+            updateKeyboardInset(from: notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.2)) {
+                keyboardInset = 0
+            }
+        }
+    }
+
+    private func updateKeyboardInset(from notification: Notification) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first(where: \.isKeyWindow),
+              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let convertedEndFrame = window.convert(endFrame, from: nil)
+        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            keyboardInset = overlap
         }
     }
 

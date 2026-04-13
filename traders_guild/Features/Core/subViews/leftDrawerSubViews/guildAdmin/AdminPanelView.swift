@@ -300,73 +300,83 @@ struct CreateAnnouncementView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(spacing: 0) {
-                AdminSheetHeader(
-                    icon: "megaphone.fill",
-                    iconColor: AppColors.accentColor,
-                    title: "Create Announcement",
-                    subtitle: "Post to your guild members"
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 30)
-                .padding(.bottom, 12)
-                .adminSheetChrome(edge: .top)
-
-                ScrollView {
-                    VStack(spacing: 12) {
-                        AdminSectionCard {
-                            AdminInputField(
-                                title: "Title (Required, min 3 chars)",
-                                placeholder: "Announcement title...",
-                                text: $title
-                            )
-                            AdminInputField(
-                                title: "Preview (Optional)",
-                                placeholder: "Short preview text...",
-                                text: $preview
-                            )
-                            AdminInputTextEditor(
-                                title: "Content (Required, min 3 chars)",
-                                placeholder: "Announcement content...",
-                                text: $content
-                            )
-                            GuildPostIconPickerSection(
-                                title: "Announcement Icon",
-                                subtitle: "Choose the icon members will see in the feed and notifications.",
-                                availableIcons: availableAnnouncementIcons,
-                                selectedIconKey: $selectedIconKey
-                            )
-                            AdminToggleRow(
-                                title: "Mark as Important",
-                                subtitle: "Highlights this announcement",
-                                icon: "exclamationmark.triangle.fill",
-                                iconColor: AppColors.statusWarning80,
-                                isOn: $isImportant
-                            )
-                        }
-
-                        AdminFooterActions(
-                            primaryTitle: "Post Announcement",
-                            primaryDisabled: !isValid,
-                            isSubmitting: isSubmitting,
-                            onCancel: { dismiss() },
-                            onPrimary: { Task { await createAnnouncement() } }
-                        )
-                        .padding(.top, 8)
-                    }
+            KeyboardAwareBottomInsetContainer(
+                footerBackground: AnyView(AdminSheetFooterBackground())
+            ) {
+                VStack(spacing: 0) {
+                    AdminSheetHeader(
+                        icon: "megaphone.fill",
+                        iconColor: AppColors.accentColor,
+                        title: "Create Announcement",
+                        subtitle: "Post to your guild members"
+                    )
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 20)
+                    .padding(.top, 30)
+                    .padding(.bottom, 12)
+                    .adminSheetChrome(edge: .top)
+
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            AdminSectionCard {
+                                AdminInputField(
+                                    title: "Title (Required, min 3 chars)",
+                                    placeholder: "Announcement title...",
+                                    text: $title
+                                )
+                                AdminInputField(
+                                    title: "Preview (Optional)",
+                                    placeholder: "Short preview text...",
+                                    text: $preview
+                                )
+                                AdminInputTextEditor(
+                                    title: "Content (Required, min 3 chars)",
+                                    placeholder: "Announcement content...",
+                                    text: $content
+                                )
+                                GuildPostIconPickerSection(
+                                    title: "Announcement Icon",
+                                    subtitle: "Choose the icon members will see in the feed and notifications.",
+                                    availableIcons: availableAnnouncementIcons,
+                                    selectedIconKey: $selectedIconKey
+                                )
+                                AdminToggleRow(
+                                    title: "Mark as Important",
+                                    subtitle: "Highlights this announcement",
+                                    icon: "exclamationmark.triangle.fill",
+                                    iconColor: AppColors.statusWarning80,
+                                    isOn: $isImportant
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .scrollDismissesKeyboard(.immediately)
+            } footer: {
+                AdminBottomActionBar(
+                    primaryTitle: "Post Announcement",
+                    primaryDisabled: !isValid,
+                    isSubmitting: isSubmitting,
+                    showsCancel: false,
+                    onPrimary: { Task { await createAnnouncement() } }
+                )
             }
 
             SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissKeyboard()
+            },
+            including: .subviews
+        )
         .dismissKeyboardOnTapAndDragBackground()
         .background(AdminSheetBackground())
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
     private func createAnnouncement() async {
@@ -420,88 +430,98 @@ struct CreateEventView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            VStack(spacing: 0) {
-                AdminSheetHeader(
-                    icon: "calendar.badge.plus",
-                    iconColor: .green,
-                    title: "Create Event",
-                    subtitle: "Schedule a guild event"
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 30)
-                .padding(.bottom, 12)
-                .adminSheetChrome(edge: .top)
-
-                ScrollView {
-                    VStack(spacing: 12) {
-                        AdminSectionCard {
-                            AdminInputField(
-                                title: "Event Title (Required, min 3 chars)",
-                                placeholder: "What's the event?",
-                                text: $title
-                            )
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Date & Time (Required, must be future)")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.greyText)
-                                DatePicker(
-                                    "Event Date",
-                                    selection: $eventDate,
-                                    in: Date()...,
-                                    displayedComponents: [.date, .hourAndMinute]
-                                )
-                                .datePickerStyle(.compact)
-                                .labelsHidden()
-                                .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
-                            }
-
-                            AdminInputField(
-                                title: "Preview Text (Required, min 3 chars)",
-                                placeholder: "Short description for the list view...",
-                                text: $preview
-                            )
-                            AdminInputTextEditor(
-                                title: "Full Description (Required, min 3 chars)",
-                                placeholder: "Describe the event in detail...",
-                                text: $content
-                            )
-                            GuildPostIconPickerSection(
-                                title: "Event Icon",
-                                subtitle: "Choose the icon members will see in the feed and notifications.",
-                                selectedIconKey: $selectedIconKey
-                            )
-                            AdminToggleRow(
-                                title: "Featured Event",
-                                subtitle: "Highlight this event",
-                                icon: "star.fill",
-                                iconColor: .yellow,
-                                isOn: $isImportant
-                            )
-                        }
-
-                        AdminFooterActions(
-                            primaryTitle: "Create Event",
-                            primaryDisabled: !isValid,
-                            isSubmitting: isSubmitting,
-                            onCancel: { dismiss() },
-                            onPrimary: { Task { await createEvent() } }
-                        )
-                        .padding(.top, 8)
-                    }
+            KeyboardAwareBottomInsetContainer(
+                footerBackground: AnyView(AdminSheetFooterBackground())
+            ) {
+                VStack(spacing: 0) {
+                    AdminSheetHeader(
+                        icon: "calendar.badge.plus",
+                        iconColor: .green,
+                        title: "Create Event",
+                        subtitle: "Schedule a guild event"
+                    )
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 20)
+                    .padding(.top, 30)
+                    .padding(.bottom, 12)
+                    .adminSheetChrome(edge: .top)
+
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            AdminSectionCard {
+                                AdminInputField(
+                                    title: "Event Title (Required, min 3 chars)",
+                                    placeholder: "What's the event?",
+                                    text: $title
+                                )
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Date & Time (Required, must be future)")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.greyText)
+                                    DatePicker(
+                                        "Event Date",
+                                        selection: $eventDate,
+                                        in: Date()...,
+                                        displayedComponents: [.date, .hourAndMinute]
+                                    )
+                                    .datePickerStyle(.compact)
+                                    .labelsHidden()
+                                    .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
+                                }
+
+                                AdminInputField(
+                                    title: "Preview Text (Required, min 3 chars)",
+                                    placeholder: "Short description for the list view...",
+                                    text: $preview
+                                )
+                                AdminInputTextEditor(
+                                    title: "Full Description (Required, min 3 chars)",
+                                    placeholder: "Describe the event in detail...",
+                                    text: $content
+                                )
+                                GuildPostIconPickerSection(
+                                    title: "Event Icon",
+                                    subtitle: "Choose the icon members will see in the feed and notifications.",
+                                    selectedIconKey: $selectedIconKey
+                                )
+                                AdminToggleRow(
+                                    title: "Featured Event",
+                                    subtitle: "Highlight this event",
+                                    icon: "star.fill",
+                                    iconColor: .yellow,
+                                    isOn: $isImportant
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .scrollDismissesKeyboard(.immediately)
+            } footer: {
+                AdminBottomActionBar(
+                    primaryTitle: "Create Event",
+                    primaryDisabled: !isValid,
+                    isSubmitting: isSubmitting,
+                    showsCancel: false,
+                    onPrimary: { Task { await createEvent() } }
+                )
             }
 
             SheetCloseButton(action: { dismiss() })
             .padding(.top, 20)
             .padding(.trailing, 20)
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissKeyboard()
+            },
+            including: .subviews
+        )
         .dismissKeyboardOnTapAndDragBackground()
         .background(AdminSheetBackground())
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     private func createEvent() async {

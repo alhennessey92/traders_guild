@@ -213,20 +213,23 @@ struct AdminFooterActions: View {
     let primaryTitle: String
     var primaryDisabled: Bool = false
     var isSubmitting: Bool = false
-    let onCancel: () -> Void
+    var showsCancel: Bool = true
+    var onCancel: (() -> Void)? = nil
     let onPrimary: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            Button("Cancel", action: onCancel)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(AppColors.adminFooterCancelForeground)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(AppColors.adminFooterCancelBackground)
-                )
+            if showsCancel, let onCancel {
+                Button("Cancel", action: onCancel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.adminFooterCancelForeground)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(AppColors.adminFooterCancelBackground)
+                    )
+            }
 
             Spacer()
 
@@ -250,6 +253,41 @@ struct AdminFooterActions: View {
             }
             .disabled(primaryDisabled || isSubmitting)
             .opacity((primaryDisabled || isSubmitting) ? 0.5 : 1.0)
+        }
+    }
+}
+
+struct AdminBottomActionBar: View {
+    let primaryTitle: String
+    var primaryDisabled: Bool = false
+    var isSubmitting: Bool = false
+    var showsCancel: Bool = true
+    var onCancel: (() -> Void)? = nil
+    let onPrimary: () -> Void
+
+    var body: some View {
+        AdminFooterActions(
+            primaryTitle: primaryTitle,
+            primaryDisabled: primaryDisabled,
+            isSubmitting: isSubmitting,
+            showsCancel: showsCancel,
+            onCancel: onCancel,
+            onPrimary: onPrimary
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+        .adminSheetChrome(edge: .bottom)
+    }
+}
+
+struct AdminSheetFooterBackground: View {
+    var body: some View {
+        ZStack {
+            Color.clear
+                .background(.ultraThinMaterial)
+            AppColors.sheetBackground.opacity(0.98)
         }
     }
 }
