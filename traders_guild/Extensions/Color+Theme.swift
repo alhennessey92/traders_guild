@@ -49,6 +49,30 @@ enum AppColors {
         static var symbolHeroTrailing: Color { navBlueRampTabEnd }
         static var symbolRowSelectedLeading: Color { navBlueRampSubTabStart }
         static var symbolRowSelectedTrailing: Color { navBlueRampSubTabEnd }
+
+        // Semantic color anchors for light grey readability (palette audit §42)
+        static var negativeRedAnchor: Color {
+            Color(red: 178.0 / 255, green: 34.0 / 255, blue: 34.0 / 255)
+        }
+        static var warningOrangeAnchor: Color {
+            Color(red: 196.0 / 255, green: 92.0 / 255, blue: 22.0 / 255)
+        }
+        static var highlightYellowAnchor: Color {
+            Color(red: 154.0 / 255, green: 120.0 / 255, blue: 12.0 / 255)
+        }
+        static var secondaryPurpleAnchor: Color {
+            Color(red: 108.0 / 255, green: 52.0 / 255, blue: 168.0 / 255)
+        }
+        static var accentCyanAnchor: Color { reputationAccent }
+        static var tealAnchor: Color {
+            Color(red: 12.0 / 255, green: 128.0 / 255, blue: 118.0 / 255)
+        }
+        static var pinkAnchor: Color {
+            Color(red: 186.0 / 255, green: 44.0 / 255, blue: 108.0 / 255)
+        }
+        static var indigoAnchor: Color {
+            Color(red: 62.0 / 255, green: 48.0 / 255, blue: 158.0 / 255)
+        }
     }
 
     // MARK: - Foundation Assets (theme-aware backgrounds)
@@ -216,6 +240,70 @@ enum AppColors {
         }
     }
 
+    /// Negative / stop loss red: system red on dark/mid; firebrick on light grey (audit 42).
+    private static var themeAwareRed: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.negativeRedAnchor
+        case .midGrey, .dark: return systemRed
+        }
+    }
+
+    /// Warning orange: system orange on dark/mid; deep amber on light grey (audit 42).
+    private static var themeAwareOrange: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.warningOrangeAnchor
+        case .midGrey, .dark: return systemOrange
+        }
+    }
+
+    /// Highlight yellow: system yellow on dark/mid; dark goldenrod on light grey (audit 42).
+    private static var themeAwareYellow: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.highlightYellowAnchor
+        case .midGrey, .dark: return systemYellow
+        }
+    }
+
+    /// Secondary purple: system purple on dark/mid; deeper purple on light grey (audit 42).
+    private static var themeAwarePurple: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.secondaryPurpleAnchor
+        case .midGrey, .dark: return systemPurple
+        }
+    }
+
+    /// Accent cyan: system cyan on dark/mid; teal-cyan on light grey (audit 42).
+    private static var themeAwareCyan: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.accentCyanAnchor
+        case .midGrey, .dark: return systemCyan
+        }
+    }
+
+    /// Teal: system teal on dark/mid; deeper teal on light grey (audit 42).
+    private static var themeAwareTeal: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.tealAnchor
+        case .midGrey, .dark: return systemTeal
+        }
+    }
+
+    /// Pink: system pink on dark/mid; deeper rose on light grey (audit 42).
+    private static var themeAwarePink: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.pinkAnchor
+        case .midGrey, .dark: return systemPink
+        }
+    }
+
+    /// Indigo: system indigo on dark/mid; deeper indigo on light grey (audit 42).
+    private static var themeAwareIndigo: Color {
+        switch theme {
+        case .lightGrey: return LightGreyPalette.indigoAnchor
+        case .midGrey, .dark: return systemIndigo
+        }
+    }
+
     /// System `Color.blue` wrapper.
     static let systemBlue = Color.blue
     /// System `Color.orange` wrapper.
@@ -338,29 +426,29 @@ enum AppColors {
     // MARK: - Semantic / Status
 
     static var statusPositive: Color { themeAwareGreen }
-    static let statusNegative = systemRed
+    static var statusNegative: Color { themeAwareRed }
     static var statusInfo: Color { themeAwareInfoBlue }
-    static let statusWarning = systemOrange
+    static var statusWarning: Color { themeAwareOrange }
 
-    static let statusNegative08 = systemRed.opacity(0.08)
-    static let statusNegative10 = systemRed.opacity(0.1)
-    static let statusNegative12 = systemRed.opacity(0.12)
-    static let statusNegative15 = systemRed.opacity(0.15)
-    static let statusNegative20 = systemRed.opacity(0.2)
-    static let statusNegative30 = systemRed.opacity(0.3)
-    static let statusNegative35 = systemRed.opacity(0.35)
-    static let statusNegative40 = systemRed.opacity(0.4)
-    static let statusNegative50 = systemRed.opacity(0.5)
-    static let statusNegative55 = systemRed.opacity(0.55)
-    static let statusNegative60 = systemRed.opacity(0.6)
-    static let statusNegative70 = systemRed.opacity(0.7)
-    static let statusNegative75 = systemRed.opacity(0.75)
-    static let statusNegative80 = systemRed.opacity(0.8)
-    static let statusNegative82 = systemRed.opacity(0.82)
-    static let statusNegative85 = systemRed.opacity(0.85)
-    static let statusNegative86 = systemRed.opacity(0.86)
-    static let statusNegative92 = systemRed.opacity(0.92)
-    static let statusNegative95 = systemRed.opacity(0.95)
+    static var statusNegative08: Color { themeAwareRed.opacity(0.08) }
+    static var statusNegative10: Color { themeAwareRed.opacity(0.1) }
+    static var statusNegative12: Color { themeAwareRed.opacity(0.12) }
+    static var statusNegative15: Color { themeAwareRed.opacity(0.15) }
+    static var statusNegative20: Color { themeAwareRed.opacity(0.2) }
+    static var statusNegative30: Color { themeAwareRed.opacity(0.3) }
+    static var statusNegative35: Color { themeAwareRed.opacity(0.35) }
+    static var statusNegative40: Color { themeAwareRed.opacity(0.4) }
+    static var statusNegative50: Color { themeAwareRed.opacity(0.5) }
+    static var statusNegative55: Color { themeAwareRed.opacity(0.55) }
+    static var statusNegative60: Color { themeAwareRed.opacity(0.6) }
+    static var statusNegative70: Color { themeAwareRed.opacity(0.7) }
+    static var statusNegative75: Color { themeAwareRed.opacity(0.75) }
+    static var statusNegative80: Color { themeAwareRed.opacity(0.8) }
+    static var statusNegative82: Color { themeAwareRed.opacity(0.82) }
+    static var statusNegative85: Color { themeAwareRed.opacity(0.85) }
+    static var statusNegative86: Color { themeAwareRed.opacity(0.86) }
+    static var statusNegative92: Color { themeAwareRed.opacity(0.92) }
+    static var statusNegative95: Color { themeAwareRed.opacity(0.95) }
 
     static var statusPositive06: Color { themeAwareGreen.opacity(0.06) }
     static var statusPositive08: Color { themeAwareGreen.opacity(0.08) }
@@ -408,25 +496,25 @@ enum AppColors {
     static var statusInfo92: Color { themeAwareInfoBlue.opacity(0.92) }
     static var statusInfo95: Color { themeAwareInfoBlue.opacity(0.95) }
 
-    static let statusWarning10 = systemOrange.opacity(0.1)
-    static let statusWarning14 = systemOrange.opacity(0.14)
-    static let statusWarning15 = systemOrange.opacity(0.15)
-    static let statusWarning16 = systemOrange.opacity(0.16)
-    static let statusWarning18 = systemOrange.opacity(0.18)
-    static let statusWarning20 = systemOrange.opacity(0.2)
-    static let statusWarning28 = systemOrange.opacity(0.28)
-    static let statusWarning30 = systemOrange.opacity(0.3)
-    static let statusWarning40 = systemOrange.opacity(0.4)
-    static let statusWarning45 = systemOrange.opacity(0.45)
-    static let statusWarning50 = systemOrange.opacity(0.5)
-    static let statusWarning60 = systemOrange.opacity(0.6)
-    static let statusWarning62 = systemOrange.opacity(0.62)
-    static let statusWarning70 = systemOrange.opacity(0.7)
-    static let statusWarning72 = systemOrange.opacity(0.72)
-    static let statusWarning80 = systemOrange.opacity(0.8)
-    static let statusWarning90 = systemOrange.opacity(0.9)
-    static let statusWarning92 = systemOrange.opacity(0.92)
-    static let statusWarning95 = systemOrange.opacity(0.95)
+    static var statusWarning10: Color { themeAwareOrange.opacity(0.1) }
+    static var statusWarning14: Color { themeAwareOrange.opacity(0.14) }
+    static var statusWarning15: Color { themeAwareOrange.opacity(0.15) }
+    static var statusWarning16: Color { themeAwareOrange.opacity(0.16) }
+    static var statusWarning18: Color { themeAwareOrange.opacity(0.18) }
+    static var statusWarning20: Color { themeAwareOrange.opacity(0.2) }
+    static var statusWarning28: Color { themeAwareOrange.opacity(0.28) }
+    static var statusWarning30: Color { themeAwareOrange.opacity(0.3) }
+    static var statusWarning40: Color { themeAwareOrange.opacity(0.4) }
+    static var statusWarning45: Color { themeAwareOrange.opacity(0.45) }
+    static var statusWarning50: Color { themeAwareOrange.opacity(0.5) }
+    static var statusWarning60: Color { themeAwareOrange.opacity(0.6) }
+    static var statusWarning62: Color { themeAwareOrange.opacity(0.62) }
+    static var statusWarning70: Color { themeAwareOrange.opacity(0.7) }
+    static var statusWarning72: Color { themeAwareOrange.opacity(0.72) }
+    static var statusWarning80: Color { themeAwareOrange.opacity(0.8) }
+    static var statusWarning90: Color { themeAwareOrange.opacity(0.9) }
+    static var statusWarning92: Color { themeAwareOrange.opacity(0.92) }
+    static var statusWarning95: Color { themeAwareOrange.opacity(0.95) }
 
     // MARK: - Audits 36–40 (light grey readability)
 
@@ -460,7 +548,7 @@ enum AppColors {
 
     /// Watchlist / symbol sheet price direction (audit 38); avoids adaptive `.green` on light color scheme.
     static var priceChangePositive: Color { statusPositive }
-    static let priceChangeNegative = statusNegative
+    static var priceChangeNegative: Color { statusNegative }
 
     /// Role pill colors; use instead of `RLMemberRole.color` where theme matters (audit 40).
     static func memberRoleColor(_ role: RLMemberRole) -> Color {
@@ -470,40 +558,179 @@ enum AppColors {
         case .moderator:
             return moderationOrange
         case .admin:
-            return systemRed
+            return themeAwareRed
         case .owner:
             return isLightGrey ? Color(red: 176.0 / 255, green: 138.0 / 255, blue: 28.0 / 255) : systemYellow
         }
     }
 
-    static let statusHighlight20 = systemYellow.opacity(0.2)
-    static let statusHighlight40 = systemYellow.opacity(0.4)
-    static let statusHighlight50 = systemYellow.opacity(0.5)
-    static let statusHighlight55 = systemYellow.opacity(0.55)
-    static let statusHighlight68 = systemYellow.opacity(0.68)
-    static let statusHighlight80 = systemYellow.opacity(0.8)
-    static let statusHighlight90 = systemYellow.opacity(0.9)
-    static let statusHighlight95 = systemYellow.opacity(0.95)
+    static var statusHighlight20: Color { themeAwareYellow.opacity(0.2) }
+    static var statusHighlight40: Color { themeAwareYellow.opacity(0.4) }
+    static var statusHighlight50: Color { themeAwareYellow.opacity(0.5) }
+    static var statusHighlight55: Color { themeAwareYellow.opacity(0.55) }
+    static var statusHighlight68: Color { themeAwareYellow.opacity(0.68) }
+    static var statusHighlight80: Color { themeAwareYellow.opacity(0.8) }
+    static var statusHighlight90: Color { themeAwareYellow.opacity(0.9) }
+    static var statusHighlight95: Color { themeAwareYellow.opacity(0.95) }
 
-    static let statusSecondary10 = systemPurple.opacity(0.1)
-    static let statusSecondary30 = systemPurple.opacity(0.3)
-    static let statusSecondary50 = systemPurple.opacity(0.5)
-    static let statusSecondary70 = systemPurple.opacity(0.7)
+    static var statusSecondary10: Color { themeAwarePurple.opacity(0.1) }
+    static var statusSecondary30: Color { themeAwarePurple.opacity(0.3) }
+    static var statusSecondary50: Color { themeAwarePurple.opacity(0.5) }
+    static var statusSecondary70: Color { themeAwarePurple.opacity(0.7) }
 
-    static let statusAccent40 = systemCyan.opacity(0.4)
-    static let statusAccent66 = systemCyan.opacity(0.66)
-    static let statusAccent90 = systemCyan.opacity(0.9)
+    static var statusAccent40: Color { themeAwareCyan.opacity(0.4) }
+    static var statusAccent66: Color { themeAwareCyan.opacity(0.66) }
+    static var statusAccent90: Color { themeAwareCyan.opacity(0.9) }
 
-    static let statusTeal22 = systemTeal.opacity(0.22)
-    static let statusTeal30 = systemTeal.opacity(0.3)
-    static let statusTeal58 = systemTeal.opacity(0.58)
-    static let statusTeal95 = systemTeal.opacity(0.95)
+    static var statusTeal22: Color { themeAwareTeal.opacity(0.22) }
+    static var statusTeal30: Color { themeAwareTeal.opacity(0.3) }
+    static var statusTeal58: Color { themeAwareTeal.opacity(0.58) }
+    static var statusTeal95: Color { themeAwareTeal.opacity(0.95) }
 
-    static let statusPink45 = systemPink.opacity(0.45)
-    static let statusPink50 = systemPink.opacity(0.5)
-    static let statusPink72 = systemPink.opacity(0.72)
+    static var statusPink45: Color { themeAwarePink.opacity(0.45) }
+    static var statusPink50: Color { themeAwarePink.opacity(0.5) }
+    static var statusPink72: Color { themeAwarePink.opacity(0.72) }
 
-    static let statusIndigo58 = systemIndigo.opacity(0.58)
+    static var statusIndigo58: Color { themeAwareIndigo.opacity(0.58) }
+
+    // MARK: - Theme-Aware Semantic Color Accessors (audit 42 — chart/marker DTOs)
+
+    /// Chart component colors — preserve original hex on dark/mid; route to palette anchors on light grey.
+    static var componentEntryGreen: Color {
+        switch theme {
+        case .lightGrey: return themeAwareGreen
+        case .midGrey, .dark: return Color(red: 14.0 / 255, green: 133.0 / 255, blue: 77.0 / 255)
+        }
+    }
+    static var componentStopLossRed: Color {
+        switch theme {
+        case .lightGrey: return themeAwareRed
+        case .midGrey, .dark: return Color(red: 220.0 / 255, green: 38.0 / 255, blue: 38.0 / 255)
+        }
+    }
+    static var componentTakeProfitCyan: Color {
+        switch theme {
+        case .lightGrey: return themeAwareCyan
+        case .midGrey, .dark: return Color(red: 14.0 / 255, green: 165.0 / 255, blue: 233.0 / 255)
+        }
+    }
+    static var componentSupportPurple: Color {
+        switch theme {
+        case .lightGrey: return themeAwarePurple
+        case .midGrey, .dark: return Color(red: 124.0 / 255, green: 58.0 / 255, blue: 237.0 / 255)
+        }
+    }
+    static var componentResistanceRed: Color { componentStopLossRed }
+    static var componentTrendlineTeal: Color {
+        switch theme {
+        case .lightGrey: return themeAwareTeal
+        case .midGrey, .dark: return Color(red: 20.0 / 255, green: 184.0 / 255, blue: 166.0 / 255)
+        }
+    }
+    static var componentZoneGreen: Color {
+        switch theme {
+        case .lightGrey: return themeAwareGreen
+        case .midGrey, .dark: return Color(red: 34.0 / 255, green: 197.0 / 255, blue: 94.0 / 255)
+        }
+    }
+    static var componentIndicatorOrange: Color {
+        switch theme {
+        case .lightGrey: return themeAwareOrange
+        case .midGrey, .dark: return Color(red: 245.0 / 255, green: 158.0 / 255, blue: 11.0 / 255)
+        }
+    }
+    static var componentLinkPink: Color {
+        switch theme {
+        case .lightGrey: return themeAwarePink
+        case .midGrey, .dark: return Color(red: 236.0 / 255, green: 72.0 / 255, blue: 153.0 / 255)
+        }
+    }
+    static var componentTimeframeCyan: Color {
+        switch theme {
+        case .lightGrey: return themeAwareCyan
+        case .midGrey, .dark: return Color(red: 56.0 / 255, green: 189.0 / 255, blue: 248.0 / 255)
+        }
+    }
+    static var componentAnchorBlue: Color {
+        switch theme {
+        case .lightGrey: return themeAwareInfoBlue
+        case .midGrey, .dark: return Color(red: 91.0 / 255, green: 127.0 / 255, blue: 255.0 / 255)
+        }
+    }
+
+    /// Marker intent colors — preserve original hex on dark/mid; route to palette anchors on light grey.
+    static var intentAnalysisTeal: Color {
+        switch theme {
+        case .lightGrey: return themeAwareTeal
+        case .midGrey, .dark: return Color(red: 15.0 / 255, green: 158.0 / 255, blue: 180.0 / 255)
+        }
+    }
+    static var intentSetupGreen: Color { componentEntryGreen }
+    static var intentQuestionBlue: Color { componentAnchorBlue }
+    static var intentPollPurple: Color {
+        switch theme {
+        case .lightGrey: return themeAwarePurple
+        case .midGrey, .dark: return Color(red: 139.0 / 255, green: 92.0 / 255, blue: 246.0 / 255)
+        }
+    }
+    static var intentNewsPink: Color { componentLinkPink }
+
+    /// Alert severity colors — theme-aware for `MarkerAlertSeverity.color`.
+    static var alertSeverityMild: Color { themeAwareInfoBlue }
+    static var alertSeverityModerate: Color { themeAwareOrange }
+    static var alertSeveritySevere: Color { themeAwareYellow }
+    static var alertSeverityCritical: Color { themeAwareRed }
+
+    /// Marker palette secondary tints — lighter companions for SF Symbol multi-color rendering.
+    static var paletteSetupSecondary: Color {
+        switch theme {
+        case .lightGrey: return themeAwareGreen.opacity(0.75)
+        case .midGrey, .dark: return Color(red: 74.0 / 255, green: 222.0 / 255, blue: 128.0 / 255)
+        }
+    }
+    static var paletteAnalysisSecondary: Color {
+        switch theme {
+        case .lightGrey: return themeAwareCyan.opacity(0.75)
+        case .midGrey, .dark: return Color(red: 34.0 / 255, green: 211.0 / 255, blue: 238.0 / 255)
+        }
+    }
+    static var paletteQuestionSecondary: Color {
+        switch theme {
+        case .lightGrey: return themeAwareInfoBlue.opacity(0.78)
+        case .midGrey, .dark: return Color(red: 147.0 / 255, green: 197.0 / 255, blue: 253.0 / 255)
+        }
+    }
+    static var palettePollSecondary: Color {
+        switch theme {
+        case .lightGrey: return themeAwarePurple.opacity(0.72)
+        case .midGrey, .dark: return Color(red: 196.0 / 255, green: 181.0 / 255, blue: 253.0 / 255)
+        }
+    }
+    static var paletteNewsSecondary: Color {
+        switch theme {
+        case .lightGrey: return themeAwarePink.opacity(0.72)
+        case .midGrey, .dark: return Color(red: 249.0 / 255, green: 168.0 / 255, blue: 212.0 / 255)
+        }
+    }
+
+    /// Award category colors — theme-aware (audit 42).
+    static var awardCategoryTrading: Color { statusPositive }
+    static var awardCategoryCommunity: Color { statusInfo }
+    static var awardCategoryMilestones: Color { statusWarning }
+    static var awardCategorySpecial: Color { themeAwarePurple }
+
+    /// Award rarity colors — theme-aware (audit 42).
+    static var awardRarityUncommon: Color { statusPositive }
+    static var awardRarityRare: Color { statusInfo }
+    static var awardRarityEpic: Color { themeAwarePurple }
+    static var awardRarityLegendary: Color { statusWarning }
+
+    /// Social link platform colors — theme-aware (audit 42).
+    static var socialBlue: Color { statusInfo }
+    static var socialIndigo: Color { themeAwareIndigo }
+    static var socialCyan: Color { themeAwareCyan }
+    static var socialOrange: Color { statusWarning }
+    static var socialRed: Color { statusNegative }
 
     // MARK: - Chart / Indicator Literal Tokens
 
@@ -1035,7 +1262,9 @@ enum AppColors {
         Color.white.opacity(0.92)
     }
 
-    static let signupInterestBlue = Color(red: 0.4, green: 0.7, blue: 0.9)
+    static var signupInterestBlue: Color {
+        isLightGrey ? LightGreyPalette.infoBlueAnchor : Color(red: 0.4, green: 0.7, blue: 0.9)
+    }
     /// Tutorial / onboarding greens — saturated on dark themes; canonical green on light grey (audit 32).
     static var signupInterestGreen: Color {
         switch theme {
@@ -1044,7 +1273,9 @@ enum AppColors {
         }
     }
 
-    static let signupInterestPurple = Color(red: 0.7, green: 0.6, blue: 0.9)
+    static var signupInterestPurple: Color {
+        isLightGrey ? LightGreyPalette.secondaryPurpleAnchor : Color(red: 0.7, green: 0.6, blue: 0.9)
+    }
 
     // MARK: - Marker
 
@@ -1600,53 +1831,49 @@ enum AppColors {
 
     /// Metric accents on statistics rows (audit 27 — readable on pale backgrounds).
     static var statisticsMetricGreen: Color { statusPositive }
-    static var statisticsMetricYellow: Color {
-        isLightGrey ? Color(red: 0.62, green: 0.48, blue: 0.08) : systemYellow
-    }
-    static var statisticsMetricOrange: Color {
-        isLightGrey ? Color(red: 0.78, green: 0.42, blue: 0.12) : systemOrange
-    }
+    static var statisticsMetricYellow: Color { themeAwareYellow }
+    static var statisticsMetricOrange: Color { themeAwareOrange }
     static var statisticsMetricMint: Color {
-        isLightGrey ? Color(red: 0.22, green: 0.62, blue: 0.52) : systemMint
+        isLightGrey ? LightGreyPalette.tealAnchor : systemMint
     }
 
     /// Personal watchlist star in symbol sheet (audit 29).
     static var symbolDetailPersonalStarActive: Color {
-        isLightGrey ? Color(red: 0.72, green: 0.52, blue: 0.06) : systemYellow
+        isLightGrey ? LightGreyPalette.highlightYellowAnchor : systemYellow
     }
 
     /// Tutorial step accents — saturated on dark; deeper on light grey (audit 32).
     static var tutorialAccentOrange: Color {
-        isLightGrey ? Color(red: 0.78, green: 0.42, blue: 0.12) : Color(red: 1.0, green: 0.58, blue: 0.0)
+        isLightGrey ? LightGreyPalette.warningOrangeAnchor : Color(red: 1.0, green: 0.58, blue: 0.0)
     }
     static var tutorialAccentYellow: Color {
-        isLightGrey ? Color(red: 0.65, green: 0.50, blue: 0.08) : Color(red: 1.0, green: 0.84, blue: 0.0)
+        isLightGrey ? LightGreyPalette.highlightYellowAnchor : Color(red: 1.0, green: 0.84, blue: 0.0)
     }
     static var tutorialAccentPurple: Color {
-        isLightGrey ? Color(red: 0.52, green: 0.36, blue: 0.72) : systemPurple
+        isLightGrey ? LightGreyPalette.secondaryPurpleAnchor : systemPurple
     }
     static var tutorialAccentCyan: Color {
-        isLightGrey ? Color(red: 0.12, green: 0.55, blue: 0.68) : systemCyan
+        isLightGrey ? LightGreyPalette.accentCyanAnchor : systemCyan
     }
 
     /// Marker viewing “Components” tab section tints — deeper on light grey (audit 33).
     static var markerViewingTintIndicator: Color {
-        isLightGrey ? Color(red: 0.78, green: 0.48, blue: 0.08) : Color(red: 245.0 / 255, green: 158.0 / 255, blue: 11.0 / 255)
+        isLightGrey ? LightGreyPalette.warningOrangeAnchor : Color(red: 245.0 / 255, green: 158.0 / 255, blue: 11.0 / 255)
     }
     static var markerViewingTintIndicatorPanel: Color {
-        isLightGrey ? Color(red: 0.82, green: 0.38, blue: 0.08) : Color(red: 249.0 / 255, green: 115.0 / 255, blue: 22.0 / 255)
+        isLightGrey ? LightGreyPalette.warningOrangeAnchor : Color(red: 249.0 / 255, green: 115.0 / 255, blue: 22.0 / 255)
     }
     static var markerViewingTintIndicatorOverlay: Color {
-        isLightGrey ? Color(red: 0.08, green: 0.48, blue: 0.68) : Color(red: 14.0 / 255, green: 165.0 / 255, blue: 233.0 / 255)
+        isLightGrey ? LightGreyPalette.accentCyanAnchor : Color(red: 14.0 / 255, green: 165.0 / 255, blue: 233.0 / 255)
     }
     static var markerViewingTintDrawing: Color {
-        isLightGrey ? Color(red: 0.06, green: 0.52, blue: 0.48) : Color(red: 20.0 / 255, green: 184.0 / 255, blue: 166.0 / 255)
+        isLightGrey ? LightGreyPalette.tealAnchor : Color(red: 20.0 / 255, green: 184.0 / 255, blue: 166.0 / 255)
     }
     static var markerViewingTintTimeframe: Color {
         isLightGrey ? LightGreyPalette.navBlueRampDeepEnd : Color(red: 56.0 / 255, green: 189.0 / 255, blue: 248.0 / 255)
     }
     static var markerViewingTintPrimaryStar: Color {
-        isLightGrey ? Color(red: 0.72, green: 0.52, blue: 0.06) : Color(red: 251.0 / 255, green: 191.0 / 255, blue: 36.0 / 255)
+        isLightGrey ? LightGreyPalette.highlightYellowAnchor : Color(red: 251.0 / 255, green: 191.0 / 255, blue: 36.0 / 255)
     }
 
     /// Discover-style search field (capsule fill + stroke). Light uses explicit fill; dark/mid keep gradient-leading as flat fallback.

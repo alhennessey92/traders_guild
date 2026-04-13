@@ -1219,11 +1219,11 @@ struct RLSocialLinkItem: Codable, Identifiable, Equatable, Hashable {
     
     var color: Color {
         switch platform.lowercased() {
-        case "twitter", "x": return .blue
-        case "discord": return .indigo
-        case "telegram": return .cyan
-        case "tradingview": return .orange
-        case "youtube": return .red
+        case "twitter", "x": return AppColors.socialBlue
+        case "discord": return AppColors.socialIndigo
+        case "telegram": return AppColors.socialCyan
+        case "tradingview": return AppColors.socialOrange
+        case "youtube": return AppColors.socialRed
         default: return .gray
         }
     }
@@ -2101,10 +2101,10 @@ enum RLAwardCategory: String, Codable, CaseIterable {
     
     var color: Color {
         switch self {
-        case .trading: return .green
-        case .community: return .blue
-        case .milestones: return .orange
-        case .special: return .purple
+        case .trading: return AppColors.awardCategoryTrading
+        case .community: return AppColors.awardCategoryCommunity
+        case .milestones: return AppColors.awardCategoryMilestones
+        case .special: return AppColors.awardCategorySpecial
         }
     }
     
@@ -2131,10 +2131,10 @@ enum RLAwardRarity: String, Codable, CaseIterable {
     var color: Color {
         switch self {
         case .common: return .gray
-        case .uncommon: return .green
-        case .rare: return .blue
-        case .epic: return .purple
-        case .legendary: return .orange
+        case .uncommon: return AppColors.awardRarityUncommon
+        case .rare: return AppColors.awardRarityRare
+        case .epic: return AppColors.awardRarityEpic
+        case .legendary: return AppColors.awardRarityLegendary
         }
     }
     
@@ -2441,10 +2441,10 @@ enum RLAlertSeverity {
     
     var color: Color {
         switch self {
-        case .error: return .red
-        case .warning: return .orange
-        case .info: return .blue
-        case .success: return .green
+        case .error: return AppColors.statusNegative
+        case .warning: return AppColors.statusWarning
+        case .info: return AppColors.statusInfo
+        case .success: return AppColors.statusPositive
         }
     }
     

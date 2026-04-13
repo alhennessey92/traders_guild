@@ -111,12 +111,12 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
 
     var color: Color {
         switch self {
-        case .analysis: return Color(hex: "#0F9EB4") ?? .teal
-        case .setup: return Color(hex: "#0E854D") ?? .green
-        case .alert: return Color(hex: "#8E959D") ?? .gray
-        case .question: return Color(hex: "#5B7FFF") ?? .blue
-        case .poll: return Color(hex: "#8B5CF6") ?? .purple
-        case .news: return Color(hex: "#EC4899") ?? .pink
+        case .analysis: return AppColors.intentAnalysisTeal
+        case .setup:    return AppColors.intentSetupGreen
+        case .alert:    return Color(hex: "#8E959D") ?? .gray
+        case .question: return AppColors.intentQuestionBlue
+        case .poll:     return AppColors.intentPollPurple
+        case .news:     return AppColors.intentNewsPink
         case .reaction: return AppColors.markerReactionAccent
         case .personal: return Color(hex: "#6B7280") ?? .gray
         }
@@ -140,14 +140,14 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         case .setup:
             return [
                 base,
-                (Color(hex: "#0E854D") ?? .green).opacity(0.88),
-                (Color(hex: "#4ADE80") ?? .mint).opacity(0.66),
+                AppColors.intentSetupGreen.opacity(0.88),
+                AppColors.paletteSetupSecondary.opacity(0.66),
             ]
         case .analysis:
             return [
                 base,
-                (Color(hex: "#0F9EB4") ?? .teal).opacity(0.88),
-                (Color(hex: "#22D3EE") ?? .cyan).opacity(0.66),
+                AppColors.intentAnalysisTeal.opacity(0.88),
+                AppColors.paletteAnalysisSecondary.opacity(0.66),
             ]
         case .alert:
             return [
@@ -158,20 +158,20 @@ enum RLMarkerIntent: String, Codable, CaseIterable {
         case .question:
             return [
                 base,
-                (Color(hex: "#5B7FFF") ?? .blue).opacity(0.9),
-                (Color(hex: "#93C5FD") ?? .cyan).opacity(0.68),
+                AppColors.intentQuestionBlue.opacity(0.9),
+                AppColors.paletteQuestionSecondary.opacity(0.68),
             ]
         case .poll:
             return [
                 base,
-                (Color(hex: "#8B5CF6") ?? .purple).opacity(0.88),
-                (Color(hex: "#C4B5FD") ?? .indigo).opacity(0.66),
+                AppColors.intentPollPurple.opacity(0.88),
+                AppColors.palettePollSecondary.opacity(0.66),
             ]
         case .news:
             return [
                 base,
-                (Color(hex: "#EC4899") ?? .pink).opacity(0.88),
-                (Color(hex: "#F9A8D4") ?? .pink).opacity(0.66),
+                AppColors.intentNewsPink.opacity(0.88),
+                AppColors.paletteNewsSecondary.opacity(0.66),
             ]
         case .reaction:
             let accent = AppColors.markerReactionAccent
@@ -404,20 +404,20 @@ enum RLComponentType: String, Codable, CaseIterable {
 
     var color: Color {
         switch self {
-        case .anchor: return Color(hex: "#5B7FFF") ?? .blue
-        case .levelEntry: return Color(hex: "#0E854D") ?? .green
-        case .levelSl: return Color(hex: "#DC2626") ?? .red
-        case .levelTp: return Color(hex: "#0EA5E9") ?? .cyan
-        case .levelSupport: return Color(hex: "#7C3AED") ?? .purple
-        case .levelResistance: return Color(hex: "#DC2626") ?? .red
-        case .drawingTrendline: return Color(hex: "#14B8A6") ?? .teal
+        case .anchor:              return AppColors.componentAnchorBlue
+        case .levelEntry:          return AppColors.componentEntryGreen
+        case .levelSl:             return AppColors.componentStopLossRed
+        case .levelTp:             return AppColors.componentTakeProfitCyan
+        case .levelSupport:        return AppColors.componentSupportPurple
+        case .levelResistance:     return AppColors.componentResistanceRed
+        case .drawingTrendline:    return AppColors.componentTrendlineTeal
         case .drawingHorizontalLine: return Color(hex: "#9CA3AF") ?? .gray
-        case .drawingZone: return Color(hex: "#22C55E") ?? .green
-        case .indicator: return Color(hex: "#F59E0B") ?? .orange
-        case .linkURL: return Color(hex: "#EC4899") ?? .pink
-        case .textNote: return Color(hex: "#6B7280") ?? .gray
-        case .reactionEmoji: return Color(hex: "#F59E0B") ?? .orange
-        case .timeframeLink: return Color(hex: "#38BDF8") ?? .cyan
+        case .drawingZone:         return AppColors.componentZoneGreen
+        case .indicator:           return AppColors.componentIndicatorOrange
+        case .linkURL:             return AppColors.componentLinkPink
+        case .textNote:            return Color(hex: "#6B7280") ?? .gray
+        case .reactionEmoji:       return AppColors.componentIndicatorOrange
+        case .timeframeLink:       return AppColors.componentTimeframeCyan
         }
     }
 

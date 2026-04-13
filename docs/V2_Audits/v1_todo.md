@@ -210,7 +210,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 72. [Fixed] Need to make tp hit coloring as blue to match price label coloring and make tracking coloring green, need to make sure we differentiate between them properly - red/SL, green/entry/tracking, blue/TP. Make sure all references of these across the app match this coloring we pick
 
-73. Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon
+73. [Fixed] Sometimes when viewing markers everythign appears correct but the actual marker icon doesnt appear on chart, the vertical line is there but not the icon
 
 74. [Fixed] Deleted messages should be removed instantly from chat or add a deleted reaction icon
 
@@ -269,7 +269,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 99. [Fixed] No 78 still not working
 
-100. [Not Fixed] Emoji picker on chart for drawings/annotations is too high and stops interaction on chart, so cant move the chart, need to be able to move the chart and when selecting the emoji move it independently. Also the picker needs to be less high - reduce the height a bit, but obviously make the content scrollable
+100. [Fixed] Emoji picker on chart for drawings/annotations is too high and stops interaction on chart, so cant move the chart, need to be able to move the chart and when selecting the emoji move it independently. Also the picker needs to be less high - reduce the height a bit, but obviously make the content scrollable
 
 101. [Fixed] No 80 not fixed was meant to be the emojis in the marker placement mode - reaction selection in bottom bar detail view
 
@@ -284,7 +284,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 103. [Fixed] In create guild make selection of language and country required
 
-104. in guild details in admin panel if user switches  to invite only for guild, show options for questions required and make it a requirement to fill at least one quesiton out
+104. [Fixed] in guild details in admin panel if user switches  to invite only for guild, show options for questions required and make it a requirement to fill at least one quesiton out
 
 105. [Fixed] Change important announcement to be a red border on icon rather than star and important announcement pill
 
@@ -292,7 +292,7 @@ Completed items are prefixed with `[Fixed]`. Untagged items are still open.
 
 107. [Fixed] Should show pending friend request in friends section in members in left drawer and should show accept/decline in notifications for friend request
 
-108. On guild invitation request - on click in notification go to view guild info like in join guild
+108. [Fixed] On guild invitation request - on click in notification go to view guild info like in join guild
 
 109. [Fixed] On viewing report resolved as normal member - when clicking the notification it takes me to manage reports in the moderator panel, which it shouldnt be allowed as they are a normal member - should show a basic view outlining the results of the resolution
 
