@@ -706,7 +706,7 @@ struct MarkerPlacementDrawingsTab: View {
     private var emojiAnnotationCard: some View {
         let currentEmoji = currentEmojiValue
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 4) {
             toolCard(
                 title: "Emoji",
                 subtitle: currentEmoji == nil
@@ -723,15 +723,15 @@ struct MarkerPlacementDrawingsTab: View {
                 // Compact horizontal strip — minimises vertical space so the
                 // panel stays small and horizontal scroll doesn't fight chart pan.
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ForEach(annotationEmojis, id: \.self) { emoji in
                             let isSelected = currentEmoji == emoji
                             Button {
                                 setAnnotationEmoji(emoji)
                             } label: {
                                 Text(emoji)
-                                    .font(.system(size: 18))
-                                    .frame(width: 38, height: 38)
+                                    .font(.system(size: 15))
+                                    .frame(width: 30, height: 30)
                                     .background(
                                         Circle()
                                             .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
@@ -749,6 +749,7 @@ struct MarkerPlacementDrawingsTab: View {
                     }
                     .padding(.horizontal, 4)
                 }
+                .contentShape(Rectangle())
 
                 annotationRemoveButton("Remove Emoji") {
                     placementState.removeComponent(.reactionEmoji)

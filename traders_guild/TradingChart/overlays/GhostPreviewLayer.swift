@@ -83,8 +83,11 @@ struct GhostPreviewLayer: View {
     let showsInfoPanels: Bool
     /// Optional price formatter — uses symbol-appropriate decimal places when provided.
     var formatPrice: ((Double) -> String)?
+    /// When true, emoji rendering is suppressed here (handled by a separate lower-z layer).
+    let suppressEmojiBackground: Bool
     @State private var annotationDragStartOffsets: [UUID: CGPoint] = [:]
     @State private var emojiScaleStartValues: [UUID: CGFloat] = [:]
+    @State private var textFontSizeStartValues: [UUID: CGFloat] = [:]
 
     init(
         placementState: MarkerPlacementState,
@@ -97,7 +100,8 @@ struct GhostPreviewLayer: View {
         drawingInteractionPhase: DrawingInteractionPhase = .idle,
         editingDrawingId: UUID? = nil,
         showsInfoPanels: Bool = true,
-        formatPrice: ((Double) -> String)? = nil
+        formatPrice: ((Double) -> String)? = nil,
+        suppressEmojiBackground: Bool = false
     ) {
         self.placementState = placementState
         self.yForPrice = yForPrice
@@ -110,16 +114,24 @@ struct GhostPreviewLayer: View {
         self.editingDrawingId = editingDrawingId
         self.showsInfoPanels = showsInfoPanels
         self.formatPrice = formatPrice
+        self.suppressEmojiBackground = suppressEmojiBackground
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // Emoji layer — only rendered here when not suppressed
+            // (when suppressed, a separate lower-z view handles non-editing emojis)
+            if !suppressEmojiBackground {
+                emojiBackgroundLayer
+            }
+
             // Canvas layer for lines, zones, and anchor crosshair
             Canvas { context, size in
                 drawLevels(context: context)
                 drawHorizontalLines(context: context)
                 drawTrendlines(context: context)
                 drawZones(context: context)
+                drawEmojiResizeHandles(context: context)
                 drawTrendlinePlacementPreview(context: context)
                 drawGuideCrosshair(context: context, size: size)
             }
@@ -138,7 +150,13 @@ struct GhostPreviewLayer: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            annotationOverlayLayer
+            // Text notes on top, readable above candles
+            textNoteOverlayLayer
+
+            // When emojis are suppressed, still render the actively-edited emoji here for gestures
+            if suppressEmojiBackground {
+                editingEmojiOverlay
+            }
         }
     }
 
@@ -342,6 +360,47 @@ struct GhostPreviewLayer: View {
         }
     }
 
+    private func drawEmojiResizeHandles(context: GraphicsContext) {
+        guard drawingInteractionPhase == .editing else { return }
+        for draft in placementState.components where draft.componentType == .reactionEmoji {
+            guard draft.id == editingDrawingId else { continue }
+            guard let anchorPoint = annotationAnchorPoint(for: draft.payload) else { continue }
+            let offset = annotationOffset(for: draft.payload)
+            let x = anchorPoint.x + CGFloat(offset.x)
+            let y = anchorPoint.y + CGFloat(offset.y)
+            guard x.isFinite, y.isFinite else { continue }
+
+            let scale = placementState.emojiScale(for: draft.id)
+            let halfSize = 13 * scale
+            let handleColor = RLComponentType.reactionEmoji.color
+
+            // Two diagonal corner handles (like zones)
+            drawControlHandle(
+                context: context,
+                center: CGPoint(x: x - halfSize, y: y - halfSize),
+                color: handleColor,
+                size: 20
+            )
+            drawControlHandle(
+                context: context,
+                center: CGPoint(x: x + halfSize, y: y + halfSize),
+                color: handleColor,
+                size: 20
+            )
+
+            // Bounding rect outline
+            let boundingRect = CGRect(
+                x: x - halfSize, y: y - halfSize,
+                width: halfSize * 2, height: halfSize * 2
+            )
+            context.stroke(
+                Path(boundingRect),
+                with: .color(handleColor.opacity(0.5)),
+                style: StrokeStyle(lineWidth: 1.0, dash: [4, 3])
+            )
+        }
+    }
+
     private func drawTrendlinePlacementPreview(context: GraphicsContext) {
         guard drawingInteractionPhase == .placingSecondPoint,
               let firstPoint = placementState.pendingDrawingFirstPoint,
@@ -466,24 +525,42 @@ struct GhostPreviewLayer: View {
         placementState.intent == .setup && placementState.setupEntryPrice != nil
     }
 
-    private var annotationOverlayLayer: some View {
+    private var emojiBackgroundLayer: some View {
         ZStack {
-            ForEach(annotationDrafts) { draft in
+            ForEach(emojiDrafts) { draft in
                 annotationView(for: draft)
             }
         }
     }
 
-    private var annotationDrafts: [MarkerComponentDraft] {
+    private var textNoteOverlayLayer: some View {
+        ZStack {
+            ForEach(textNoteDrafts) { draft in
+                annotationView(for: draft)
+            }
+        }
+    }
+
+    private var emojiDrafts: [MarkerComponentDraft] {
         placementState.components.filter {
-            // Alert markers: note text is managed in the general tab, not as a chart overlay
-            if $0.componentType == .textNote {
-                return placementState.intent != .alert
+            $0.componentType == .reactionEmoji && placementState.intent != .reaction
+        }
+    }
+
+    private var textNoteDrafts: [MarkerComponentDraft] {
+        placementState.components.filter {
+            $0.componentType == .textNote && placementState.intent != .alert
+        }
+    }
+
+    /// When emoji background is suppressed, the actively-edited emoji still needs gesture handling at this z-level.
+    private var editingEmojiOverlay: some View {
+        ZStack {
+            if drawingInteractionPhase == .editing,
+               let editingId = editingDrawingId,
+               let draft = emojiDrafts.first(where: { $0.id == editingId }) {
+                annotationView(for: draft)
             }
-            if $0.componentType == .reactionEmoji {
-                return placementState.intent != .reaction
-            }
-            return false
         }
     }
 
@@ -525,13 +602,15 @@ struct GhostPreviewLayer: View {
 
                 switch draft.payload {
                 case .note(let payload):
+                    let resolvedFontSize = CGFloat(payload.fontSize ?? Double(ChartAnnotationBubbleMetrics.fontSize))
                     if isSelectedForEditing {
-                        annotationNoteView(text: payload.text, isSelected: true)
+                        annotationNoteView(text: payload.text, isSelected: true, fontSize: resolvedFontSize)
                             .position(x: x, y: y)
                             .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
+                            .simultaneousGesture(annotationTextScaleGesture(draftId: draft.id, payload: payload))
                             .allowsHitTesting(true)
                     } else {
-                        annotationNoteView(text: payload.text, isSelected: false)
+                        annotationNoteView(text: payload.text, isSelected: false, fontSize: resolvedFontSize)
                             .position(x: x, y: y)
                             .allowsHitTesting(false)
                     }
@@ -556,33 +635,35 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private func annotationNoteView(text: String, isSelected: Bool) -> some View {
-        Text(verbatim: ChartAnnotationBubbleMetrics.displayText(text))
-            .font(.system(size: ChartAnnotationBubbleMetrics.fontSize, weight: .semibold))
+    private func annotationNoteView(text: String, isSelected: Bool, fontSize: CGFloat = ChartAnnotationBubbleMetrics.fontSize) -> some View {
+        let displayText = ChartAnnotationBubbleMetrics.displayText(text)
+        return Text(verbatim: displayText)
+            .font(.system(size: fontSize, weight: .semibold))
             .foregroundColor(AppColors.primaryForeground)
             .lineLimit(ChartAnnotationBubbleMetrics.maxVisibleLines)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(
-                maxWidth: ChartAnnotationBubbleMetrics.maxBubbleWidth(plotWidth: width),
-                alignment: .leading
-            )
-            .padding(.horizontal, ChartAnnotationBubbleMetrics.horizontalPadding)
-            .padding(.vertical, ChartAnnotationBubbleMetrics.verticalPadding)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: ChartAnnotationBubbleMetrics.maxBubbleWidth(plotWidth: width))
+            .padding(.horizontal, isSelected ? ChartAnnotationBubbleMetrics.horizontalPadding : 4)
+            .padding(.vertical, isSelected ? ChartAnnotationBubbleMetrics.verticalPadding : 2)
             .background(
-                RoundedRectangle(cornerRadius: ChartAnnotationBubbleMetrics.cornerRadius)
-                    .fill(AppColors.systemBlack.opacity(isSelected ? 0.78 : 0.66))
-                    .overlay(
+                Group {
+                    if isSelected {
                         RoundedRectangle(cornerRadius: ChartAnnotationBubbleMetrics.cornerRadius)
-                            .stroke(
-                                RLComponentType.textNote.color.opacity(isSelected ? 0.72 : 0.44),
-                                lineWidth: isSelected ? 1.2 : 0.8
+                            .fill(AppColors.surfaceWhite04)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: ChartAnnotationBubbleMetrics.cornerRadius)
+                                    .stroke(
+                                        RLComponentType.textNote.color.opacity(0.72),
+                                        lineWidth: 1.2
+                                    )
                             )
-                    )
+                    }
+                }
             )
+            .fixedSize()
             .shadow(
-                color: AppColors.systemBlack.opacity(isSelected ? 0.22 : 0),
-                radius: isSelected ? 3 : 0,
+                color: AppColors.systemBlack.opacity(isSelected ? 0.22 : 0.55),
+                radius: isSelected ? 3 : 2,
                 x: 0,
                 y: 1
             )
@@ -645,6 +726,52 @@ struct GhostPreviewLayer: View {
             }
             .onEnded { _ in
                 emojiScaleStartValues[draftId] = nil
+                // Persist scale into the emoji payload so it survives sync
+                if let draft = placementState.components.first(where: { $0.id == draftId }),
+                   case let .reactionEmoji(payload) = draft.payload {
+                    let finalScale = placementState.emojiScale(for: draftId)
+                    placementState.updateComponent(
+                        id: draftId,
+                        payload: .reactionEmoji(
+                            EmojiPayload(
+                                emoji: payload.emoji,
+                                offsetX: payload.offsetX,
+                                offsetY: payload.offsetY,
+                                anchorTime: payload.anchorTime,
+                                anchorPrice: payload.anchorPrice,
+                                scale: Double(finalScale)
+                            )
+                        )
+                    )
+                }
+            }
+    }
+
+    private func annotationTextScaleGesture(draftId: UUID, payload: NotePayload) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                guard drawingInteractionPhase == .editing, editingDrawingId == draftId else { return }
+                if textFontSizeStartValues[draftId] == nil {
+                    textFontSizeStartValues[draftId] = CGFloat(payload.fontSize ?? Double(ChartAnnotationBubbleMetrics.fontSize))
+                }
+                let base = textFontSizeStartValues[draftId] ?? ChartAnnotationBubbleMetrics.fontSize
+                let newSize = min(28, max(8, base * value))
+                placementState.updateComponent(
+                    id: draftId,
+                    payload: .note(
+                        NotePayload(
+                            text: payload.text,
+                            offsetX: payload.offsetX,
+                            offsetY: payload.offsetY,
+                            anchorTime: payload.anchorTime,
+                            anchorPrice: payload.anchorPrice,
+                            fontSize: Double(newSize)
+                        )
+                    )
+                )
+            }
+            .onEnded { _ in
+                textFontSizeStartValues[draftId] = nil
             }
     }
 
@@ -702,7 +829,8 @@ struct GhostPreviewLayer: View {
                         offsetX: Double(offset.x),
                         offsetY: Double(offset.y),
                         anchorTime: note.anchorTime,
-                        anchorPrice: note.anchorPrice
+                        anchorPrice: note.anchorPrice,
+                        fontSize: note.fontSize
                     )
                 )
             )
@@ -715,7 +843,8 @@ struct GhostPreviewLayer: View {
                         offsetX: Double(offset.x),
                         offsetY: Double(offset.y),
                         anchorTime: emoji.anchorTime,
-                        anchorPrice: emoji.anchorPrice
+                        anchorPrice: emoji.anchorPrice,
+                        scale: emoji.scale
                     )
                 )
             )

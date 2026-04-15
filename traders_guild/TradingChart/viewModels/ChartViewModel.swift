@@ -701,6 +701,13 @@ class ChartViewModel: ObservableObject {
             ChartDrawingBridge.markerDraft(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
         })
         chartComponentsPlacementState.components = nextComponents
+
+        // Seed emoji scale overrides from persisted drawings
+        for drawing in normalizedDrawings where drawing.type == .emoji {
+            if let scale = drawing.scale {
+                chartComponentsPlacementState.emojiScaleOverrides[drawing.id] = CGFloat(scale)
+            }
+        }
         if let activeEditingDraftId,
            !nextComponents.contains(where: { $0.id == activeEditingDraftId }) {
             chartComponentsPlacementState.commitDrawingAndExit()
@@ -713,8 +720,15 @@ class ChartViewModel: ObservableObject {
         defer { isApplyingChartDrawingPlacementToManager = false }
         let anchorTime = dataManager.candles.last?.timestamp ?? Date()
         let anchorPrice = dataManager.candles.last?.close ?? 0
-        let nextDrawings = chartComponentsPlacementState.components.compactMap {
-            ChartDrawingBridge.chartDrawing(from: $0, anchorTime: anchorTime, anchorPrice: anchorPrice)
+        let nextDrawings = chartComponentsPlacementState.components.compactMap { draft -> ChartDrawing? in
+            guard var drawing = ChartDrawingBridge.chartDrawing(from: draft, anchorTime: anchorTime, anchorPrice: anchorPrice) else { return nil }
+            if drawing.type == .emoji {
+                let scale = chartComponentsPlacementState.emojiScale(for: draft.id)
+                if scale != 1.0 {
+                    drawing.scale = Double(scale)
+                }
+            }
+            return drawing
         }
         guard nextDrawings != chartDrawingManager.drawings else { return }
         chartDrawingManager.setDrawings(nextDrawings)

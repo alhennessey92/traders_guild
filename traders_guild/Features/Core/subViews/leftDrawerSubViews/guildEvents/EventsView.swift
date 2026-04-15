@@ -50,7 +50,12 @@ struct EventsListView: View {
     private var activeEvents: [RLGuildEventWithAuthorDTO] {
         leftDrawerViewModel.upcomingEvents
             .filter(\.isActiveEvent)
-            .sorted { $0.eventDate < $1.eventDate }
+            .sorted { lhs, rhs in
+                // Featured events bubble to the top of the active list so members
+                // see the guild's highlighted events first, then chronological.
+                if lhs.isImportant != rhs.isImportant { return lhs.isImportant }
+                return lhs.eventDate < rhs.eventDate
+            }
     }
 
     private var pastEvents: [RLGuildEventWithAuthorDTO] {
@@ -66,6 +71,10 @@ struct EventsListView: View {
         case .past:
             return pastEvents
         }
+    }
+
+    private var featuredActiveCount: Int {
+        activeEvents.filter(\.isImportant).count
     }
     
     var body: some View {
@@ -103,7 +112,27 @@ struct EventsListView: View {
                     .padding(.top, 32)
                 } else {
                     VStack(spacing: 10) {
-                        ForEach(selectedEvents) { event in
+                        if selectedTab == .active && featuredActiveCount > 0 {
+                            ImportantSectionHeader(
+                                icon: "sparkles",
+                                iconColor: AppColors.statusHighlight80,
+                                title: "Featured",
+                                count: featuredActiveCount
+                            )
+                        }
+                        ForEach(Array(selectedEvents.enumerated()), id: \.element.id) { index, event in
+                            if selectedTab == .active,
+                               index == featuredActiveCount,
+                               featuredActiveCount > 0,
+                               index < selectedEvents.count {
+                                ImportantSectionHeader(
+                                    icon: "calendar",
+                                    iconColor: AppColors.accentColor,
+                                    title: "Upcoming",
+                                    count: selectedEvents.count - featuredActiveCount
+                                )
+                                .padding(.top, 6)
+                            }
                             EventRowView(
                                 event: event,
                                 onTap: {
@@ -131,23 +160,32 @@ struct EventRowView: View {
         NotificationStyling(isRead: event.isRead)
     }
 
+    private var featuredBorderColor: Color? {
+        guard event.isImportant else { return nil }
+        // Keep the gold accent visible even after the event has been read —
+        // "featured" is a guild-level signal, not just an unread indicator.
+        return AppColors.statusHighlight80.opacity(event.isRead ? 0.3 : 0.6)
+    }
+
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
             isUnread: !event.isRead,
-            semanticBorderColor: event.isImportant && !event.isRead
-                ? AppColors.statusHighlight80.opacity(0.45) : nil,
+            semanticBorderColor: featuredBorderColor,
             cornerRadius: 14
         ) {
             VStack(spacing: 0) {
                 // MARK: - Main Content Area
                 HStack(alignment: .top, spacing: 12) {
+                    // Icon — featured events get a small yellow star badge in
+                    // the bottom-right corner of the icon.
                     GuildPostIconBadge(
                         iconKey: event.iconKey,
                         isFeatured: event.isImportant,
                         size: 36,
                         iconSize: 16,
-                        isRead: event.isRead
+                        isRead: event.isRead,
+                        cornerBadge: event.isImportant ? .featured : nil
                     )
 
                     // Event content
@@ -171,10 +209,6 @@ struct EventRowView: View {
                         .font(.caption2)
                         .foregroundColor(AppColors.accentColor)
                         .padding(.top, 2)
-
-                        if event.isImportant {
-                            UnifiedImportanceBadge(text: "FEATURED EVENT")
-                        }
                     }
 
                     Spacer()
@@ -222,12 +256,21 @@ struct EventDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var rlAppState: RLAppState
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    
+    @EnvironmentObject var messagingManager: RLMessagingManager
+
     @State private var hasRecordedView = false
     @State private var showAttendConfirmation = false
     @State private var showUnAttendConfirmation = false
     @State private var showShareConfirmation = false
     @State private var selectedFriendToShare: UUID? = nil
+
+    // Attendees list (fetched on appear)
+    @State private var attendees: [RLGuildSimpleMembershipResponse] = []
+    @State private var isLoadingAttendees = false
+
+    // Resolved location label (e.g. chatroom name, symbol ticker)
+    @State private var resolvedLocationLabel: String? = nil
+    @State private var isNavigatingToLocation = false
     
     private let dateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -251,19 +294,16 @@ struct EventDetailView: View {
                         isFeatured: displayedEvent.isImportant,
                         size: 44,
                         iconSize: 20,
-                        isRead: false
+                        isRead: false,
+                        cornerBadge: displayedEvent.isImportant ? .featured : nil
                     )
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(displayedEvent.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
 
-                        if displayedEvent.isImportant {
-                            UnifiedImportanceBadge(text: "FEATURED EVENT")
-                        }
-                        
                         Text(dateFormatter.string(from: displayedEvent.eventDate))
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -291,36 +331,25 @@ struct EventDetailView: View {
                 // Event details and content
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        // Event info
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "person.3.fill")
-                                    .foregroundColor(AppColors.accentColor)
-                                Text(displayedEvent.attendanceDisplay)
-                                    .font(.subheadline)
-                                    .foregroundColor(AppColors.accentColor)
-                            }
-                            
-                            HStack(spacing: 6) {
-                                Image(systemName: "location.fill")
-                                    .foregroundColor(.secondary)
-                                Text("Guild Hall")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        // Event description
+                        // Event description (now first)
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Event Description")
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            
+
                             Text(displayedEvent.content)
                                 .font(.body)
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
+
+                        // Location row — only shown when the event has a navigable location.
+                        if let locationType = displayedEvent.locationType {
+                            locationRow(type: locationType)
+                        }
+
+                        // Attendees list (replaces the top-of-view attendance count)
+                        attendeesSection
                     }
                 }
                 
@@ -401,9 +430,92 @@ struct EventDetailView: View {
         }
         .onAppear {
             recordEventView()
+            loadAttendees()
+            resolveLocationLabel()
         }
     }
-    
+
+    // MARK: - Subviews
+
+    @ViewBuilder
+    private func locationRow(type: RLEventLocationType) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: type == .chatroom ? "bubble.left.and.bubble.right.fill" : "chart.line.uptrend.xyaxis")
+                .foregroundColor(AppColors.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(type == .chatroom ? "Chatroom" : "Symbol")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(resolvedLocationLabel ?? "Loading…")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if displayedEvent.hasNavigableLocation {
+                Button {
+                    Task { await goToEventLocation() }
+                } label: {
+                    HStack(spacing: 4) {
+                        if isNavigatingToLocation {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "arrow.up.forward.app.fill")
+                        }
+                        Text("Go to Event")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(AppColors.accentColor.opacity(0.2))
+                    .foregroundColor(AppColors.accentColor)
+                    .cornerRadius(8)
+                }
+                .disabled(isNavigatingToLocation)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(AppColors.drawerBackground.opacity(0.3))
+        .cornerRadius(10)
+    }
+
+    @ViewBuilder
+    private var attendeesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.3.fill")
+                    .foregroundColor(AppColors.accentColor)
+                Text("Attendees (\(displayedEvent.attendeeCount))")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Spacer()
+                if isLoadingAttendees {
+                    ProgressView().scaleEffect(0.7)
+                }
+            }
+
+            if attendees.isEmpty && !isLoadingAttendees {
+                Text("No attendees yet. Be the first!")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(attendees, id: \.userId) { member in
+                        UnifiedAuthorRow(
+                            username: member.username,
+                            role: member.memberRole,
+                            reputation: member.reputation,
+                            accuracy: member.accuracyFormatted
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Action Methods
     
     private func attendEvent() {
@@ -469,13 +581,89 @@ struct EventDetailView: View {
         guard !hasRecordedView else { return }
         guard let guildId = rlAppState.currentGuild?.id else { return }
         hasRecordedView = true
-        
+
         Task {
             do {
                 try await rlAppState.recordEventView(guildId: guildId, eventId: event.id)
                 leftDrawerViewModel.markEventAsRead(eventId: event.id)
             } catch {
                 print("Failed to record event view: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Attendees / Location
+
+    private func loadAttendees() {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        isLoadingAttendees = true
+        Task {
+            defer { isLoadingAttendees = false }
+            do {
+                let list = try await rlAppState.fetchEventAttendees(guildId: guildId, eventId: event.id)
+                attendees = list
+            } catch {
+                // Error already surfaced by rlAppState; leave list empty so the
+                // "No attendees yet" copy appears rather than a loading spinner.
+            }
+        }
+    }
+
+    /// Resolves the human-readable label for the event's location (chatroom name,
+    /// symbol ticker) so it doesn't say "Loading…" forever.
+    private func resolveLocationLabel() {
+        guard let type = displayedEvent.locationType, let id = displayedEvent.locationId else {
+            resolvedLocationLabel = nil
+            return
+        }
+        switch type {
+        case .chatroom:
+            // RLMessagingManager.chatroomCache is private, so just fetch —
+            // the fetch itself is cached server-side and in AppState.
+            Task {
+                do {
+                    let chatroom = try await rlAppState.fetchChatroom(chatroomId: id)
+                    resolvedLocationLabel = "#\(chatroom.name)"
+                } catch {
+                    resolvedLocationLabel = "Chatroom"
+                }
+            }
+        case .symbol:
+            Task {
+                do {
+                    let symbol = try await rlAppState.realApi.getSymbol(symbolId: id)
+                    resolvedLocationLabel = symbol.ticker
+                } catch {
+                    resolvedLocationLabel = "Symbol"
+                }
+            }
+        }
+    }
+
+    /// "Go to Event" — navigates to the event's selected location (chatroom or
+    /// symbol chart) and dismisses this sheet so the target is visible.
+    private func goToEventLocation() async {
+        guard let type = displayedEvent.locationType, let id = displayedEvent.locationId else { return }
+        isNavigatingToLocation = true
+        defer { isNavigatingToLocation = false }
+
+        switch type {
+        case .chatroom:
+            // Dismiss first so the chatroom sheet can take over the screen.
+            dismiss()
+            await messagingManager.openChatroom(id: id)
+        case .symbol:
+            do {
+                let symbol = try await rlAppState.realApi.getSymbol(symbolId: id)
+                dismiss()
+                // MainView listens for this and calls chartViewModel.setSymbol.
+                NotificationCenter.default.post(
+                    name: .selectChartSymbol,
+                    object: nil,
+                    userInfo: ["symbol": symbol]
+                )
+            } catch {
+                rlAppState.showError(error, title: "Unable to Open Location", style: .toast)
             }
         }
     }

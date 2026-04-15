@@ -1336,7 +1336,8 @@ final class MarkerPlacementState: ObservableObject {
             offsetX: offsetX,
             offsetY: offsetY,
             anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
-            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice
+            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
+            fontSize: existing?.fontSize
         )
     }
 
@@ -1351,7 +1352,8 @@ final class MarkerPlacementState: ObservableObject {
             offsetX: offsetX,
             offsetY: offsetY,
             anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
-            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice
+            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
+            scale: existing?.scale
         )
     }
 

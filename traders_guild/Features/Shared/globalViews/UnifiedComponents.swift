@@ -1486,13 +1486,37 @@ struct UnifiedIconBadge: View {
     }
 }
 
+/// Small palette-rendered badge pinned to the bottom-trailing of a
+/// `GuildPostIconBadge` to flag important announcements / featured events.
+/// The inner symbol and the surrounding circle share the tint; the outer ring
+/// uses the sheet background so the marker separates cleanly from the parent.
+struct GuildPostCornerBadge: Equatable {
+    let systemImage: String
+    let tint: Color
+
+    /// Red palette for important announcements.
+    static let important = GuildPostCornerBadge(
+        systemImage: "exclamationmark.circle.fill",
+        tint: AppColors.bearCandleRed
+    )
+
+    /// Yellow palette for featured events.
+    static let featured = GuildPostCornerBadge(
+        systemImage: "star.circle.fill",
+        tint: AppColors.statusHighlight80
+    )
+}
+
 struct GuildPostIconBadge: View {
     let iconKey: GuildPostIconKey
     var isFeatured: Bool = false
-    var showsFeaturedMarker: Bool = true
+    /// Legacy flag — retained for source compatibility but no longer used.
+    /// Callers should pass `cornerBadge` instead.
+    var showsFeaturedMarker: Bool = false
     var size: CGFloat = 36
     var iconSize: CGFloat = 16
     var isRead: Bool = false
+    var cornerBadge: GuildPostCornerBadge? = nil
 
     private var tint: Color {
         isFeatured ? AppColors.statusHighlight80 : iconKey.accentColor
@@ -1510,17 +1534,24 @@ struct GuildPostIconBadge: View {
             Circle()
                 .stroke(tint.opacity(isFeatured ? 0.9 : 0.24), lineWidth: isFeatured ? 2 : 1)
         }
-        .overlay(alignment: .topTrailing) {
-            if isFeatured && showsFeaturedMarker {
-                Image(systemName: "star.fill")
-                    .font(.system(size: size * 0.28, weight: .bold))
-                    .foregroundColor(AppColors.statusHighlight80)
+        .overlay(alignment: .bottomTrailing) {
+            if let cornerBadge {
+                let badgeDiameter = size * 0.48
+                let readOpacity: Double = isRead ? 0.7 : 1.0
+                Image(systemName: cornerBadge.systemImage)
+                    .resizable()
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(
+                        AppColors.sheetBackground.opacity(readOpacity),
+                        cornerBadge.tint.opacity(readOpacity)
+                    )
+                    .frame(width: badgeDiameter, height: badgeDiameter)
                     .background(
                         Circle()
                             .fill(AppColors.sheetBackground)
-                            .frame(width: size * 0.38, height: size * 0.38)
+                            .frame(width: badgeDiameter + 3, height: badgeDiameter + 3)
                     )
-                    .offset(x: size * 0.08, y: -size * 0.08)
+                    .offset(x: size * 0.08, y: size * 0.08)
             }
         }
     }
@@ -1659,17 +1690,32 @@ struct UnifiedMarkerBadge: View {
 /// Badge for important items (announcements, alerts)
 struct UnifiedImportanceBadge: View {
     var text: String = "IMPORTANT"
+    var systemImage: String? = nil
     var backgroundColor: Color = AppColors.bearCandleRed.opacity(0.8)
     var textColor: Color = .white
-    
+
     var body: some View {
-        Text(text)
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(textColor)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(backgroundColor)
-            .cornerRadius(4)
+        HStack(spacing: 3) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(textColor)
+            }
+            Text(text.uppercased())
+                .font(.system(size: 8, weight: .heavy))
+                .tracking(0.4)
+                .foregroundColor(textColor)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2.5)
+        .background(
+            Capsule()
+                .fill(backgroundColor)
+        )
+        .overlay(
+            Capsule()
+                .stroke(textColor.opacity(0.22), lineWidth: 0.5)
+        )
     }
 }
 

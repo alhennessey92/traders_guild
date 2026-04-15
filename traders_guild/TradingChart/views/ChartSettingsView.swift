@@ -89,9 +89,16 @@ struct ChartSettingsView: View {
                     selection: $settings.bearishCandleColor
                 )
 
+                settingsToggleRow(
+                    title: "Semi-Transparent Bullish Candles",
+                    subtitle: "Keep the default tinted fill for bullish bodies instead of rendering them solid.",
+                    isOn: $settings.useSemiTransparentBullishCandles
+                )
+
                 secondaryActionButton(title: "Reset to Default") {
                     settings.bullishCandleColor = AppColors.defaultBullishCandleGreen
                     settings.bearishCandleColor = .red
+                    settings.useSemiTransparentBullishCandles = true
                 }
             }
         }

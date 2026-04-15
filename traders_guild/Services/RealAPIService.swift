@@ -1040,7 +1040,9 @@ extension RealAPIService {
         preview: String,
         eventDate: Date,
         isImportant: Bool,
-        iconKey: GuildPostIconKey?
+        iconKey: GuildPostIconKey?,
+        locationType: RLEventLocationType? = nil,
+        locationId: UUID? = nil
     ) async throws -> RLGuildEventResponseDTO {
         let requestBody = RLCreateGuildEventRequestDTO(
             title: title,
@@ -1048,9 +1050,11 @@ extension RealAPIService {
             preview: preview,
             eventDate: eventDate,
             isImportant: isImportant,
-            iconKey: iconKey
+            iconKey: iconKey,
+            locationType: locationType?.rawValue,
+            locationId: locationId
         )
-        
+
         return try await request(
             "/guilds/\(guildId.uuidString)/events",
             service: .core,
@@ -1059,7 +1063,20 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
+    /// Fetch the list of members attending a guild event.
+    func fetchEventAttendees(
+        guildId: UUID,
+        eventId: UUID
+    ) async throws -> [RLGuildSimpleMembershipResponse] {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/events/\(eventId.uuidString)/attendees",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
 }
 
 

@@ -18,7 +18,20 @@ import SwiftUI
 struct AnnouncementsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    
+
+    /// Sort: important first, then by chronological order (already sorted by view model).
+    /// Pinning important items to the top is the core UX benefit of the "Important" flag.
+    private var sortedAnnouncements: [RLGuildAnnouncementWithAuthorDTO] {
+        leftDrawerViewModel.announcements.sorted { lhs, rhs in
+            if lhs.isImportant != rhs.isImportant { return lhs.isImportant }
+            return lhs.announcement.postedAt > rhs.announcement.postedAt
+        }
+    }
+
+    private var importantCount: Int {
+        leftDrawerViewModel.announcements.filter(\.isImportant).count
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             // Loading state
@@ -35,7 +48,24 @@ struct AnnouncementsListView: View {
                 )
                 .padding(.top, 40)
             } else {
-                ForEach(leftDrawerViewModel.announcements) { announcement in
+                if importantCount > 0 {
+                    ImportantSectionHeader(
+                        icon: "exclamationmark.circle.fill",
+                        iconColor: AppColors.statusWarning80,
+                        title: "Important",
+                        count: importantCount
+                    )
+                }
+                ForEach(Array(sortedAnnouncements.enumerated()), id: \.element.id) { index, announcement in
+                    if index == importantCount, importantCount > 0, index < sortedAnnouncements.count {
+                        ImportantSectionHeader(
+                            icon: "megaphone.fill",
+                            iconColor: AppColors.accentColor,
+                            title: "All Announcements",
+                            count: sortedAnnouncements.count - importantCount
+                        )
+                        .padding(.top, 6)
+                    }
                     AnnouncementRowView(
                         announcement: announcement,
                         onTap: {
@@ -46,6 +76,42 @@ struct AnnouncementsListView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - IMPORTANT SECTION HEADER
+// MARK: - ================================================================================================
+
+/// Compact section header used to separate "Important" pinned items from the rest.
+struct ImportantSectionHeader: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption.weight(.bold))
+                .foregroundColor(iconColor)
+            Text(title.uppercased())
+                .font(.caption2.weight(.heavy))
+                .tracking(0.6)
+                .foregroundColor(AppColors.whiteText.opacity(0.7))
+            Text("\(count)")
+                .font(.caption2.weight(.bold))
+                .foregroundColor(AppColors.whiteText.opacity(0.55))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1)
+                .background(
+                    Capsule()
+                        .fill(AppColors.whiteText.opacity(0.08))
+                )
+            Spacer()
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 2)
     }
 }
 
@@ -61,40 +127,40 @@ struct AnnouncementRowView: View {
         NotificationStyling(isRead: announcement.isRead)
     }
 
+    private var importantBorderColor: Color? {
+        guard announcement.isImportant else { return nil }
+        // Show the "important" accent even when read — just lower the opacity.
+        return AppColors.statusWarning80.opacity(announcement.isRead ? 0.25 : 0.55)
+    }
+
     var body: some View {
         UnifiedContentCard(
             onTap: onTap,
             isUnread: !announcement.isRead,
-            semanticBorderColor: announcement.isImportant && !announcement.isRead
-                ? Color.orange.opacity(0.4) : nil,
+            semanticBorderColor: importantBorderColor,
             cornerRadius: 14
         ) {
             VStack(spacing: 0) {
                 // MARK: - Main Content Area
                 HStack(alignment: .top, spacing: 12) {
-                    // Icon
+                    // Icon — important announcements get a small red exclamation
+                    // badge in the bottom-right corner of the icon.
                     GuildPostIconBadge(
                         iconKey: announcement.iconKey,
                         isFeatured: announcement.isImportant,
-                        showsFeaturedMarker: false,
                         size: 36,
                         iconSize: 16,
-                        isRead: announcement.isRead
+                        isRead: announcement.isRead,
+                        cornerBadge: announcement.isImportant ? .important : nil
                     )
 
                     VStack(alignment: .leading, spacing: 6) {
-                        // Title
                         Text(announcement.title)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(styling.titleColor)
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
-
-                        // Importance badge
-                        if announcement.isImportant {
-                            UnifiedImportanceBadge(text: "Important")
-                        }
 
                         // Preview text
                         Text(announcement.preview)
@@ -162,27 +228,23 @@ struct AnnouncementDetailView: View {
                     GuildPostIconBadge(
                         iconKey: announcement.iconKey,
                         isFeatured: announcement.isImportant,
-                        showsFeaturedMarker: false,
                         size: 44,
                         iconSize: 20,
-                        isRead: false
+                        isRead: false,
+                        cornerBadge: announcement.isImportant ? .important : nil
                     )
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(announcement.title)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
-                        
-                        if announcement.isImportant {
-                            UnifiedImportanceBadge(text: "Important")
-                        }
-                        
+
                         Text(announcement.timeAgoFormatted)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
                 }
                 

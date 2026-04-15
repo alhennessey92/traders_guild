@@ -83,6 +83,10 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
     var isVisible: Bool
     var note: String?
     var emoji: String?
+    var offsetX: Double?
+    var offsetY: Double?
+    var scale: Double?
+    var fontSize: Double?
 
     init(
         id: UUID = UUID(),
@@ -93,7 +97,11 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         lineWidth: Double? = nil,
         isVisible: Bool = true,
         note: String? = nil,
-        emoji: String? = nil
+        emoji: String? = nil,
+        offsetX: Double? = nil,
+        offsetY: Double? = nil,
+        scale: Double? = nil,
+        fontSize: Double? = nil
     ) {
         self.id = id
         self.type = type
@@ -104,6 +112,10 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         self.isVisible = isVisible
         self.note = note
         self.emoji = emoji
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+        self.scale = scale
+        self.fontSize = fontSize
     }
 }
 
@@ -209,7 +221,11 @@ final class ChartDrawingManager: ObservableObject {
         lineStyle: MarkerDrawingLineStyle? = nil,
         lineWidth: Double? = nil,
         note: String? = nil,
-        emoji: String? = nil
+        emoji: String? = nil,
+        offsetX: Double? = nil,
+        offsetY: Double? = nil,
+        scale: Double? = nil,
+        fontSize: Double? = nil
     ) -> UUID {
         let drawing = ChartDrawing(
             type: type,
@@ -218,7 +234,11 @@ final class ChartDrawingManager: ObservableObject {
             lineStyle: lineStyle,
             lineWidth: lineWidth,
             note: note,
-            emoji: emoji
+            emoji: emoji,
+            offsetX: offsetX,
+            offsetY: offsetY,
+            scale: scale,
+            fontSize: fontSize
         )
         drawings.append(drawing)
         save()

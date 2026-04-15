@@ -542,19 +542,22 @@ struct NotePayload: Codable {
     let offsetY: Double?
     let anchorTime: Date?
     let anchorPrice: Double?
+    let fontSize: Double?
 
     init(
         text: String,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
         anchorTime: Date? = nil,
-        anchorPrice: Double? = nil
+        anchorPrice: Double? = nil,
+        fontSize: Double? = nil
     ) {
         self.text = text
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.anchorTime = anchorTime
         self.anchorPrice = anchorPrice
+        self.fontSize = fontSize
     }
 }
 
@@ -570,19 +573,22 @@ struct EmojiPayload: Codable {
     let offsetY: Double?
     let anchorTime: Date?
     let anchorPrice: Double?
+    let scale: Double?
 
     init(
         emoji: String,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
         anchorTime: Date? = nil,
-        anchorPrice: Double? = nil
+        anchorPrice: Double? = nil,
+        scale: Double? = nil
     ) {
         self.emoji = emoji
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.anchorTime = anchorTime
         self.anchorPrice = anchorPrice
+        self.scale = scale
     }
 }
 

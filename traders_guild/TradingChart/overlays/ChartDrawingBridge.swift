@@ -124,8 +124,11 @@ enum ChartDrawingBridge {
                 payload: .note(
                     NotePayload(
                         text: drawing.note ?? "Add your context",
+                        offsetX: drawing.offsetX,
+                        offsetY: drawing.offsetY,
                         anchorTime: noteAnchor.time,
-                        anchorPrice: noteAnchor.price
+                        anchorPrice: noteAnchor.price,
+                        fontSize: drawing.fontSize
                     )
                 )
             )
@@ -138,8 +141,11 @@ enum ChartDrawingBridge {
                 payload: .reactionEmoji(
                     EmojiPayload(
                         emoji: drawing.emoji ?? "🎯",
+                        offsetX: drawing.offsetX,
+                        offsetY: drawing.offsetY,
                         anchorTime: emojiAnchor.time,
-                        anchorPrice: emojiAnchor.price
+                        anchorPrice: emojiAnchor.price,
+                        scale: drawing.scale
                     )
                 )
             )
@@ -224,7 +230,10 @@ enum ChartDrawingBridge {
                     ),
                 ],
                 colorHex: ChartDrawingType.textNote.defaultColorHex,
-                note: payload.text
+                note: payload.text,
+                offsetX: payload.offsetX,
+                offsetY: payload.offsetY,
+                fontSize: payload.fontSize
             )
 
         case let .reactionEmoji(payload):
@@ -238,7 +247,10 @@ enum ChartDrawingBridge {
                     ),
                 ],
                 colorHex: ChartDrawingType.emoji.defaultColorHex,
-                emoji: payload.emoji
+                emoji: payload.emoji,
+                offsetX: payload.offsetX,
+                offsetY: payload.offsetY,
+                scale: payload.scale
             )
 
         default:

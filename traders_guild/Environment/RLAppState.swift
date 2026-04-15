@@ -1526,6 +1526,50 @@ class RLAppState: ObservableObject {
         }
     }
 
+    func updateGuildJoinQuestions(
+        questions: [RLGuildJoinQuestionInputDTO],
+        showSuccessMessage: Bool = true
+    ) async throws -> [RLGuildJoinQuestionDTO] {
+        guard let guild = currentGuild else {
+            throw NSError(
+                domain: "RLAppState",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "No guild selected"]
+            )
+        }
+
+        let normalizedQuestions = questions
+            .map { $0.prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .enumerated()
+            .map { index, prompt in
+                RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
+            }
+
+        guard guild.isOpen || !normalizedQuestions.isEmpty else {
+            showError(
+                title: "Join Question Required",
+                message: "Add at least one join question before saving an invite-only guild.",
+                style: .toast
+            )
+            throw APIError.badRequest("private_guild_question_required")
+        }
+
+        do {
+            let response = try await realApi.updateGuildJoinQuestions(
+                guildId: guild.id,
+                questions: normalizedQuestions
+            )
+            if showSuccessMessage {
+                showSuccess(RLUserFacingCopy.text(.successGuildSettingsUpdated))
+            }
+            return response.questions
+        } catch {
+            showError(error, title: "Failed to Update Questions", style: .toast)
+            throw error
+        }
+    }
+
     func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
         do {
             let result = try await realApi.createGuildJoinRequest(guildId: guildId, note: note, answers: answers)
@@ -1707,6 +1751,16 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
+
+    /// Fetch the list of members attending a guild event.
+    func fetchEventAttendees(guildId: UUID, eventId: UUID) async throws -> [RLGuildSimpleMembershipResponse] {
+        do {
+            return try await realApi.fetchEventAttendees(guildId: guildId, eventId: eventId)
+        } catch {
+            showError(error, title: "Failed to Load Attendees", style: .toast)
+            throw error
+        }
+    }
     
     
     /// Create event (ADMIN/MOD only)
@@ -1717,7 +1771,9 @@ class RLAppState: ObservableObject {
         preview: String,
         eventDate: Date,
         isImportant: Bool = false,
-        iconKey: GuildPostIconKey? = nil
+        iconKey: GuildPostIconKey? = nil,
+        locationType: RLEventLocationType? = nil,
+        locationId: UUID? = nil
     ) async throws -> RLGuildEventWithAuthorDTO {
         guard let guild = currentGuild else {
             throw RLAppError.noGuildSelected
@@ -1728,7 +1784,7 @@ class RLAppState: ObservableObject {
         guard let membership = currentMembership else {
             throw RLAppError.noGuildSelected
         }
-        
+
         do {
             // Backend returns just the event response
             let eventResponse = try await realApi.createEvent(
@@ -1738,7 +1794,9 @@ class RLAppState: ObservableObject {
                 preview: preview,
                 eventDate: eventDate,
                 isImportant: isImportant,
-                iconKey: iconKey
+                iconKey: iconKey,
+                locationType: locationType,
+                locationId: locationId
             )
             
             // Construct the author membership info from current user

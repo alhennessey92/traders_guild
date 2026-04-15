@@ -19,6 +19,13 @@ enum ViewportWindowStyle: String, CaseIterable, Identifiable {
 class ChartSettings: ObservableObject {
     static let shared = ChartSettings()
 
+    private enum StorageKey {
+        static let showViewportWindow = "chartShowViewportWindow"
+        static let viewportWindowStyle = "chartViewportWindowStyle"
+        static let viewportWindowOpacity = "chartViewportWindowOpacity"
+        static let useSemiTransparentBullishCandles = "chartUseSemiTransparentBullishCandles"
+    }
+
     // MARK: - Grid Settings
 
     @Published var showGridLines: Bool = true
@@ -28,30 +35,42 @@ class ChartSettings: ObservableObject {
 
     @Published var bullishCandleColor: Color = AppColors.defaultBullishCandleGreen
     @Published var bearishCandleColor: Color = .red
+    @Published var useSemiTransparentBullishCandles: Bool = true {
+        didSet { UserDefaults.standard.set(useSemiTransparentBullishCandles, forKey: StorageKey.useSemiTransparentBullishCandles) }
+    }
 
     // MARK: - Viewport Window Settings (timeframe panel)
 
     @Published var showViewportWindow: Bool = true {
-        didSet { UserDefaults.standard.set(showViewportWindow, forKey: "chartShowViewportWindow") }
+        didSet { UserDefaults.standard.set(showViewportWindow, forKey: StorageKey.showViewportWindow) }
     }
     @Published var viewportWindowStyle: ViewportWindowStyle = .dimmed {
-        didSet { UserDefaults.standard.set(viewportWindowStyle.rawValue, forKey: "chartViewportWindowStyle") }
+        didSet { UserDefaults.standard.set(viewportWindowStyle.rawValue, forKey: StorageKey.viewportWindowStyle) }
     }
     @Published var viewportWindowOpacity: Double = 0.35 {
-        didSet { UserDefaults.standard.set(viewportWindowOpacity, forKey: "chartViewportWindowOpacity") }
+        didSet { UserDefaults.standard.set(viewportWindowOpacity, forKey: StorageKey.viewportWindowOpacity) }
     }
 
     init() {
-        // Restore persisted viewport settings
-        if UserDefaults.standard.object(forKey: "chartShowViewportWindow") != nil {
-            showViewportWindow = UserDefaults.standard.bool(forKey: "chartShowViewportWindow")
+        if UserDefaults.standard.object(forKey: StorageKey.useSemiTransparentBullishCandles) != nil {
+            useSemiTransparentBullishCandles = UserDefaults.standard.bool(forKey: StorageKey.useSemiTransparentBullishCandles)
         }
-        if let styleRaw = UserDefaults.standard.string(forKey: "chartViewportWindowStyle"),
+
+        // Restore persisted viewport settings
+        if UserDefaults.standard.object(forKey: StorageKey.showViewportWindow) != nil {
+            showViewportWindow = UserDefaults.standard.bool(forKey: StorageKey.showViewportWindow)
+        }
+        if let styleRaw = UserDefaults.standard.string(forKey: StorageKey.viewportWindowStyle),
            let style = ViewportWindowStyle(rawValue: styleRaw) {
             viewportWindowStyle = style
         }
-        if UserDefaults.standard.object(forKey: "chartViewportWindowOpacity") != nil {
-            viewportWindowOpacity = UserDefaults.standard.double(forKey: "chartViewportWindowOpacity")
+        if UserDefaults.standard.object(forKey: StorageKey.viewportWindowOpacity) != nil {
+            viewportWindowOpacity = UserDefaults.standard.double(forKey: StorageKey.viewportWindowOpacity)
         }
+    }
+
+    func bullishBodyFillOpacity(isLightGreyTheme: Bool) -> Double {
+        guard useSemiTransparentBullishCandles else { return 1.0 }
+        return isLightGreyTheme ? 1.0 : 0.3
     }
 }

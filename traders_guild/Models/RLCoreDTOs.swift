@@ -863,6 +863,13 @@ struct RLGuildAnnouncementsListDTO: Codable {
 // MARK: - Guild Events DTOs (Real API)
 // ================================================================================================
 
+/// Event location target — "symbol" or "chatroom".
+/// Stored raw so we never fail to decode an event with an unknown location type.
+enum RLEventLocationType: String, Codable {
+    case symbol
+    case chatroom
+}
+
 /// Create Guild Event Request - matches backend GuildEventCreateRequest
 struct RLCreateGuildEventRequestDTO: Codable {
     let title: String
@@ -871,6 +878,8 @@ struct RLCreateGuildEventRequestDTO: Codable {
     let eventDate: Date           // backend: event_date
     let isImportant: Bool         // backend: is_important
     let iconKey: GuildPostIconKey?
+    let locationType: String?     // backend: location_type — "symbol" | "chatroom" | nil
+    let locationId: UUID?         // backend: location_id
 }
 
 
@@ -890,6 +899,8 @@ struct RLGuildEventResponseDTO: Codable, Identifiable {
     var isAttending: Bool                // backend: is_attending (var for local cache updates)
     let status: String
     var isRead: Bool                     // backend: is_read (var for local cache updates)
+    let locationType: String?            // backend: location_type
+    let locationId: UUID?                // backend: location_id
 }
 
 /// Guild Event with author membership response - matches backend exactly
@@ -925,7 +936,21 @@ struct RLGuildEventWithAuthorDTO: Codable, Identifiable {
         get { event.isRead }
         set { event.isRead = newValue }
     }
-    
+
+    // MARK: - Location
+    /// Parsed location type — nil when no location set or value is unknown.
+    var locationType: RLEventLocationType? {
+        guard let raw = event.locationType else { return nil }
+        return RLEventLocationType(rawValue: raw)
+    }
+
+    var locationId: UUID? { event.locationId }
+
+    /// True when we have both a recognized type and an id to navigate to.
+    var hasNavigableLocation: Bool {
+        locationType != nil && locationId != nil
+    }
+
     // MARK: - Author Convenience Accessors
     var author: RLGuildSimpleMembershipResponse { authorMembership }
     var authorDisplayName: String { authorMembership.displayName }

@@ -224,7 +224,8 @@ extension RLChartMarkerDTO {
                             offsetX: payload.offsetX,
                             offsetY: payload.offsetY,
                             anchorTime: payload.anchorTime ?? fallbackAnchorTime,
-                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice
+                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice,
+                            fontSize: payload.fontSize
                         )
                     ),
                     ordering: component.ordering
@@ -241,7 +242,8 @@ extension RLChartMarkerDTO {
                             offsetX: payload.offsetX,
                             offsetY: payload.offsetY,
                             anchorTime: payload.anchorTime ?? fallbackAnchorTime,
-                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice
+                            anchorPrice: payload.anchorPrice ?? fallbackAnchorPrice,
+                            scale: payload.scale
                         )
                     ),
                     ordering: component.ordering

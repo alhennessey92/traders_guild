@@ -1167,7 +1167,8 @@ struct TradingChartView: View {
                     drawingInteractionPhase: chartDrawingPlacementState.drawingInteractionPhase,
                     editingDrawingId: chartDrawingPlacementState.editingDrawingId,
                     showsInfoPanels: false,
-                    formatPrice: { price in chartData.formatPrice(price) }
+                    formatPrice: { price in chartData.formatPrice(price) },
+                    suppressEmojiBackground: true
                 )
                 .mask(plotAreaMask(geometry: geometry))
                 .zIndex(26)
@@ -1217,6 +1218,13 @@ struct TradingChartView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+            }
+
+            // Emoji annotations behind candles — non-editing emojis from default chart drawings
+            if shouldShowDefaultChartDrawingOverlay {
+                chartDrawingEmojiBackgroundLayer(geometry: geometry, coordinateSystem: coordinateSystem)
+                    .mask(plotAreaMask(geometry: geometry))
+                    .allowsHitTesting(false)
             }
 
             mainChartCanvas(geometry: geometry)
@@ -1421,8 +1429,53 @@ struct TradingChartView: View {
         }
     }
     
+    // MARK: - Emoji Background Layer (behind candles)
+
+    @ViewBuilder
+    private func chartDrawingEmojiBackgroundLayer(
+        geometry: GeometryProxy,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> some View {
+        let emojiDrafts = chartDrawingPlacementState.components.filter {
+            $0.componentType == .reactionEmoji
+        }
+        if !emojiDrafts.isEmpty {
+            ZStack {
+                ForEach(emojiDrafts) { draft in
+                    if case let .reactionEmoji(payload) = draft.payload {
+                        let anchorPrice = payload.anchorPrice ?? 0
+                        let anchorTime = payload.anchorTime
+                        let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
+                        let anchorX: CGFloat = {
+                            guard let time = anchorTime,
+                                  let index = coordinateSystem.candleIndex(forTimestamp: time) else {
+                                return (geometry.size.width - yAxisWidth) * 0.5
+                            }
+                            return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                        }()
+                        let offsetX = CGFloat(payload.offsetX ?? 0)
+                        let offsetY = CGFloat(payload.offsetY ?? -68)
+                        let x = anchorX + offsetX
+                        let y = anchorY + offsetY
+                        let isEditing = chartDrawingPlacementState.drawingInteractionPhase == .editing
+                            && chartDrawingPlacementState.editingDrawingId == draft.id
+
+                        if x.isFinite, y.isFinite, !isEditing {
+                            let scale = chartDrawingPlacementState.emojiScale(for: draft.id)
+                            Text(payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "🎯" : payload.emoji)
+                                .font(.system(size: 24))
+                                .scaleEffect(scale)
+                                .position(x: x, y: y)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Main Chart Canvas
-    
+
     @ViewBuilder
     private func mainChartCanvas(geometry: GeometryProxy) -> some View {
         Canvas { context, size in
@@ -3663,6 +3716,13 @@ struct TradingChartView: View {
                     location: translatedLocation,
                     coordinateSystem: coordinateSystem
                 )
+            case .reactionEmoji:
+                updateEmojiScaleHandle(
+                    draftId: dragOrigin.draftId,
+                    handleIndex: index,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
             default:
                 return false
             }
@@ -4229,6 +4289,52 @@ struct TradingChartView: View {
         drawingState.updateComponent(id: draftId, payload: .drawingZone(updatedPayload))
     }
 
+    private func updateEmojiScaleHandle(
+        draftId: UUID,
+        handleIndex: Int,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.components.first(where: { $0.id == draftId }),
+              case let .reactionEmoji(payload) = draft.payload else {
+            return
+        }
+
+        // Calculate emoji center position
+        let anchorPrice = payload.anchorPrice ?? 0
+        let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
+        let anchorX: CGFloat = {
+            guard let time = payload.anchorTime,
+                  let index = coordinateSystem.candleIndex(forTimestamp: time) else { return 0 }
+            return coordinateSystem.xCenterPosition(forCandleIndex: index)
+        }()
+        let offsetX = CGFloat(payload.offsetX ?? 0)
+        let offsetY = CGFloat(payload.offsetY ?? -68)
+        let centerX = anchorX + offsetX
+        let centerY = anchorY + offsetY
+
+        // Compute new scale from drag distance to center
+        let dragDist = max(abs(location.x - centerX), abs(location.y - centerY))
+        let baseSize: CGFloat = 13 // half the emoji size at scale 1.0
+        let newScale = min(2.4, max(0.6, dragDist / baseSize))
+
+        drawingState.setEmojiScale(newScale, for: draftId)
+        drawingState.updateComponent(
+            id: draftId,
+            payload: .reactionEmoji(
+                EmojiPayload(
+                    emoji: payload.emoji,
+                    offsetX: payload.offsetX,
+                    offsetY: payload.offsetY,
+                    anchorTime: payload.anchorTime,
+                    anchorPrice: payload.anchorPrice,
+                    scale: Double(newScale)
+                )
+            )
+        )
+    }
+
     private func resolveHandleTime(
         locationX: CGFloat,
         coordinateSystem: ChartCoordinateSystem,
@@ -4323,6 +4429,27 @@ struct TradingChartView: View {
                     ).map { (.point(1), $0) }
                 },
             ].compactMap { $0 }
+
+        case .reactionEmoji(let payload):
+            let anchorPrice = payload.anchorPrice ?? 0
+            let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
+            let anchorX: CGFloat = {
+                guard let time = payload.anchorTime,
+                      let index = coordinateSystem.candleIndex(forTimestamp: time) else {
+                    return 0
+                }
+                return coordinateSystem.xCenterPosition(forCandleIndex: index)
+            }()
+            let offsetX = CGFloat(payload.offsetX ?? 0)
+            let offsetY = CGFloat(payload.offsetY ?? -68)
+            let x = anchorX + offsetX
+            let y = anchorY + offsetY
+            let scale = drawingState.emojiScale(for: editingId)
+            let halfSize = 13 * scale
+            candidates = [
+                (.point(0), CGPoint(x: x - halfSize, y: y - halfSize)),
+                (.point(1), CGPoint(x: x + halfSize, y: y + halfSize)),
+            ]
 
         default:
             return nil
@@ -4762,7 +4889,7 @@ struct TradingChartView: View {
                 }
 
                 if let drawingState = activeInteractiveDrawingState {
-                    if isDrawingPointPlacementActive || isEmojiEditingActive {
+                    if isDrawingPointPlacementActive {
                         drawingState.setDrawingPanLocked(true)
                         return
                     }
@@ -4813,7 +4940,7 @@ struct TradingChartView: View {
             .onEnded { value in
                 if crosshairManager.isActive {
                     crosshairDragStartPosition = nil
-                } else if isDrawingPointPlacementActive || isEmojiEditingActive {
+                } else if isDrawingPointPlacementActive {
                     lastDragTranslation = .zero
                     dragState = .zero
                     activeInteractiveDrawingState?.setDrawingPanLocked(false)
@@ -4884,8 +5011,7 @@ struct TradingChartView: View {
                 guard !crosshairManager.isActive,
                       !isMarkerBeingDragged,
                       !isPinchingOnYAxis,
-                      !isDrawingPointPlacementActive,
-                      !isEmojiEditingActive else { return }
+                      !isDrawingPointPlacementActive else { return }
                 
                 if !isPinchingOnChart {
                     isPinchingOnChart = true
@@ -5711,6 +5837,14 @@ struct TradingChartView: View {
                                         drawingToolbarActionButton(icon: "text.cursor", title: "Text") {
                                             openDrawingTextEditor(for: draft)
                                         }
+
+                                        drawingToolbarActionButton(icon: "textformat.size.smaller", title: "A-") {
+                                            adjustTextNoteFontSize(draft: draft, drawingState: drawingState, delta: -1)
+                                        }
+
+                                        drawingToolbarActionButton(icon: "textformat.size.larger", title: "A+") {
+                                            adjustTextNoteFontSize(draft: draft, drawingState: drawingState, delta: 1)
+                                        }
                                     }
 
                                     drawingToolbarActionButton(
@@ -5830,10 +5964,10 @@ struct TradingChartView: View {
         toolbarWidth: CGFloat
     ) -> some View {
         let selectedEmoji = drawingToolbarSelectedEmoji(for: draft)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 6)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
 
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(AppColors.chartOverlayToolbarSecondary)
@@ -5853,21 +5987,17 @@ struct TradingChartView: View {
                 }
             }
 
-            Text("Pick an anchor emoji for this chart note.")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppColors.chartOverlayToolbarTertiary)
-
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(drawingEmojiPickerCategories.enumerated()), id: \.offset) { entry in
                         let category = entry.element
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(category.title)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundColor(AppColors.greyText)
                                 .textCase(.uppercase)
 
-                            LazyVGrid(columns: columns, spacing: 10) {
+                            LazyVGrid(columns: columns, spacing: 6) {
                                 ForEach(category.emojis, id: \.self) { emoji in
                                     drawingEmojiToolbarButton(
                                         emoji: emoji,
@@ -5882,10 +6012,10 @@ struct TradingChartView: View {
                 }
                 .padding(.trailing, 4)
             }
-            .frame(maxHeight: 210)
+            .frame(maxHeight: 110)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .frame(width: toolbarWidth, alignment: .leading)
         .background(OverlayPanelChrome.background(cornerRadius: 14))
     }
@@ -5906,7 +6036,8 @@ struct TradingChartView: View {
                         offsetX: payload.offsetX,
                         offsetY: payload.offsetY,
                         anchorTime: payload.anchorTime,
-                        anchorPrice: payload.anchorPrice
+                        anchorPrice: payload.anchorPrice,
+                        scale: payload.scale
                     )
                 )
             )
@@ -5924,9 +6055,9 @@ struct TradingChartView: View {
                             )
                     )
                 Text(emoji)
-                    .font(.system(size: 24))
+                    .font(.system(size: 18))
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 32, height: 32)
             .scaleEffect(isSelected ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
@@ -5958,6 +6089,29 @@ struct TradingChartView: View {
         guard case let .reactionEmoji(payload) = draft.payload else { return nil }
         let trimmed = payload.emoji.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func adjustTextNoteFontSize(
+        draft: MarkerComponentDraft,
+        drawingState: MarkerPlacementState,
+        delta: CGFloat
+    ) {
+        guard case let .note(payload) = draft.payload else { return }
+        let current = CGFloat(payload.fontSize ?? Double(ChartAnnotationBubbleMetrics.fontSize))
+        let newSize = min(28, max(8, current + delta))
+        drawingState.updateComponent(
+            id: draft.id,
+            payload: .note(
+                NotePayload(
+                    text: payload.text,
+                    offsetX: payload.offsetX,
+                    offsetY: payload.offsetY,
+                    anchorTime: payload.anchorTime,
+                    anchorPrice: payload.anchorPrice,
+                    fontSize: Double(newSize)
+                )
+            )
+        )
     }
 
     private func openDrawingTextEditor(for draft: MarkerComponentDraft) {
@@ -6056,7 +6210,8 @@ struct TradingChartView: View {
                         offsetX: payload.offsetX,
                         offsetY: payload.offsetY,
                         anchorTime: payload.anchorTime,
-                        anchorPrice: payload.anchorPrice
+                        anchorPrice: payload.anchorPrice,
+                        fontSize: payload.fontSize
                     )
                 )
             )
@@ -6070,7 +6225,8 @@ struct TradingChartView: View {
                         offsetX: payload.offsetX,
                         offsetY: payload.offsetY,
                         anchorTime: payload.anchorTime,
-                        anchorPrice: payload.anchorPrice
+                        anchorPrice: payload.anchorPrice,
+                        scale: payload.scale
                     )
                 )
             )
@@ -6640,7 +6796,7 @@ struct TradingChartView: View {
                 with: .color(candleColor),
                 lineWidth: 1
             )
-            let bullFillOpacity: CGFloat = isLightGreyChart ? 1.0 : 0.3
+            let bullFillOpacity = chartSettings.bullishBodyFillOpacity(isLightGreyTheme: isLightGreyChart)
             context.fill(
                 Path(roundedRect: bodyRect, cornerRadius: 0),
                 with: .color(candleColor.opacity(bullFillOpacity))

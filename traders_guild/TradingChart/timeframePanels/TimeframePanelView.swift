@@ -760,7 +760,7 @@ struct TimeframePanelView: View {
 
             if isBullish {
                 context.stroke(Path(bodyRect), with: .color(candleColor), lineWidth: 1)
-                let bullFillOpacity = isLightGreyChart ? 1.0 : 0.3
+                let bullFillOpacity = chartSettings.bullishBodyFillOpacity(isLightGreyTheme: isLightGreyChart)
                 context.fill(Path(bodyRect), with: .color(candleColor.opacity(bullFillOpacity)))
             } else {
                 context.fill(Path(bodyRect), with: .color(candleColor))

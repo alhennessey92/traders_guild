@@ -1167,7 +1167,8 @@ class MarkerManager: ObservableObject {
                         offsetX: existingEmojiPayload?.offsetX,
                         offsetY: existingEmojiPayload?.offsetY,
                         anchorTime: existingEmojiPayload?.anchorTime,
-                        anchorPrice: existingEmojiPayload?.anchorPrice
+                        anchorPrice: existingEmojiPayload?.anchorPrice,
+                        scale: existingEmojiPayload?.scale
                     )
                 )
             )
