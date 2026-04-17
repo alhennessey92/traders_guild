@@ -56,6 +56,17 @@ final class TutorialManager: ObservableObject {
         return spotlightFrames[key]
     }
 
+    /// True when the bottom sheet should be hidden entirely during the current
+    /// tutorial step. Steps that target the sheet itself (`bottom-bar` /
+    /// `bottom-sheet`) need the sheet visible; narrative steps that only show
+    /// a centered card (welcome, complete) are cleaner without it.
+    var shouldHideBottomSheet: Bool {
+        guard isActive else { return false }
+        guard currentStep.requiredDrawer == .center else { return false }
+        let key = currentStep.spotlightKey
+        return key != "bottom-bar" && key != "bottom-sheet"
+    }
+
     // MARK: - Configure
 
     func configure(

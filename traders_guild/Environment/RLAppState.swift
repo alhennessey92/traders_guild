@@ -944,6 +944,13 @@ class RLAppState: ObservableObject {
         presentPendingSignupWelcomeIfNeeded()
     }
 
+    /// Re-opens the beta welcome screen on demand (e.g. from Settings).
+    /// Does not touch the signup-welcome carousel or auto-advance to it.
+    func presentBetaWelcomeFromSettings() {
+        guard !showBetaWelcomeSheet else { return }
+        showBetaWelcomeSheet = true
+    }
+
     func refreshRuntimeFlags() async {
         guard isAuthenticated, accessToken != nil else {
             runtimeFlags = .disabled
@@ -2743,7 +2750,7 @@ class RLAppState: ObservableObject {
             return
         }
 
-        if runtimeFlags.betaWelcomeEnabled && !hasSeenBetaWelcome(for: userId) {
+        if !hasSeenBetaWelcome(for: userId) {
             guard !showBetaWelcomeSheet else { return }
             markBetaWelcomeSeen(for: userId)
             showBetaWelcomeSheet = true

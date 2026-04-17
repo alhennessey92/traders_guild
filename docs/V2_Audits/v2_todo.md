@@ -31,9 +31,9 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
 
 16. Need to double check APNs only work for logged in used and not other user. Noticed getting event reminders for event on logged in user but another guild to current one. Was unable to go to that event so need to switch etc... This needs a full audit as part of the APN current user review. Making it work across guilds for logged in user - merge into no 12 and 13 as part of group update
 
-17. Allow chart settings to allow users to toggle solid candles vs semi transparent candles like the default bullish candles are
+17. [Fixed] Allow chart settings to allow users to toggle solid candles vs semi transparent candles like the default bullish candles are
 
-18. Audit the synthetic users section for use in beta/production environemnt
+18. [Fixing] Audit the synthetic users section for use in beta/production environemnt
     - reduce no of synthetic users
     - Make the synthetic users full validated users with proper accounts etc...
     - Seed a good no of markers
@@ -41,8 +41,16 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
     - Place markers across all symbols and timeframes
 
 
-- Emoji annotation when placed starts in latest candle, needs to be center of users screen relevant, same for text annotation
+[Fixed] - Emoji annotation when placed starts in latest candle, needs to be center of users screen relevant, same for text annotation
 
-- Emoji and text annotation dont stay fixed to candle when zooming horizontally
+[Fixed] - Emoji and text annotation dont stay fixed to candle when zooming horizontally
 
 19. Prepare for Beta Launch!
+
+- Change initial guild to beta 1 guild
+
+- Add initial welcome message about beta including talking about synthetic users
+
+- Change signup display name to Your full name
+
+- Still getting initial creash on welcome from logging out

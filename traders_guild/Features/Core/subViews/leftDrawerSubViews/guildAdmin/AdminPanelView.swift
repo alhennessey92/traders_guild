@@ -493,7 +493,7 @@ struct CreateEventView: View {
                                 title: "Featured Event",
                                 subtitle: "Pin to the top and highlight in the feed",
                                 icon: "star.circle.fill",
-                                iconColor: AppColors.statusHighlight80,
+                                iconColor: AppColors.statusInfo,
                                 isOn: $isImportant
                             )
                         }

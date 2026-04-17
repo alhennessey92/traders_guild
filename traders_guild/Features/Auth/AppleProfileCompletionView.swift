@@ -67,7 +67,7 @@ struct AppleProfileCompletionView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 20)
 
-                    StandardTextFieldView(title: "Display name", text: $name)
+                    StandardTextFieldView(title: "Your Full Name", text: $name)
                         .padding(.bottom, 16)
 
                     VStack(alignment: .leading, spacing: 8) {

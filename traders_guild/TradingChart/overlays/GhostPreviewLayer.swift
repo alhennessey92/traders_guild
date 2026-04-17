@@ -77,6 +77,7 @@ struct GhostPreviewLayer: View {
     let topSafeAreaInset: CGFloat
     let bottomPanelPadding: CGFloat
     let xForTime: ((Date) -> CGFloat?)?
+    let timeForX: ((CGFloat) -> Date?)?
     let guidePoint: (time: Date, price: Double)?
     let drawingInteractionPhase: DrawingInteractionPhase
     let editingDrawingId: UUID?
@@ -85,7 +86,7 @@ struct GhostPreviewLayer: View {
     var formatPrice: ((Double) -> String)?
     /// When true, emoji rendering is suppressed here (handled by a separate lower-z layer).
     let suppressEmojiBackground: Bool
-    @State private var annotationDragStartOffsets: [UUID: CGPoint] = [:]
+    @State private var annotationDragStartCenters: [UUID: CGPoint] = [:]
     @State private var emojiScaleStartValues: [UUID: CGFloat] = [:]
     @State private var textFontSizeStartValues: [UUID: CGFloat] = [:]
 
@@ -96,6 +97,7 @@ struct GhostPreviewLayer: View {
         topSafeAreaInset: CGFloat = 0,
         bottomPanelPadding: CGFloat = 74,
         xForTime: ((Date) -> CGFloat?)? = nil,
+        timeForX: ((CGFloat) -> Date?)? = nil,
         guidePoint: (time: Date, price: Double)? = nil,
         drawingInteractionPhase: DrawingInteractionPhase = .idle,
         editingDrawingId: UUID? = nil,
@@ -109,6 +111,7 @@ struct GhostPreviewLayer: View {
         self.topSafeAreaInset = topSafeAreaInset
         self.bottomPanelPadding = bottomPanelPadding
         self.xForTime = xForTime
+        self.timeForX = timeForX
         self.guidePoint = guidePoint
         self.drawingInteractionPhase = drawingInteractionPhase
         self.editingDrawingId = editingDrawingId
@@ -689,26 +692,27 @@ struct GhostPreviewLayer: View {
                 guard drawingInteractionPhase == .editing, editingDrawingId == draftId else {
                     return
                 }
-                let baseOffset = annotationDragStartOffsets[draftId] ?? CGPoint(
-                    x: annotationOffset(for: payload).x,
-                    y: annotationOffset(for: payload).y
+                guard let anchorPoint = annotationAnchorPoint(for: payload) else { return }
+                let baseCenter = annotationDragStartCenters[draftId] ?? CGPoint(
+                    x: anchorPoint.x + annotationOffset(for: payload).x,
+                    y: anchorPoint.y + annotationOffset(for: payload).y
                 )
-                if annotationDragStartOffsets[draftId] == nil {
-                    annotationDragStartOffsets[draftId] = baseOffset
+                if annotationDragStartCenters[draftId] == nil {
+                    annotationDragStartCenters[draftId] = baseCenter
                 }
 
-                let nextOffset = CGPoint(
-                    x: baseOffset.x + value.translation.width,
-                    y: baseOffset.y + value.translation.height
+                let nextCenter = CGPoint(
+                    x: baseCenter.x + value.translation.width,
+                    y: baseCenter.y + value.translation.height
                 )
-                updateAnnotationOffset(draftId: draftId, payload: payload, offset: nextOffset)
+                updateAnnotationPlacement(draftId: draftId, payload: payload, center: nextCenter)
             }
             .onEnded { _ in
                 guard drawingInteractionPhase == .editing, editingDrawingId == draftId else {
-                    annotationDragStartOffsets[draftId] = nil
+                    annotationDragStartCenters[draftId] = nil
                     return
                 }
-                annotationDragStartOffsets[draftId] = nil
+                annotationDragStartCenters[draftId] = nil
             }
     }
 
@@ -814,36 +818,48 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private func updateAnnotationOffset(
+    private func updateAnnotationPlacement(
         draftId: UUID,
         payload: MarkerComponentPayload,
-        offset: CGPoint
+        center: CGPoint
     ) {
         switch payload {
         case let .note(note):
+            let resolvedAnchorTime = timeForX?(center.x) ?? note.anchorTime ?? placementState.anchorDraft?.payload.anchorTime
+            let resolvedAnchorPrice = note.anchorPrice ?? placementState.anchorDraft?.payload.levelPrice
+            let resolvedAnchorX = resolvedAnchorTime.flatMap { xForTime?($0) }
+            let resolvedAnchorY = resolvedAnchorPrice.flatMap { yForPrice($0) }
             placementState.updateComponent(
                 id: draftId,
                 payload: .note(
                     NotePayload(
                         text: note.text,
-                        offsetX: Double(offset.x),
-                        offsetY: Double(offset.y),
-                        anchorTime: note.anchorTime,
-                        anchorPrice: note.anchorPrice,
+                        offsetX: resolvedAnchorX.map { anchorX in
+                            timeForX == nil ? Double(center.x - anchorX) : 0.0
+                        },
+                        offsetY: resolvedAnchorY.map { Double(center.y - $0) } ?? note.offsetY,
+                        anchorTime: resolvedAnchorTime,
+                        anchorPrice: resolvedAnchorPrice,
                         fontSize: note.fontSize
                     )
                 )
             )
         case let .reactionEmoji(emoji):
+            let resolvedAnchorTime = timeForX?(center.x) ?? emoji.anchorTime ?? placementState.anchorDraft?.payload.anchorTime
+            let resolvedAnchorPrice = emoji.anchorPrice ?? placementState.anchorDraft?.payload.levelPrice
+            let resolvedAnchorX = resolvedAnchorTime.flatMap { xForTime?($0) }
+            let resolvedAnchorY = resolvedAnchorPrice.flatMap { yForPrice($0) }
             placementState.updateComponent(
                 id: draftId,
                 payload: .reactionEmoji(
                     EmojiPayload(
                         emoji: emoji.emoji,
-                        offsetX: Double(offset.x),
-                        offsetY: Double(offset.y),
-                        anchorTime: emoji.anchorTime,
-                        anchorPrice: emoji.anchorPrice,
+                        offsetX: resolvedAnchorX.map { anchorX in
+                            timeForX == nil ? Double(center.x - anchorX) : 0.0
+                        },
+                        offsetY: resolvedAnchorY.map { Double(center.y - $0) } ?? emoji.offsetY,
+                        anchorTime: resolvedAnchorTime,
+                        anchorPrice: resolvedAnchorPrice,
                         scale: emoji.scale
                     )
                 )

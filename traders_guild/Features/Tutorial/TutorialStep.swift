@@ -35,8 +35,6 @@ enum TutorialStep: Int, CaseIterable, Codable {
     /// Extra padding added above the spotlight rect for steps that need a taller cutout.
     var spotlightExtraTopPadding: CGFloat {
         switch self {
-        case .chart:
-            return 60
         case .timeframeLinking:
             // Lift cutout so chart timeframe price header stays fully in the lit region (not under dimming).
             return 220
@@ -47,11 +45,23 @@ enum TutorialStep: Int, CaseIterable, Codable {
         }
     }
 
+    /// Extra gap (in points) added between the tooltip card and the spotlight
+    /// for steps where the default gap leaves the card visually clipping the
+    /// highlighted UI.
+    var extraCardGap: CGFloat {
+        switch self {
+        case .chart:
+            return 32
+        default:
+            return 0
+        }
+    }
+
     /// When true, the spotlight cutout stretches to the full screen width
     /// and extends down to the bottom edge of the screen.
     var fullWidthSpotlight: Bool {
         switch self {
-        case .chart, .markersIntro, .setupMarkers, .indicatorsDrawings,
+        case .markersIntro, .setupMarkers, .indicatorsDrawings,
              .timeframeLinking, .chartSetupCopying, .linkingMarkersChat:
             return true
         default:

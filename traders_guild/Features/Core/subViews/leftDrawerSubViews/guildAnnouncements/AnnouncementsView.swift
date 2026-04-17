@@ -147,7 +147,6 @@ struct AnnouncementRowView: View {
                     // badge in the bottom-right corner of the icon.
                     GuildPostIconBadge(
                         iconKey: announcement.iconKey,
-                        isFeatured: announcement.isImportant,
                         size: 36,
                         iconSize: 16,
                         isRead: announcement.isRead,
@@ -227,7 +226,6 @@ struct AnnouncementDetailView: View {
                 HStack(alignment: .top, spacing: 12) {
                     GuildPostIconBadge(
                         iconKey: announcement.iconKey,
-                        isFeatured: announcement.isImportant,
                         size: 44,
                         iconSize: 20,
                         isRead: false,

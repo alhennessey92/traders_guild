@@ -719,6 +719,15 @@ struct UserSettingsSheetView: View {
                         userInfo: ["fromBeginning": tutorialCompleted]
                     )
                 }
+
+                SettingsButtonRow(
+                    icon: "flask.fill",
+                    title: "Beta Welcome",
+                    subtitle: "Review the beta program overview",
+                    iconColor: AppColors.accentColor
+                ) {
+                    rlAppState.presentBetaWelcomeFromSettings()
+                }
             }
         }
     }

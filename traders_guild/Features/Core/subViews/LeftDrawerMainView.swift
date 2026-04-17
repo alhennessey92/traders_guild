@@ -356,7 +356,7 @@ struct LeftDrawerMainView: View {
         case .guildMemberRL:
             return [.fraction(0.6), .large]
         case .betaFeedback:
-            return [.fraction(0.72), .large]
+            return [.large]
         case .createAnnouncement:
             return [.large]
         case .createEvent:
@@ -513,12 +513,9 @@ struct MainDrawerView: View {
             ("star.fill", "Watchlists", nil, .navigate(.guildWatchlist)),
             ("calendar.badge.clock", "Events", leftDrawerViewModel.hasUnreadEvents ? .unreadDot : nil, .navigate(.events)),
             ("person.2.fill", "User List", nil, .navigate(.userList)),
-            ("chart.bar.fill", "Statistics", nil, .navigate(.statistics))
+            ("chart.bar.fill", "Statistics", nil, .navigate(.statistics)),
+            ("flask.fill", "Beta Feedback", nil, .betaFeedback)
         ]
-
-        if rlAppState.runtimeFlags.betaFeedbackEnabled {
-            items.append(("flask.fill", "Beta Feedback", nil, .betaFeedback))
-        }
         
         // Add Admin/Mod Panel for moderators and admins
         if rlAppState.canModerate {

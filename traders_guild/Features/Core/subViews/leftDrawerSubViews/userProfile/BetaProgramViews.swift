@@ -4,94 +4,99 @@ struct BetaWelcomeSheetView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     private let highlights: [(icon: String, title: String, body: String)] = [
-        ("flask.fill", "Early Access", "You’ll see beta features before they roll out more widely."),
-        ("bubble.left.and.text.bubble.right.fill", "Feedback Matters", "Share bugs, rough edges, and ideas directly from the beta feedback sheet."),
-        ("wrench.and.screwdriver.fill", "Things May Change", "Some flows may evolve quickly while we keep polishing the product.")
+        ("flask.fill", "Early Access", "You’re one of the first to explore Traders Guild while we keep polishing the experience."),
+        ("person.2.wave.2.fill", "Synthetic Users", "You’ll notice demo accounts and sample activity around the guild. They’re here to show how chat, markers, and leaderboards come alive — we’ll dial them back as real activity grows."),
+        ("lifepreserver.fill", "Send Support & Feedback", "Found a bug or have a suggestion? Use Beta Feedback (left drawer) for quick reports, or Contact Support in Settings for account help."),
+        ("wrench.and.screwdriver.fill", "Things May Change", "Some flows may evolve quickly between releases — your feedback directly shapes what we work on next.")
     ]
 
     var body: some View {
-        VStack(spacing: 20) {
-            Capsule()
-                .fill(AppColors.surfaceWhite15)
-                .frame(width: 42, height: 5)
-                .padding(.top, 6)
+        ZStack {
+            AppColors.sheetBackground
+                .ignoresSafeArea()
+            StaticPatternView()
+                .ignoresSafeArea()
 
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(AppColors.accentColor.opacity(0.16))
-                        .frame(width: 82, height: 82)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        VStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppColors.accentColor.opacity(0.16))
+                                    .frame(width: 96, height: 96)
 
-                    Image(systemName: "flask.fill")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundColor(AppColors.accentColor)
-                }
+                                Image(systemName: "flask.fill")
+                                    .font(.system(size: 36, weight: .semibold))
+                                    .foregroundColor(AppColors.accentColor)
+                            }
+                            .padding(.top, 24)
 
-                Text("Welcome To The Beta")
-                    .font(.title3.bold())
-                    .foregroundColor(AppColors.whiteText)
-
-                Text("You’re getting early access while we continue refining the experience. Thanks for helping us make Traders Guild better.")
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.greyText)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 4)
-            }
-
-            VStack(spacing: 10) {
-                ForEach(highlights, id: \.title) { item in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppColors.accentColor)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(AppColors.accentColor.opacity(0.14))
-                            )
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.title)
-                                .font(.subheadline.weight(.semibold))
+                            Text("Welcome To The Beta")
+                                .font(.title.bold())
                                 .foregroundColor(AppColors.whiteText)
-                            Text(item.body)
-                                .font(.caption)
+
+                            Text("Thanks for joining early. A quick heads-up on what to expect, and how to reach us if something feels off.")
+                                .font(.subheadline)
                                 .foregroundColor(AppColors.greyText)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 4)
                         }
 
-                        Spacer(minLength: 0)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppColors.symbolDetailCardFill)
-                    )
-                }
-            }
+                        VStack(spacing: 10) {
+                            ForEach(highlights, id: \.title) { item in
+                                HStack(alignment: .top, spacing: 12) {
+                                    Image(systemName: item.icon)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(AppColors.accentColor)
+                                        .frame(width: 28, height: 28)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(AppColors.accentColor.opacity(0.14))
+                                        )
 
-            Button {
-                rlAppState.dismissBetaWelcomeSheet()
-            } label: {
-                Text("Continue")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(AppColors.gradientBackgroundDark)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppColors.whiteText)
-                    )
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(AppColors.whiteText)
+                                        Text(item.body)
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.greyText)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(AppColors.symbolDetailCardFill)
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                }
+
+                Button {
+                    rlAppState.dismissBetaWelcomeSheet()
+                } label: {
+                    Text("Continue")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.gradientBackgroundDark)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppColors.whiteText)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .buttonStyle(.plain)
         }
-        .padding(20)
-        .background(
-            ZStack {
-                AppColors.sheetBackground
-                StaticPatternView()
-            }
-            .ignoresSafeArea()
-        )
     }
 }
 
@@ -254,10 +259,6 @@ struct BetaFeedbackView: View {
                     .background(AppColors.sheetBackground)
                 }
             }
-        }
-        .onTapGesture {
-            isSubjectFocused = false
-            dismissKeyboard()
         }
         .alert("Feedback Sent", isPresented: $showSuccessAlert) {
             Button("OK") { dismiss() }

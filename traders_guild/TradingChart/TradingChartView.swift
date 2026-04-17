@@ -1023,10 +1023,7 @@ struct TradingChartView: View {
             .onAppear {
                 updateChartSize(geometry.size)
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
-                chartViewModel.updateChartDrawingPlacementAnchor(
-                    time: chartData.candles.last?.timestamp,
-                    price: chartData.candles.last?.close
-                )
+                syncChartDrawingPlacementAnchorToVisibleCenter()
                 seedInitialDrawingGuidePointIfNeeded(
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
@@ -1051,18 +1048,17 @@ struct TradingChartView: View {
             }
             .onChange(of: gestureState.panOffset.width) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                syncChartDrawingPlacementAnchorToVisibleCenter()
                 requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
             }
             .onChange(of: gestureState.candleWidthScale) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                syncChartDrawingPlacementAnchorToVisibleCenter()
             }
             .onChange(of: chartData.candles.count) { _, _ in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
                 requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
-                chartViewModel.updateChartDrawingPlacementAnchor(
-                    time: chartData.candles.last?.timestamp,
-                    price: chartData.candles.last?.close
-                )
+                syncChartDrawingPlacementAnchorToVisibleCenter()
                 seedInitialDrawingGuidePointIfNeeded(
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
@@ -1135,6 +1131,10 @@ struct TradingChartView: View {
                         guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
                         return coordinateSystem.xCenterPosition(forCandleIndex: index)
                     },
+                    timeForX: { x in
+                        guard let index = coordinateSystem.candleIndex(atXPosition: x) else { return nil }
+                        return coordinateSystem.timestamp(forCandleIndex: index)
+                    },
                     guidePoint: currentDrawingGuidePoint,
                     drawingInteractionPhase: placementState.drawingInteractionPhase,
                     editingDrawingId: placementState.editingDrawingId,
@@ -1162,6 +1162,10 @@ struct TradingChartView: View {
                     xForTime: { time in
                         guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
                         return coordinateSystem.xCenterPosition(forCandleIndex: index)
+                    },
+                    timeForX: { x in
+                        guard let index = coordinateSystem.candleIndex(atXPosition: x) else { return nil }
+                        return coordinateSystem.timestamp(forCandleIndex: index)
                     },
                     guidePoint: currentDrawingGuidePoint,
                     drawingInteractionPhase: chartDrawingPlacementState.drawingInteractionPhase,
@@ -2852,6 +2856,19 @@ struct TradingChartView: View {
         )
         let middleIndex = (visibleStartIndex + visibleEndIndex) / 2
         return max(0, min(chartData.candles.count - 1, middleIndex))
+    }
+
+    private func syncChartDrawingPlacementAnchorToVisibleCenter() {
+        guard !chartData.candles.isEmpty else { return }
+        let centerIndex = snappedMarkerCandleIndex(from: calculateCenterCandleIndex())
+            ?? max(0, min(chartData.candles.count - 1, calculateCenterCandleIndex()))
+        guard chartData.candles.indices.contains(centerIndex) else { return }
+
+        let candle = chartData.candles[centerIndex]
+        chartViewModel.updateChartDrawingPlacementAnchor(
+            time: candle.timestamp,
+            price: candle.close
+        )
     }
 
     static func nearestNonGapCandleIndex(for targetIndex: Int, candles: [RLCandleDTO]) -> Int? {

@@ -102,6 +102,9 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
+
+    // MARK: - Tutorial Auto-Start Gate
+    @State private var didScheduleTutorialAutoStart: Bool = false
     // MARK: - Computed Properties
     private var screenSize: CGSize {
         UIScreen.main.bounds.size
@@ -557,7 +560,7 @@ struct MainView: View {
             
             // MARK: - Bottom Sheet
             // Bottom sheet — stays visible during placement mode with swapped content
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -711,12 +714,23 @@ struct MainView: View {
                 // Configure tutorial manager with drawer control closures
                 configureTutorialManager()
 
-                // Auto-launch tutorial for new users
-                if !rlAppState.hasTutorialCompleted(for: user.id) &&
-                   rlAppState.getTutorialProgress(for: user.id) == nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        tutorialManager.startTutorial(fromBeginning: true)
-                    }
+                // Auto-launch tutorial for new users. Gated on welcome sheets
+                // being dismissed so the tutorial doesn't start underneath them.
+                scheduleTutorialAutoStartIfEligible(for: user.id)
+            }
+            .onChange(of: rlAppState.showBetaWelcomeSheet) { _, isShowing in
+                if !isShowing, let userId = rlAppState.currentUser?.id {
+                    scheduleTutorialAutoStartIfEligible(for: userId)
+                }
+            }
+            .onChange(of: rlAppState.showSignupWelcomeCarousel) { _, isShowing in
+                if !isShowing, let userId = rlAppState.currentUser?.id {
+                    scheduleTutorialAutoStartIfEligible(for: userId)
+                }
+            }
+            .onChange(of: rlAppState.showingTransition) { _, isShowing in
+                if !isShowing, let userId = rlAppState.currentUser?.id {
+                    scheduleTutorialAutoStartIfEligible(for: userId)
                 }
             }
             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
@@ -1027,6 +1041,33 @@ struct MainView: View {
                     toggleRightDrawerFromToolbar()
                 }
             }
+        }
+    }
+
+    /// Schedules the first-run tutorial once the welcome sheets are out of the way.
+    /// Called from `.task` and re-evaluated when welcome/carousel sheets or the
+    /// loading transition dismiss. Re-checks inside the delayed closure because
+    /// the welcome sheets are presented *after* MainView appears, so conditions
+    /// can change between scheduling and firing.
+    private func scheduleTutorialAutoStartIfEligible(for userId: UUID) {
+        guard !didScheduleTutorialAutoStart else { return }
+        guard !rlAppState.hasTutorialCompleted(for: userId) else { return }
+        guard rlAppState.getTutorialProgress(for: userId) == nil else { return }
+        guard !rlAppState.showBetaWelcomeSheet else { return }
+        guard !rlAppState.showSignupWelcomeCarousel else { return }
+        guard !rlAppState.showingTransition else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            guard rlAppState.currentUser?.id == userId else { return }
+            guard !tutorialManager.isActive else { return }
+            // Re-verify — a welcome sheet may have been presented during the delay.
+            guard !rlAppState.showBetaWelcomeSheet,
+                  !rlAppState.showSignupWelcomeCarousel,
+                  !rlAppState.showingTransition else {
+                return
+            }
+            didScheduleTutorialAutoStart = true
+            tutorialManager.startTutorial(fromBeginning: true)
         }
     }
 

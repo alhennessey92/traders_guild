@@ -117,7 +117,7 @@ struct SignupEmailView: View {
                         .padding(.bottom, 20)
                         .padding(.leading, 20)
 
-                    StandardTextFieldView(title: "Display name", text: $name)
+                    StandardTextFieldView(title: "Your Full Name", text: $name)
                         .padding(.bottom, 10)
 
                     StandardTextFieldView(

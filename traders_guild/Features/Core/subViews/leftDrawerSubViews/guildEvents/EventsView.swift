@@ -177,11 +177,10 @@ struct EventRowView: View {
             VStack(spacing: 0) {
                 // MARK: - Main Content Area
                 HStack(alignment: .top, spacing: 12) {
-                    // Icon — featured events get a small yellow star badge in
+                    // Icon — featured events get a small blue star badge in
                     // the bottom-right corner of the icon.
                     GuildPostIconBadge(
                         iconKey: event.iconKey,
-                        isFeatured: event.isImportant,
                         size: 36,
                         iconSize: 16,
                         isRead: event.isRead,
@@ -291,7 +290,6 @@ struct EventDetailView: View {
                 HStack(alignment: .top, spacing: 12) {
                     GuildPostIconBadge(
                         iconKey: displayedEvent.iconKey,
-                        isFeatured: displayedEvent.isImportant,
                         size: 44,
                         iconSize: 20,
                         isRead: false,

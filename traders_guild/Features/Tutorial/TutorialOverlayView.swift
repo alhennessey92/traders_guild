@@ -102,24 +102,25 @@ struct TutorialOverlayView: View {
         let halfCard = estimatedCardHeight / 2
         let safeTop = screen.minY + screenEdgePadding + 50 // account for status bar
         let safeBottom = screen.maxY - screenEdgePadding - 30 // account for home indicator
+        let gap = cardSpotlightGap + step.extraCardGap
 
         // Full-width spotlight steps extend to screen bottom — always place card above
         if step.fullWidthSpotlight {
             let adjustedTop = spotlightTop - step.spotlightExtraTopPadding
-            let aboveY = adjustedTop - cardSpotlightGap - halfCard
+            let aboveY = adjustedTop - gap - halfCard
             return max(aboveY, safeTop + halfCard)
         }
 
         let spotlightBottom = spotlightRect.maxY + spotlightPadding / 2
 
         // Try to place below the spotlight first
-        let belowY = spotlightBottom + cardSpotlightGap + halfCard
+        let belowY = spotlightBottom + gap + halfCard
         if belowY + halfCard <= safeBottom {
             return belowY
         }
 
         // If it doesn't fit below, try above
-        let aboveY = spotlightTop - cardSpotlightGap - halfCard
+        let aboveY = spotlightTop - gap - halfCard
         if aboveY - halfCard >= safeTop {
             return aboveY
         }
@@ -188,7 +189,8 @@ struct TutorialOverlayView: View {
                 if let rect = spotlightRect, tutorialManager.showSpotlight {
                     if step.fullWidthSpotlight {
                         let topEdge = rect.minY - spotlightPadding / 2 - step.spotlightExtraTopPadding
-                        let cutoutHeight = screen.maxY - topEdge
+                        let bottomEdge = fullWidthBottomEdge(rect: rect, screen: screen)
+                        let cutoutHeight = bottomEdge - topEdge
                         let cutoutCenterY = topEdge + cutoutHeight / 2
 
                         Rectangle()
@@ -201,6 +203,15 @@ struct TutorialOverlayView: View {
                     }
                 }
             }
+    }
+
+    /// Bottom edge for full-width spotlights. Uses the content's actual bottom
+    /// unless it's within a small threshold of the screen bottom — in which case
+    /// it extends to the screen edge to avoid a sliver of dimming over the home-indicator area.
+    private func fullWidthBottomEdge(rect: CGRect, screen: CGRect) -> CGFloat {
+        let contentBottom = rect.maxY + spotlightPadding / 2
+        let gap = screen.maxY - contentBottom
+        return gap < 40 ? screen.maxY : contentBottom
     }
 
     // MARK: - Spotlight Ring
@@ -216,8 +227,9 @@ struct TutorialOverlayView: View {
 
         if step.fullWidthSpotlight {
             let topEdge = rect.minY - spotlightPadding / 2 - step.spotlightExtraTopPadding
+            let bottomEdge = fullWidthBottomEdge(rect: rect, screen: screen)
             ringWidth = screen.width
-            ringHeight = screen.maxY - topEdge
+            ringHeight = bottomEdge - topEdge
             ringX = screen.midX
             ringY = topEdge + ringHeight / 2
         } else {

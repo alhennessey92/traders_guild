@@ -1486,24 +1486,26 @@ struct UnifiedIconBadge: View {
     }
 }
 
-/// Small palette-rendered badge pinned to the bottom-trailing of a
-/// `GuildPostIconBadge` to flag important announcements / featured events.
-/// The inner symbol and the surrounding circle share the tint; the outer ring
-/// uses the sheet background so the marker separates cleanly from the parent.
+/// Small badge pinned to the bottom-trailing of a `GuildPostIconBadge` to flag
+/// important announcements / featured events. Rendered as a palette-tinted
+/// SF symbol (white circle outline, colored inner glyph) on a dark theme disc
+/// so the marker reads clearly against the parent icon.
 struct GuildPostCornerBadge: Equatable {
+    /// Two-layer SF symbol — `.circle` variants work because palette mode
+    /// colors the inner glyph (primary) and the circle outline (secondary).
     let systemImage: String
     let tint: Color
 
-    /// Red palette for important announcements.
+    /// Red exclamation inside a white circle for important announcements.
     static let important = GuildPostCornerBadge(
-        systemImage: "exclamationmark.circle.fill",
+        systemImage: "exclamationmark.circle",
         tint: AppColors.bearCandleRed
     )
 
-    /// Yellow palette for featured events.
+    /// Blue star inside a white circle for featured events.
     static let featured = GuildPostCornerBadge(
-        systemImage: "star.circle.fill",
-        tint: AppColors.statusHighlight80
+        systemImage: "star.circle",
+        tint: AppColors.statusInfo
     )
 }
 
@@ -1536,22 +1538,26 @@ struct GuildPostIconBadge: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let cornerBadge {
-                let badgeDiameter = size * 0.48
-                let readOpacity: Double = isRead ? 0.7 : 1.0
-                Image(systemName: cornerBadge.systemImage)
-                    .resizable()
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(
-                        AppColors.sheetBackground.opacity(readOpacity),
-                        cornerBadge.tint.opacity(readOpacity)
-                    )
-                    .frame(width: badgeDiameter, height: badgeDiameter)
-                    .background(
-                        Circle()
-                            .fill(AppColors.sheetBackground)
-                            .frame(width: badgeDiameter + 3, height: badgeDiameter + 3)
-                    )
-                    .offset(x: size * 0.08, y: size * 0.08)
+                let badgeDiameter = size * 0.40
+                let readOpacity: Double = isRead ? 0.75 : 1.0
+                ZStack {
+                    // Dark theme-colored disc behind the SF symbol so the
+                    // colored outline reads cleanly against the parent icon.
+                    Circle()
+                        .fill(AppColors.sheetBackground.opacity(readOpacity))
+                    // Two-layer SF symbol: primary = colored inner glyph,
+                    // secondary = same tint at lower alpha so it blends with
+                    // the dark disc into a "slightly darker" border ring.
+                    Image(systemName: cornerBadge.systemImage)
+                        .font(.system(size: badgeDiameter, weight: .bold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            cornerBadge.tint.opacity(readOpacity),
+                            cornerBadge.tint.opacity(readOpacity * 0.75)
+                        )
+                }
+                .frame(width: badgeDiameter, height: badgeDiameter)
+                .offset(x: size * 0.06, y: size * 0.06)
             }
         }
     }

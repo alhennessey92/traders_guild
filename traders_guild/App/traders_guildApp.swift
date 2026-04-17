@@ -127,13 +127,9 @@ struct traders_guildApp: App {
                 BiometricEnrollmentView()
                     .environmentObject(rlAppState)
             }
-            .sheet(isPresented: $rlAppState.showBetaWelcomeSheet, onDismiss: {
-                rlAppState.dismissBetaWelcomeSheet()
-            }) {
+            .fullScreenCover(isPresented: $rlAppState.showBetaWelcomeSheet) {
                 BetaWelcomeSheetView()
                     .environmentObject(rlAppState)
-                    .presentationDetents([.fraction(0.56)])
-                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $rlAppState.showSignupWelcomeCarousel, onDismiss: {
                 rlAppState.dismissSignupWelcomeCarousel()
