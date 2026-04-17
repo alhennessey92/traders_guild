@@ -995,6 +995,7 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
 /// Backend: MarketDataProviderStatusResponse
 struct RLMarketDataProviderStatusDTO: Codable {
     let activeProvider: String
+    let cryptoProvider: String?
     let updatedAt: Date?
 }
 
@@ -2533,7 +2534,7 @@ extension RLTradingSymbolDTO {
         inPersonalWatchlist: nil,
         inGuildWatchlist: nil,
         isRequestedForGuild: nil,
-        activeMarketProvider: "twelve_data",
+        activeMarketProvider: "binance",
         isSupportedByActiveProvider: true,
         isMarketOpen: true,
         marketStatusUpdatedAt: Date(),
@@ -2567,7 +2568,7 @@ extension RLTradingSymbolDTO {
         inPersonalWatchlist: nil,
         inGuildWatchlist: nil,
         isRequestedForGuild: nil,
-        activeMarketProvider: "twelve_data",
+        activeMarketProvider: "oanda",
         isSupportedByActiveProvider: true,
         isMarketOpen: false,
         marketStatusUpdatedAt: Date(),

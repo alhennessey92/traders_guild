@@ -162,7 +162,6 @@ class ChartViewModel: ObservableObject {
         do {
             do {
                 let providerStatus = try await api.getMarketDataProviderStatus()
-                activeMarketProvider = providerStatus.activeProvider
                 activeMarketProviderUpdatedAt = providerStatus.updatedAt
             } catch {
                 // Non-fatal: symbol payloads also carry active provider metadata.
@@ -183,10 +182,6 @@ class ChartViewModel: ObservableObject {
 
             // Set initial symbol from watchlists, then global fallback.
             let available = allAvailableSymbols
-            if let providerFromSymbols = available.first(where: { $0.activeMarketProvider != nil })?.activeMarketProvider {
-                activeMarketProvider = providerFromSymbols
-            }
-
             if let current = currentSymbol,
                let refreshedCurrent = available.first(where: { $0.id == current.id }),
                !refreshedCurrent.isSelectableForActiveProvider {
@@ -201,6 +196,7 @@ class ChartViewModel: ObservableObject {
                     ?? combinedWatchlist.first
                     ?? globalSymbols.first
             }
+            activeMarketProvider = currentSymbol?.activeMarketProvider
             syncChartDrawingStorageContext()
             availableSymbols = available
             
@@ -337,7 +333,7 @@ class ChartViewModel: ObservableObject {
             activeMarketProvider = fallback.activeMarketProvider ?? activeMarketProvider
             appState.showError(
                 title: "Symbol Unavailable",
-                message: "Provider changed. Switched to \(fallback.ticker).",
+                message: "\(detailMessage(forUnsupportedSymbolDetail: detail)) Switched to \(fallback.ticker).",
                 style: .toast
             )
             await loadChartData(
@@ -349,14 +345,14 @@ class ChartViewModel: ObservableObject {
             return
         }
 
-        errorMessage = "No symbols supported by active provider"
+        errorMessage = "No symbols supported by their default data providers"
         dataManager.updateWithMarketData([])
         earliestHistoricalCandleTimestamp = nil
         hasMoreHistoricalCandles = false
         appState.showError(
             title: "No Supported Symbols",
             message: detail.isEmpty
-                ? "No symbols are supported by the active market provider."
+                ? "No symbols are supported by their default market data providers."
                 : detail,
             style: .toast
         )
@@ -390,6 +386,14 @@ class ChartViewModel: ObservableObject {
         currentTimeframe = timeframe
         dataManager.currentTimeframe = timeframe
         handleTimeframeChange()
+    }
+
+    private func detailMessage(forUnsupportedSymbolDetail detail: String) -> String {
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        return "Selected symbol is unavailable from its default market data provider."
     }
 
     /// Load a candle/marker window centered around a specific timestamp.

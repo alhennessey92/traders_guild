@@ -33,7 +33,7 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
 
 17. [Fixed] Allow chart settings to allow users to toggle solid candles vs semi transparent candles like the default bullish candles are
 
-18. [Fixing] Audit the synthetic users section for use in beta/production environemnt
+18. [Fixed] Audit the synthetic users section for use in beta/production environemnt
     - reduce no of synthetic users
     - Make the synthetic users full validated users with proper accounts etc...
     - Seed a good no of markers
@@ -49,8 +49,8 @@ Text input needs to just be the text on the chart. Need to allow sizing of text 
 
 - Change initial guild to beta 1 guild
 
-- Add initial welcome message about beta including talking about synthetic users
+- [Fixed] Add initial welcome message about beta including talking about synthetic users
 
-- Change signup display name to Your full name
+- [Fixed] Change signup display name to Your full name
 
-- Still getting initial creash on welcome from logging out
+- Still getting initial crash on welcome from logging out
