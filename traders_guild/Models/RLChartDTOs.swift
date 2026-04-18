@@ -291,6 +291,8 @@ protocol MarkerListItemData {
     var intent: String { get }
     var title: String? { get }
     var notePreview: String? { get }
+    var pollQuestion: String? { get }
+    var pollOptions: [String]? { get }
     var selectedEmoji: String? { get }
     var alertSeverity: String? { get }
     var createdAt: Date { get }
@@ -312,6 +314,8 @@ protocol MarkerListItemData {
 }
 
 extension MarkerListItemData {
+    var pollQuestion: String? { nil }
+    var pollOptions: [String]? { nil }
     var selectedEmoji: String? { nil }
     var alertSeverity: String? { nil }
 
@@ -1479,6 +1483,8 @@ struct RLTopMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     let intent: String
     let title: String?
     let notePreview: String?
+    let pollQuestion: String?
+    let pollOptions: [String]?
     let selectedEmoji: String?
     let alertSeverity: String?
     let createdAt: Date
@@ -1764,6 +1770,8 @@ struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     let intent: String
     let title: String?
     let notePreview: String?
+    let pollQuestion: String?
+    let pollOptions: [String]?
     let selectedEmoji: String?
     let alertSeverity: String?
     let createdAt: Date
@@ -1828,6 +1836,8 @@ extension RLMarkerActivityItemDTO {
             intent: intent,
             title: title,
             notePreview: notePreview,
+            pollQuestion: pollQuestion,
+            pollOptions: pollOptions,
             selectedEmoji: selectedEmoji,
             alertSeverity: alertSeverity,
             createdAt: createdAt,

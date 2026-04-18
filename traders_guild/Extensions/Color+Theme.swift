@@ -73,6 +73,12 @@ enum AppColors {
         static var indigoAnchor: Color {
             Color(red: 62.0 / 255, green: 48.0 / 255, blue: 158.0 / 255)
         }
+
+        /// Deep forest green for semantic positive UI (accuracy, profit, status) on light grey.
+        /// Separated from `defaultBullishCandleGreen` (RGB 88,185,138) so candle hue is unchanged.
+        static var semanticGreenAnchor: Color {
+            Color(red: 14.0 / 255, green: 108.0 / 255, blue: 52.0 / 255)
+        }
     }
 
     // MARK: - Foundation Assets (theme-aware backgrounds)
@@ -207,14 +213,16 @@ enum AppColors {
     /// System `Color.green` wrapper (use `themeAwareGreen` for semantic positive UI).
     static let systemGreen = Color.green
 
-    /// Default bullish chart candle and light-grey semantic positive (RGB **88, 185, 138**).
+    /// Default bullish chart candle (RGB **88, 185, 138**). Used only for chart rendering — intentionally
+    /// kept separate from `themeAwareGreen` so the candle hue is theme-stable.
     static let defaultBullishCandleGreen = Color(red: 88.0 / 255, green: 185.0 / 255, blue: 138.0 / 255)
 
-    /// Canonical positive green: iOS system green on dark/mid; sage green on light grey (matches default bull candle).
+    /// Canonical positive green: iOS system green on dark/mid; deep forest green on light grey
+    /// (high contrast against ~#C0C2C9; candle colour is unaffected — see `defaultBullishCandleGreen`).
     private static var themeAwareGreen: Color {
         switch theme {
         case .lightGrey:
-            return defaultBullishCandleGreen
+            return LightGreyPalette.semanticGreenAnchor
         case .midGrey, .dark:
             return systemGreen
         }
@@ -1657,6 +1665,13 @@ enum AppColors {
         }
     }
 
+    /// Foreground text rendered directly on any blue gradient surface (hero card, selected list row).
+    /// Always white regardless of theme — the blue gradient supplies sufficient contrast.
+    static var onSymbolBlueBackground: Color { Color.white }
+
+    /// Muted companion for secondary / tertiary text on blue gradient surfaces.
+    static var onSymbolBlueBackgroundMuted: Color { Color.white.opacity(0.78) }
+
     /// Status badge on symbol list rows (global list).
     static var symbolRowBadgeForeground: Color {
         isLightGrey ? primaryForeground : surfaceWhite90
@@ -1814,7 +1829,7 @@ enum AppColors {
     static var chatBackgroundPatternMultiplyElevated: Double { isLightGrey ? 0.036 : 0.028 }
 
     /// Scales `StaticPatternView` in guild discover/switch/create flows (lightGrey only).
-    static var guildFlowPatternOpacityScale: Double { isLightGrey ? 0.42 : 1.0 }
+    static var guildFlowPatternOpacityScale: Double { isLightGrey ? 0.18 : 1.0 }
 
     /// Selected row highlight on guild switch list (accent fill/stroke opacity; audit 31 — stronger on light grey).
     static var guildSwitchRowSelectedFillOpacity: Double { isLightGrey ? 0.38 : 0.16 }

@@ -445,7 +445,7 @@ struct IndicatorPanelYAxisLane: View {
 
                         context.draw(
                             Text(label.text)
-                                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                .font(.system(size: ChartAxisMetrics.indicatorPanelYAxisLabelFontSize, weight: .semibold, design: .monospaced))
                                 .foregroundColor(label.color),
                             at: CGPoint(x: x, y: y),
                             anchor: .trailing

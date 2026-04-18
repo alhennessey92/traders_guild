@@ -128,9 +128,9 @@ struct SwitchGuildView: View {
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Join a Guild",
-                    backgroundColor: AppColors.gradientBackgroundDark.opacity(0.2),
-                    foregroundColor: AppColors.whiteText.opacity(0.9),
-                    strokeColor: AppColors.whiteText.opacity(0.3),
+                    backgroundColor: AppColors.drawerNeutralActionButtonFill,
+                    foregroundColor: AppColors.drawerNeutralActionButtonForeground,
+                    strokeColor: AppColors.drawerNeutralActionButtonStroke,
                     strokeWidth: 0.5,
                     action: {
                         showJoinGuild = true
@@ -200,9 +200,6 @@ struct SwitchGuildView: View {
         
         // Clear drawer cache to force refresh for new guild
         leftDrawerViewModel.clearCache()
-        
-        // Show success message
-        rlAppState.showSuccess("Switched to \(item.guild.name)")
     }
 }
 
@@ -1253,7 +1250,7 @@ struct GuildDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 100)
+                .padding(.bottom, 140)
                 .onAppear {
                     for i in 0...4 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
@@ -1562,7 +1559,7 @@ struct JoinGuildFormView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
-                        .padding(.bottom, 100)
+                        .padding(.bottom, 140)
                     }
                 }
             }
@@ -2044,7 +2041,7 @@ struct CreateGuildView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 140)
                     .onAppear {
                         for i in 0...4 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {

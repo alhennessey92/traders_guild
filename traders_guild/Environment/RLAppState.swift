@@ -244,6 +244,7 @@ class RLAppState: ObservableObject {
     private var lastReachabilitySatisfied: Bool?
     private var hasShownOfflineToastForCurrentEpisode = false
     private var pendingSignupWelcomeUserId: UUID?
+    private var pendingBetaWelcomeUserId: UUID?
     private let reportedUserStore = ReportedUserStore()
     private let reportedContentStore = ReportedContentStore()
 
@@ -1153,6 +1154,7 @@ class RLAppState: ObservableObject {
                 }
                 armBiometricAppLockIfNeeded(reason: "session_restore")
                 subscribeToNotifications(reason: .sessionRestore)
+                queueBetaWelcomeIfNeeded()
             }
         }
 
@@ -1404,6 +1406,7 @@ class RLAppState: ObservableObject {
             print("🔐 \(context): Guild selection required (\(userGuilds.count) guilds)")
             showGuildSelectionSheet = true
         }
+        queueBetaWelcomeIfNeeded()
         isHandlingAuthFlow = false
     }
     
@@ -2612,6 +2615,7 @@ class RLAppState: ObservableObject {
         reportedContentStateVersion = 0
         clearBiometricAppLock()
         pendingSignupWelcomeUserId = nil
+        pendingBetaWelcomeUserId = nil
         pendingPasswordResetToken = nil
         onboardingState = nil
         accountCreatedDuringOnboarding = false
@@ -2738,26 +2742,49 @@ class RLAppState: ObservableObject {
 
     private func queueSignupWelcomeCarouselIfNeeded() {
         guard let userId = currentUser?.id else { return }
+        queueBetaWelcomeIfNeeded()
         guard !hasSeenSignupWelcomeCarousel(for: userId) else { return }
         pendingSignupWelcomeUserId = userId
     }
 
+    /// Queue the beta welcome sheet for any authenticated user who hasn't seen it.
+    /// Safe to call from signup, login, Apple Sign In, biometric login, and session restore —
+    /// each path funnels here so the sheet is guaranteed to fire once per user before the tutorial.
+    func queueBetaWelcomeIfNeeded() {
+        guard let userId = currentUser?.id else { return }
+        guard !hasSeenBetaWelcome(for: userId) else { return }
+        pendingBetaWelcomeUserId = userId
+    }
+
     private func presentPendingSignupWelcomeIfNeeded() {
         guard !showingTransition else { return }
+
+        if let betaUserId = pendingBetaWelcomeUserId {
+            guard currentUser?.id == betaUserId else {
+                pendingBetaWelcomeUserId = nil
+                return
+            }
+            if !hasSeenBetaWelcome(for: betaUserId) {
+                guard !showBetaWelcomeSheet else { return }
+                markBetaWelcomeSeen(for: betaUserId)
+                pendingBetaWelcomeUserId = nil
+                showBetaWelcomeSheet = true
+                return
+            }
+            pendingBetaWelcomeUserId = nil
+        }
+
+        guard !showBetaWelcomeSheet else { return }
+
         guard let userId = pendingSignupWelcomeUserId else { return }
         guard currentUser?.id == userId else {
             pendingSignupWelcomeUserId = nil
             return
         }
-
-        if !hasSeenBetaWelcome(for: userId) {
-            guard !showBetaWelcomeSheet else { return }
-            markBetaWelcomeSeen(for: userId)
-            showBetaWelcomeSheet = true
+        guard !hasSeenSignupWelcomeCarousel(for: userId) else {
+            pendingSignupWelcomeUserId = nil
             return
         }
-
-        guard !showBetaWelcomeSheet else { return }
 
         markSignupWelcomeCarouselSeen(for: userId)
         pendingSignupWelcomeUserId = nil

@@ -3,6 +3,8 @@ import SwiftUI
 struct MarkerViewingGeneralTab: View {
     @EnvironmentObject private var rlAppState: RLAppState
     @State private var showReportReasonSheet: Bool = false
+    @State private var isSubmittingPollVote: Bool = false
+    @State private var submittingPollVoteOptionId: UUID? = nil
 
     let marker: ChartMarkerUI
     @ObservedObject var markerManager: MarkerManager
@@ -215,37 +217,51 @@ struct MarkerViewingGeneralTab: View {
                 } else {
                     ForEach(pollOptions) { option in
                         let isSelected = selectedPollOptionId == option.id || option.hasVoted
-                        HStack(spacing: 8) {
-                            if isSelected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(MarkerPollStyleTokens.selectedAccent)
+                        let isSubmitting = isSubmittingPollVote && submittingPollVoteOptionId == option.id
+
+                        Button {
+                            handlePollVote(optionId: option.id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(MarkerPollStyleTokens.selectedAccent)
+                                }
+
+                                Text(option.text)
+                                    .font(.caption.weight(isSelected ? .semibold : .regular))
+                                    .foregroundColor(AppColors.primaryForeground)
+                                    .lineLimit(2)
+
+                                Spacer(minLength: 0)
+
+                                if isSubmitting {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                        .tint(MarkerPollStyleTokens.progressSubmittingTint)
+                                } else {
+                                    Text("\(option.voteCount)")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundColor(isSelected ? MarkerPollStyleTokens.selectedAccent : MarkerPollStyleTokens.unselectedCount)
+                                }
                             }
-
-                            Text(option.text)
-                                .font(.caption.weight(isSelected ? .semibold : .regular))
-                                .foregroundColor(AppColors.primaryForeground)
-                                .lineLimit(2)
-
-                            Spacer(minLength: 0)
-
-                            Text("\(option.voteCount)")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(isSelected ? MarkerPollStyleTokens.selectedAccent : MarkerPollStyleTokens.unselectedCount)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? MarkerPollStyleTokens.selectedBackground : MarkerPollStyleTokens.unselectedBackground)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                isSelected ? MarkerPollStyleTokens.selectedBorder : MarkerPollStyleTokens.unselectedBorder,
+                                                lineWidth: 1
+                                            )
+                                    )
+                            )
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? MarkerPollStyleTokens.selectedBackground : MarkerPollStyleTokens.unselectedBackground)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            isSelected ? MarkerPollStyleTokens.selectedBorder : MarkerPollStyleTokens.unselectedBorder,
-                                            lineWidth: 1
-                                        )
-                                )
-                        )
+                        .buttonStyle(.plain)
+                        .disabled(isSubmittingPollVote)
                     }
                 }
             }
@@ -1095,7 +1111,11 @@ struct MarkerViewingGeneralTab: View {
     }
 
     private var questionText: String {
-        trimmedNote
+        let trimmedTitle = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+        return trimmedNote
     }
 
     private var pollQuestionText: String {
@@ -1108,6 +1128,26 @@ struct MarkerViewingGeneralTab: View {
 
     private var selectedPollOptionId: UUID? {
         liveMarker.userPollVote
+    }
+
+    private func handlePollVote(optionId: UUID) {
+        guard !isSubmittingPollVote else { return }
+        isSubmittingPollVote = true
+        submittingPollVoteOptionId = optionId
+
+        Task {
+            defer {
+                isSubmittingPollVote = false
+                submittingPollVoteOptionId = nil
+            }
+
+            do {
+                try await markerManager.voteOnPoll(markerId: liveMarker.id, optionId: optionId)
+                HapticFeedback.light.trigger()
+            } catch {
+                print("Failed to vote on poll marker from detail view: \(error)")
+            }
+        }
     }
 
     private var newsURL: String? {

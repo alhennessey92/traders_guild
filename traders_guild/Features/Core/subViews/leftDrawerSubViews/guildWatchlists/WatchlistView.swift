@@ -615,9 +615,13 @@ struct PersonalWatchlistRow: View {
                 
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(symbol.ticker)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppColors.primaryForeground)
+                    HStack(spacing: 6) {
+                        Text(symbol.ticker)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppColors.primaryForeground)
+
+                        SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+                    }
                     
                     Text(symbol.displayName)
                         .font(.system(size: 12))
@@ -698,9 +702,13 @@ struct GuildWatchlistRow: View {
                 
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(symbol.ticker)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppColors.primaryForeground)
+                    HStack(spacing: 6) {
+                        Text(symbol.ticker)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppColors.primaryForeground)
+
+                        SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+                    }
                     
                     Text(symbol.displayName)
                         .font(.system(size: 12))

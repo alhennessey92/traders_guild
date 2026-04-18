@@ -179,15 +179,15 @@ struct ChartSheetSymbolView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(symbol.displayName)
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(AppColors.primaryForeground)
+                                .foregroundColor(AppColors.onSymbolBlueBackground)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.85)
                                 .fixedSize(horizontal: false, vertical: true)
-                            
+
                             FlowLayout(spacing: 5) {
                                 Text(symbol.ticker)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
+                                    .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
 
                                 // Market status
                                 SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
@@ -204,20 +204,20 @@ struct ChartSheetSymbolView: View {
 
                                 Text("•")
                                     .font(.system(size: 9))
-                                    .foregroundColor(AppColors.surfaceDetailQuaternaryForeground)
+                                    .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
 
                                 Text(symbol.assetClass.capitalized)
                                     .font(.system(size: 11))
-                                    .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
+                                    .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
                             }
                         }
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                        
+
                         // Price section - fixed width to prevent squishing
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(symbol.formatPrice(chartViewModel.dataManager.currentPrice))
                                 .font(.system(size: 18, weight: .bold, design: .monospaced))
-                                .foregroundColor(AppColors.primaryForeground)
+                                .foregroundColor(AppColors.onSymbolBlueBackground)
                                 .lineLimit(1)
                             
                             HStack(spacing: 2) {
@@ -1104,15 +1104,15 @@ struct SymbolListRow: View {
                     HStack(spacing: 6) {
                         Text(symbol.ticker)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppColors.primaryForeground)
-                        
+                            .foregroundColor(isSelected ? AppColors.onSymbolBlueBackground : AppColors.primaryForeground)
+
                         // Market status indicator
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                     }
-                    
+
                     Text(symbol.displayName)
                         .font(.caption)
-                        .foregroundColor(AppColors.secondaryForeground)
+                        .foregroundColor(isSelected ? AppColors.onSymbolBlueBackgroundMuted : AppColors.secondaryForeground)
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
@@ -1134,7 +1134,7 @@ struct SymbolListRow: View {
                     Text(symbol.priceFormatted ?? "--")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundColor(AppColors.primaryForeground)
+                        .foregroundColor(isSelected ? AppColors.onSymbolBlueBackground : AppColors.primaryForeground)
                     
                     HStack(spacing: 2) {
                         Image(systemName: (symbol.isUp ?? true) ? "arrow.up" : "arrow.down")

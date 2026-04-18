@@ -11,91 +11,95 @@ struct BetaWelcomeSheetView: View {
     ]
 
     var body: some View {
-        ZStack {
-            AppColors.sheetBackground
-                .ignoresSafeArea()
-            StaticPatternView()
-                .ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.accentColor.opacity(0.16))
+                            .frame(width: 96, height: 96)
 
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        VStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.accentColor.opacity(0.16))
-                                    .frame(width: 96, height: 96)
-
-                                Image(systemName: "flask.fill")
-                                    .font(.system(size: 36, weight: .semibold))
-                                    .foregroundColor(AppColors.accentColor)
-                            }
-                            .padding(.top, 24)
-
-                            Text("Welcome To The Beta")
-                                .font(.title.bold())
-                                .foregroundColor(AppColors.whiteText)
-
-                            Text("Thanks for joining early. A quick heads-up on what to expect, and how to reach us if something feels off.")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 4)
-                        }
-
-                        VStack(spacing: 10) {
-                            ForEach(highlights, id: \.title) { item in
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: item.icon)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(AppColors.accentColor)
-                                        .frame(width: 28, height: 28)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .fill(AppColors.accentColor.opacity(0.14))
-                                        )
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.title)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundColor(AppColors.whiteText)
-                                        Text(item.body)
-                                            .font(.caption)
-                                            .foregroundColor(AppColors.greyText)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(AppColors.symbolDetailCardFill)
-                                )
-                            }
-                        }
+                        Image(systemName: "flask.fill")
+                            .font(.system(size: 36, weight: .semibold))
+                            .foregroundColor(AppColors.accentColor)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                    .padding(.top, 24)
+
+                    Text("Welcome To The Beta")
+                        .font(.title.bold())
+                        .foregroundColor(AppColors.whiteText)
+
+                    Text("Thanks for joining early. A quick heads-up on what to expect, and how to reach us if something feels off.")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 4)
                 }
 
-                Button {
-                    rlAppState.dismissBetaWelcomeSheet()
-                } label: {
-                    Text("Continue")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(AppColors.gradientBackgroundDark)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                VStack(spacing: 10) {
+                    ForEach(highlights, id: \.title) { item in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(AppColors.accentColor)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(AppColors.accentColor.opacity(0.14))
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(AppColors.whiteText)
+                                Text(item.body)
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppColors.whiteText)
+                                .fill(AppColors.symbolDetailCardFill)
                         )
+                    }
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+        .background {
+            ZStack {
+                AppColors.sheetBackground
+                StaticPatternView()
+            }
+            .ignoresSafeArea()
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button {
+                rlAppState.dismissBetaWelcomeSheet()
+            } label: {
+                Text("Continue")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(AppColors.gradientBackgroundDark)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppColors.whiteText)
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .background(AppColors.sheetBackground.opacity(0.96))
         }
     }
 }
@@ -131,134 +135,133 @@ struct BetaFeedbackView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppColors.sheetBackground
-                .ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 0) {
+                SettingsSubViewHeader(title: "Beta Feedback", onBack: { dismiss() })
 
-            KeyboardAwareBottomInsetContainer {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        SettingsSubViewHeader(title: "Beta Feedback", onBack: { dismiss() })
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flask.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(AppColors.accentColor)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    Circle()
+                                        .fill(AppColors.accentColor.opacity(0.16))
+                                )
 
-                        VStack(spacing: 24) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "flask.fill")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(AppColors.accentColor)
-                                        .frame(width: 36, height: 36)
-                                        .background(
-                                            Circle()
-                                                .fill(AppColors.accentColor.opacity(0.16))
-                                        )
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Help shape the beta")
-                                            .font(.headline)
-                                            .foregroundColor(AppColors.whiteText)
-                                        Text("Tell us what’s working, what feels off, or what’s blocking you.")
-                                            .font(.caption)
-                                            .foregroundColor(AppColors.greyText)
-                                    }
-
-                                    Spacer()
-                                }
-
-                                Text("These submissions go straight into the existing support review queue, so include enough detail for us to understand what happened.")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Help shape the beta")
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText)
+                                Text("Tell us what’s working, what feels off, or what’s blocking you.")
                                     .font(.caption)
                                     .foregroundColor(AppColors.greyText)
                             }
-                            .padding(16)
-                            .background(AppColors.insetPanelBackground)
-                            .cornerRadius(14)
-                            .padding(.top, 20)
 
-                            SupportCategoryMenuField(
-                                title: "Feedback Type",
-                                selection: $category,
-                                options: categories
-                            )
-
-                            SettingsTextField(
-                                title: "Subject",
-                                placeholder: "Short summary of the beta feedback",
-                                text: $subject,
-                                icon: "text.alignleft"
-                            )
-                            .focused($isSubjectFocused)
-
-                            SupportMessageEditorCard(
-                                title: "Details",
-                                text: $message,
-                                placeholder: "Explain what you saw, what you expected, and anything else that would help us investigate.",
-                                characterLimit: 5000,
-                                minHeight: 150
-                            )
-
-                            if let errorMessage {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.caption)
-                                    Text(errorMessage)
-                                        .font(.caption)
-                                }
-                                .foregroundColor(AppColors.statusNegative70)
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppColors.statusNegative08)
-                                .cornerRadius(12)
-                            }
-
-                            Toggle(isOn: $includeDeviceInfo) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Include device information")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(AppColors.whiteText)
-
-                                    Text("Helpful for reproduction and debugging")
-                                        .font(.caption)
-                                        .foregroundColor(AppColors.greyText)
-                                }
-                            }
-                            .tint(AppColors.accentColor)
-                            .padding()
-                            .background(AppColors.insetPanelBackground)
-                            .cornerRadius(12)
-
-                            HStack(spacing: 10) {
-                                Image(systemName: selectedCategoryOption.icon)
-                                    .foregroundColor(AppColors.accentColor)
-                                Text("Selected: \(selectedCategoryOption.title)")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.greyText)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 4)
+                            Spacer()
                         }
-                        .padding(.horizontal, 25)
-                        .padding(.bottom, 24)
+
+                        Text("These submissions go straight into the existing support review queue, so include enough detail for us to understand what happened.")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
                     }
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .dismissKeyboardOnTapAndDragBackground()
-            } footer: {
-                VStack(spacing: 0) {
-                    Divider()
-                    StandardActionButtonFullWidth(
-                        title: "Send Beta Feedback",
-                        backgroundColor: isValid ? AppColors.accentColor : AppColors.greyText.opacity(0.5),
-                        foregroundColor: .white,
-                        isLoading: isSending,
-                        isDisabled: !isValid || isSending,
-                        action: submit
+                    .padding(16)
+                    .background(AppColors.insetPanelBackground)
+                    .cornerRadius(14)
+                    .padding(.top, 20)
+
+                    SupportCategoryMenuField(
+                        title: "Feedback Type",
+                        selection: $category,
+                        options: categories
                     )
-                    .padding(.horizontal, 25)
-                    .padding(.top, 16)
-                    .padding(.bottom, 20)
-                    .background(AppColors.sheetBackground)
+
+                    SettingsTextField(
+                        title: "Subject",
+                        placeholder: "Short summary of the beta feedback",
+                        text: $subject,
+                        icon: "text.alignleft"
+                    )
+                    .focused($isSubjectFocused)
+
+                    SupportMessageEditorCard(
+                        title: "Details",
+                        text: $message,
+                        placeholder: "Explain what you saw, what you expected, and anything else that would help us investigate.",
+                        characterLimit: 5000,
+                        minHeight: 150
+                    )
+
+                    if let errorMessage {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                            Text(errorMessage)
+                                .font(.caption)
+                        }
+                        .foregroundColor(AppColors.statusNegative70)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.statusNegative08)
+                        .cornerRadius(12)
+                    }
+
+                    Toggle(isOn: $includeDeviceInfo) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Include device information")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(AppColors.whiteText)
+
+                            Text("Helpful for reproduction and debugging")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                    }
+                    .tint(AppColors.accentColor)
+                    .padding()
+                    .background(AppColors.insetPanelBackground)
+                    .cornerRadius(12)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: selectedCategoryOption.icon)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("Selected: \(selectedCategoryOption.title)")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 4)
                 }
+                .padding(.horizontal, 25)
+                .padding(.bottom, 24)
             }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(AppColors.sheetBackground.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                StandardActionButtonFullWidth(
+                    title: "Send Beta Feedback",
+                    backgroundColor: isValid ? AppColors.accentColor : AppColors.greyText.opacity(0.5),
+                    foregroundColor: .white,
+                    isLoading: isSending,
+                    isDisabled: !isValid || isSending,
+                    action: submit
+                )
+                .padding(.horizontal, 25)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+            }
+            .background(AppColors.sheetBackground)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSubjectFocused = false
+            dismissKeyboard()
         }
         .alert("Feedback Sent", isPresented: $showSuccessAlert) {
             Button("OK") { dismiss() }

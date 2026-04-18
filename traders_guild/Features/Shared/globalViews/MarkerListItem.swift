@@ -40,6 +40,14 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         return !note.isEmpty
     }
 
+    private var hasQuestionPrompt: Bool {
+        questionPromptText != nil
+    }
+
+    private var hasPollContent: Bool {
+        pollQuestionText != nil || pollOptionsPreviewText != nil
+    }
+
     private var isLikeAnimating: Bool {
         likeAnimationMarkerId == marker.id
     }
@@ -103,7 +111,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .setup:
             return liveSetupMetrics != nil || outcome != nil || hasNotePreview
         case .question, .poll:
-            return hasNotePreview
+            return hasQuestionPrompt || hasPollContent || hasNotePreview
         case .alert, .news:
             return hasNotePreview
         case .analysis:
@@ -182,6 +190,26 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             normalized = note.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private var questionPromptText: String? {
+        guard marker.intentEnum == .question else { return nil }
+        return normalizedListText(marker.title) ?? notePreviewText
+    }
+
+    private var pollQuestionText: String? {
+        guard marker.intentEnum == .poll else { return nil }
+        return normalizedListText(marker.pollQuestion) ?? normalizedListText(marker.title) ?? notePreviewText
+    }
+
+    private var pollOptionTexts: [String] {
+        guard marker.intentEnum == .poll else { return [] }
+        return (marker.pollOptions ?? []).compactMap { normalizedListText($0) }
+    }
+
+    private var pollOptionsPreviewText: String? {
+        guard !pollOptionTexts.isEmpty else { return nil }
+        return pollOptionTexts.joined(separator: " • ")
     }
 
     /// For news markers, `notePreview` often holds the article URL.
@@ -676,11 +704,20 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             }
 
         case .question, .poll:
-            if let note = notePreviewText, !note.isEmpty {
-                Text(note)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppColors.listCardBodyEmphasisText)
-                    .lineLimit(6)
+            VStack(alignment: .leading, spacing: 6) {
+                if let question = marker.intentEnum == .question ? questionPromptText : pollQuestionText {
+                    Text(question)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppColors.listCardBodyEmphasisText)
+                        .lineLimit(6)
+                }
+
+                if let pollOptionsPreviewText {
+                    Text(pollOptionsPreviewText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.listCardSecondaryText)
+                        .lineLimit(4)
+                }
             }
 
         case .alert:
@@ -733,8 +770,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .question:
             MarkerListSpecificsSection {
                 MarkerListSpecificsLabel(label: "QUESTION", color: accentColor)
-                if let note = notePreviewText, !note.isEmpty {
-                    Text(note)
+                if let questionPromptText {
+                    Text(questionPromptText)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppColors.listCardHighlightText)
                         .lineLimit(2)
@@ -768,9 +805,20 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .poll:
             MarkerListSpecificsSection {
                 MarkerListSpecificsLabel(label: "POLL", color: accentColor)
-                if let note = notePreviewText, !note.isEmpty {
-                    Text(note)
+                if let pollQuestionText {
+                    Text(pollQuestionText)
                         .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(AppColors.listCardHighlightText)
+                        .lineLimit(2)
+                }
+                if let pollOptionsPreviewText {
+                    Text(pollOptionsPreviewText)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(AppColors.listCardBodyText)
+                        .lineLimit(2)
+                } else if let note = notePreviewText, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 10.5, weight: .medium))
                         .foregroundColor(AppColors.listCardBodyText)
                         .lineLimit(2)
                 }
@@ -819,6 +867,11 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             return String(format: "%.4f", price)
         }
         return String(format: "%.6f", price)
+    }
+
+    private func normalizedListText(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func reputationImpactText(for outcome: SetupOutcome) -> String? {
