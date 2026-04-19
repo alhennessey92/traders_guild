@@ -433,11 +433,36 @@ struct ChartIndicatorBrowser: View {
             }
             
             HStack(spacing: 8) {
-                AddButton(title: "EMA", color: .cyan) { addingIndicatorType = .ema }
-                AddButton(title: "SMA", color: .orange) { addingIndicatorType = .sma }
-                AddButton(title: "WMA", color: .yellow) { addingIndicatorType = .wma }
-                AddButton(title: "HMA", color: .mint) { addingIndicatorType = .hma }
+                AddMAButton(
+                    type: .ema,
+                    color: .cyan,
+                    count: indicatorManager.activeIndicators.movingAverageCount(for: .ema),
+                    limit: ActiveIndicators.maxMovingAveragesPerType
+                ) { addingIndicatorType = .ema }
+                AddMAButton(
+                    type: .sma,
+                    color: .orange,
+                    count: indicatorManager.activeIndicators.movingAverageCount(for: .sma),
+                    limit: ActiveIndicators.maxMovingAveragesPerType
+                ) { addingIndicatorType = .sma }
+                AddMAButton(
+                    type: .wma,
+                    color: .yellow,
+                    count: indicatorManager.activeIndicators.movingAverageCount(for: .wma),
+                    limit: ActiveIndicators.maxMovingAveragesPerType
+                ) { addingIndicatorType = .wma }
+                AddMAButton(
+                    type: .hma,
+                    color: .mint,
+                    count: indicatorManager.activeIndicators.movingAverageCount(for: .hma),
+                    limit: ActiveIndicators.maxMovingAveragesPerType
+                ) { addingIndicatorType = .hma }
             }
+
+            Text("Up to \(ActiveIndicators.maxMovingAveragesPerType) per type (EMA / SMA / WMA / HMA).")
+                .font(.caption2)
+                .foregroundColor(AppColors.secondaryForeground)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
             Divider().background(AppColors.surfaceGray30)
             
@@ -716,6 +741,49 @@ struct AddButton: View {
     }
 }
 
+struct AddMAButton: View {
+    let type: IndicatorType
+    let color: Color
+    let count: Int
+    let limit: Int
+    let action: () -> Void
+
+    private var isAtLimit: Bool { count >= limit }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 14, weight: .medium))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(type.shortName)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("\(count)/\(limit)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isAtLimit ? .orange : color.opacity(0.7))
+                }
+            }
+            .foregroundColor(color)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                LinearGradient(
+                    colors: [color.opacity(0.2), color.opacity(0.1)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(color.opacity(0.3), lineWidth: 1)
+            )
+            .opacity(isAtLimit ? 0.45 : 1)
+        }
+        .disabled(isAtLimit)
+    }
+}
+
 struct ActiveIndicatorRow: View {
     let title: String
     let color: Color
@@ -937,10 +1005,12 @@ struct AddMASheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         let config = MovingAverageConfig(type: indicatorType, color: CodableColor(selectedColor), period: period)
-                        indicatorManager.addMovingAverage(config)
-                        onRecalculate()
+                        if indicatorManager.addMovingAverage(config) {
+                            onRecalculate()
+                        }
                         dismiss()
                     }
+                    .disabled(!indicatorManager.activeIndicators.canAddMovingAverage(of: indicatorType))
                 }
             }
         }

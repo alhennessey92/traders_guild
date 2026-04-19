@@ -123,15 +123,16 @@ struct BetaFeedbackView: View {
         SupportCategoryOption(id: "beta_issue", title: "Beta Issue", icon: "exclamationmark.triangle.fill", subtitle: "A rough edge, blocker, or confusing flow")
     ]
 
+    private let subjectMinimum = 5
+    private let messageMinimum = 20
+
     private var selectedCategoryOption: SupportCategoryOption {
         categories.first(where: { $0.id == category }) ?? categories[0]
     }
 
     private var isValid: Bool {
-        !subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        subject.count >= 5 &&
-        !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        message.count >= 20
+        subject.trimmingCharacters(in: .whitespacesAndNewlines).count >= subjectMinimum &&
+        message.trimmingCharacters(in: .whitespacesAndNewlines).count >= messageMinimum
     }
 
     var body: some View {
@@ -178,21 +179,35 @@ struct BetaFeedbackView: View {
                         options: categories
                     )
 
-                    SettingsTextField(
-                        title: "Subject",
-                        placeholder: "Short summary of the beta feedback",
-                        text: $subject,
-                        icon: "text.alignleft"
-                    )
-                    .focused($isSubjectFocused)
+                    VStack(alignment: .leading, spacing: 6) {
+                        SettingsTextField(
+                            title: "Subject",
+                            placeholder: "Short summary of the beta feedback",
+                            text: $subject,
+                            icon: "text.alignleft"
+                        )
+                        .focused($isSubjectFocused)
 
-                    SupportMessageEditorCard(
-                        title: "Details",
-                        text: $message,
-                        placeholder: "Explain what you saw, what you expected, and anything else that would help us investigate.",
-                        characterLimit: 5000,
-                        minHeight: 150
-                    )
+                        MinimumCharacterHint(
+                            currentCount: subject.trimmingCharacters(in: .whitespacesAndNewlines).count,
+                            minimum: subjectMinimum
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        SupportMessageEditorCard(
+                            title: "Details",
+                            text: $message,
+                            placeholder: "Explain what you saw, what you expected, and anything else that would help us investigate.",
+                            characterLimit: 5000,
+                            minHeight: 150
+                        )
+
+                        MinimumCharacterHint(
+                            currentCount: message.trimmingCharacters(in: .whitespacesAndNewlines).count,
+                            minimum: messageMinimum
+                        )
+                    }
 
                     if let errorMessage {
                         HStack(spacing: 6) {
@@ -297,5 +312,31 @@ struct BetaFeedbackView: View {
                 }
             }
         }
+    }
+}
+
+struct MinimumCharacterHint: View {
+    let currentCount: Int
+    let minimum: Int
+
+    private var isSatisfied: Bool { currentCount >= minimum }
+    private var remaining: Int { max(minimum - currentCount, 0) }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isSatisfied ? "checkmark.circle.fill" : "circle")
+                .font(.caption2)
+                .foregroundColor(isSatisfied ? AppColors.statusPositive70 : AppColors.greyText)
+
+            Text(isSatisfied
+                 ? "Minimum \(minimum) characters reached"
+                 : "\(remaining) more character\(remaining == 1 ? "" : "s") needed (min \(minimum))")
+                .font(.caption2)
+                .foregroundColor(isSatisfied ? AppColors.statusPositive70 : AppColors.greyText)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .animation(.easeInOut(duration: 0.15), value: isSatisfied)
     }
 }

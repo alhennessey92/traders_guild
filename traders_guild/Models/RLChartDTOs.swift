@@ -538,6 +538,22 @@ struct IndicatorPayload: Codable {
     let name: String
     let settings: [String: AnyCodable]?
     let isPrimary: Bool?
+    /// Unique per-instance identifier. Non-nil only for multi-instance indicators
+    /// (e.g. multiple EMAs/SMAs/WMAs/HMAs on a single marker). Legacy single-instance
+    /// indicators (VWAP, RSI, etc.) leave this nil.
+    let instanceId: UUID?
+
+    init(
+        name: String,
+        settings: [String: AnyCodable]?,
+        isPrimary: Bool?,
+        instanceId: UUID? = nil
+    ) {
+        self.name = name
+        self.settings = settings
+        self.isPrimary = isPrimary
+        self.instanceId = instanceId
+    }
 }
 
 struct NotePayload: Codable {

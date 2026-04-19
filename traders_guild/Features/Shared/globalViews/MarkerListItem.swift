@@ -194,7 +194,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
     private var questionPromptText: String? {
         guard marker.intentEnum == .question else { return nil }
-        return normalizedListText(marker.title) ?? notePreviewText
+        return notePreviewText ?? normalizedListText(marker.title)
     }
 
     private var pollQuestionText: String? {
@@ -207,9 +207,17 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         return (marker.pollOptions ?? []).compactMap { normalizedListText($0) }
     }
 
+    private var pollOptionPreviewItems: [String] {
+        Array(pollOptionTexts.prefix(4))
+    }
+
+    private var hiddenPollOptionCount: Int {
+        max(0, pollOptionTexts.count - pollOptionPreviewItems.count)
+    }
+
     private var pollOptionsPreviewText: String? {
-        guard !pollOptionTexts.isEmpty else { return nil }
-        return pollOptionTexts.joined(separator: " • ")
+        guard !pollOptionPreviewItems.isEmpty else { return nil }
+        return pollOptionPreviewItems.joined(separator: " • ")
     }
 
     /// For news markers, `notePreview` often holds the article URL.
@@ -705,18 +713,15 @@ struct MarkerListItem<M: MarkerListItemData>: View {
 
         case .question, .poll:
             VStack(alignment: .leading, spacing: 6) {
-                if let question = marker.intentEnum == .question ? questionPromptText : pollQuestionText {
-                    Text(question)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppColors.listCardBodyEmphasisText)
-                        .lineLimit(6)
+                if marker.intentEnum == .question, let questionPromptText {
+                    questionPromptBlock(
+                        questionPromptText,
+                        lineLimit: 5,
+                        compact: false
+                    )
                 }
-
-                if let pollOptionsPreviewText {
-                    Text(pollOptionsPreviewText)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.listCardSecondaryText)
-                        .lineLimit(4)
+                if marker.intentEnum == .poll {
+                    pollPreviewBlock(compact: false)
                 }
             }
 
@@ -771,10 +776,11 @@ struct MarkerListItem<M: MarkerListItemData>: View {
             MarkerListSpecificsSection {
                 MarkerListSpecificsLabel(label: "QUESTION", color: accentColor)
                 if let questionPromptText {
-                    Text(questionPromptText)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.listCardHighlightText)
-                        .lineLimit(2)
+                    questionPromptBlock(
+                        questionPromptText,
+                        lineLimit: 3,
+                        compact: true
+                    )
                 }
             }
 
@@ -805,23 +811,7 @@ struct MarkerListItem<M: MarkerListItemData>: View {
         case .poll:
             MarkerListSpecificsSection {
                 MarkerListSpecificsLabel(label: "POLL", color: accentColor)
-                if let pollQuestionText {
-                    Text(pollQuestionText)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.listCardHighlightText)
-                        .lineLimit(2)
-                }
-                if let pollOptionsPreviewText {
-                    Text(pollOptionsPreviewText)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundColor(AppColors.listCardBodyText)
-                        .lineLimit(2)
-                } else if let note = notePreviewText, !note.isEmpty {
-                    Text(note)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundColor(AppColors.listCardBodyText)
-                        .lineLimit(2)
-                }
+                pollPreviewBlock(compact: true)
             }
 
         case .news:
@@ -872,6 +862,106 @@ struct MarkerListItem<M: MarkerListItemData>: View {
     private func normalizedListText(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    @ViewBuilder
+    private func questionPromptBlock(_ question: String, lineLimit: Int, compact: Bool) -> some View {
+        HStack(alignment: .top, spacing: compact ? 8 : 10) {
+            Image(systemName: "text.quote")
+                .font(.system(size: compact ? 10 : 11, weight: .semibold))
+                .foregroundColor(accentColor.opacity(compact ? 0.88 : 0.96))
+                .padding(compact ? 6 : 7)
+                .background(
+                    Circle()
+                        .fill(accentColor.opacity(compact ? 0.14 : 0.18))
+                        .overlay(
+                            Circle()
+                                .stroke(accentColor.opacity(compact ? 0.20 : 0.26), lineWidth: 1)
+                        )
+                )
+
+            Text(question)
+                .font(.system(size: compact ? 11.5 : 12.5, weight: compact ? .medium : .semibold))
+                .foregroundColor(compact ? AppColors.listCardHighlightText : AppColors.listCardBodyEmphasisText)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, compact ? 9 : 10)
+        .padding(.vertical, compact ? 8 : 9)
+        .background(
+            RoundedRectangle(cornerRadius: compact ? 10 : 11)
+                .fill(accentColor.opacity(compact ? 0.08 : 0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: compact ? 10 : 11)
+                        .stroke(accentColor.opacity(compact ? 0.14 : 0.18), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func pollPreviewBlock(compact: Bool) -> some View {
+        if let pollQuestionText {
+            questionPromptBlock(
+                pollQuestionText,
+                lineLimit: compact ? 3 : 4,
+                compact: compact
+            )
+        }
+
+        if !pollOptionPreviewItems.isEmpty {
+            VStack(alignment: .leading, spacing: compact ? 5 : 6) {
+                ForEach(Array(pollOptionPreviewItems.enumerated()), id: \.offset) { index, option in
+                    pollOptionPreviewRow(
+                        option,
+                        index: index,
+                        compact: compact
+                    )
+                }
+
+                if hiddenPollOptionCount > 0 {
+                    Text("+\(hiddenPollOptionCount) more option\(hiddenPollOptionCount == 1 ? "" : "s")")
+                        .font(.system(size: compact ? 9.5 : 10, weight: .semibold))
+                        .foregroundColor(AppColors.listCardSecondaryText)
+                        .padding(.top, compact ? 1 : 2)
+                }
+            }
+        } else if let note = notePreviewText, !note.isEmpty {
+            Text(note)
+                .font(.system(size: compact ? 10.5 : 11, weight: .medium))
+                .foregroundColor(AppColors.listCardBodyText)
+                .lineLimit(compact ? 2 : 3)
+        }
+    }
+
+    private func pollOptionPreviewRow(_ option: String, index: Int, compact: Bool) -> some View {
+        HStack(spacing: compact ? 7 : 8) {
+            Text("\(index + 1)")
+                .font(.system(size: compact ? 9 : 9.5, weight: .heavy, design: .rounded))
+                .foregroundColor(AppColors.onAccentForeground)
+                .frame(width: compact ? 18 : 20, height: compact ? 18 : 20)
+                .background(
+                    Circle()
+                        .fill(accentColor.opacity(compact ? 0.62 : 0.72))
+                )
+
+            Text(option)
+                .font(.system(size: compact ? 10.5 : 11, weight: .medium))
+                .foregroundColor(AppColors.listCardBodyText)
+                .lineLimit(compact ? 1 : 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, compact ? 8 : 9)
+        .padding(.vertical, compact ? 6 : 7)
+        .background(
+            RoundedRectangle(cornerRadius: compact ? 9 : 10)
+                .fill(AppColors.whiteText.opacity(compact ? 0.06 : 0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: compact ? 9 : 10)
+                        .stroke(AppColors.whiteText.opacity(compact ? 0.07 : 0.08), lineWidth: 1)
+                )
+        )
     }
 
     private func reputationImpactText(for outcome: SetupOutcome) -> String? {

@@ -215,6 +215,21 @@ struct IndicatorEditingContext: Identifiable {
     let item: IndicatorCatalogItem
     let indicatorName: String
     let existingSettings: [String: AnyCodable]?
+    /// Non-nil for multi-instance indicators (moving averages) so saves route to the
+    /// specific instance rather than creating a new one.
+    let instanceId: UUID?
+
+    init(
+        item: IndicatorCatalogItem,
+        indicatorName: String,
+        existingSettings: [String: AnyCodable]?,
+        instanceId: UUID? = nil
+    ) {
+        self.item = item
+        self.indicatorName = indicatorName
+        self.existingSettings = existingSettings
+        self.instanceId = instanceId
+    }
 }
 
 struct IndicatorSettingField: Identifiable {

@@ -722,10 +722,16 @@ final class IndicatorManager: ObservableObject {
     
     // MARK: - Moving Average Management (EMA, SMA, WMA, HMA)
     
-    func addMovingAverage(_ config: MovingAverageConfig) {
-        guard !activeIndicators.movingAverages.contains(where: { $0.id == config.id }) else { return }
+    @discardableResult
+    func addMovingAverage(_ config: MovingAverageConfig) -> Bool {
+        guard !activeIndicators.movingAverages.contains(where: { $0.id == config.id }) else { return false }
+        guard activeIndicators.canAddMovingAverage(of: config.type) else {
+            errorMessage = "Maximum \(ActiveIndicators.maxMovingAveragesPerType) \(config.type.shortName) moving averages allowed."
+            return false
+        }
         activeIndicators.movingAverages.append(config)
         saveConfiguration()
+        return true
     }
     
     func addEMA(period: Int, color: Color = .cyan) {

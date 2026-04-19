@@ -643,6 +643,7 @@ final class MarkerPlacementState: ObservableObject {
     private let maxIndicatorPanels = 2
     private let maxDrawingOverlays = 15
     private let maxTimeframeLinks = 2
+    let maxMovingAveragesPerType = 5
 
     var indicatorPanelCount: Int {
         indicatorDrafts.reduce(0) { partialResult, draft in
@@ -825,6 +826,9 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func canAttachIndicator(named name: String) -> Bool {
+        if isMovingAverageName(name) {
+            return canAddMovingAverage(named: name)
+        }
         if isIndicatorAttached(named: name) {
             return true
         }
@@ -834,11 +838,80 @@ final class MarkerPlacementState: ObservableObject {
         return true
     }
 
+    // MARK: - Moving Average Multi-Instance Support
+
+    /// Count of moving averages currently attached for a given type name ("EMA", "SMA", "WMA", "HMA").
+    func movingAverageCount(named name: String) -> Int {
+        let normalized = normalizedIndicatorName(name)
+        return indicatorDrafts.reduce(0) { partial, draft in
+            guard case let .indicator(payload) = draft.payload,
+                  normalizedIndicatorName(payload.name) == normalized else {
+                return partial
+            }
+            return partial + 1
+        }
+    }
+
+    /// Whether another MA of this type can be attached (enforces 5-per-type cap).
+    func canAddMovingAverage(named name: String) -> Bool {
+        movingAverageCount(named: name) < maxMovingAveragesPerType
+    }
+
+    /// Insert or update a moving average instance. If `instanceId` matches an existing
+    /// draft, updates in place; otherwise appends a new instance (respecting the per-type cap).
+    @discardableResult
+    func upsertMovingAverage(
+        name: String,
+        settings: [String: AnyCodable]?,
+        instanceId: UUID
+    ) -> Bool {
+        if let index = components.firstIndex(where: { draft in
+            guard case let .indicator(payload) = draft.payload else { return false }
+            return payload.instanceId == instanceId
+        }) {
+            let updated = IndicatorPayload(
+                name: name,
+                settings: settings,
+                isPrimary: nil,
+                instanceId: instanceId
+            )
+            setComponentPayload(at: index, to: .indicator(updated))
+            return true
+        }
+
+        guard canAddMovingAverage(named: name) else { return false }
+
+        let payload = IndicatorPayload(
+            name: name,
+            settings: settings,
+            isPrimary: nil,
+            instanceId: instanceId
+        )
+        components.append(
+            MarkerComponentDraft(componentType: .indicator, payload: .indicator(payload))
+        )
+        return true
+    }
+
+    /// Remove a specific moving average instance by its instanceId.
+    func removeMovingAverage(instanceId: UUID) {
+        components.removeAll { draft in
+            guard case let .indicator(payload) = draft.payload else { return false }
+            return payload.instanceId == instanceId
+        }
+    }
+
     @discardableResult
     func upsertIndicator(
         name: String,
         settings: [String: AnyCodable]?
     ) -> Bool {
+        // Moving averages are multi-instance: each legacy call without an instanceId
+        // creates a fresh instance (capped at 5 per type).
+        if isMovingAverageName(name) {
+            return upsertMovingAverage(name: name, settings: settings, instanceId: UUID())
+        }
+
         let normalizedName = normalizedIndicatorName(name)
         let existingIndex = components.firstIndex { draft in
             guard draft.componentType == .indicator,
@@ -868,6 +941,16 @@ final class MarkerPlacementState: ObservableObject {
         }
 
         return true
+    }
+
+    /// Insert or update an indicator from an existing payload (preserves instanceId for MAs).
+    @discardableResult
+    func upsertIndicator(payload: IndicatorPayload) -> Bool {
+        if isMovingAverageName(payload.name) {
+            let id = payload.instanceId ?? UUID()
+            return upsertMovingAverage(name: payload.name, settings: payload.settings, instanceId: id)
+        }
+        return upsertIndicator(name: payload.name, settings: payload.settings)
     }
 
     func removeIndicator(named name: String) {
@@ -941,6 +1024,24 @@ final class MarkerPlacementState: ObservableObject {
         var blockedByLimit = false
 
         for payload in payloads {
+            if isMovingAverageName(payload.name) {
+                let id = payload.instanceId ?? UUID()
+                let alreadyPresent = components.contains { draft in
+                    if case let .indicator(existing) = draft.payload {
+                        return existing.instanceId == id
+                    }
+                    return false
+                }
+                if !upsertMovingAverage(name: payload.name, settings: payload.settings, instanceId: id) {
+                    blockedByLimit = true
+                    continue
+                }
+                if !alreadyPresent {
+                    added += 1
+                }
+                continue
+            }
+
             let hadIndicator = isIndicatorAttached(named: payload.name)
             if !upsertIndicator(name: payload.name, settings: payload.settings) {
                 blockedByLimit = true
@@ -1901,6 +2002,11 @@ final class MarkerPlacementState: ObservableObject {
             guard case let .indicator(payload) = draft.payload else { return false }
             return normalizedIndicatorName(payload.name) == normalizedName
         }
+    }
+
+    func isMovingAverageName(_ name: String) -> Bool {
+        let normalized = normalizedIndicatorName(name)
+        return normalized == "EMA" || normalized == "SMA" || normalized == "WMA" || normalized == "HMA"
     }
 
     private func isPanelIndicator(_ name: String) -> Bool {

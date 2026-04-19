@@ -1152,10 +1152,25 @@ struct ActiveIndicators: Codable {
     var volume: VolumeConfig?
     
     // MARK: - Panel Limit Constants
-    
+
     /// Maximum number of panel indicators allowed at once
     static let maxPanelIndicators: Int = 2
-    
+
+    /// Maximum number of moving averages allowed per type (EMA, SMA, WMA, HMA)
+    static let maxMovingAveragesPerType: Int = 10
+
+    // MARK: - Moving Average Counts
+
+    /// Current count of moving averages for a given type (enabled + disabled)
+    func movingAverageCount(for type: IndicatorType) -> Int {
+        movingAverages.filter { $0.type == type }.count
+    }
+
+    /// Whether another moving average of the given type can be added
+    func canAddMovingAverage(of type: IndicatorType) -> Bool {
+        movingAverageCount(for: type) < Self.maxMovingAveragesPerType
+    }
+
     // MARK: - Panel Count
     
     /// Current count of enabled panel indicators

@@ -10,6 +10,7 @@ struct MarkerPlacementIndicatorsTab: View {
     @State private var limitWarning: String?
     @State private var infoMessage: String?
     @State private var editingContext: IndicatorEditingContext?
+    @State private var addingMAType: IndicatorType?
 
     private let indicatorCatalog = IndicatorCatalogItem.all
 
@@ -57,11 +58,27 @@ struct MarkerPlacementIndicatorsTab: View {
             IndicatorSettingsEditorSheet(
                 context: context,
                 onSave: { updatedSettings in
-                    _ = placementState.upsertIndicator(
-                        name: context.indicatorName,
-                        settings: updatedSettings
-                    )
+                    if let instanceId = context.instanceId {
+                        _ = placementState.upsertMovingAverage(
+                            name: context.indicatorName,
+                            settings: updatedSettings,
+                            instanceId: instanceId
+                        )
+                    } else {
+                        _ = placementState.upsertIndicator(
+                            name: context.indicatorName,
+                            settings: updatedSettings
+                        )
+                    }
                     infoMessage = "Updated \(context.item.title) settings."
+                }
+            )
+        }
+        .sheet(item: $addingMAType) { type in
+            AddMarkerMASheet(
+                indicatorType: type,
+                onAdd: { period, color in
+                    addMovingAverageInstance(type: type, period: period, color: color)
                 }
             )
         }
@@ -172,10 +189,216 @@ struct MarkerPlacementIndicatorsTab: View {
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
 
+            if category == .trend {
+                movingAverageCapHint
+            }
+
             ForEach(indicatorCatalog.filter { $0.category == category }) { item in
-                catalogIndicatorRow(item)
+                if isMovingAverageItem(item) {
+                    movingAverageCatalogSection(item)
+                } else {
+                    catalogIndicatorRow(item)
+                }
             }
         }
+    }
+
+    private var movingAverageCapHint: some View {
+        Text("Up to \(placementState.maxMovingAveragesPerType) moving averages per type (EMA / SMA / WMA / HMA).")
+            .font(.caption2)
+            .foregroundColor(AppColors.greyText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isMovingAverageItem(_ item: IndicatorCatalogItem) -> Bool {
+        switch item.type {
+        case .ema, .sma, .wma, .hma: return true
+        default: return false
+        }
+    }
+
+    private func movingAverageCatalogSection(_ item: IndicatorCatalogItem) -> some View {
+        let name = item.payloadName
+        let attached = attachedMovingAverages(for: name)
+        let count = attached.count
+        let limit = placementState.maxMovingAveragesPerType
+        let canAdd = placementState.canAddMovingAverage(named: name)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppColors.surfaceWhite88)
+                        Text(item.title)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.primaryForeground)
+                        Text("\(count)/\(limit)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(count >= limit ? AppColors.chartOrangeGradientStart : AppColors.greyText)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(AppColors.whiteText.opacity(0.09)))
+                    }
+
+                    HStack(spacing: 6) {
+                        Text(item.description)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
+                            .lineLimit(1)
+                        indicatorModeBadge(isPanel: false)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    openAddMASheet(for: item.type, name: name)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(canAdd ? placementState.intent.color : AppColors.whiteText.opacity(0.3))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAdd)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.whiteText.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                count > 0
+                                    ? placementState.intent.color.opacity(0.45)
+                                    : AppColors.whiteText.opacity(0.08),
+                                lineWidth: 1
+                            )
+                    )
+            )
+
+            if !attached.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(attached) { entry in
+                        attachedMovingAverageRow(entry: entry, item: item)
+                    }
+                }
+                .padding(.leading, 10)
+            }
+        }
+    }
+
+    private func attachedMovingAverageRow(entry: AttachedMovingAverage, item: IndicatorCatalogItem) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(entry.color)
+                .frame(width: 8, height: 8)
+
+            Text(entry.label)
+                .font(.caption)
+                .foregroundColor(AppColors.primaryForeground)
+
+            Spacer(minLength: 0)
+
+            Button {
+                openMASettingsEditor(item: item, entry: entry)
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(AppColors.whiteText.opacity(0.08)))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                placementState.removeMovingAverage(instanceId: entry.instanceId)
+                infoMessage = "Removed \(entry.label)."
+                limitWarning = nil
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppColors.statusNegative85)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(AppColors.whiteText.opacity(0.05))
+        )
+    }
+
+    private func attachedMovingAverages(for name: String) -> [AttachedMovingAverage] {
+        let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return placementState.indicatorDrafts.compactMap { draft -> AttachedMovingAverage? in
+            guard case let .indicator(payload) = draft.payload,
+                  payload.name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalized,
+                  let instanceId = payload.instanceId else {
+                return nil
+            }
+            return AttachedMovingAverage(
+                instanceId: instanceId,
+                name: payload.name,
+                settings: payload.settings
+            )
+        }
+        .sorted { $0.period < $1.period }
+    }
+
+    private func openAddMASheet(for type: IndicatorType, name: String) {
+        infoMessage = nil
+        guard placementState.canAddMovingAverage(named: name) else {
+            limitWarning = "Maximum \(placementState.maxMovingAveragesPerType) \(type.shortName) moving averages."
+            HapticFeedback.light.trigger()
+            return
+        }
+        limitWarning = nil
+        addingMAType = type
+    }
+
+    private func addMovingAverageInstance(type: IndicatorType, period: Int, color: Color) {
+        let name = type.rawValue
+        let instanceId = UUID()
+        let settings: [String: AnyCodable] = [
+            "period": AnyCodable(period),
+            "source": AnyCodable("close"),
+            "lineWidth": AnyCodable(1.5),
+            "color": encodedColor(color),
+        ]
+        if placementState.upsertMovingAverage(name: name, settings: settings, instanceId: instanceId) {
+            infoMessage = "Added \(type.shortName) \(period)."
+            limitWarning = nil
+        } else {
+            limitWarning = "Maximum \(placementState.maxMovingAveragesPerType) \(type.shortName) moving averages."
+            HapticFeedback.light.trigger()
+        }
+    }
+
+    private func openMASettingsEditor(item: IndicatorCatalogItem, entry: AttachedMovingAverage) {
+        editingContext = IndicatorEditingContext(
+            item: item,
+            indicatorName: entry.name,
+            existingSettings: entry.settings,
+            instanceId: entry.instanceId
+        )
+    }
+
+    private func encodedColor(_ color: Color) -> AnyCodable {
+        let codable = CodableColor(color)
+        return AnyCodable(
+            [
+                "red": codable.red,
+                "green": codable.green,
+                "blue": codable.blue,
+                "opacity": codable.opacity,
+            ]
+        )
     }
 
     private var attachCurrentChartSetButton: some View {
@@ -462,13 +685,108 @@ private struct AttachedIndicator: Identifiable {
     var id: String { "\(draftID.uuidString)|\(payload.name)" }
 }
 
+struct AttachedMovingAverage: Identifiable {
+    let instanceId: UUID
+    let name: String
+    let settings: [String: AnyCodable]?
+
+    var id: UUID { instanceId }
+
+    var period: Int {
+        guard let raw = settings?["period"]?.value else { return 20 }
+        if let int = raw as? Int { return int }
+        if let double = raw as? Double { return Int(double) }
+        if let string = raw as? String, let parsed = Int(string) { return parsed }
+        return 20
+    }
+
+    var color: Color {
+        guard let value = settings?["color"]?.value else { return .cyan }
+        if let dict = value as? [String: Any],
+           let red = numeric(dict["red"]),
+           let green = numeric(dict["green"]),
+           let blue = numeric(dict["blue"]) {
+            let opacity = numeric(dict["opacity"]) ?? 1.0
+            return CodableColor(red: red, green: green, blue: blue, opacity: opacity).color
+        }
+        return .cyan
+    }
+
+    var label: String {
+        "\(name.uppercased()) \(period)"
+    }
+
+    private func numeric(_ raw: Any?) -> Double? {
+        if let d = raw as? Double { return d }
+        if let i = raw as? Int { return Double(i) }
+        if let s = raw as? String, let d = Double(s) { return d }
+        return nil
+    }
+}
+
+struct AddMarkerMASheet: View {
+    let indicatorType: IndicatorType
+    let onAdd: (Int, Color) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var period: Int = 20
+    @State private var selectedColor: Color
+
+    private let presets: [Int] = [9, 10, 12, 14, 20, 21, 26, 50, 100, 200]
+
+    init(indicatorType: IndicatorType, onAdd: @escaping (Int, Color) -> Void) {
+        self.indicatorType = indicatorType
+        self.onAdd = onAdd
+        _selectedColor = State(initialValue: indicatorType.defaultColor)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Period") {
+                    Stepper("Period: \(period)", value: $period, in: 2...300)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 8) {
+                        ForEach(presets, id: \.self) { preset in
+                            Button("\(preset)") { period = preset }
+                                .buttonStyle(.bordered)
+                                .tint(period == preset ? .blue : .gray)
+                        }
+                    }
+                }
+                Section("Color") {
+                    ColorPickerGrid(selectedColor: $selectedColor)
+                }
+            }
+            .navigationTitle("Add \(indicatorType.shortName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        onAdd(period, selectedColor)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 enum MarkerPlacementIndicatorFactory {
     static func activePayloads(from active: ActiveIndicators) -> [IndicatorPayload] {
         var payloads: [IndicatorPayload] = []
 
         for ma in active.enabledMovingAverages {
-            payloads.append(payload(name: ma.type.rawValue, settings: movingAverageSettings(ma)))
+            payloads.append(
+                IndicatorPayload(
+                    name: ma.type.rawValue,
+                    settings: movingAverageSettings(ma),
+                    isPrimary: nil,
+                    instanceId: ma.id
+                )
+            )
         }
 
         if let vwap = active.vwap, vwap.isEnabled {
@@ -703,11 +1021,16 @@ enum MarkerPlacementIndicatorFactory {
         var unique: [IndicatorPayload] = []
 
         for payload in payloads {
-            let key = payload.name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            if seen.contains(key) {
+            let normalized = payload.name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            // Moving averages are multi-instance — never collapse by name alone.
+            if normalized == "EMA" || normalized == "SMA" || normalized == "WMA" || normalized == "HMA" {
+                unique.append(payload)
                 continue
             }
-            seen.insert(key)
+            if seen.contains(normalized) {
+                continue
+            }
+            seen.insert(normalized)
             unique.append(payload)
         }
 
