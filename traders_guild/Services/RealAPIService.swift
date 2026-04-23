@@ -45,6 +45,7 @@ enum APIService {
         case .directServices:
             switch APIEnvironment.current {
             case .development:
+                #if DEBUG
                 #if targetEnvironment(simulator)
                 switch self {
                 case .auth:       return "http://localhost:8000/api/v1"
@@ -54,9 +55,8 @@ enum APIService {
                 case .reputation: return "http://localhost:8005/api/v1"
                 }
                 #else
-                // ⚠️ UPDATE THIS to your Mac's IP for device testing
-                let macIP = "192.168.1.182"
-//                let macIP = "192.168.1.196"
+                // Device testing: set TG_DEV_MAC_IP in the scheme's env vars.
+                let macIP = ProcessInfo.processInfo.environment["TG_DEV_MAC_IP"] ?? "127.0.0.1"
                 switch self {
                 case .auth:       return "http://\(macIP):8000/api/v1"
                 case .core:       return "http://\(macIP):8001/api/v1"
@@ -64,6 +64,9 @@ enum APIService {
                 case .realtime:   return "http://\(macIP):8002/api/v1"
                 case .reputation: return "http://\(macIP):8005/api/v1"
                 }
+                #endif
+                #else
+                return AppConfig.productionGatewayBaseURL
                 #endif
             case .production:
                 return AppConfig.productionGatewayBaseURL

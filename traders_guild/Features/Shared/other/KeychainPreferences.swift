@@ -24,6 +24,27 @@ enum KeychainPreferences {
         return byte != 0
     }
 
+    // MARK: - String values
+
+    static func setString(_ value: String, forKey key: String) {
+        save(data: Data(value.utf8), forKey: key)
+    }
+
+    static func string(forKey key: String) -> String? {
+        guard let data = load(forKey: key) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    // MARK: - Data values
+
+    static func setData(_ value: Data, forKey key: String) {
+        save(data: value, forKey: key)
+    }
+
+    static func data(forKey key: String) -> Data? {
+        load(forKey: key)
+    }
+
     // MARK: - Remove
 
     static func removeValue(forKey key: String) {

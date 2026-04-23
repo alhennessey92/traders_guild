@@ -44,7 +44,7 @@ This document provides extensive examples for every DTO in your application, inc
 ```swift
 // Decoding from API response
 func fetchCurrentUser() async throws -> CurrentUserDTO {
-    let url = URL(string: "https://api.tradersguild.com/v1/users/me")!
+    let url = URL(string: "https://api.tradersguild.co/api/v1/users/me")!
     let (data, _) = try await URLSession.shared.data(from: url)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
@@ -799,7 +799,7 @@ class GuildDetailViewModel: ObservableObject {
     
     func joinGuild(_ guildId: UUID) async {
         // API call to join guild
-        let url = URL(string: "https://api.tradersguild.com/v1/guilds/\(guildId)/join")!
+        let url = URL(string: "https://api.tradersguild.co/api/v1/guilds/\(guildId)/join")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         
@@ -1058,7 +1058,7 @@ struct AnnouncementDetailView: View {
 @MainActor
 class AnnouncementViewModel: ObservableObject {
     func markAsRead(_ announcementId: UUID) async {
-        let url = URL(string: "https://api.tradersguild.com/v1/announcements/\(announcementId)/read")!
+        let url = URL(string: "https://api.tradersguild.co/api/v1/announcements/\(announcementId)/read")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         
@@ -1498,7 +1498,7 @@ class EventViewModel: ObservableObject {
     
     func toggleAttendance(_ eventId: UUID, currentStatus: Bool) async {
         let endpoint = currentStatus ? "leave" : "join"
-        let url = URL(string: "https://api.tradersguild.com/v1/events/\(eventId)/\(endpoint)")!
+        let url = URL(string: "https://api.tradersguild.co/api/v1/events/\(eventId)/\(endpoint)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         
@@ -2420,7 +2420,7 @@ class ChatroomViewModel: ObservableObject {
     @Published var messages: [ChatroomMessageDTO] = []
     
     func loadMessages(for chatroomId: UUID) async {
-        let url = URL(string: "https://api.tradersguild.com/v1/chatrooms/\(chatroomId)/messages")!
+        let url = URL(string: "https://api.tradersguild.co/api/v1/chatrooms/\(chatroomId)/messages")!
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             let decoder = JSONDecoder()
@@ -2432,7 +2432,7 @@ class ChatroomViewModel: ObservableObject {
     }
     
     func sendMessage(_ content: String, in chatroomId: UUID) async {
-        let url = URL(string: "https://api.tradersguild.com/v1/chatrooms/\(chatroomId)/messages")!
+        let url = URL(string: "https://api.tradersguild.co/api/v1/chatrooms/\(chatroomId)/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -3005,7 +3005,7 @@ import Foundation
 // MARK: - API Service
 class TradersGuildAPI {
     static let shared = TradersGuildAPI()
-    private let baseURL = "https://api.tradersguild.com/v1"
+    private let baseURL = "https://api.tradersguild.co/api/v1"
     private let decoder: JSONDecoder
     
     private init() {

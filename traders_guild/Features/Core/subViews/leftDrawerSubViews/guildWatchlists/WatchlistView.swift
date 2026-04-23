@@ -518,6 +518,15 @@ struct WatchlistView: View {
     }
 
     private func showUnsupportedSymbolToast(_ symbol: RLTradingSymbolDTO) {
+        if APIEnvironment.current == .production {
+            rlAppState.showError(
+                title: "Available in Production",
+                message: "\(symbol.ticker) is listed in public beta, but live data is currently limited to Binance crypto markets. Broader markets unlock in production.",
+                style: .toast
+            )
+            return
+        }
+
         let providerText = symbol.activeProviderDisplayName ?? "active provider"
         rlAppState.showError(
             title: "Symbol Unavailable",

@@ -60,7 +60,7 @@ struct AppConfig {
     static var productionGatewayBaseURL: String {
         normalizedEnvURL(
             keys: ["TG_GATEWAY_BASE_URL_PROD"],
-            fallback: "https://api.tradersguild.com/api/v1"
+            fallback: "https://api.tradersguild.co/api/v1"
         )
     }
 

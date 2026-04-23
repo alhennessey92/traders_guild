@@ -361,12 +361,20 @@ class ChartViewModel: ObservableObject {
     /// Set the current symbol and regenerate chart data
     func setSymbol(_ symbol: RLTradingSymbolDTO) {
         guard symbol.isSelectableForActiveProvider else {
-            let providerText = symbol.activeProviderDisplayName ?? "active provider"
-            appState.showError(
-                title: "Symbol Unavailable",
-                message: "\(symbol.ticker) is not supported by \(providerText).",
-                style: .toast
-            )
+            if APIEnvironment.current == .production {
+                appState.showError(
+                    title: "Available in Production",
+                    message: "\(symbol.ticker) is listed in public beta, but live data is currently limited to Binance crypto markets. Broader markets unlock in production.",
+                    style: .toast
+                )
+            } else {
+                let providerText = symbol.activeProviderDisplayName ?? "active provider"
+                appState.showError(
+                    title: "Symbol Unavailable",
+                    message: "\(symbol.ticker) is not supported by \(providerText).",
+                    style: .toast
+                )
+            }
             return
         }
         guard currentSymbol?.id != symbol.id else { return }
@@ -389,6 +397,10 @@ class ChartViewModel: ObservableObject {
     }
 
     private func detailMessage(forUnsupportedSymbolDetail detail: String) -> String {
+        if APIEnvironment.current == .production {
+            return "Public beta currently supports live Binance crypto markets only. Broader markets unlock in production."
+        }
+
         let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             return trimmed

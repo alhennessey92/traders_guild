@@ -32,16 +32,12 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
+		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Traders Guild needs camera access so you can capture and share images in chats.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Traders Guild uses Face ID for quick and secure sign-in.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Traders Guild uses local network access for development connections to local staging services.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Traders Guild needs microphone access for voice dictation in chat messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -39,11 +39,15 @@ class RLAppState: ObservableObject {
     @Published var accessToken: String? {
         didSet {
             if let token = accessToken {
-                print("🔑 AccessToken SET: \(token.prefix(20))...")
+                #if DEBUG
+                print("🔑 AccessToken SET")
+                #endif
                 saveTokenToKeychain(token)
                 realApi.setAccessToken(token)
             } else {
+                #if DEBUG
                 print("🔑 AccessToken CLEARED")
+                #endif
                 clearTokenFromKeychain()
                 realApi.setAccessToken(nil)
             }
@@ -260,6 +264,11 @@ class RLAppState: ObservableObject {
     
     init() {
         print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
+
+        // Lift any pre-existing tokens/DTOs out of UserDefaults into the
+        // Keychain before restoreSession() reads them back. Runs once
+        // per install; idempotent.
+        migrateSecretsToKeychainIfNeeded()
 
         // Set up auth failure callback - called when token refresh fails
         realApi.onAuthenticationFailure = { [weak self] in
@@ -2648,78 +2657,123 @@ class RLAppState: ObservableObject {
         return trimmed
     }
 
+    // MARK: - Secure storage (Keychain)
+    //
+    // Tokens, user/guild/membership DTOs, and the refresh token all
+    // carry enough authority to impersonate the user. They live in the
+    // Keychain — which survives reinstalls, is encrypted at rest, and
+    // is scoped to this device — not UserDefaults, which is plist and
+    // readable by anyone with filesystem access (jailbreak, backup).
+    //
+    // One-shot migration: any token previously stored in UserDefaults
+    // is copied into the Keychain on first launch after upgrade, then
+    // removed from UserDefaults.
+
+    private var tokenStorageKey: String { "\(keychainPrefix)token" }
+    private var userStorageKey: String { "\(keychainPrefix)user" }
+    private var guildStorageKey: String { "\(keychainPrefix)guild" }
+    private var membershipStorageKey: String { "\(keychainPrefix)membership" }
+    private var refreshTokenStorageKey: String { "\(keychainPrefix)refresh_token" }
+    private var keychainMigrationDoneKey: String { "\(keychainPrefix)keychain_migration_v1_done" }
+
+    fileprivate func migrateSecretsToKeychainIfNeeded() {
+        if KeychainPreferences.bool(forKey: keychainMigrationDoneKey) {
+            return
+        }
+
+        // Strings
+        for key in [tokenStorageKey, refreshTokenStorageKey] {
+            if KeychainPreferences.string(forKey: key) == nil,
+               let legacy = UserDefaults.standard.string(forKey: key) {
+                KeychainPreferences.setString(legacy, forKey: key)
+            }
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        // Data blobs (JSON DTOs)
+        for key in [userStorageKey, guildStorageKey, membershipStorageKey] {
+            if KeychainPreferences.data(forKey: key) == nil,
+               let legacy = UserDefaults.standard.data(forKey: key) {
+                KeychainPreferences.setData(legacy, forKey: key)
+            }
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        KeychainPreferences.setBool(true, forKey: keychainMigrationDoneKey)
+    }
+
     // Token
     private func saveTokenToKeychain(_ token: String) {
-        UserDefaults.standard.set(token, forKey: "\(keychainPrefix)token")
+        KeychainPreferences.setString(token, forKey: tokenStorageKey)
     }
-    
+
     private func getTokenFromKeychain() -> String? {
-        UserDefaults.standard.string(forKey: "\(keychainPrefix)token")
+        KeychainPreferences.string(forKey: tokenStorageKey)
     }
-    
+
     private func clearTokenFromKeychain() {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)token")
+        KeychainPreferences.removeValue(forKey: tokenStorageKey)
     }
-    
+
     // User
     private func saveUserToKeychain(_ user: RLUserDTO) {
         if let data = try? JSONEncoder().encode(user) {
-            UserDefaults.standard.set(data, forKey: "\(keychainPrefix)user")
+            KeychainPreferences.setData(data, forKey: userStorageKey)
         }
     }
-    
+
     private func getUserFromKeychain() -> RLUserDTO? {
-        guard let data = UserDefaults.standard.data(forKey: "\(keychainPrefix)user") else { return nil }
+        guard let data = KeychainPreferences.data(forKey: userStorageKey) else { return nil }
         return try? JSONDecoder().decode(RLUserDTO.self, from: data)
     }
-    
+
     private func clearUserFromKeychain() {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)user")
+        KeychainPreferences.removeValue(forKey: userStorageKey)
     }
-    
+
     // Guild
     private func saveGuildToKeychain(_ guild: RLGuildDTO) {
         if let data = try? JSONEncoder().encode(guild) {
-            UserDefaults.standard.set(data, forKey: "\(keychainPrefix)guild")
+            KeychainPreferences.setData(data, forKey: guildStorageKey)
         }
     }
-    
+
     private func getGuildFromKeychain() -> RLGuildDTO? {
-        guard let data = UserDefaults.standard.data(forKey: "\(keychainPrefix)guild") else { return nil }
+        guard let data = KeychainPreferences.data(forKey: guildStorageKey) else { return nil }
         return try? JSONDecoder().decode(RLGuildDTO.self, from: data)
     }
-    
+
     private func clearGuildFromKeychain() {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)guild")
+        KeychainPreferences.removeValue(forKey: guildStorageKey)
     }
-    
+
     // Membership
     private func saveMembershipToKeychain(_ membership: RLGuildMembershipDTO) {
         if let data = try? JSONEncoder().encode(membership) {
-            UserDefaults.standard.set(data, forKey: "\(keychainPrefix)membership")
+            KeychainPreferences.setData(data, forKey: membershipStorageKey)
         }
     }
-    
+
     private func getMembershipFromKeychain() -> RLGuildMembershipDTO? {
-        guard let data = UserDefaults.standard.data(forKey: "\(keychainPrefix)membership") else { return nil }
+        guard let data = KeychainPreferences.data(forKey: membershipStorageKey) else { return nil }
         return try? JSONDecoder().decode(RLGuildMembershipDTO.self, from: data)
     }
-    
+
     private func clearMembershipFromKeychain() {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)membership")
+        KeychainPreferences.removeValue(forKey: membershipStorageKey)
     }
-    
+
     // Refresh Token
     private func saveRefreshTokenToKeychain(_ token: String) {
-        UserDefaults.standard.set(token, forKey: "\(keychainPrefix)refresh_token")
+        KeychainPreferences.setString(token, forKey: refreshTokenStorageKey)
     }
-    
+
     private func getRefreshTokenFromKeychain() -> String? {
-        UserDefaults.standard.string(forKey: "\(keychainPrefix)refresh_token")
+        KeychainPreferences.string(forKey: refreshTokenStorageKey)
     }
-    
+
     private func clearRefreshTokenFromKeychain() {
-        UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)refresh_token")
+        KeychainPreferences.removeValue(forKey: refreshTokenStorageKey)
     }
 
     // Onboarding State

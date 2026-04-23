@@ -922,6 +922,15 @@ struct ChartSheetSymbolView: View {
     }
 
     private func showUnsupportedSymbolToast(_ symbol: RLTradingSymbolDTO) {
+        if APIEnvironment.current == .production {
+            rlAppState.showError(
+                title: "Available in Production",
+                message: "\(symbol.ticker) is listed in public beta, but live data is currently limited to Binance crypto markets. Broader markets unlock in production.",
+                style: .toast
+            )
+            return
+        }
+
         let providerText = symbol.providerDisplayLabel
         rlAppState.showError(
             title: "Symbol Unavailable",
@@ -1206,7 +1215,7 @@ struct GlobalSymbolListRow: View {
             badges.append("Requested")
         }
         if symbol.isSupportedByActiveProvider == false {
-            badges.append("Unsupported")
+            badges.append(UnsupportedSymbolBadge.labelText)
         }
         return badges
     }
@@ -1353,8 +1362,12 @@ struct SymbolProviderBadge: View {
 }
 
 struct UnsupportedSymbolBadge: View {
+    static var labelText: String {
+        APIEnvironment.current == .production ? "Prod Only" : "Unsupported"
+    }
+
     var body: some View {
-        Text("Unsupported")
+        Text(Self.labelText)
             .font(.system(size: 9, weight: .bold))
             .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
             .padding(.horizontal, 6)
