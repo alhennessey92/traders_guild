@@ -25,6 +25,15 @@ final class AvatarImageCache {
     func store(_ image: UIImage, for url: URL) {
         cache.setObject(image, forKey: url.absoluteString as NSString)
     }
+
+    func removeImage(for url: URL) {
+        cache.removeObject(forKey: url.absoluteString as NSString)
+    }
+
+    func removeImage(forURLString urlString: String?) {
+        guard let urlString, !urlString.isEmpty else { return }
+        cache.removeObject(forKey: urlString as NSString)
+    }
 }
 
 // MARK: - Cached Avatar Image View
@@ -48,11 +57,13 @@ struct CachedAvatarImage: View {
             } else {
                 // Check cache synchronously to avoid flash
                 initialsPlaceholder
-                    .onAppear { loadFromCacheOrFetch() }
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+        .task(id: url.absoluteString) {
+            await loadFromCacheOrFetch()
+        }
     }
 
     private var initialsPlaceholder: some View {
@@ -65,25 +76,44 @@ struct CachedAvatarImage: View {
             )
     }
 
-    private func loadFromCacheOrFetch() {
+    private func loadFromCacheOrFetch() async {
+        await MainActor.run {
+            image = nil
+            loadFailed = false
+        }
+
         // Synchronous cache hit — no flash
         if let cached = AvatarImageCache.shared.image(for: url) {
-            image = cached
+            await MainActor.run { image = cached }
             return
         }
 
-        // Async fetch
-        Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let uiImage = UIImage(data: data) {
-                    AvatarImageCache.shared.store(uiImage, for: url)
-                    await MainActor.run { image = uiImage }
-                } else {
-                    await MainActor.run { loadFailed = true }
+        let targetURL = url
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: targetURL)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode),
+                  let uiImage = UIImage(data: data) else {
+                await MainActor.run {
+                    if targetURL == url {
+                        loadFailed = true
+                    }
                 }
-            } catch {
-                await MainActor.run { loadFailed = true }
+                return
+            }
+
+            AvatarImageCache.shared.store(uiImage, for: targetURL)
+            await MainActor.run {
+                if targetURL == url {
+                    image = uiImage
+                }
+            }
+        } catch {
+            await MainActor.run {
+                if targetURL == url {
+                    loadFailed = true
+                }
             }
         }
     }

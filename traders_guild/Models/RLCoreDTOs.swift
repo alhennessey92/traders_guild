@@ -256,6 +256,26 @@ struct RLUserDTO: Codable, Identifiable, Equatable {
             authProvider: authProvider
         )
     }
+
+    func withAvatarUrl(_ newAvatarUrl: String?) -> RLUserDTO {
+        RLUserDTO(
+            id: id,
+            email: email,
+            username: username,
+            displayName: displayName,
+            avatarUrl: newAvatarUrl,
+            globalReputation: globalReputation,
+            isOnline: isOnline,
+            isVerified: isVerified,
+            isSuperuser: isSuperuser,
+            lastSeenAt: lastSeenAt,
+            createdAt: createdAt,
+            updatedAt: Date(),
+            dateOfBirth: dateOfBirth,
+            status: status,
+            authProvider: authProvider
+        )
+    }
 }
 
 

@@ -2232,8 +2232,9 @@ class RLAppState: ObservableObject {
     func uploadAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLAvatarUpdateResponse {
         do {
             let response = try await realApi.uploadAvatar(imageData: imageData, mimeType: mimeType)
+            applyCurrentUserAvatar(url: response.avatarUrl)
             if let updatedUser = try? await realApi.getCurrentUser() {
-                currentUser = updatedUser
+                applyCurrentUserUpdate(updatedUser)
             }
             showSuccess(RLUserFacingCopy.text(.successAvatarUpdated))
             return response
@@ -2247,8 +2248,9 @@ class RLAppState: ObservableObject {
     func removeAvatar() async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.removeAvatar()
+            applyCurrentUserAvatar(url: nil)
             if let updatedUser = try? await realApi.getCurrentUser() {
-                currentUser = updatedUser
+                applyCurrentUserUpdate(updatedUser)
             }
             showSuccess(RLUserFacingCopy.text(.successAvatarRemoved))
             return response
@@ -2256,6 +2258,17 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Remove Avatar", style: .toast)
             throw error
         }
+    }
+
+    private func applyCurrentUserAvatar(url: String?) {
+        guard let user = currentUser else { return }
+        applyCurrentUserUpdate(user.withAvatarUrl(url))
+    }
+
+    private func applyCurrentUserUpdate(_ updatedUser: RLUserDTO) {
+        AvatarImageCache.shared.removeImage(forURLString: currentUser?.avatarUrl)
+        AvatarImageCache.shared.removeImage(forURLString: updatedUser.avatarUrl)
+        currentUser = updatedUser
     }
 
     /// Update trading interests using the extended profile endpoint
