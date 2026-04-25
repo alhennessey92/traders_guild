@@ -751,7 +751,19 @@ struct TradingChartView: View {
     
     /// Whether loading overlay should be shown
     private var shouldShowLoadingOverlay: Bool {
-        isChartLoading || chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
+        if chartViewModel.currentSymbol == nil {
+            return true
+        }
+        if chartViewModel.isLoadingData {
+            return true
+        }
+        return isChartLoading && !chartData.candles.isEmpty
+    }
+
+    private var shouldShowNoDataOverlay: Bool {
+        chartViewModel.currentSymbol != nil
+            && !chartViewModel.isLoadingData
+            && chartData.candles.isEmpty
     }
     
     /// Effective candle index for marker preview (from pending or placement mode)
@@ -1709,6 +1721,8 @@ struct TradingChartView: View {
     private var loadingOverlayIfNeeded: some View {
         if shouldShowLoadingOverlay {
             loadingOverlay
+        } else if shouldShowNoDataOverlay {
+            noDataOverlay
         }
     }
     
@@ -1744,6 +1758,39 @@ struct TradingChartView: View {
                 .font(.caption)
                 .foregroundColor(AppColors.secondaryForeground)
         }
+    }
+
+    @ViewBuilder
+    private var noDataOverlay: some View {
+        ZStack {
+            AppColors.surfaceBlack85
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                Image(systemName: "chart.line.uptrend.xyaxis.circle")
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundColor(AppColors.primaryForeground)
+
+                Text("Market Data Unavailable")
+                    .font(.headline)
+                    .foregroundColor(AppColors.primaryForeground)
+
+                Text(noDataSubtitle)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .frame(maxWidth: 260)
+            }
+            .padding(24)
+        }
+        .transition(.opacity.animation(.easeOut(duration: 0.3)))
+    }
+
+    private var noDataSubtitle: String {
+        if APIEnvironment.current == .production {
+            return "Live candles are unavailable for this symbol right now in public beta. Please try again shortly."
+        }
+        return "No candles are available for this symbol yet."
     }
     
     // MARK: - Duplicate Marker Overlay
