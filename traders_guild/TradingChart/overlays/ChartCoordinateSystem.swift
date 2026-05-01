@@ -54,6 +54,11 @@ class ChartCoordinateSystem {
     
     func yPosition(forPrice price: Double) -> CGFloat {
         let priceRange = chartData.priceRange
+        guard priceRange.max > priceRange.min,
+              chartSize.height > 0,
+              gestureState.priceScale > 0 else {
+            return chartSize.height * 0.5
+        }
         let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
         let baseY = chartSize.height - (CGFloat(normalizedPrice) * chartSize.height * gestureState.priceScale)
         return baseY - gestureState.verticalPanOffset - dragState.height
@@ -66,6 +71,7 @@ class ChartCoordinateSystem {
         let adjustedX = x - totalOffset
         let scaledWidth = baseCandleWidth * gestureState.candleWidthScale * pinchScale
         let totalWidth = scaledWidth + candleSpacing
+        guard totalWidth > 0 else { return nil }
         let index = Int(floor(adjustedX / totalWidth))
         guard index >= 0 && index < chartData.candles.count else { return nil }
         return index
@@ -73,6 +79,11 @@ class ChartCoordinateSystem {
     
     func price(atYPosition y: CGFloat) -> Double {
         let priceRange = chartData.priceRange
+        guard priceRange.max > priceRange.min,
+              chartSize.height > 0,
+              gestureState.priceScale > 0 else {
+            return priceRange.min
+        }
         let adjustedY = y + gestureState.verticalPanOffset + dragState.height
         let normalizedY = (chartSize.height - adjustedY) / (chartSize.height * gestureState.priceScale)
         let price = priceRange.min + (normalizedY * (priceRange.max - priceRange.min))
@@ -84,6 +95,11 @@ class ChartCoordinateSystem {
     /// beyond the currently visible price range
     func unclampedPrice(atYPosition y: CGFloat) -> Double {
         let priceRange = chartData.priceRange
+        guard priceRange.max > priceRange.min,
+              chartSize.height > 0,
+              gestureState.priceScale > 0 else {
+            return max(0.0001, priceRange.min)
+        }
         let adjustedY = y + gestureState.verticalPanOffset + dragState.height
         let normalizedY = (chartSize.height - adjustedY) / (chartSize.height * gestureState.priceScale)
         let price = priceRange.min + (normalizedY * (priceRange.max - priceRange.min))

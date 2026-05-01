@@ -9,7 +9,7 @@ private struct SignupWelcomeStep: Identifiable {
 }
 
 struct SignupWelcomeCarouselView: View {
-    @EnvironmentObject var rlAppState: RLAppState
+    @Environment(\.dismiss) private var dismiss
     @State private var currentStepIndex: Int = 0
 
     private let steps: [SignupWelcomeStep] = [
@@ -43,7 +43,7 @@ struct SignupWelcomeCarouselView: View {
                 Spacer()
 
                 Button("Skip") {
-                    rlAppState.dismissSignupWelcomeCarousel()
+                    dismiss()
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(AppColors.greyText)
@@ -102,7 +102,7 @@ struct SignupWelcomeCarouselView: View {
 
                 Button {
                     if currentStepIndex == steps.count - 1 {
-                        rlAppState.dismissSignupWelcomeCarousel()
+                        dismiss()
                     } else {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             currentStepIndex += 1

@@ -69,7 +69,9 @@ extension RLTradingSymbolDTO {
 
         switch assetClassEnum {
         case .crypto:
-            return TimeZone(secondsFromGMT: 0) ?? .current
+            // Crypto trades continuously and doesn't have exchange session
+            // boundaries to preserve, so chart times should follow the user.
+            return .current
         case .futures, .commodities:
             return TimeZone(identifier: "America/Chicago") ?? .current
         case .stocks, .indices:

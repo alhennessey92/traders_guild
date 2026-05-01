@@ -67,7 +67,9 @@ struct EditProfileView: View {
     // Validation
     @State private var usernameError: String?
     @State private var displayNameError: String?
-    
+    @State private var displayNameValidationTask: Task<Void, Never>?
+    @State private var usernameValidationTask: Task<Void, Never>?
+
     private var isValid: Bool {
         !displayName.trimmingCharacters(in: .whitespaces).isEmpty &&
         !username.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -150,7 +152,12 @@ struct EditProfileView: View {
                                 )
                                 .onChange(of: displayName) { _, newValue in
                                     hasChanges = true
-                                    validateDisplayName(newValue)
+                                    displayNameValidationTask?.cancel()
+                                    displayNameValidationTask = Task {
+                                        try? await Task.sleep(nanoseconds: 250_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        await MainActor.run { validateDisplayName(newValue) }
+                                    }
                                 }
                                 
                                 // Username
@@ -164,7 +171,12 @@ struct EditProfileView: View {
                                 )
                                 .onChange(of: username) { _, newValue in
                                     hasChanges = true
-                                    validateUsername(newValue)
+                                    usernameValidationTask?.cancel()
+                                    usernameValidationTask = Task {
+                                        try? await Task.sleep(nanoseconds: 250_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        await MainActor.run { validateUsername(newValue) }
+                                    }
                                 }
                                 
                                 // Bio
@@ -232,9 +244,9 @@ struct EditProfileView: View {
                                 action: saveProfile
                             )
                             .padding(.top, 10)
+
+                            Spacer(minLength: 100)
                         }
-                        
-                        Spacer(minLength: 100)
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
@@ -1121,6 +1133,7 @@ struct TradingInterestsView: View {
                 VStack(spacing: 0) {
                     SettingsSubViewHeader(title: "Trading Interests", onBack: onBack)
                     
+                    let selectedNames = Set(selectedInterests.map(\.name))
                     ScrollView {
                         VStack(spacing: 24) {
                             // Info text
@@ -1130,7 +1143,7 @@ struct TradingInterestsView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 25)
                                 .padding(.top, 10)
-                            
+
                             // Interest categories
                             ForEach(availableInterests, id: \.category) { category in
                                 VStack(alignment: .leading, spacing: 12) {
@@ -1138,7 +1151,7 @@ struct TradingInterestsView: View {
                                         .font(.headline)
                                         .foregroundColor(AppColors.whiteText)
                                         .padding(.horizontal, 25)
-                                    
+
                                     LazyVGrid(columns: [
                                         GridItem(.flexible(), spacing: 12),
                                         GridItem(.flexible(), spacing: 12)
@@ -1146,7 +1159,7 @@ struct TradingInterestsView: View {
                                         ForEach(category.items) { item in
                                             InterestChip(
                                                 item: item,
-                                                isSelected: selectedInterests.contains(where: { $0.name == item.name }),
+                                                isSelected: selectedNames.contains(item.name),
                                                 onTap: {
                                                     toggleInterest(item)
                                                 }
@@ -2951,8 +2964,6 @@ struct PushNotificationSettingsView: View {
                     systemSettingsBanner
                 }
 
-                pushDiagnosticsCard
-
                 if isLoading {
                     ProgressView()
                         .tint(AppColors.primaryForeground)
@@ -3001,135 +3012,6 @@ struct PushNotificationSettingsView: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 8)
-    }
-
-    private var pushDiagnosticsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .foregroundColor(AppColors.accentColor)
-                Text("Device Registration")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Spacer()
-                registrationStateBadge
-            }
-
-            diagnosticsRow(
-                title: "Authorization",
-                value: pushManager.permissionStatus.debugLabel
-            )
-            diagnosticsRow(
-                title: "APNs token",
-                value: pushManager.diagnostics.lastAPNsToken.map(shortToken) ?? "Missing"
-            )
-            diagnosticsRow(
-                title: "Last APNs attempt",
-                value: formattedAttempt(
-                    at: pushManager.diagnostics.lastAPNsRegistrationAttemptAt,
-                    reason: pushManager.diagnostics.lastAPNsRegistrationReason
-                )
-            )
-            diagnosticsRow(
-                title: "Backend registration",
-                value: pushManager.diagnostics.lastBackendRegistrationState.label
-            )
-            diagnosticsRow(
-                title: "Last backend attempt",
-                value: formattedAttempt(
-                    at: pushManager.diagnostics.lastBackendRegistrationAttemptAt,
-                    reason: pushManager.diagnostics.lastBackendRegistrationReason
-                )
-            )
-            diagnosticsRow(
-                title: "Marker results enabled",
-                value: prefs.markerResult ? "Yes" : "No"
-            )
-
-            if let error = pushManager.diagnostics.lastErrorMessage,
-               !error.isEmpty {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(AppColors.statusWarning95)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Button {
-                Task {
-                    await pushManager.registerForRemoteNotifications(
-                        reason: .manual,
-                        allowPermissionPrompt: true
-                    )
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.clockwise.circle.fill")
-                    Text(pushManager.permissionStatus == .notDetermined
-                        ? "Enable and Register"
-                        : "Re-register Device")
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.whiteText)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.accentColor.opacity(0.24))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.accentColor.opacity(0.45), lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.insetPanelBackground)
-        )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
-    private var registrationStateBadge: some View {
-        let success = pushManager.diagnostics.isBackendRegisteredThisSession
-        return Text(success ? "Registered" : "Pending")
-            .font(.caption.weight(.semibold))
-            .foregroundColor(success ? AppColors.statusPositive90 : AppColors.statusWarning95)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill((success ? AppColors.statusPositive35 : AppColors.statusWarning95).opacity(0.18))
-            )
-    }
-
-    private func diagnosticsRow(title: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(.caption)
-                .foregroundColor(AppColors.whiteText)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-
-    private func shortToken(_ token: String) -> String {
-        guard token.count > 12 else { return token }
-        return "\(token.prefix(8))...\(token.suffix(4))"
-    }
-
-    private func formattedAttempt(at date: Date?, reason: String?) -> String {
-        guard let date else { return "Never" }
-        if let reason, !reason.isEmpty {
-            return "\(date.formatted(date: .abbreviated, time: .shortened)) • \(reason)"
-        }
-        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     // MARK: - Preference Toggles

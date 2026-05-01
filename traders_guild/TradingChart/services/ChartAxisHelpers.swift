@@ -347,7 +347,7 @@ struct PriceAxisHelper {
     /// Determine the appropriate number of decimal places for the current symbol
     var decimalPlaces: Int {
         guard let symbol = symbol else {
-            return decimalPlacesFromMagnitude()
+            return decimalPlacesForStep(nicePriceStep)
         }
         
         let assetClass = symbol.assetClassEnum ?? .forex
@@ -355,14 +355,7 @@ struct PriceAxisHelper {
         case .forex:
             return symbol.ticker.contains("JPY") ? 3 : 4
         case .crypto:
-            let avgPrice = (priceRange.min + priceRange.max) / 2
-            if avgPrice > 1000 {
-                return 2
-            } else if avgPrice > 1 {
-                return 3
-            } else {
-                return 4
-            }
+            return cryptoYAxisDecimalPlaces()
         case .stocks, .commodities, .futures:
             return 2
         case .indices:
@@ -371,36 +364,61 @@ struct PriceAxisHelper {
         }
     }
     
-    /// Fallback decimal places based on price magnitude when no symbol is set
-    private func decimalPlacesFromMagnitude() -> Int {
-        let step = nicePriceStep
-        
-        if step >= 100 {
+    /// Fallback decimal places based on the current grid step when no symbol is set.
+    private func decimalPlacesForStep(_ step: Double) -> Int {
+        let absoluteStep = abs(step)
+
+        if absoluteStep >= 100 {
             return 0
-        } else if step >= 10 {
+        } else if absoluteStep >= 10 {
             return 0
-        } else if step >= 1 {
+        } else if absoluteStep >= 1 {
             return 0
-        } else if step >= 0.1 {
+        } else if absoluteStep >= 0.1 {
             return 1
-        } else if step >= 0.01 {
+        } else if absoluteStep >= 0.01 {
             return 2
-        } else if step >= 0.001 {
+        } else if absoluteStep >= 0.001 {
             return 3
-        } else if step >= 0.0001 {
+        } else if absoluteStep >= 0.0001 {
             return 4
         } else {
             return 5
         }
     }
+
+    private func cryptoYAxisDecimalPlaces() -> Int {
+        let avgPrice = max(abs((priceRange.min + priceRange.max) * 0.5), abs(nicePriceStep))
+        let minimumPlaces: Int
+        let maximumPlaces: Int
+
+        if avgPrice >= 1000 {
+            minimumPlaces = 2
+            maximumPlaces = 2
+        } else if avgPrice >= 1 {
+            minimumPlaces = 2
+            maximumPlaces = 4
+        } else if avgPrice >= 0.01 {
+            minimumPlaces = 3
+            maximumPlaces = 5
+        } else if avgPrice >= 0.0001 {
+            minimumPlaces = 4
+            maximumPlaces = 6
+        } else {
+            minimumPlaces = 5
+            maximumPlaces = 6
+        }
+
+        let stepPlaces = decimalPlacesForStep(nicePriceStep)
+        return min(maximumPlaces, max(minimumPlaces, stepPlaces))
+    }
     
     /// Format a price value for display on the Y-axis
     func formatPrice(_ price: Double) -> String {
-        if let symbol = symbol {
+        if let symbol = symbol, symbol.assetClassEnum != .crypto {
             return symbol.formatPrice(price)
-        } else {
-            return String(format: "%.\(decimalPlaces)f", price)
         }
+        return String(format: "%.\(decimalPlaces)f", price)
     }
     
     /// Format price for a grid label (may be more compact)
@@ -415,6 +433,21 @@ struct PriceAxisHelper {
         
         return String(format: "%.\(places)f", price)
     }
+}
+
+func formatMainChartPriceLabel(
+    _ price: Double,
+    symbol: RLTradingSymbolDTO?,
+    priceRange: (min: Double, max: Double),
+    priceScale: CGFloat,
+    chartHeight: CGFloat? = nil
+) -> String {
+    PriceAxisHelper(
+        symbol: symbol,
+        priceRange: priceRange,
+        priceScale: priceScale,
+        chartHeight: chartHeight
+    ).formatPrice(price)
 }
 
 
@@ -467,5 +500,3 @@ struct AxisConfiguration {
     var timeAxis = TimeAxis()
     var priceAxis = PriceAxis()
 }
-
-

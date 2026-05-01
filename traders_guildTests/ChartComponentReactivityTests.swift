@@ -433,6 +433,135 @@ struct ChartComponentReactivityTests {
         #expect(symbol.marketSession.closedWeekend)
     }
 
+    @Test
+    func cryptoYAxisFormatterClampsHighPriceLabelsToTwoDecimals() {
+        let symbol = RLTradingSymbolDTO(
+            id: UUID(),
+            ticker: "BTC/USD",
+            displayName: "Bitcoin / US Dollar",
+            assetClass: "crypto",
+            exchange: "Coinbase",
+            tickSize: 0.01,
+            lotSize: 1,
+            decimalPlaces: 8,
+            isActive: true,
+            iconName: nil,
+            iconUrl: nil,
+            primaryColor: "#F7931A",
+            secondaryColor: "#1C1C1C",
+            currentPrice: 65000.12345678,
+            priceFormatted: "65000.12345678",
+            change24h: 1200.55,
+            changePercent24h: 1.88,
+            changeFormatted: "+1200.55 (+1.88%)",
+            isUp: true,
+            high24h: nil,
+            low24h: nil,
+            volume24h: nil,
+            volumeFormatted: nil,
+            inPersonalWatchlist: nil,
+            inGuildWatchlist: nil,
+            isRequestedForGuild: nil,
+            activeMarketProvider: "coinbase",
+            isSupportedByActiveProvider: true,
+            isMarketOpen: true,
+            marketStatusUpdatedAt: nil,
+            activityBadges: nil
+        )
+        let helper = PriceAxisHelper(
+            symbol: symbol,
+            priceRange: (min: 64_000, max: 66_000),
+            priceScale: 1.0,
+            chartHeight: 320
+        )
+
+        #expect(helper.formatPrice(65000.12345678) == "65000.12")
+    }
+
+    @Test
+    func cryptoYAxisFormatterKeepsUsefulPrecisionForSubDollarPrices() {
+        let symbol = RLTradingSymbolDTO(
+            id: UUID(),
+            ticker: "DOGE/USD",
+            displayName: "Dogecoin / US Dollar",
+            assetClass: "crypto",
+            exchange: "Kraken",
+            tickSize: 0.0001,
+            lotSize: 1,
+            decimalPlaces: 8,
+            isActive: true,
+            iconName: nil,
+            iconUrl: nil,
+            primaryColor: "#C2A633",
+            secondaryColor: "#1C1C1C",
+            currentPrice: 0.07345678,
+            priceFormatted: "0.07345678",
+            change24h: 0.0012,
+            changePercent24h: 1.66,
+            changeFormatted: "+0.0012 (+1.66%)",
+            isUp: true,
+            high24h: nil,
+            low24h: nil,
+            volume24h: nil,
+            volumeFormatted: nil,
+            inPersonalWatchlist: nil,
+            inGuildWatchlist: nil,
+            isRequestedForGuild: nil,
+            activeMarketProvider: "kraken",
+            isSupportedByActiveProvider: true,
+            isMarketOpen: true,
+            marketStatusUpdatedAt: nil,
+            activityBadges: nil
+        )
+        let helper = PriceAxisHelper(
+            symbol: symbol,
+            priceRange: (min: 0.0711, max: 0.0749),
+            priceScale: 1.0,
+            chartHeight: 320
+        )
+
+        #expect(helper.formatPrice(0.07345678) == "0.0735")
+    }
+
+    @Test
+    func cryptoChartsUseDeviceTimeZoneForXAxisAndCrosshairLabels() {
+        let symbol = RLTradingSymbolDTO(
+            id: UUID(),
+            ticker: "BTC/USD",
+            displayName: "Bitcoin / US Dollar",
+            assetClass: "crypto",
+            exchange: "Binance",
+            tickSize: 0.01,
+            lotSize: 1,
+            decimalPlaces: 8,
+            isActive: true,
+            iconName: nil,
+            iconUrl: nil,
+            primaryColor: "#F7931A",
+            secondaryColor: "#1C1C1C",
+            currentPrice: 65000.12345678,
+            priceFormatted: "65000.12345678",
+            change24h: 1200.55,
+            changePercent24h: 1.88,
+            changeFormatted: "+1200.55 (+1.88%)",
+            isUp: true,
+            high24h: nil,
+            low24h: nil,
+            volume24h: nil,
+            volumeFormatted: nil,
+            inPersonalWatchlist: nil,
+            inGuildWatchlist: nil,
+            isRequestedForGuild: nil,
+            activeMarketProvider: "binance",
+            isSupportedByActiveProvider: true,
+            isMarketOpen: true,
+            marketStatusUpdatedAt: nil,
+            activityBadges: nil
+        )
+
+        #expect(symbol.exchangeTimeZone.identifier == TimeZone.current.identifier)
+    }
+
     private func makeCandle(open: Double, close: Double) -> RLCandleDTO {
         RLCandleDTO(
             timestamp: Date(timeIntervalSince1970: 0),

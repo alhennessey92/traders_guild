@@ -15,7 +15,8 @@ final class AvatarImageCache {
     private let cache = NSCache<NSString, UIImage>()
 
     private init() {
-        cache.countLimit = 200
+        // Shared in-memory image cache reused by both avatars and symbol icons.
+        cache.countLimit = 400
     }
 
     func image(for url: URL) -> UIImage? {

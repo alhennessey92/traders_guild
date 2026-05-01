@@ -175,7 +175,7 @@ struct UserSettingsSheetView: View {
     
     private var mainSettingsView: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 // Header with Back Button
                 HStack {
                     Button(action: onBack) {
@@ -218,7 +218,7 @@ struct UserSettingsSheetView: View {
 
                 // LOGOUT SECTION
                 logoutSection
-                
+
                 Spacer(minLength: 100)
             }
         }

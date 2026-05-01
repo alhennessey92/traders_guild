@@ -317,6 +317,7 @@ struct CrosshairInfoPopupCompact: View {
     /// Format time based on timeframe for the info popup header
     private func formatTimeForHeader(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.timeZone = chartData.currentSymbol?.exchangeTimeZone ?? .current
         
         switch timeframe {
         case .d1, .w1, .mn:

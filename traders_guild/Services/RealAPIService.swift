@@ -11,6 +11,53 @@
 
 import Foundation
 
+final class AsyncSingleFlight<Value> {
+    private final class Flight {
+        let id = UUID()
+        let task: Task<Value, Error>
+
+        init(task: Task<Value, Error>) {
+            self.task = task
+        }
+    }
+
+    private let lock = NSLock()
+    private var inFlight: Flight?
+
+    func run(
+        _ operation: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        let flight = lockFlight(for: operation)
+        defer { clearFlightIfCurrent(flight) }
+        return try await flight.task.value
+    }
+
+    private func lockFlight(
+        for operation: @escaping @Sendable () async throws -> Value
+    ) -> Flight {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let inFlight {
+            return inFlight
+        }
+
+        let created = Flight(task: Task {
+            try await operation()
+        })
+        inFlight = created
+        return created
+    }
+
+    private func clearFlightIfCurrent(_ flight: Flight) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard inFlight?.id == flight.id else { return }
+        inFlight = nil
+    }
+}
+
 // MARK: - API Configuration
 
 enum APIEnvironment {
@@ -108,15 +155,13 @@ class RealAPIService {
     private var accessToken: String?
     private var refreshToken: String?
     
-    /// Flag to prevent multiple simultaneous refresh attempts
-    private var isRefreshingToken = false
-    
     /// Callback when authentication fails completely (refresh token expired)
     /// RLAppState should set this to handle logout
     var onAuthenticationFailure: (() -> Void)?
     
     /// Callback when tokens are refreshed - allows RLAppState to update keychain
     var onTokensRefreshed: ((_ accessToken: String, _ refreshToken: String) -> Void)?
+    private let tokenRefreshSingleFlight = AsyncSingleFlight<RLTokenDTO>()
     
     // MARK: - JSON Decoder
     
@@ -198,7 +243,50 @@ class RealAPIService {
     var isAuthenticated: Bool {
         accessToken != nil
     }
-    
+
+    // MARK: - Proactive Token Refresh
+
+    /// Refresh the access token if it's near expiry. No-op if no refresh token,
+    /// no access token, or expiry is comfortably in the future.
+    func refreshAccessTokenIfNeeded(thresholdSeconds: TimeInterval = 300) async {
+        guard let token = accessToken,
+              refreshToken != nil else { return }
+
+        guard let exp = Self.expirationDate(forJWT: token) else { return }
+        let secondsRemaining = exp.timeIntervalSinceNow
+        guard secondsRemaining < thresholdSeconds else { return }
+
+        do {
+            try await performTokenRefresh()
+        } catch {
+            #if DEBUG
+            print("🔄 Proactive token refresh failed: \(error)")
+            #endif
+        }
+    }
+
+    /// Decode a JWT and return its `exp` claim as a Date. Pure parsing; no
+    /// signature verification (the backend does that).
+    static func expirationDate(forJWT token: String) -> Date? {
+        let segments = token.split(separator: ".")
+        guard segments.count >= 2 else { return nil }
+        let payloadSegment = String(segments[1])
+
+        // Base64URL → base64 + padding
+        var base64 = payloadSegment
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padCount = (4 - base64.count % 4) % 4
+        base64.append(String(repeating: "=", count: padCount))
+
+        guard let data = Data(base64Encoded: base64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: exp)
+    }
+
     // MARK: - Generic Request
     
     /// Main request method with automatic token refresh on 401
@@ -289,11 +377,14 @@ class RealAPIService {
                         #if DEBUG
                         print("❌ Token refresh failed: \(error)")
                         #endif
-                        // Refresh failed - notify app to logout
-                        await MainActor.run {
-                            onAuthenticationFailure?()
+                        if case APIError.unauthorized = error {
+                            // Refresh token itself is invalid/expired - notify app to logout.
+                            await MainActor.run {
+                                onAuthenticationFailure?()
+                            }
+                            throw APIError.unauthorized
                         }
-                        throw APIError.unauthorized
+                        throw error
                     }
                 }
                 throw APIError.unauthorized
@@ -324,27 +415,12 @@ class RealAPIService {
     
     /// Performs token refresh with locking to prevent multiple simultaneous refreshes
     private func performTokenRefresh() async throws {
-        // If already refreshing, wait a bit and check if we have a new token
-        if isRefreshingToken {
-            #if DEBUG
-            print("🔄 Token refresh already in progress, waiting...")
-            #endif
-            // Wait for the other refresh to complete (with timeout)
-            for _ in 0..<20 { // 2 second timeout
-                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                if !isRefreshingToken {
-                    if accessToken != nil {
-                        return // Another call refreshed successfully
-                    }
-                    break
-                }
-            }
-            throw APIError.unauthorized
+        _ = try await tokenRefreshSingleFlight.run { [self] in
+            try await executeTokenRefresh()
         }
-        
-        isRefreshingToken = true
-        defer { isRefreshingToken = false }
-        
+    }
+
+    private func executeTokenRefresh() async throws -> RLTokenDTO {
         guard let refresh = refreshToken else {
             throw APIError.unauthorized
         }
@@ -365,7 +441,15 @@ class RealAPIService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(requestBody)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw CancellationError()
+            }
+            throw APIError.networkError("token_refresh_failed")
+        }
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -375,10 +459,23 @@ class RealAPIService {
             #if DEBUG
             print("🔄 Token refresh failed with status: \(httpResponse.statusCode)")
             #endif
-            throw APIError.unauthorized
+            let detail = extractErrorDetail(from: data)
+            switch httpResponse.statusCode {
+            case 401:
+                throw APIError.unauthorized
+            case 400, 422:
+                throw APIError.badRequest(detail)
+            default:
+                throw APIError.serverError(httpResponse.statusCode, detail)
+            }
         }
         
-        let tokenResponse = try decoder.decode(RLTokenDTO.self, from: data)
+        let tokenResponse: RLTokenDTO
+        do {
+            tokenResponse = try decoder.decode(RLTokenDTO.self, from: data)
+        } catch {
+            throw APIError.decodingError("token_refresh_decode_failed")
+        }
         
         // Update tokens
         setTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
@@ -391,6 +488,7 @@ class RealAPIService {
         #if DEBUG
         print("✅ Token refreshed successfully")
         #endif
+        return tokenResponse
     }
     
     private func extractErrorDetail(from data: Data) -> String {
@@ -951,6 +1049,31 @@ extension RealAPIService {
         
         return try await request(
             "/guilds/\(guildId.uuidString)/announcements",
+            service: .core,
+            method: "POST",
+            body: requestBody,
+            auth: true
+        )
+    }
+
+    /// Create a platform-wide announcement (superuser only).
+    func createGlobalAnnouncement(
+        title: String,
+        content: String,
+        preview: String? = nil,
+        isImportant: Bool,
+        iconKey: GuildPostIconKey?
+    ) async throws -> RLGlobalAnnouncementBroadcastResponseDTO {
+        let requestBody = RLCreateGlobalAnnouncementRequestDTO(
+            title: title,
+            content: content,
+            preview: preview,
+            isImportant: isImportant,
+            iconKey: iconKey
+        )
+
+        return try await request(
+            "/admin/announcements/global",
             service: .core,
             method: "POST",
             body: requestBody,

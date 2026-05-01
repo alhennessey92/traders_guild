@@ -194,6 +194,16 @@ struct TradingChartView: View {
     private var currentSymbol: RLTradingSymbolDTO? {
         chartViewModel.currentSymbol
     }
+
+    private func compactMainChartPriceLabel(_ price: Double, chartHeight: CGFloat? = nil) -> String {
+        formatMainChartPriceLabel(
+            price,
+            symbol: currentSymbol,
+            priceRange: chartData.priceRange,
+            priceScale: gestureState.priceScale,
+            chartHeight: chartHeight
+        )
+    }
     
     // MARK: - Chart Control ViewModel
     @ObservedObject var controlViewModel: ChartControlViewModel
@@ -751,6 +761,9 @@ struct TradingChartView: View {
     
     /// Whether loading overlay should be shown
     private var shouldShowLoadingOverlay: Bool {
+        if chartViewModel.markerNavigationSession != nil {
+            return true
+        }
         if chartViewModel.currentSymbol == nil {
             return true
         }
@@ -1151,7 +1164,7 @@ struct TradingChartView: View {
                     drawingInteractionPhase: placementState.drawingInteractionPhase,
                     editingDrawingId: placementState.editingDrawingId,
                     showsInfoPanels: false,
-                    formatPrice: { price in chartData.formatPrice(price) }
+                    formatPrice: { price in compactMainChartPriceLabel(price, chartHeight: geometry.size.height) }
                 )
                 .mask(plotAreaMask(geometry: geometry))
                 .zIndex(30)
@@ -1183,7 +1196,7 @@ struct TradingChartView: View {
                     drawingInteractionPhase: chartDrawingPlacementState.drawingInteractionPhase,
                     editingDrawingId: chartDrawingPlacementState.editingDrawingId,
                     showsInfoPanels: false,
-                    formatPrice: { price in chartData.formatPrice(price) },
+                    formatPrice: { price in compactMainChartPriceLabel(price, chartHeight: geometry.size.height) },
                     suppressEmojiBackground: true
                 )
                 .mask(plotAreaMask(geometry: geometry))
@@ -1280,7 +1293,7 @@ struct TradingChartView: View {
                         guard let index = coordinateSystem.candleIndex(forTimestamp: time) else { return nil }
                         return coordinateSystem.xCenterPosition(forCandleIndex: index)
                     },
-                    formatPrice: { price in chartData.formatPrice(price) }
+                    formatPrice: { price in compactMainChartPriceLabel(price, chartHeight: geometry.size.height) }
                 )
                 .mask(plotAreaMask(geometry: geometry))
                 .allowsHitTesting(false)
@@ -1336,7 +1349,8 @@ struct TradingChartView: View {
                     renderWidth: geometry.size.width,
                     plotWidth: max(0, geometry.size.width - yAxisWidth),
                     chartHeight: geometry.size.height,
-                    chartData: chartData
+                    chartData: chartData,
+                    priceScale: gestureState.priceScale
                 )
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
                 .mask(priceLinesFullWidthMask(geometry: geometry))
@@ -1391,7 +1405,8 @@ struct TradingChartView: View {
             coordinateSystem: coordinateSystem,
             chartWidth: geometry.size.width,
             chartHeight: geometry.size.height,
-            chartData: chartData
+            chartData: chartData,
+            priceScale: gestureState.priceScale
         )
     }
     
@@ -1626,6 +1641,7 @@ struct TradingChartView: View {
             chartWidth: geometry.size.width,
             chartHeight: geometry.size.height,
             chartData: chartData,
+            priceScale: gestureState.priceScale,
             isPredictionPlacementActive: isPredictionPlacementOverlayActive
         )
     }
@@ -1666,7 +1682,8 @@ struct TradingChartView: View {
             coordinateSystem: coordinateSystem,
             chartWidth: geometry.size.width,
             chartHeight: geometry.size.height,
-            chartData: chartData
+            chartData: chartData,
+            formatPrice: { price in compactMainChartPriceLabel(price, chartHeight: geometry.size.height) }
         )
     }
     
@@ -1683,7 +1700,8 @@ struct TradingChartView: View {
                 coordinateSystem: coordinateSystem,
                 chartWidth: geometry.size.width,
                 chartHeight: geometry.size.height,
-                chartData: chartData
+                chartData: chartData,
+                formatPrice: { price in compactMainChartPriceLabel(price, chartHeight: geometry.size.height) }
             )
         }
     }
@@ -1728,6 +1746,72 @@ struct TradingChartView: View {
     
     @ViewBuilder
     private var loadingOverlay: some View {
+        if let session = chartViewModel.markerNavigationSession {
+            markerNavigationLoadingOverlay(session: session)
+        } else {
+            chartLoadingOverlay
+        }
+    }
+
+    @ViewBuilder
+    private func markerNavigationLoadingOverlay(session: MarkerNavigationSession) -> some View {
+        let intent = session.target.intent
+        let severity = session.target.alertSeverity
+        let symbol = MarkerVisualSpec.symbol(for: intent, severity: severity)
+        let palette = MarkerVisualSpec.palette(for: intent, severity: severity)
+        let title = session.phase.title
+        let subtitle = session.phase.subtitle
+
+        ZStack {
+            AppColors.surfaceBlack85
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle()
+                                .stroke(MarkerVisualSpec.borderColor(for: intent, severity: severity), lineWidth: 1)
+                        )
+                        .frame(width: 58, height: 58)
+                        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+
+                    if session.phase.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: palette.first ?? AppColors.primaryForeground))
+                            .scaleEffect(1.45)
+                    }
+
+                    Image(systemName: symbol)
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundColor(palette.first ?? MarkerVisualSpec.iconBaseColor)
+                }
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(AppColors.primaryForeground)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(AppColors.secondaryForeground)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppColors.surfaceBlack70)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
+        }
+        .transition(.opacity.animation(.easeOut(duration: 0.2)))
+    }
+
+    @ViewBuilder
+    private var chartLoadingOverlay: some View {
         ZStack {
             AppColors.surfaceBlack85
                 .ignoresSafeArea()
@@ -2559,7 +2643,10 @@ struct TradingChartView: View {
         isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            if !hasInitializedPosition && !chartData.candles.isEmpty && chartViewModel.currentSymbol != nil {
+            if !hasInitializedPosition,
+               !chartViewModel.isNavigatingToMarker,
+               !chartData.candles.isEmpty,
+               chartViewModel.currentSymbol != nil {
                 resetChartToMostRecentCandles()
                 hasInitializedPosition = true
             }
@@ -2799,7 +2886,9 @@ struct TradingChartView: View {
         if oldValue == nil && newValue != nil && !chartData.candles.isEmpty {
             if !hasInitializedPosition {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    resetChartToMostRecentCandles()
+                    if !chartViewModel.isNavigatingToMarker {
+                        resetChartToMostRecentCandles()
+                    }
                     hasInitializedPosition = true
                 }
             }
@@ -2810,11 +2899,17 @@ struct TradingChartView: View {
     private func handleSymbolStringChange(oldValue: String?, newValue: String?) {
         if oldValue != newValue && oldValue != nil {
             isChartLoading = true
-            markerManager.clearMarkers()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                resetChartToMostRecentCandles()
-                Task {
-                    await loadMarkersFromAPI()
+            if !chartViewModel.isNavigatingToMarker {
+                markerManager.clearMarkers()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    resetChartToMostRecentCandles()
+                    Task {
+                        await loadMarkersFromAPI()
+                    }
+                }
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    isChartLoading = false
                 }
             }
         }
@@ -2824,16 +2919,25 @@ struct TradingChartView: View {
         if oldValue != newValue {
             isChartLoading = true
             markerManager.clearMarkers()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                resetChartToMostRecentCandles()
-                Task {
-                    await loadMarkersFromAPI()
+            // While a marker-panel navigation is in flight, MarkerNavigationHelper owns the
+            // scroll position and will reload markers itself. Skipping the snap-to-latest reset
+            // prevents the chart from jumping to the right edge before navigation can land.
+            if !chartViewModel.isNavigatingToMarker {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    resetChartToMostRecentCandles()
+                    Task {
+                        await loadMarkersFromAPI()
+                    }
+                }
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    isChartLoading = false
                 }
             }
         }
         indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
-    
+
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
         let historicalPrependedCount = chartData.consumeLastPrependedCandleCount()
         if historicalPrependedCount > 0 {
@@ -2842,7 +2946,9 @@ struct TradingChartView: View {
             return
         }
 
-        if abs(newCount - oldCount) > 10 {
+        // Skip the auto-snap-to-latest while marker navigation is in flight - otherwise a fresh
+        // batch of candles arriving during navigation kills the centering animation.
+        if abs(newCount - oldCount) > 10 && !chartViewModel.isNavigatingToMarker {
             resetChartToMostRecentCandles()
         }
         if newCount != oldCount {
@@ -2869,6 +2975,7 @@ struct TradingChartView: View {
     private func requestOlderCandlesIfNeeded(chartWidth: CGFloat) {
         guard chartViewModel.hasMoreHistoricalCandles,
               !chartViewModel.isLoadingOlderCandles,
+              !chartViewModel.isNavigatingToMarker,
               !isChartLoading,
               !chartData.candles.isEmpty,
               totalCandleWidth > 0,
@@ -2890,13 +2997,20 @@ struct TradingChartView: View {
     }
     
     private func calculateCenterCandleIndex() -> Int {
+        // Guard against division by zero and empty data: during a transition (e.g. timeframe
+        // change) totalCandleWidth or candle count can briefly be 0, which would otherwise
+        // pin the preview to candle 0.
+        guard totalCandleWidth > 0, !chartData.candles.isEmpty else {
+            return max(0, chartData.candles.count - 1)
+        }
+
         let totalOffset = gestureState.panOffset.width
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth))
-        
+
         // FIXED: Use screen width as fallback when chartSize not yet set
         let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
         let candlesOnScreen = Int(effectiveWidth / totalCandleWidth)
-        
+
         let visibleEndIndex = Swift.min(
             chartData.candles.count,
             visibleStartIndex + candlesOnScreen + 2
@@ -5343,7 +5457,7 @@ struct TradingChartView: View {
     }
 
     private func drawingGuidePriceLabel(price: Double) -> some View {
-        Text(chartData.formatPrice(price))
+        Text(compactMainChartPriceLabel(price))
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(.black)
             .padding(.horizontal, 6)
@@ -5463,7 +5577,7 @@ struct TradingChartView: View {
     ) -> some View {
         SecondaryPriceChipView(
             label: label,
-            priceText: chartData.formatPrice(price),
+            priceText: compactMainChartPriceLabel(price),
             color: color
         )
     }
@@ -5649,13 +5763,13 @@ struct TradingChartView: View {
             let y = size.height - (CGFloat(normalizedPrice) * scaledHeight) - totalVerticalOffset
             
             if y >= -300 && y <= size.height + 300 {
-                let priceText = chartData.formatPrice(currentPrice)
+                let priceText = priceHelper.formatPrice(currentPrice)
                 
                 context.draw(
                     Text(priceText)
                         .font(.system(size: 11))
                         .foregroundColor(AppColors.chartAxisLabelPrimary),
-                    at: CGPoint(x: 30, y: y)
+                    at: CGPoint(x: size.width * 0.5, y: y)
                 )
                 labelCount += 1
             }
@@ -6698,6 +6812,9 @@ struct TradingChartView: View {
         guard chartSettings.showGridLines else { return }
 
         let priceRange = chartData.priceRange
+        guard priceRange.max > priceRange.min,
+              totalCandleWidth > 0,
+              actualCandleWidth > 0 else { return }
         let scaledHeight = size.height * gestureState.priceScale
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
         let totalOffset = gestureState.panOffset.width
@@ -6717,6 +6834,9 @@ struct TradingChartView: View {
     private func verticalGridPaths(size: CGSize, totalOffset: CGFloat, timeframe: RLChartTimeframe) -> (major: Path, minor: Path) {
         var majorPath = Path()
         var minorPath = Path()
+        guard totalCandleWidth > 0, actualCandleWidth > 0 else {
+            return (majorPath, minorPath)
+        }
         let labels = ChartXAxisLabelEngine.makeLabels(
             input: .init(
                 candles: chartData.candles,
@@ -6782,7 +6902,14 @@ struct TradingChartView: View {
         let scaledHeight = size.height * gestureState.priceScale
         let totalOffset = gestureState.panOffset.width
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
-        
+
+        // Skip drawing during transitional states where the math collapses to NaN/Infinity
+        // (timeframe change in flight, empty data, single-price range). This is what produces
+        // the "flat single line" rendering during marker navigation if not guarded.
+        guard totalCandleWidth > 0,
+              !chartData.candles.isEmpty,
+              priceRange.max > priceRange.min else { return }
+
         let visibleStartIndex = Swift.max(0, Int(-totalOffset / totalCandleWidth) - 1)
         let visibleEndIndex = Swift.min(
             chartData.candles.count,
@@ -7038,6 +7165,7 @@ struct PlacementLineDragOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let priceScale: CGFloat
 
     @State private var dragStartY: CGFloat = 0
     @State private var dragStartPrice: Double = 0
@@ -7047,6 +7175,16 @@ struct PlacementLineDragOverlay: View {
     private var lineY: CGFloat { coordinateSystem.yPosition(forPrice: effectivePrice) }
 
     private var handleCenterX: CGFloat { chartWidth / 2 }
+
+    private func formatPlacementPrice(_ price: Double) -> String {
+        formatMainChartPriceLabel(
+            price,
+            symbol: chartData.currentSymbol,
+            priceRange: chartData.priceRange,
+            priceScale: priceScale,
+            chartHeight: chartHeight
+        )
+    }
 
     var body: some View {
         if lineY.isFinite {
@@ -7081,7 +7219,7 @@ struct PlacementLineDragOverlay: View {
                 // Price + type label near Y-axis
                 SecondaryPriceChipView(
                     label: markerIntent == .setup ? "Entry" : markerIntent.displayName,
-                    priceText: chartData.formatPrice(effectivePrice),
+                    priceText: formatPlacementPrice(effectivePrice),
                     color: markerIntent.color
                 )
                 .position(x: labelCenterX, y: lineY)
@@ -7124,6 +7262,7 @@ struct PlacementSupportResistanceOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let priceScale: CGFloat
 
     @State private var dragStartYByType: [RLComponentType: CGFloat] = [:]
     private let haptic = UIImpactFeedbackGenerator(style: .medium)
@@ -7152,6 +7291,16 @@ struct PlacementSupportResistanceOverlay: View {
 
     private var hasVisiblePlacementLevels: Bool {
         supportPrice != nil || resistancePrice != nil
+    }
+
+    private func formatPlacementPrice(_ price: Double) -> String {
+        formatMainChartPriceLabel(
+            price,
+            symbol: chartData.currentSymbol,
+            priceRange: chartData.priceRange,
+            priceScale: priceScale,
+            chartHeight: chartHeight
+        )
     }
 
     var body: some View {
@@ -7208,7 +7357,7 @@ struct PlacementSupportResistanceOverlay: View {
 
             SecondaryPriceChipView(
                 label: label,
-                priceText: chartData.formatPrice(price),
+                priceText: formatPlacementPrice(price),
                 color: color
             )
             .position(x: labelCenterX, y: y)
@@ -7287,6 +7436,7 @@ struct PredictionPlacementOverlay: View {
     let plotWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let priceScale: CGFloat
 
     @State private var dragStartY: CGFloat = 0
     @State private var dragStartPrice: Double = 0
@@ -7294,6 +7444,16 @@ struct PredictionPlacementOverlay: View {
 
     private var layout: SetupCorePriceLineLayout {
         SetupCorePriceLineLayout(renderWidth: renderWidth, plotWidth: plotWidth)
+    }
+
+    private func formatPlacementPrice(_ price: Double) -> String {
+        formatMainChartPriceLabel(
+            price,
+            symbol: chartData.currentSymbol,
+            priceRange: chartData.priceRange,
+            priceScale: priceScale,
+            chartHeight: chartHeight
+        )
     }
 
     var body: some View {
@@ -7397,7 +7557,7 @@ struct PredictionPlacementOverlay: View {
 
             SetupCorePriceChipView(
                 label: label,
-                priceText: chartData.formatPrice(price),
+                priceText: formatPlacementPrice(price),
                 color: color,
                 showsPattern: true
             )
@@ -7650,7 +7810,18 @@ struct MarkerPriceLinesOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let priceScale: CGFloat
     var isPredictionPlacementActive: Bool = false
+
+    private func formatPlacementPrice(_ price: Double) -> String {
+        formatMainChartPriceLabel(
+            price,
+            symbol: chartData.currentSymbol,
+            priceRange: chartData.priceRange,
+            priceScale: priceScale,
+            chartHeight: chartHeight
+        )
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -7804,7 +7975,7 @@ struct MarkerPriceLinesOverlay: View {
         label: String,
         layout: SetupCorePriceLineLayout
     ) {
-        let priceText = chartData.formatPrice(price)
+        let priceText = formatPlacementPrice(price)
         let labelRect = layout.labelRect(centerY: y)
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
         context.fill(roundedPath, with: .color(color))
@@ -7937,7 +8108,7 @@ struct MarkerPriceLinesOverlay: View {
         
         context.stroke(linePath, with: .color(color.opacity(0.6)), style: strokeStyle)
         
-        let priceText = chartData.formatPrice(price)
+        let priceText = formatPlacementPrice(price)
         
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
         context.fill(roundedPath, with: .color(color))
@@ -8178,6 +8349,7 @@ struct PredictionTargetLineOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let formatPrice: (Double) -> String
     
     // FIXED: Store initial Y position when drag starts to prevent feedback loop
     @State private var dragStartY: CGFloat = 0
@@ -8226,7 +8398,7 @@ struct PredictionTargetLineOverlay: View {
     private func drawTargetLabel(context: GraphicsContext, size: CGSize, y: CGFloat) {
         guard let targetPrice = targetPrice else { return }
         
-        let priceText = chartData.formatPrice(targetPrice)
+        let priceText = formatPrice(targetPrice)
         let labelRect = ChartAxisMetrics.labelRect(
             totalWidth: size.width,
             centerY: y,
@@ -8308,6 +8480,7 @@ struct StaticTargetLineOverlay: View {
     let chartWidth: CGFloat
     let chartHeight: CGFloat
     let chartData: ChartDataManager
+    let formatPrice: (Double) -> String
     
     var body: some View {
         Canvas { context, size in
@@ -8337,7 +8510,7 @@ struct StaticTargetLineOverlay: View {
             var labelContext = context
             labelContext.clip(to: roundedPath)
             labelContext.draw(
-                secondaryPriceChipText(label: "Target", priceText: chartData.formatPrice(targetPrice)),
+                secondaryPriceChipText(label: "Target", priceText: formatPrice(targetPrice)),
                 at: CGPoint(x: labelRect.midX, y: y)
             )
         }

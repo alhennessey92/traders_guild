@@ -64,6 +64,18 @@ struct traders_guildTests {
         #expect(colorDistance(AppColors.surfaceGray30, AppColors.systemGray.opacity(0.3)) < 0.0001)
     }
 
+    @Test func cryptoTickerResolverCoversExpandedBundledIconSet() async throws {
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "BTC/USD", assetClass: "crypto") == "icon_btc")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "ETH/USD", assetClass: "crypto") == "icon_eth")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "SOL/USD", assetClass: "crypto") == "icon_sol")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "ADA/USD", assetClass: "crypto") == "icon_ada")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "XRP/USD", assetClass: "crypto") == "icon_xrp")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "DOGE/USD", assetClass: "crypto") == "icon_doge")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "SHIB/USD", assetClass: "crypto") == "icon_shib")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "ATOM/USD", assetClass: "crypto") == "icon_atom")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "LTC/USD", assetClass: "crypto") == "icon_ltc")
+    }
+
     private func colorDistance(_ lhs: Color, _ rhs: Color) -> Double {
         guard let lhsRGBA = rgba(lhs), let rhsRGBA = rgba(rhs) else { return .infinity }
         let dr = lhsRGBA.r - rhsRGBA.r

@@ -148,4 +148,36 @@ struct BetaRuntimeAndReportingTests {
 
         #expect(flags == RLRuntimeFlagsDTO(betaWelcomeEnabled: true, betaFeedbackEnabled: false))
     }
+
+    @MainActor
+    @Test
+    func finishTransitionPresentsQueuedBetaWelcomeSheet() {
+        let appState = RLAppState()
+        let now = Date()
+        let user = RLUserDTO(
+            id: UUID(),
+            email: "beta@example.com",
+            username: "beta_user",
+            displayName: "Beta User",
+            avatarUrl: nil,
+            globalReputation: 0,
+            isOnline: true,
+            isVerified: true,
+            isSuperuser: false,
+            lastSeenAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            dateOfBirth: nil,
+            status: "active",
+            authProvider: "email"
+        )
+
+        appState.currentUser = user
+        appState.showingTransition = true
+
+        appState.queueBetaWelcomeIfNeeded()
+        appState.finishTransition()
+
+        #expect(appState.showBetaWelcomeSheet)
+    }
 }

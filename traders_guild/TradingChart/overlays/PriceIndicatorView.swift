@@ -77,7 +77,13 @@ struct PriceIndicatorView: View {
 
     /// Formatted price using symbol-aware formatting
     private var formattedPrice: String {
-        chartData.formatPrice(currentPrice)
+        formatMainChartPriceLabel(
+            currentPrice,
+            symbol: chartData.currentSymbol,
+            priceRange: priceRange,
+            priceScale: priceScale,
+            chartHeight: chartHeight
+        )
     }
 
     private var layout: PriceIndicatorLayout? {
@@ -274,6 +280,11 @@ struct PriceLevelsView: View {
     let chartData: ChartDataManager
     
     private func yPosition(for price: Double) -> CGFloat {
+        guard priceRange.max > priceRange.min,
+              chartHeight > 0,
+              priceScale > 0 else {
+            return chartHeight * 0.5
+        }
         let normalizedPrice = (price - priceRange.min) / (priceRange.max - priceRange.min)
         return chartHeight - (CGFloat(normalizedPrice) * chartHeight * priceScale) - verticalOffset
     }

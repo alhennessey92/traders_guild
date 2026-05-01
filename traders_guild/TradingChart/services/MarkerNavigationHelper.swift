@@ -8,6 +8,113 @@
 
 import SwiftUI
 
+enum MarkerNavigationPhase: Equatable {
+    case preparing
+    case loadingHistoricalWindow
+    case centering
+    case settled
+    case failed(String)
+
+    var isLoading: Bool {
+        switch self {
+        case .preparing, .loadingHistoricalWindow, .centering:
+            return true
+        case .settled, .failed:
+            return false
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .preparing:
+            return "Opening marker"
+        case .loadingHistoricalWindow:
+            return "Loading marker candles"
+        case .centering:
+            return "Centering marker"
+        case .settled:
+            return "Marker ready"
+        case .failed:
+            return "Marker unavailable"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .preparing:
+            return "Preparing chart context"
+        case .loadingHistoricalWindow:
+            return "Fetching historical candles"
+        case .centering:
+            return "Moving to marker"
+        case .settled:
+            return "Marker loaded"
+        case .failed(let message):
+            return message
+        }
+    }
+}
+
+struct MarkerNavigationTarget: Identifiable {
+    let markerId: UUID
+    let symbolId: UUID
+    let symbolTicker: String?
+    let symbolBrandColor: String?
+    let symbolAssetClass: String?
+    let timeframeRaw: String
+    let candleTimestamp: Date
+    let price: Double?
+    let intent: RLMarkerIntent
+    let selectedEmoji: String?
+    let alertSeverity: MarkerAlertSeverity?
+
+    var id: UUID { markerId }
+
+    var timeframe: RLChartTimeframe? {
+        RLChartTimeframe.fromBackendString(timeframeRaw)
+    }
+
+    init(topMarker marker: RLTopMarkerDTO) {
+        self.markerId = marker.id
+        self.symbolId = marker.symbolId
+        self.symbolTicker = marker.symbolTicker
+        self.symbolBrandColor = marker.symbolBrandColor
+        self.symbolAssetClass = marker.symbolAssetClass
+        self.timeframeRaw = marker.timeframe
+        self.candleTimestamp = marker.candleTimestamp
+        self.price = marker.price
+        self.intent = marker.intentEnum
+        self.selectedEmoji = marker.selectedEmoji
+        self.alertSeverity = MarkerAlertSeverity.resolved(rawValue: marker.alertSeverity)
+    }
+
+    init(sharedPayload payload: MarkerSharePayloadV1) {
+        self.markerId = payload.markerId
+        self.symbolId = payload.symbolId
+        self.symbolTicker = payload.symbolTicker
+        self.symbolBrandColor = payload.symbolBrandColor
+        self.symbolAssetClass = payload.symbolAssetClass
+        self.timeframeRaw = payload.timeframe
+        self.candleTimestamp = payload.candleTimestamp
+        self.price = nil
+        self.intent = payload.intentEnum
+        self.selectedEmoji = payload.selectedEmojiValue
+        self.alertSeverity = payload.alertSeverityEnum
+    }
+}
+
+struct MarkerNavigationSession: Identifiable {
+    let id: UUID
+    let target: MarkerNavigationTarget
+    var phase: MarkerNavigationPhase
+
+    init(id: UUID = UUID(), target: MarkerNavigationTarget, phase: MarkerNavigationPhase = .preparing) {
+        self.id = id
+        self.target = target
+        self.phase = phase
+    }
+}
+
 // MARK: - ================================================================================================
 // MARK: - MARKER NAVIGATION HELPER
 // MARK: - ================================================================================================
@@ -52,8 +159,22 @@ class MarkerNavigationHelper {
         chartWidth: CGFloat? = nil,
         completion: (() -> Void)? = nil
     ) {
+        navigateToMarker(
+            MarkerNavigationTarget(topMarker: marker),
+            chartWidth: chartWidth,
+            resolvedSymbol: nil,
+            completion: completion
+        )
+    }
+
+    func navigateToMarker(
+        _ target: MarkerNavigationTarget,
+        chartWidth: CGFloat? = nil,
+        resolvedSymbol: RLTradingSymbolDTO? = nil,
+        completion: (() -> Void)? = nil
+    ) {
         print("🎯 === MARKER NAVIGATION START ===")
-        print("🎯 Target: \(marker.symbolTicker) | Timeframe: \(marker.timeframe) | Timestamp: \(marker.candleTimestamp)")
+        print("🎯 Target: \(target.symbolTicker ?? target.symbolId.uuidString) | Timeframe: \(target.timeframeRaw) | Timestamp: \(target.candleTimestamp)")
         
         guard let chartViewModel = chartViewModel else {
             print("❌ MarkerNavigationHelper: chartViewModel is nil")
@@ -75,135 +196,240 @@ class MarkerNavigationHelper {
         let currentTicker = chartViewModel.currentSymbol?.ticker ?? "none"
         let currentTimeframe = chartViewModel.currentTimeframe
         print("🎯 Current: \(currentTicker) | \(currentTimeframe.rawValue)")
+
+        let sessionId = chartViewModel.beginMarkerNavigation(target)
         
         // Step 2: Check if we need to change symbol
-        let needsSymbolChange = currentTicker != marker.symbolTicker
+        let targetSymbol = resolvedSymbol ?? findSymbol(for: target, in: chartViewModel)
+        guard let targetSymbol else {
+            print("❌ Symbol not found for marker navigation: \(target.symbolTicker ?? target.symbolId.uuidString)")
+            chartViewModel.finishMarkerNavigation(
+                sessionId: sessionId,
+                phase: .failed("Symbol is not available")
+            )
+            completion?()
+            return
+        }
+
+        let needsSymbolChange = chartViewModel.currentSymbol?.id != target.symbolId
         print("🎯 Needs symbol change: \(needsSymbolChange)")
         
         // Step 3: Check if we need to change timeframe
-        let markerTimeframe = RLChartTimeframe.fromBackendString(marker.timeframe) ?? currentTimeframe
+        let markerTimeframe = target.timeframe ?? currentTimeframe
         let needsTimeframeChange = currentTimeframe != markerTimeframe
         print("🎯 Needs timeframe change: \(needsTimeframeChange)")
-        
-        // Step 4: Perform symbol change if needed
-        if needsSymbolChange {
-            if let symbol = findSymbol(ticker: marker.symbolTicker, in: chartViewModel) {
-                print("✅ Found symbol: \(symbol.ticker) - calling setSymbol")
-                chartViewModel.setSymbol(symbol)
-            } else {
-                print("❌ Symbol not found: \(marker.symbolTicker)")
-                print("📋 Available in personalWatchlist: \(chartViewModel.personalWatchlist.map { $0.ticker })")
-                print("📋 Available in guildWatchlist: \(chartViewModel.guildWatchlist.map { $0.ticker })")
-                print("📋 Available in combinedWatchlist: \(chartViewModel.combinedWatchlist.map { $0.ticker })")
-            }
-        }
-        
-        // Step 5: Perform timeframe change if needed
-        if needsTimeframeChange {
-            print("✅ Setting timeframe to: \(markerTimeframe.rawValue)")
-            chartViewModel.setTimeframe(markerTimeframe)
-        }
-        
-        // Step 6: Wait for data to load, then scroll to candle
-        let scrollDelay: TimeInterval = (needsSymbolChange || needsTimeframeChange) ? 0.5 : 0.2
-        print("🎯 Waiting \(scrollDelay)s for data to load...")
-        
+
         // Capture values directly to avoid weak self issues
-        let targetMarker = marker
-        let markerTimestamp = marker.candleTimestamp
+        let targetMarker = target
+        let markerTimestamp = target.candleTimestamp
         let capturedGestureState = gestureState
         let capturedChartViewModel = chartViewModel
         let baseCandleWidth = self.baseCandleWidth
         let candleSpacing = self.candleSpacing
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + scrollDelay) {
-            Task { @MainActor in
-                if Self.requiresHistoricalWindow(for: targetMarker, in: capturedChartViewModel.dataManager.candles) {
-                    print("🎯 Target lies outside current candle window - loading historical slice")
-                    await capturedChartViewModel.loadNavigationWindow(
-                        around: markerTimestamp,
-                        timeframe: markerTimeframe
-                    )
-                }
+        let needsDataWait = needsSymbolChange || needsTimeframeChange
 
-                let candles = capturedChartViewModel.dataManager.candles
-                print("🎯 After delay - finding candle for timestamp \(markerTimestamp)")
-                print("🎯 Current symbol after delay: \(capturedChartViewModel.currentSymbol?.ticker ?? "none")")
-                print("🎯 Current timeframe after delay: \(capturedChartViewModel.currentTimeframe.rawValue)")
-                print("🎯 Candle count: \(candles.count)")
+        Task { @MainActor in
+            capturedChartViewModel.updateMarkerNavigationPhase(sessionId: sessionId, phase: .preparing)
 
-                // Find the candle index that best matches the marker's timestamp
-                let targetCandleIndex: Int
-                if let foundIndex = Self.findCandleIndex(forTimestamp: markerTimestamp, in: candles) {
-                    print("🎯 Found candle at index \(foundIndex) for timestamp")
-                    targetCandleIndex = foundIndex
-                } else {
-                    // Default to showing recent candles if timestamp isn't found
-                    let safeIndex = max(0, candles.count - 50)
-                    print("🎯 No candle match found, using safe index: \(safeIndex)")
-                    targetCandleIndex = safeIndex
-                }
-
-                print("🎯 Final target candle index: \(targetCandleIndex)")
-                if targetCandleIndex < candles.count {
-                    let targetCandle = candles[targetCandleIndex]
-                    print("🎯 Target candle timestamp: \(targetCandle.timestamp)")
-                }
-
-                // Calculate the total candle width including spacing
-                let scaledCandleWidth = baseCandleWidth * capturedGestureState.candleWidthScale
-                let totalCandleWidth = scaledCandleWidth + candleSpacing
-
-                print("🎯 Scroll params: candleWidthScale=\(capturedGestureState.candleWidthScale), totalCandleWidth=\(totalCandleWidth)")
-                print("🎯 Current panOffset before: \(capturedGestureState.panOffset.width)")
-
-                // Center on candle with smooth animation
-                let candle = targetCandleIndex < candles.count ? candles[targetCandleIndex] : nil
-                let priceRange = capturedChartViewModel.dataManager.priceRange
-                let chartHeight = UIScreen.main.bounds.height * 0.6 // Approximate chart height
-
-                if let candle = candle, priceRange.max > priceRange.min {
-                    let focusMarker = capturedChartViewModel.markerManager
-                        .flatMap { manager in
-                            Self.matchingMarkerForNavigation(targetMarker, markers: manager.markers)
-                        }
-                    let focusPrice = focusMarker.flatMap { marker in
-                        MarkerFocusHelper.renderedGlyphFocusPrice(
-                            marker: marker,
-                            candles: candles,
-                            chartSize: CGSize(width: width, height: chartHeight),
-                            priceRange: priceRange,
-                            priceScale: capturedGestureState.priceScale,
-                            verticalOffset: capturedGestureState.verticalPanOffset,
-                            totalCandleWidth: totalCandleWidth,
-                            actualCandleWidth: scaledCandleWidth,
-                            totalOffset: capturedGestureState.panOffset.width
-                        )
-                    } ?? candle.close
-                    capturedGestureState.animateCenterOnMarker(
-                        at: targetCandleIndex,
-                        chartWidth: width,
-                        candleWidth: totalCandleWidth,
-                        price: focusPrice,
-                        chartHeight: chartHeight,
-                        priceRange: priceRange
-                    )
-                } else {
-                    capturedGestureState.centerOnCandle(
-                        at: targetCandleIndex,
-                        chartWidth: width,
-                        candleWidth: totalCandleWidth
-                    )
-                }
-
-                // Select the marker after navigation so the bottom-sheet marker detail view opens.
-                Self.selectMarkerForDetail(targetMarker, in: capturedChartViewModel, attemptsRemaining: 6)
-
-                print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
-                print("🎯 === MARKER NAVIGATION COMPLETE ===")
-
+            let prepared = await capturedChartViewModel.prepareForMarkerNavigation(
+                target,
+                symbol: targetSymbol,
+                timeframe: markerTimeframe
+            )
+            guard prepared else {
+                capturedChartViewModel.finishMarkerNavigation(
+                    sessionId: sessionId,
+                    phase: .failed("Chart context could not load")
+                )
                 completion?()
+                return
             }
+            guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+
+            if needsDataWait {
+                print("🎯 Waiting for target timeframe data to arrive...")
+                let deadline = Date().addingTimeInterval(3.0)
+                while Date() < deadline {
+                    let tfMatches = capturedChartViewModel.currentTimeframe == markerTimeframe
+                    let candles = capturedChartViewModel.dataManager.candles
+                    let inRange = !candles.isEmpty
+                        && !Self.requiresHistoricalWindow(for: targetMarker, in: candles)
+                    if tfMatches && inRange { break }
+                    if tfMatches && !candles.isEmpty {
+                        // Timeframe and candles arrived but marker is outside window - break
+                        // out so we can explicitly load the historical slice below.
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                }
+            } else {
+                // Same symbol+timeframe: brief yield so any in-flight UI work settles.
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+
+            if Self.requiresHistoricalWindow(for: targetMarker, in: capturedChartViewModel.dataManager.candles) {
+                print("🎯 Target lies outside current candle window - loading historical slice")
+                capturedChartViewModel.updateMarkerNavigationPhase(sessionId: sessionId, phase: .loadingHistoricalWindow)
+                await capturedChartViewModel.loadNavigationWindow(
+                    around: markerTimestamp,
+                    timeframe: markerTimeframe
+                )
+            }
+            guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+
+            // Wait for the candle array to STABILIZE: setSymbol+setTimeframe often fire
+            // multiple back-to-back fetches (initial load, refresh, historical merge), each
+            // replacing the array. If we center while the array is still churning, the
+            // computed pan offset becomes stale (target index in old array maps to off-screen
+            // position in new array, which then gets clamped to the chart edge).
+            // Stability = candle count unchanged for 400ms, with a 4s overall cap.
+            print("🎯 Waiting for candle count to stabilize...")
+            var lastSignature = Self.candleWindowSignature(capturedChartViewModel.dataManager.candles)
+            var stableSince = Date()
+            let stabilityDeadline = Date().addingTimeInterval(4.0)
+            while Date() < stabilityDeadline {
+                try? await Task.sleep(nanoseconds: 80_000_000) // 80ms
+                let currentSignature = Self.candleWindowSignature(capturedChartViewModel.dataManager.candles)
+                if currentSignature != lastSignature {
+                    lastSignature = currentSignature
+                    stableSince = Date()
+                } else if Date().timeIntervalSince(stableSince) >= 0.4 {
+                    break
+                }
+            }
+
+            let candles = capturedChartViewModel.dataManager.candles
+            guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+            print("🎯 After wait - finding candle for timestamp \(markerTimestamp)")
+            print("🎯 Current symbol after wait: \(capturedChartViewModel.currentSymbol?.ticker ?? "none")")
+            print("🎯 Current timeframe after wait: \(capturedChartViewModel.currentTimeframe.rawValue)")
+            print("🎯 Candle count: \(candles.count)")
+
+            // Center the chart now, and capture the params we'll need for re-centering if more
+            // data arrives during the settle window. centerOnCandle is INSTANT (no display-link
+            // animation) so it can't be interrupted mid-flight by a competing pan write.
+            capturedChartViewModel.updateMarkerNavigationPhase(sessionId: sessionId, phase: .centering)
+            Self.centerChart(
+                on: targetMarker,
+                markerTimestamp: markerTimestamp,
+                gestureState: capturedGestureState,
+                chartViewModel: capturedChartViewModel,
+                chartWidth: width,
+                baseCandleWidth: baseCandleWidth,
+                candleSpacing: candleSpacing
+            )
+
+            let matchedMarker = await Self.waitForMarkerForDetail(
+                targetMarker,
+                in: capturedChartViewModel,
+                timeout: 5.0
+            )
+            guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+            if let matchedMarker {
+                capturedChartViewModel.markerManager?.selectedMarker = matchedMarker
+            }
+
+            print("🎯 Current panOffset after: \(capturedGestureState.panOffset.width)")
+            print("🎯 === MARKER NAVIGATION COMPLETE ===")
+
+            // Re-center for the next 1.5s on every candle-array change. Late-arriving fetches
+            // (e.g. an initial-load response that lands after our stability window) replace the
+            // candle array and shift the marker's index; without re-centering, panOffset
+            // ends up clamped to the chart edge.
+            let watchDeadline = Date().addingTimeInterval(1.5)
+            var watchedSignature = Self.candleWindowSignature(capturedChartViewModel.dataManager.candles)
+            while Date() < watchDeadline {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+                let nowSignature = Self.candleWindowSignature(capturedChartViewModel.dataManager.candles)
+                if nowSignature != watchedSignature {
+                    watchedSignature = nowSignature
+                    Self.centerChart(
+                        on: targetMarker,
+                        markerTimestamp: markerTimestamp,
+                        gestureState: capturedGestureState,
+                        chartViewModel: capturedChartViewModel,
+                        chartWidth: width,
+                        baseCandleWidth: baseCandleWidth,
+                        candleSpacing: candleSpacing
+                    )
+                }
+            }
+
+            if matchedMarker == nil {
+                capturedChartViewModel.finishMarkerNavigation(
+                    sessionId: sessionId,
+                    phase: .failed("Marker data did not load")
+                )
+            } else {
+                capturedChartViewModel.finishMarkerNavigation(
+                    sessionId: sessionId,
+                    phase: .settled
+                )
+            }
+            completion?()
+        }
+    }
+
+    /// Compute target candle index from the marker timestamp against the CURRENT candle array
+    /// and snap the chart to it instantly. Safe to call repeatedly as the array changes.
+    private static func centerChart(
+        on targetMarker: MarkerNavigationTarget,
+        markerTimestamp: Date,
+        gestureState: ChartGestureState,
+        chartViewModel: ChartViewModel,
+        chartWidth: CGFloat,
+        baseCandleWidth: CGFloat,
+        candleSpacing: CGFloat
+    ) {
+        let candles = chartViewModel.dataManager.candles
+        guard !candles.isEmpty else { return }
+
+        let scaledCandleWidth = baseCandleWidth * gestureState.candleWidthScale
+        let totalCandleWidth = scaledCandleWidth + candleSpacing
+        guard totalCandleWidth > 0, chartWidth > 0 else { return }
+
+        let targetCandleIndex: Int
+        if let foundIndex = findCandleIndex(forTimestamp: markerTimestamp, in: candles) {
+            targetCandleIndex = foundIndex
+        } else {
+            targetCandleIndex = max(0, candles.count - 50)
+        }
+
+        let priceRange = chartViewModel.dataManager.priceRange
+        let chartHeight = UIScreen.main.bounds.height * 0.6
+        if priceRange.max > priceRange.min {
+            let focusMarker = chartViewModel.markerManager.flatMap { manager in
+                matchingMarkerForNavigation(targetMarker, markers: manager.markers)
+            }
+            let focusPrice = focusMarker.flatMap { marker in
+                MarkerFocusHelper.renderedGlyphFocusPrice(
+                    marker: marker,
+                    candles: candles,
+                    chartSize: CGSize(width: chartWidth, height: chartHeight),
+                    priceRange: priceRange,
+                    priceScale: gestureState.priceScale,
+                    verticalOffset: gestureState.verticalPanOffset,
+                    totalCandleWidth: totalCandleWidth,
+                    actualCandleWidth: scaledCandleWidth,
+                    totalOffset: gestureState.panOffset.width
+                )
+            } ?? targetMarker.price ?? candles[targetCandleIndex].close
+
+            gestureState.centerOnMarker(
+                at: targetCandleIndex,
+                chartWidth: chartWidth,
+                candleWidth: totalCandleWidth,
+                price: focusPrice,
+                chartHeight: chartHeight,
+                priceRange: priceRange
+            )
+        } else {
+            gestureState.centerOnCandle(
+                at: targetCandleIndex,
+                chartWidth: chartWidth,
+                candleWidth: totalCandleWidth
+            )
         }
     }
     
@@ -249,45 +475,49 @@ class MarkerNavigationHelper {
 
     /// Try to select a marker on chart after symbol/timeframe navigation completes.
     /// Retries because marker arrays can populate shortly after candles.
-    private static func selectMarkerForDetail(
-        _ target: RLTopMarkerDTO,
+    private static func waitForMarkerForDetail(
+        _ target: MarkerNavigationTarget,
         in chartViewModel: ChartViewModel,
-        attemptsRemaining: Int
-    ) {
-        guard let markerManager = chartViewModel.markerManager else { return }
+        timeout: TimeInterval
+    ) async -> ChartMarkerUI? {
+        guard let markerManager = chartViewModel.markerManager else { return nil }
+        let deadline = Date().addingTimeInterval(timeout)
 
-        if let exactMatch = matchingMarkerForNavigation(target, markers: markerManager.markers) {
-            markerManager.selectedMarker = exactMatch
-            return
+        while Date() < deadline {
+            markerManager.recalculateCandleIndices(candles: chartViewModel.dataManager.candles)
+            if let exactMatch = matchingMarkerForNavigation(target, markers: markerManager.markers) {
+                return exactMatch
+            }
+            try? await Task.sleep(nanoseconds: 120_000_000)
         }
 
-        guard attemptsRemaining > 0 else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            selectMarkerForDetail(target, in: chartViewModel, attemptsRemaining: attemptsRemaining - 1)
-        }
+        return matchingMarkerForNavigation(target, markers: markerManager.markers)
     }
 
     private static func matchingMarkerForNavigation(
-        _ target: RLTopMarkerDTO,
+        _ target: MarkerNavigationTarget,
         markers: [ChartMarkerUI]
     ) -> ChartMarkerUI? {
-        if let exactMatch = markers.first(where: { $0.id == target.id }) {
+        if let exactMatch = markers.first(where: { $0.id == target.markerId }) {
             return exactMatch
         }
 
         let closeTimeAndTypeMatches = markers.filter { marker in
             let timestampDiff = abs(marker.candleTimestamp.timeIntervalSince(target.candleTimestamp))
-            return timestampDiff < 1 && marker.intent == target.intentEnum
+            return timestampDiff < 1 && marker.intent == target.intent
+        }
+
+        guard let targetPrice = target.price else {
+            return closeTimeAndTypeMatches.first
         }
 
         return closeTimeAndTypeMatches.min(by: { lhs, rhs in
-            abs(lhs.price - target.price) < abs(rhs.price - target.price)
+            abs(lhs.price - targetPrice) < abs(rhs.price - targetPrice)
         })
     }
 
     private static func requiresHistoricalWindow(
-        for target: RLTopMarkerDTO,
+        for target: MarkerNavigationTarget,
         in candles: [RLCandleDTO]
     ) -> Bool {
         guard let firstTimestamp = candles.first?.timestamp,
@@ -297,12 +527,27 @@ class MarkerNavigationHelper {
 
         return target.candleTimestamp < firstTimestamp || target.candleTimestamp > lastTimestamp
     }
+
+    private static func candleWindowSignature(_ candles: [RLCandleDTO]) -> String {
+        "\(candles.count)|\(candles.first?.timestamp.timeIntervalSince1970 ?? 0)|\(candles.last?.timestamp.timeIntervalSince1970 ?? 0)"
+    }
     
     // MARK: - Private Methods
     
     /// Find a symbol by ticker in the view model's watchlists or SampleData
-    private func findSymbol(ticker: String, in viewModel: ChartViewModel) -> RLTradingSymbolDTO? {
-        print("🔍 Looking for symbol: \(ticker)")
+    private func findSymbol(for target: MarkerNavigationTarget, in viewModel: ChartViewModel) -> RLTradingSymbolDTO? {
+        print("🔍 Looking for symbol: \(target.symbolTicker ?? target.symbolId.uuidString)")
+
+        let allSymbols = viewModel.allAvailableSymbols
+        if let symbol = allSymbols.first(where: { $0.id == target.symbolId }) {
+            print("🔍 Found by symbolId")
+            return symbol
+        }
+
+        guard let ticker = target.symbolTicker else {
+            print("🔍 Symbol ticker missing and id not found: \(target.symbolId)")
+            return nil
+        }
         
         // Check personal watchlist first
         if let symbol = viewModel.personalWatchlist.first(where: { $0.ticker == ticker }) {

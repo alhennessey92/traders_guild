@@ -615,13 +615,21 @@ struct PersonalWatchlistRow: View {
     let isRemoving: Bool
     let onTap: () -> Void
     let onRemove: () -> Void
-    
+
+    private var pillCount: Int {
+        var n = 0
+        if symbol.activeProviderDisplayName != nil { n += 1 }
+        if !symbol.isSelectableForActiveProvider { n += 1 }
+        return n
+    }
+
     var body: some View {
+        let isCompactPills = pillCount >= 3
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Symbol icon with SVG support
                 WatchlistSymbolIcon(symbol: symbol, size: 44)
-                
+
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -631,7 +639,7 @@ struct PersonalWatchlistRow: View {
 
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                     }
-                    
+
                     Text(symbol.displayName)
                         .font(.system(size: 12))
                         .foregroundColor(AppColors.secondaryForeground)
@@ -639,13 +647,14 @@ struct PersonalWatchlistRow: View {
 
                     FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
-                            SymbolProviderBadge(provider: provider)
+                            SymbolProviderBadge(provider: provider, isCompact: isCompactPills)
                         }
                         if !symbol.isSelectableForActiveProvider {
-                            UnsupportedSymbolBadge()
+                            UnsupportedSymbolBadge(isCompact: isCompactPills)
                         }
                     }
                 }
+                .frame(maxHeight: 64)
 
                 Spacer()
 
@@ -702,13 +711,21 @@ struct GuildWatchlistRow: View {
     let isCurrentSymbol: Bool
     let isJustSelected: Bool
     let onTap: () -> Void
-    
+
+    private var pillCount: Int {
+        var n = 0
+        if symbol.activeProviderDisplayName != nil { n += 1 }
+        if !symbol.isSelectableForActiveProvider { n += 1 }
+        return n
+    }
+
     var body: some View {
+        let isCompactPills = pillCount >= 3
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Symbol icon with SVG support
                 WatchlistSymbolIcon(symbol: symbol, size: 44)
-                
+
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -718,7 +735,7 @@ struct GuildWatchlistRow: View {
 
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
                     }
-                    
+
                     Text(symbol.displayName)
                         .font(.system(size: 12))
                         .foregroundColor(AppColors.secondaryForeground)
@@ -726,13 +743,14 @@ struct GuildWatchlistRow: View {
 
                     FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
-                            SymbolProviderBadge(provider: provider)
+                            SymbolProviderBadge(provider: provider, isCompact: isCompactPills)
                         }
                         if !symbol.isSelectableForActiveProvider {
-                            UnsupportedSymbolBadge()
+                            UnsupportedSymbolBadge(isCompact: isCompactPills)
                         }
                     }
                 }
+                .frame(maxHeight: 64)
 
                 Spacer()
 
@@ -777,19 +795,27 @@ struct SearchResultSymbolRow: View {
     let inPersonal: Bool
     let onTap: () -> Void
     let onAddToPersonal: () -> Void
-    
+
+    private var pillCount: Int {
+        var n = 0
+        if symbol.activeProviderDisplayName != nil { n += 1 }
+        if !symbol.isSelectableForActiveProvider { n += 1 }
+        return n
+    }
+
     var body: some View {
+        let isCompactPills = pillCount >= 3
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Symbol icon
                 WatchlistSymbolIcon(symbol: symbol, size: 40)
-                
+
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(symbol.ticker)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppColors.primaryForeground)
-                    
+
                     Text(symbol.displayName)
                         .font(.system(size: 11))
                         .foregroundColor(AppColors.secondaryForeground)
@@ -797,13 +823,14 @@ struct SearchResultSymbolRow: View {
 
                     FlowLayout(spacing: 6) {
                         if let provider = symbol.activeProviderDisplayName {
-                            SymbolProviderBadge(provider: provider)
+                            SymbolProviderBadge(provider: provider, isCompact: isCompactPills)
                         }
                         if !symbol.isSelectableForActiveProvider {
-                            UnsupportedSymbolBadge()
+                            UnsupportedSymbolBadge(isCompact: isCompactPills)
                         }
                     }
                 }
+                .frame(maxHeight: 64)
 
                 Spacer()
                 

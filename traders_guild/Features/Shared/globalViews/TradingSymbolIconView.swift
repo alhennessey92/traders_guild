@@ -44,6 +44,9 @@ struct TradingSymbolIconView: View {
         return BundledTradingSymbolIconResolver.assetName(for: symbol.ticker, assetClass: symbol.assetClass)
     }
 
+    @State private var loadedImage: UIImage?
+    @State private var loadFailed: Bool = false
+
     var body: some View {
         iconContent
             .frame(width: size, height: size)
@@ -63,26 +66,55 @@ struct TradingSymbolIconView: View {
     @ViewBuilder
     private var iconContent: some View {
         if let remoteURL = remoteIconURL {
-            AsyncImage(url: remoteURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    fallbackContent
-                case .empty:
-                    fallbackContent.opacity(0.55)
-                @unknown default:
-                    fallbackContent
-                }
-            }
+            remoteIconView(for: remoteURL)
         } else if let iconAssetName {
             Image(iconAssetName)
                 .resizable()
                 .scaledToFill()
         } else {
             fallbackContent
+        }
+    }
+
+    @ViewBuilder
+    private func remoteIconView(for url: URL) -> some View {
+        // Synchronous cache hit: render immediately, no decode-flash on scroll.
+        let cached = AvatarImageCache.shared.image(for: url) ?? loadedImage
+        if let cached {
+            Image(uiImage: cached)
+                .resizable()
+                .scaledToFill()
+        } else if loadFailed {
+            fallbackContent
+        } else {
+            fallbackContent
+                .opacity(0.55)
+                .task(id: url.absoluteString) {
+                    await loadRemoteIcon(url: url)
+                }
+        }
+    }
+
+    private func loadRemoteIcon(url: URL) async {
+        if let cached = AvatarImageCache.shared.image(for: url) {
+            await MainActor.run {
+                if loadedImage == nil { loadedImage = cached }
+            }
+            return
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode),
+                  let uiImage = UIImage(data: data) else {
+                await MainActor.run { loadFailed = true }
+                return
+            }
+            AvatarImageCache.shared.store(uiImage, for: url)
+            await MainActor.run { loadedImage = uiImage }
+        } catch {
+            await MainActor.run { loadFailed = true }
         }
     }
 

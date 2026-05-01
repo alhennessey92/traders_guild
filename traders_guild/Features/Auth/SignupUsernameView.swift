@@ -98,14 +98,12 @@ struct SignupUsernameView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    if !rlAppState.accountCreatedDuringOnboarding {
-                        Button(action: {
-                            if !path.isEmpty { path.removeLast() }
-                        }) {
-                            Image(systemName: "chevron.left")
-                                .font(.headline)
-                                .foregroundColor(AppColors.unhighlightedButtonBackground)
-                        }
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(AppColors.unhighlightedButtonBackground)
                     }
                 }
 

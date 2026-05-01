@@ -106,7 +106,7 @@ struct SignupGuildView: View {
                                     ) {}
                                 }
 
-                                Text("You will start in this onboarding guild.")
+                                Text("You will start in this beta guild.")
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.center)
@@ -124,7 +124,7 @@ struct SignupGuildView: View {
                                     .font(.headline)
                                     .foregroundColor(AppColors.whiteText)
 
-                                Text("Continue to get assigned to an onboarding guild.")
+                                Text("Continue to get assigned to a beta guild.")
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.center)
@@ -239,7 +239,7 @@ struct SignupGuildView: View {
 
     private var subtitleText: String {
         if shouldShowAssignedFallback {
-            return "No open guilds available, so you were assigned this onboarding guild."
+            return "No open guilds available, so you were assigned this beta guild."
         }
         return "Only open guilds are listed here. Private guilds require owner/admin approval after signup."
     }

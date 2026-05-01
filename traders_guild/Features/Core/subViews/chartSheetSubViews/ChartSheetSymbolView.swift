@@ -841,7 +841,7 @@ struct ChartSheetSymbolView: View {
                         iconColor: assetClassColor(assetClass),
                         isExpandedByDefault: true
                     ) {
-                        VStack(spacing: 6) {
+                        LazyVStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in
                                 GlobalSymbolListRow(
                                     symbol: symbol,
@@ -1076,7 +1076,7 @@ struct SymbolAssetGroup: View {
             iconColor: assetClassColor(assetClass),
             isExpandedByDefault: true
         ) {
-            VStack(spacing: 6) {
+            LazyVStack(spacing: 6) {
                 ForEach(symbols) { symbol in
                     SymbolListRow(
                         symbol: symbol,
@@ -1096,8 +1096,16 @@ struct SymbolListRow: View {
     let symbol: RLTradingSymbolDTO
     let isSelected: Bool
     let action: () -> Void
-    
+
+    private var pillCount: Int {
+        var n = 1
+        n += symbol.activityBadgeValues.count
+        if !symbol.isSelectableForActiveProvider { n += 1 }
+        return n
+    }
+
     var body: some View {
+        let isCompactPills = pillCount >= 3
         Button(action: {
             // Haptic feedback
             let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -1107,7 +1115,7 @@ struct SymbolListRow: View {
             HStack(spacing: 12) {
                 // Symbol Icon
                 SymbolIconView(symbol: symbol, size: 44)
-                
+
                 // Symbol Info
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
@@ -1125,15 +1133,16 @@ struct SymbolListRow: View {
                         .lineLimit(1)
 
                     FlowLayout(spacing: 6) {
-                        SymbolProviderBadge(provider: symbol.providerDisplayLabel)
+                        SymbolProviderBadge(provider: symbol.providerDisplayLabel, isCompact: isCompactPills)
                         ForEach(symbol.activityBadgeValues, id: \.self) { badge in
-                            SymbolActivityBadge(label: badge)
+                            SymbolActivityBadge(label: badge, isCompact: isCompactPills)
                         }
                         if !symbol.isSelectableForActiveProvider {
-                            UnsupportedSymbolBadge()
+                            UnsupportedSymbolBadge(isCompact: isCompactPills)
                         }
                     }
                 }
+                .frame(maxHeight: 64)
                 .layoutPriority(1)
                 
                 Spacer()
@@ -1220,7 +1229,16 @@ struct GlobalSymbolListRow: View {
         return badges
     }
 
+    private var pillCount: Int {
+        var n = 1
+        n += symbol.activityBadgeValues.count
+        if !symbol.isSelectableForActiveProvider { n += 1 }
+        n += statusBadges.count
+        return n
+    }
+
     var body: some View {
+        let isCompactPills = pillCount >= 3
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
@@ -1241,15 +1259,16 @@ struct GlobalSymbolListRow: View {
                             .lineLimit(1)
 
                         FlowLayout(spacing: 6) {
-                            SymbolProviderBadge(provider: symbol.providerDisplayLabel)
+                            SymbolProviderBadge(provider: symbol.providerDisplayLabel, isCompact: isCompactPills)
                             ForEach(symbol.activityBadgeValues, id: \.self) { badge in
-                                SymbolActivityBadge(label: badge)
+                                SymbolActivityBadge(label: badge, isCompact: isCompactPills)
                             }
                             if !symbol.isSelectableForActiveProvider {
-                                UnsupportedSymbolBadge()
+                                UnsupportedSymbolBadge(isCompact: isCompactPills)
                             }
                         }
                     }
+                    .frame(maxHeight: 64)
 
                     Spacer()
 
@@ -1347,38 +1366,58 @@ struct SymbolMarketStatus: View {
 
 struct SymbolProviderBadge: View {
     let provider: String
+    var isCompact: Bool = false
 
     var body: some View {
-        Text(provider)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(AppColors.statusInfo25)
-            .clipShape(Capsule())
+        Group {
+            if isCompact {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 10, weight: .bold))
+            } else {
+                Text(provider)
+                    .font(.system(size: 9, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(AppColors.statusInfo25)
+        .clipShape(Capsule())
+        .accessibilityLabel(provider)
     }
 }
 
 struct UnsupportedSymbolBadge: View {
+    var isCompact: Bool = false
+
     static var labelText: String {
         APIEnvironment.current == .production ? "Prod Only" : "Unsupported"
     }
 
     var body: some View {
-        Text(Self.labelText)
-            .font(.system(size: 9, weight: .bold))
-            .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(AppColors.statusNegative35)
-            .clipShape(Capsule())
+        Group {
+            if isCompact {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10, weight: .bold))
+            } else {
+                Text(Self.labelText)
+                    .font(.system(size: 9, weight: .bold))
+            }
+        }
+        .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(AppColors.statusNegative35)
+        .clipShape(Capsule())
+        .accessibilityLabel(Self.labelText)
     }
 }
 
 struct SymbolActivityBadge: View {
     let label: String
+    var isCompact: Bool = false
 
     private var iconName: String {
         switch label.lowercased() {
@@ -1407,19 +1446,27 @@ struct SymbolActivityBadge: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: iconName)
-                .font(.system(size: 8, weight: .bold))
-            Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .lineLimit(1)
+        Group {
+            if isCompact {
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .bold))
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: iconName)
+                        .font(.system(size: 8, weight: .bold))
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
         }
         .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
-        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(backgroundColor)
         .clipShape(Capsule())
+        .accessibilityLabel(label)
     }
 }
 
@@ -1449,6 +1496,8 @@ struct MarketSessionTimeline: View {
     let symbol: RLTradingSymbolDTO
 
     @State private var now = Date()
+    @State private var cachedOandaSessionState: (isOpen: Bool, nextTransition: Date)?
+    @State private var cachedCountdownText: String = ""
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     private var session: RLTradingSymbolDTO.MarketSession { symbol.marketSession }
@@ -1478,7 +1527,7 @@ struct MarketSessionTimeline: View {
     }
 
     private var isInSession: Bool {
-        if let oandaState = oandaSessionState {
+        if let oandaState = cachedOandaSessionState {
             return oandaState.isOpen
         }
         if session.isContinuous {
@@ -1493,11 +1542,11 @@ struct MarketSessionTimeline: View {
         }
     }
 
-    private var countdownText: String {
+    private func computeCountdownText() -> String {
         var calendar = Calendar.current
         calendar.timeZone = tz
 
-        if let oandaState = oandaSessionState {
+        if let oandaState = cachedOandaSessionState {
             return "\(oandaState.isOpen ? "Closes" : "Opens") \(relativeCountdown(to: oandaState.nextTransition))"
         }
 
@@ -1561,7 +1610,7 @@ struct MarketSessionTimeline: View {
         String(format: "%02d:%02d", hour >= 24 ? 0 : hour, minute)
     }
 
-    private var oandaSessionState: (isOpen: Bool, nextTransition: Date)? {
+    private func computeOandaSessionState() -> (isOpen: Bool, nextTransition: Date)? {
         guard usesOandaForexSessionBoundaries else { return nil }
 
         var calendar = Calendar.current
@@ -1601,6 +1650,11 @@ struct MarketSessionTimeline: View {
         return isOpen ? (true, nextFridayClose) : (false, nextSundayOpen)
     }
 
+    private func refreshDerivedState() {
+        cachedOandaSessionState = computeOandaSessionState()
+        cachedCountdownText = computeCountdownText()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -1611,7 +1665,7 @@ struct MarketSessionTimeline: View {
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
                 Spacer()
-                Text(countdownText)
+                Text(cachedCountdownText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(isInSession ? AppColors.statusPositive90 : AppColors.statusWarning90)
             }
@@ -1633,6 +1687,9 @@ struct MarketSessionTimeline: View {
                         .stroke(AppColors.symbolDetailCardStroke, lineWidth: 1)
                 )
         )
+        .onAppear { refreshDerivedState() }
+        .onChange(of: now) { _, _ in refreshDerivedState() }
+        .onChange(of: symbol.id) { _, _ in refreshDerivedState() }
         .onReceive(timer) { _ in now = Date() }
     }
 

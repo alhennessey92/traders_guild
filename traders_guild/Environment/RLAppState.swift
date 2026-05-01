@@ -203,7 +203,6 @@ class RLAppState: ObservableObject {
     
     @Published var showGuildSelectionSheet: Bool = false
     @Published var showBetaWelcomeSheet: Bool = false
-    @Published var showSignupWelcomeCarousel: Bool = false
     @Published var isBiometricAppLockActive: Bool = false
     @Published var isBiometricUnlockInProgress: Bool = false
     @Published var biometricUnlockErrorMessage: String?
@@ -247,7 +246,6 @@ class RLAppState: ObservableObject {
     private let reachabilityQueue = DispatchQueue(label: "traders_guild.reachability")
     private var lastReachabilitySatisfied: Bool?
     private var hasShownOfflineToastForCurrentEpisode = false
-    private var pendingSignupWelcomeUserId: UUID?
     private var pendingBetaWelcomeUserId: UUID?
     private let reportedUserStore = ReportedUserStore()
     private let reportedContentStore = ReportedContentStore()
@@ -372,7 +370,7 @@ class RLAppState: ObservableObject {
         showingTransition = false
         hasCompletedInitialLoad = true
         transitionMinimumDismissAt = nil
-        presentPendingSignupWelcomeIfNeeded()
+        presentPendingBetaWelcomeIfNeeded()
     }
     
     func chartDidBecomeReady() {
@@ -927,8 +925,19 @@ class RLAppState: ObservableObject {
             onboardingState = .complete
             accountCreatedDuringOnboarding = false
             isOnboardingFlowActive = false
-            queueSignupWelcomeCarouselIfNeeded()
             showTransitionForChartLoad(minimumDuration: 2.5)
+            queueBetaWelcomeIfNeeded()
+
+            // Defer the fullScreenCover presentation to the next runloop so
+            // SwiftUI fully processes the mainContent flip (ContentView→MainView)
+            // and TransitionView mount before we ask it to present the cover.
+            // Doing all four state changes in the same tick caused SwiftUI to
+            // drop the cover during reconciliation — the binding stayed true
+            // but the cover never visibly settled until the chart finished
+            // loading much later.
+            DispatchQueue.main.async { [weak self] in
+                self?.presentPendingBetaWelcomeIfNeeded()
+            }
 
             // Offer biometric enrollment after the chart transition finishes
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
@@ -945,17 +954,12 @@ class RLAppState: ObservableObject {
         pendingEmailVerificationToken = token
     }
 
-    func dismissSignupWelcomeCarousel() {
-        showSignupWelcomeCarousel = false
-    }
-
     func dismissBetaWelcomeSheet() {
         showBetaWelcomeSheet = false
-        presentPendingSignupWelcomeIfNeeded()
+        presentPendingBetaWelcomeIfNeeded()
     }
 
     /// Re-opens the beta welcome screen on demand (e.g. from Settings).
-    /// Does not touch the signup-welcome carousel or auto-advance to it.
     func presentBetaWelcomeFromSettings() {
         guard !showBetaWelcomeSheet else { return }
         showBetaWelcomeSheet = true
@@ -969,7 +973,7 @@ class RLAppState: ObservableObject {
 
         do {
             runtimeFlags = try await realApi.getRuntimeFlags()
-            presentPendingSignupWelcomeIfNeeded()
+            presentPendingBetaWelcomeIfNeeded()
         } catch is CancellationError {
             return
         } catch {
@@ -1004,6 +1008,10 @@ class RLAppState: ObservableObject {
     }
 
     func handleSceneDidBecomeActive() {
+        Task { [realApi] in
+            await realApi.refreshAccessTokenIfNeeded()
+        }
+
         guard shouldUseBiometricAppLock else {
             clearBiometricAppLock()
             return
@@ -1710,6 +1718,36 @@ class RLAppState: ObservableObject {
             return response
         } catch {
             showError(error, title: "Failed to Create Announcement", style: .toast)
+            throw error
+        }
+    }
+
+    func createGlobalAnnouncement(
+        title: String,
+        content: String,
+        preview: String? = nil,
+        isImportant: Bool = false,
+        iconKey: GuildPostIconKey? = nil
+    ) async throws -> RLGlobalAnnouncementBroadcastResponseDTO {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPreview = preview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedPreview = trimmedPreview.isEmpty
+            ? String(normalizedContent.prefix(180))
+            : trimmedPreview
+
+        do {
+            let response = try await realApi.createGlobalAnnouncement(
+                title: normalizedTitle,
+                content: normalizedContent,
+                preview: normalizedPreview,
+                isImportant: isImportant,
+                iconKey: iconKey
+            )
+            showSuccess("Announcement posted to \(response.createdAnnouncementCount) guilds")
+            return response
+        } catch {
+            showError(error, title: "Failed to Create Global Announcement", style: .toast)
             throw error
         }
     }
@@ -2631,12 +2669,10 @@ class RLAppState: ObservableObject {
         showBetaWelcomeSheet = false
         isHandlingAuthFlow = false
         isOnboardingFlowActive = false
-        showSignupWelcomeCarousel = false
         runtimeFlags = .disabled
         reportedUserStateVersion = 0
         reportedContentStateVersion = 0
         clearBiometricAppLock()
-        pendingSignupWelcomeUserId = nil
         pendingBetaWelcomeUserId = nil
         pendingPasswordResetToken = nil
         onboardingState = nil
@@ -2807,13 +2843,6 @@ class RLAppState: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)onboarding_state")
     }
 
-    private func queueSignupWelcomeCarouselIfNeeded() {
-        guard let userId = currentUser?.id else { return }
-        queueBetaWelcomeIfNeeded()
-        guard !hasSeenSignupWelcomeCarousel(for: userId) else { return }
-        pendingSignupWelcomeUserId = userId
-    }
-
     /// Queue the beta welcome sheet for any authenticated user who hasn't seen it.
     /// Safe to call from signup, login, Apple Sign In, biometric login, and session restore —
     /// each path funnels here so the sheet is guaranteed to fire once per user before the tutorial.
@@ -2823,9 +2852,7 @@ class RLAppState: ObservableObject {
         pendingBetaWelcomeUserId = userId
     }
 
-    private func presentPendingSignupWelcomeIfNeeded() {
-        guard !showingTransition else { return }
-
+    private func presentPendingBetaWelcomeIfNeeded() {
         if let betaUserId = pendingBetaWelcomeUserId {
             guard currentUser?.id == betaUserId else {
                 pendingBetaWelcomeUserId = nil
@@ -2840,34 +2867,6 @@ class RLAppState: ObservableObject {
             }
             pendingBetaWelcomeUserId = nil
         }
-
-        guard !showBetaWelcomeSheet else { return }
-
-        guard let userId = pendingSignupWelcomeUserId else { return }
-        guard currentUser?.id == userId else {
-            pendingSignupWelcomeUserId = nil
-            return
-        }
-        guard !hasSeenSignupWelcomeCarousel(for: userId) else {
-            pendingSignupWelcomeUserId = nil
-            return
-        }
-
-        markSignupWelcomeCarouselSeen(for: userId)
-        pendingSignupWelcomeUserId = nil
-        showSignupWelcomeCarousel = true
-    }
-
-    private func hasSeenSignupWelcomeCarousel(for userId: UUID) -> Bool {
-        UserDefaults.standard.bool(forKey: signupWelcomeCarouselKey(for: userId))
-    }
-
-    private func markSignupWelcomeCarouselSeen(for userId: UUID) {
-        UserDefaults.standard.set(true, forKey: signupWelcomeCarouselKey(for: userId))
-    }
-
-    private func signupWelcomeCarouselKey(for userId: UUID) -> String {
-        "\(keychainPrefix)signup_welcome_seen_\(userId.uuidString)"
     }
 
     private func hasSeenBetaWelcome(for userId: UUID) -> Bool {
@@ -3851,6 +3850,9 @@ class RLAppState: ObservableObject {
             self.notificationStats = stats
             return stats
         } catch {
+            if case APIError.unauthorized = error {
+                throw error
+            }
             showError(error, title: "Failed to Load Notification Stats", style: .toast)
             throw error
         }

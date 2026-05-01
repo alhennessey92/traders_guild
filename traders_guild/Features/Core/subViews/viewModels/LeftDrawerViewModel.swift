@@ -1055,13 +1055,15 @@ class LeftDrawerViewModel: ObservableObject {
     }
 
     func handleRealtimeNotificationInsert(_ notification: RLNotificationDTO) {
-        if !userNotifications.contains(where: { $0.id == notification.id }) {
-            userNotifications.insert(notification, at: 0)
-            lastRealtimeNotificationInsertAt = Date()
-            markNotificationListSynced(at: lastRealtimeNotificationInsertAt ?? Date())
-            refreshFriendRelationshipCachesIfNeeded(for: notification)
-            print("🔔 New real-time notification: \(notification.displayTitle)")
+        if let existingIndex = userNotifications.firstIndex(where: { $0.id == notification.id }) {
+            userNotifications.remove(at: existingIndex)
         }
+
+        userNotifications.insert(notification, at: 0)
+        lastRealtimeNotificationInsertAt = Date()
+        markNotificationListSynced(at: lastRealtimeNotificationInsertAt ?? Date())
+        refreshFriendRelationshipCachesIfNeeded(for: notification)
+        print("🔔 Real-time notification updated: \(notification.displayTitle)")
     }
 
     private func refreshFriendRelationshipCachesIfNeeded(for notification: RLNotificationDTO) {

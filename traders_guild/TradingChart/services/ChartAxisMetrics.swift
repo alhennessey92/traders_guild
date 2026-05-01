@@ -1,7 +1,7 @@
 import CoreGraphics
 
 enum ChartAxisMetrics {
-    static let yAxisLaneWidth: CGFloat = 59
+    static let yAxisLaneWidth: CGFloat = 64
     static let indicatorPanelYAxisLaneWidth: CGFloat = 44
     static let indicatorPanelYAxisLabelWidth: CGFloat = 40
     static let indicatorPanelYAxisLabelFontSize: CGFloat = 10

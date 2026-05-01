@@ -793,6 +793,20 @@ struct RLCreateGuildAnnouncementRequestDTO: Codable {
     let iconKey: GuildPostIconKey?
 }
 
+struct RLCreateGlobalAnnouncementRequestDTO: Codable {
+    let title: String
+    let content: String
+    let preview: String?
+    let isImportant: Bool
+    let iconKey: GuildPostIconKey?
+}
+
+struct RLGlobalAnnouncementBroadcastResponseDTO: Codable {
+    let targetGuildCount: Int
+    let createdAnnouncementCount: Int
+    let authorDisplayName: String
+}
+
 /// Guild Announcement Response - matches backend GuildAnnouncementResponse exactly
 struct RLGuildAnnouncementResponseDTO: Codable, Identifiable {
     let id: UUID

@@ -62,6 +62,15 @@ class ChartDataManager: ObservableObject {
     private var basePrice: Double = 100.0
     private let maxCandles = Int.max
     private let maxRealtimeFallbackInsert = 120
+
+    /// Coalesces tick-driven `@Published` updates so SwiftUI is invalidated at most ~20Hz
+    /// instead of at the raw WebSocket tick rate (which can hit 50–100Hz). Without this
+    /// the entire view tree observing `chartViewModel`/`chartDataManager` is rebuilt on
+    /// every tick, even when the chart isn't on screen.
+    private var pendingTickCandles: [RLCandleDTO]?
+    private var pendingTickPrice: Double?
+    private var pendingTickFlushScheduled = false
+    private let tickPublishCoalesceWindow: TimeInterval = 0.05
     
     // MARK: - Initialization
     
@@ -117,7 +126,7 @@ class ChartDataManager: ObservableObject {
     ///   - timestamp: Optional tick timestamp (uses current time if nil)
     func processRealTick(price: Double, volume: Double, timestamp: Date? = nil) {
         let result = RealtimeCandleStreamReducer.processTick(
-            candles: candles,
+            candles: pendingTickCandles ?? candles,
             timeframe: currentTimeframe,
             price: price,
             volume: volume,
@@ -125,9 +134,27 @@ class ChartDataManager: ObservableObject {
             maxCandles: maxCandles,
             maxRealtimeFallbackInsert: maxRealtimeFallbackInsert
         )
-        candles = result.candles
-        currentPrice = result.currentPrice
+        pendingTickCandles = result.candles
+        pendingTickPrice = result.currentPrice
         basePrice = result.currentPrice
+
+        guard !pendingTickFlushScheduled else { return }
+        pendingTickFlushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + tickPublishCoalesceWindow) { [weak self] in
+            self?.flushPendingTick()
+        }
+    }
+
+    private func flushPendingTick() {
+        pendingTickFlushScheduled = false
+        if let pendingCandles = pendingTickCandles {
+            candles = pendingCandles
+            pendingTickCandles = nil
+        }
+        if let pendingPrice = pendingTickPrice {
+            currentPrice = pendingPrice
+            pendingTickPrice = nil
+        }
         updatePriceRange()
     }
     
@@ -136,6 +163,7 @@ class ChartDataManager: ObservableObject {
     /// - Parameter candle: The complete candle data
     @discardableResult
     func processRealCandle(_ candle: RLCandleDTO) -> Int {
+        flushPendingTick()
         let result = RealtimeCandleStreamReducer.processCompletedCandle(
             candles: candles,
             timeframe: currentTimeframe,
@@ -173,8 +201,11 @@ class ChartDataManager: ObservableObject {
             return
         }
         
-        let allLows = candles.map { $0.low }
-        let allHighs = candles.map { $0.high }
+        let rangeSource = candles.contains(where: { !$0.isGapFill })
+            ? candles.filter { !$0.isGapFill }
+            : candles
+        let allLows = rangeSource.map { $0.low }
+        let allHighs = rangeSource.map { $0.high }
         
         guard let minPrice = allLows.min(),
               let maxPrice = allHighs.max() else {
@@ -182,7 +213,15 @@ class ChartDataManager: ObservableObject {
             return
         }
         
-        let padding = (maxPrice - minPrice) * 0.1
+        let span = maxPrice - minPrice
+        guard span > 0 else {
+            let center = maxPrice > 0 ? maxPrice : max(currentPrice, 1)
+            let padding = max(abs(center) * 0.001, 0.0001)
+            priceRange = (center - padding, center + padding)
+            return
+        }
+
+        let padding = span * 0.1
         priceRange = (minPrice - padding, maxPrice + padding)
     }
     
@@ -286,6 +325,8 @@ class ChartDataManager: ObservableObject {
     // MARK: - External Data Methods
     
     func updateWithMarketData(_ data: [RLCandleDTO]) {
+        pendingTickCandles = nil
+        pendingTickPrice = nil
         lastPrependedCandleCount = 0
         candles = Self.sortedUniqueCandles(data)
         updatePriceRange()
@@ -303,6 +344,7 @@ class ChartDataManager: ObservableObject {
             return 0
         }
 
+        flushPendingTick()
         let oldFirstTimestamp = candles.first?.timestamp
         let existingTimestamps = Set(candles.map(\.timestamp))
         let insertedBeforeFirst = data.filter { candle in

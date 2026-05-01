@@ -290,12 +290,17 @@ struct CreateAnnouncementView: View {
     @State private var isImportant: Bool = false
     @State private var selectedIconKey: GuildPostIconKey = .announcementDefault
     @State private var isSubmitting: Bool = false
+    @State private var broadcastToAllGuilds: Bool = false
 
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         title.count >= 3 &&
         !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         content.count >= 3
+    }
+
+    private var canBroadcastToAllGuilds: Bool {
+        rlAppState.currentUser?.isSuperuser == true
     }
 
     var body: some View {
@@ -305,7 +310,9 @@ struct CreateAnnouncementView: View {
                     icon: "megaphone.fill",
                     iconColor: AppColors.accentColor,
                     title: "Create Announcement",
-                    subtitle: "Post to your guild members"
+                    subtitle: broadcastToAllGuilds
+                        ? "Post a system announcement into every active guild"
+                        : "Post to your guild members"
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 30)
@@ -343,6 +350,15 @@ struct CreateAnnouncementView: View {
                                 iconColor: AppColors.bearCandleRed,
                                 isOn: $isImportant
                             )
+                            if canBroadcastToAllGuilds {
+                                AdminToggleRow(
+                                    title: "Broadcast to All Guilds",
+                                    subtitle: "Uses the hidden Traders Guild system account so every guild gets the same announcement",
+                                    icon: "globe.europe.africa.fill",
+                                    iconColor: AppColors.accentColor,
+                                    isOn: $broadcastToAllGuilds
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -380,15 +396,27 @@ struct CreateAnnouncementView: View {
         defer { isSubmitting = false }
 
         do {
-            let newAnnouncement = try await rlAppState.createAnnouncement(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-                preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
-                isImportant: isImportant,
-                iconKey: selectedIconKey
-            )
-
-            leftDrawerViewModel.announcements.insert(newAnnouncement, at: 0)
+            if broadcastToAllGuilds {
+                _ = try await rlAppState.createGlobalAnnouncement(
+                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                    content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                    preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
+                    isImportant: isImportant,
+                    iconKey: selectedIconKey
+                )
+                if let guildId = rlAppState.currentGuild?.id {
+                    await leftDrawerViewModel.refreshAnnouncements(guildId: guildId, rlAppState: rlAppState)
+                }
+            } else {
+                let newAnnouncement = try await rlAppState.createAnnouncement(
+                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                    content: content.trimmingCharacters(in: .whitespacesAndNewlines),
+                    preview: preview.isEmpty ? nil : preview.trimmingCharacters(in: .whitespacesAndNewlines),
+                    isImportant: isImportant,
+                    iconKey: selectedIconKey
+                )
+                leftDrawerViewModel.announcements.insert(newAnnouncement, at: 0)
+            }
             dismiss()
         } catch {
             // Error is already shown by rlAppState

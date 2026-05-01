@@ -13,6 +13,11 @@ enum BundledTradingSymbolIconResolver {
             if normalizedTicker.hasPrefix("ETH") { return "icon_eth" }
             if normalizedTicker.hasPrefix("SOL") { return "icon_sol" }
             if normalizedTicker.hasPrefix("ADA") { return "icon_ada" }
+            if normalizedTicker.hasPrefix("XRP") { return "icon_xrp" }
+            if normalizedTicker.hasPrefix("DOGE") { return "icon_doge" }
+            if normalizedTicker.hasPrefix("SHIB") { return "icon_shib" }
+            if normalizedTicker.hasPrefix("ATOM") { return "icon_atom" }
+            if normalizedTicker.hasPrefix("LTC") { return "icon_ltc" }
         }
 
         switch normalizedTicker {

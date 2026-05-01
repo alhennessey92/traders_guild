@@ -4,6 +4,83 @@ import Testing
 
 struct MarkerActivityNavigationTests {
     @Test
+    func navigationTargetFromActivityMarkerPreservesChartContext() {
+        let markerId = UUID()
+        let symbolId = UUID()
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        var marker = makeActivityMarker(
+            id: markerId,
+            symbolId: symbolId,
+            ticker: "DOGE/USD",
+            timeframe: "1m",
+            activityOffset: 0,
+            createdOffset: 0
+        )
+        marker = marker.withNavigationContext(
+            candleTimestamp: timestamp,
+            price: 0.1087,
+            intent: RLMarkerIntent.alert.rawValue,
+            alertSeverity: MarkerAlertSeverity.critical.rawValue
+        )
+
+        let target = MarkerNavigationTarget(topMarker: marker.asTopMarkerDTO())
+
+        #expect(target.markerId == markerId)
+        #expect(target.symbolId == symbolId)
+        #expect(target.symbolTicker == "DOGE/USD")
+        #expect(target.timeframe == .m1)
+        #expect(target.candleTimestamp == timestamp)
+        #expect(target.price == 0.1087)
+        #expect(target.intent == .alert)
+        #expect(target.alertSeverity == .critical)
+    }
+
+    @Test
+    func navigationTargetFromSharedPayloadPreservesMarkerIdentity() {
+        let markerId = UUID()
+        let symbolId = UUID()
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_060)
+        let payload = MarkerSharePayloadV1(
+            markerId: markerId,
+            symbolId: symbolId,
+            symbolTicker: "BTC/USD",
+            symbolAssetClass: "crypto",
+            symbolBrandColor: "#F7931A",
+            timeframe: "5m",
+            candleTimestamp: timestamp,
+            intent: RLMarkerIntent.reaction.rawValue,
+            selectedEmoji: "🔥"
+        )
+
+        let target = MarkerNavigationTarget(sharedPayload: payload)
+
+        #expect(target.markerId == markerId)
+        #expect(target.symbolId == symbolId)
+        #expect(target.symbolTicker == "BTC/USD")
+        #expect(target.symbolAssetClass == "crypto")
+        #expect(target.symbolBrandColor == "#F7931A")
+        #expect(target.timeframe == .m5)
+        #expect(target.candleTimestamp == timestamp)
+        #expect(target.intent == .reaction)
+        #expect(target.selectedEmoji == "🔥")
+        #expect(target.price == nil)
+    }
+
+    @Test
+    func chartDataManagerGivesSinglePriceWindowsAUsableRange() {
+        let manager = ChartDataManager()
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        manager.updateWithMarketData([
+            RLCandleDTO(timestamp: timestamp, timestampFormatted: nil, open: 100, high: 100, low: 100, close: 100, volume: 0, volumeFormatted: nil, isGapFill: true),
+            RLCandleDTO(timestamp: timestamp.addingTimeInterval(60), timestampFormatted: nil, open: 100, high: 100, low: 100, close: 100, volume: 0, volumeFormatted: nil, isGapFill: true)
+        ])
+
+        #expect(manager.priceRange.max > manager.priceRange.min)
+        #expect(manager.priceRange.min < 100)
+        #expect(manager.priceRange.max > 100)
+    }
+
+    @Test
     func loadModesMatchRecentArchiveAndSetupPolicies() {
         #expect(MarkerActivityListLoadMode.recentFeed.state == .all)
         #expect(MarkerActivityListLoadMode.recentFeed.fetchAllPages == false)
@@ -78,6 +155,7 @@ struct MarkerActivityNavigationTests {
 }
 
 private func makeActivityMarker(
+    id: UUID = UUID(),
     symbolId: UUID = UUID(),
     ticker: String,
     timeframe: String,
@@ -89,7 +167,7 @@ private func makeActivityMarker(
     let createdDate = baseDate.addingTimeInterval(createdOffset)
 
     return RLMarkerActivityItemDTO(
-        id: UUID(),
+        id: id,
         symbolId: symbolId,
         symbolTicker: ticker,
         symbolBrandColor: nil,
@@ -106,6 +184,8 @@ private func makeActivityMarker(
         intent: RLMarkerIntent.analysis.rawValue,
         title: "Marker",
         notePreview: "Preview",
+        pollQuestion: nil,
+        pollOptions: nil,
         selectedEmoji: nil,
         alertSeverity: nil,
         createdAt: createdDate,
@@ -122,4 +202,50 @@ private func makeActivityMarker(
         commentCount: 0,
         isCurrentUserMarker: false
     )
+}
+
+private extension RLMarkerActivityItemDTO {
+    func withNavigationContext(
+        candleTimestamp: Date,
+        price: Double,
+        intent: String,
+        alertSeverity: String?
+    ) -> RLMarkerActivityItemDTO {
+        RLMarkerActivityItemDTO(
+            id: id,
+            symbolId: symbolId,
+            symbolTicker: symbolTicker,
+            symbolBrandColor: symbolBrandColor,
+            symbolAssetClass: symbolAssetClass,
+            guildId: guildId,
+            authorId: authorId,
+            authorUsername: authorUsername,
+            authorInitials: authorInitials,
+            authorAvatarUrl: authorAvatarUrl,
+            authorIsOnline: authorIsOnline,
+            authorReputation: authorReputation,
+            authorAccuracyRate: authorAccuracyRate,
+            authorRole: authorRole,
+            intent: intent,
+            title: title,
+            notePreview: notePreview,
+            pollQuestion: pollQuestion,
+            pollOptions: pollOptions,
+            selectedEmoji: selectedEmoji,
+            alertSeverity: alertSeverity,
+            createdAt: createdAt,
+            createdAtFormatted: createdAtFormatted,
+            activityTimestamp: activityTimestamp,
+            activityTimestampFormatted: activityTimestampFormatted,
+            candleTimestamp: candleTimestamp,
+            timeframe: timeframe,
+            price: price,
+            setupSummary: setupSummary,
+            predictionResult: predictionResult,
+            likeCount: likeCount,
+            isLikedByCurrentUser: isLikedByCurrentUser,
+            commentCount: commentCount,
+            isCurrentUserMarker: isCurrentUserMarker
+        )
+    }
 }

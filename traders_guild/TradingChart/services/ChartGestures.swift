@@ -186,14 +186,17 @@ class ChartGestureState: ObservableObject {
     ) {
         var newHorizontalOffset = panOffset.width + translation.width
         var newVerticalOffset = verticalPanOffset + translation.height
-        
-        // Horizontal limits
-        let edgePadding: CGFloat = Self.horizontalEdgePadding
-        let totalChartWidth = CGFloat(candleCount) * candleWidth
-        let maxHorizontalOffset = edgePadding
-        let minHorizontalOffset = -(totalChartWidth - chartWidth + edgePadding)
-        
-        newHorizontalOffset = Swift.min(maxHorizontalOffset, Swift.max(minHorizontalOffset, newHorizontalOffset))
+
+        // Horizontal limits - skip clamping when there is no candle data, otherwise the
+        // computed min/max collapse and the pan offset gets snapped to the first candle.
+        if candleCount > 0 && candleWidth > 0 {
+            let edgePadding: CGFloat = Self.horizontalEdgePadding
+            let totalChartWidth = CGFloat(candleCount) * candleWidth
+            let maxHorizontalOffset = edgePadding
+            let minHorizontalOffset = -(totalChartWidth - chartWidth + edgePadding)
+
+            newHorizontalOffset = Swift.min(maxHorizontalOffset, Swift.max(minHorizontalOffset, newHorizontalOffset))
+        }
         
         // Vertical limits - matches clampedVerticalOffset exactly
         let scaledHeight = chartHeight * priceScale
@@ -368,6 +371,7 @@ class ChartGestureState: ObservableObject {
     
     /// Center chart on specific candle index (horizontal only)
     func centerOnCandle(at index: Int, chartWidth: CGFloat, candleWidth: CGFloat) {
+        guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
         let targetX = CGFloat(index) * candleWidth
         let centerOffset = chartWidth / 2
@@ -383,6 +387,7 @@ class ChartGestureState: ObservableObject {
         chartHeight: CGFloat,
         priceRange: (min: Double, max: Double)
     ) {
+        guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
         stopCenteringAnimation()
 
@@ -409,6 +414,7 @@ class ChartGestureState: ObservableObject {
         priceRange: (min: Double, max: Double),
         duration: CFTimeInterval = 0.9
     ) {
+        guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
         stopCenteringAnimation()
 

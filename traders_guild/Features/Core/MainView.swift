@@ -723,11 +723,6 @@ struct MainView: View {
                     scheduleTutorialAutoStartIfEligible(for: userId)
                 }
             }
-            .onChange(of: rlAppState.showSignupWelcomeCarousel) { _, isShowing in
-                if !isShowing, let userId = rlAppState.currentUser?.id {
-                    scheduleTutorialAutoStartIfEligible(for: userId)
-                }
-            }
             .onChange(of: rlAppState.showingTransition) { _, isShowing in
                 if !isShowing, let userId = rlAppState.currentUser?.id {
                     scheduleTutorialAutoStartIfEligible(for: userId)
@@ -790,10 +785,11 @@ struct MainView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {
                 case .active:
-                    if rlAppState.accessToken != nil {
-                        rlAppState.connectRealTimeService()
-                    }
                     Task {
+                        await rlAppState.realApi.refreshAccessTokenIfNeeded(thresholdSeconds: 120)
+                        if rlAppState.accessToken != nil {
+                            rlAppState.connectRealTimeService()
+                        }
                         await leftDrawerViewModel.handleAppDidBecomeActive(rlAppState: rlAppState)
                         await chartViewModel.handleAppDidBecomeActive()
                         await timeframePanelManager.refreshPanels(for: activeTimeframePanelSource)
@@ -1045,29 +1041,44 @@ struct MainView: View {
     }
 
     /// Schedules the first-run tutorial once the welcome sheets are out of the way.
-    /// Called from `.task` and re-evaluated when welcome/carousel sheets or the
+    /// Called from `.task` and re-evaluated when the beta welcome sheet or the
     /// loading transition dismiss. Re-checks inside the delayed closure because
-    /// the welcome sheets are presented *after* MainView appears, so conditions
+    /// the welcome sheet may be presented *after* MainView appears, so conditions
     /// can change between scheduling and firing.
     private func scheduleTutorialAutoStartIfEligible(for userId: UUID) {
         guard !didScheduleTutorialAutoStart else { return }
         guard !rlAppState.hasTutorialCompleted(for: userId) else { return }
         guard rlAppState.getTutorialProgress(for: userId) == nil else { return }
         guard !rlAppState.showBetaWelcomeSheet else { return }
-        guard !rlAppState.showSignupWelcomeCarousel else { return }
         guard !rlAppState.showingTransition else { return }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             guard rlAppState.currentUser?.id == userId else { return }
             guard !tutorialManager.isActive else { return }
-            // Re-verify — a welcome sheet may have been presented during the delay.
+            // Re-verify — the welcome sheet may have been presented during the delay.
             guard !rlAppState.showBetaWelcomeSheet,
-                  !rlAppState.showSignupWelcomeCarousel,
                   !rlAppState.showingTransition else {
                 return
             }
             didScheduleTutorialAutoStart = true
-            tutorialManager.startTutorial(fromBeginning: true)
+
+            // Close any open drawers and dismiss any sheet overlays so the
+            // tutorial overlay raises over a quiet view tree. TutorialManager
+            // resets currentDrawerState to .center on start, so the actual UI
+            // must match or the manager and the real shell desync.
+            dismissLeftSheetsSignal = true
+            dismissRightSheetsSignal = true
+            withAnimation(AnimationConstants.standard) {
+                showLeftDrawer = false
+                showRightDrawer = false
+                showOverlay = false
+                showSheetOverlay = false
+                leftDragTranslation = 0
+                rightDragTranslation = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                tutorialManager.startTutorial(fromBeginning: true)
+            }
         }
     }
 
@@ -1550,34 +1561,25 @@ struct MainView: View {
             selectedDetent = .fraction(0.11)
         }
 
-        if chartViewModel.currentSymbol?.id != payload.symbolId {
-            if let cached = chartViewModel.allAvailableSymbols.first(where: { $0.id == payload.symbolId }) {
-                chartViewModel.setSymbol(cached)
-            } else {
-                do {
-                    let symbol = try await rlAppState.realApi.getSymbol(symbolId: payload.symbolId)
-                    chartViewModel.setSymbol(symbol)
-                } catch {
-                    rlAppState.showError(error, title: "Unable to Open Marker", style: .toast)
-                    return
-                }
+        let resolvedSymbol: RLTradingSymbolDTO
+        if let cached = chartViewModel.allAvailableSymbols.first(where: { $0.id == payload.symbolId }) {
+            resolvedSymbol = cached
+        } else {
+            do {
+                resolvedSymbol = try await rlAppState.realApi.getSymbol(symbolId: payload.symbolId)
+            } catch {
+                rlAppState.showError(error, title: "Unable to Open Marker", style: .toast)
+                return
             }
         }
 
-        let targetTimeframe = RLChartTimeframe.fromBackendString(payload.timeframe) ?? chartViewModel.currentTimeframe
-        if chartViewModel.currentTimeframe != targetTimeframe {
-            chartViewModel.setTimeframe(targetTimeframe)
-        }
-
-        await chartViewModel.loadNavigationWindow(
-            around: payload.candleTimestamp,
-            timeframe: targetTimeframe
+        let helper = MarkerNavigationHelper(
+            chartViewModel: chartViewModel,
+            gestureState: chartGestureState
         )
-
-        NotificationCenter.default.post(
-            name: .focusSharedMarker,
-            object: nil,
-            userInfo: payload.notificationUserInfo
+        helper.navigateToMarker(
+            MarkerNavigationTarget(sharedPayload: payload),
+            resolvedSymbol: resolvedSymbol
         )
     }
 
@@ -2419,15 +2421,19 @@ struct ChartBottomSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if selectedView == .symbol {
+                symbolAndSettingsContent
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
                         switch selectedView {
-                        case .symbol:
-                            symbolAndSettingsContent
                         case .markers:
                             markersContent
-                        case .components, .chat:
+                        case .symbol, .components, .chat:
                             EmptyView()
                         }
                     }

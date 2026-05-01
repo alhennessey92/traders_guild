@@ -28,6 +28,12 @@ class ChartViewModel: ObservableObject {
     /// Current WebSocket channel subscriptions for real-time market data
     private var currentTickChannel: String?
     private var currentCandleChannel: String?
+
+    /// Coalesces back-to-back tick-driven indicator recalcs into a throttled cadence.
+    /// WebSocket ticks can arrive at 20–100Hz; recalculating all indicators across the
+    /// full candle history on every tick burns a CPU core and starves the UI.
+    private var pendingIndicatorRecalc = false
+    private let indicatorRecalcCoalesceWindow: TimeInterval = 0.08
     
     /// Configure with proper app state and API service
     /// Called from MainView.onAppear when EnvironmentObjects are available
@@ -69,6 +75,13 @@ class ChartViewModel: ObservableObject {
     @Published private(set) var isLoadingOlderCandles: Bool = false
     @Published private(set) var hasMoreHistoricalCandles: Bool = false
     @Published var errorMessage: String?
+
+    /// True while a marker-panel navigation is in flight (timeframe/symbol/scroll change driven by
+    /// MarkerNavigationHelper). While set, TradingChartView suppresses competing pan-offset resets
+    /// so the navigation can land on the marker without being snapped back to the latest candles.
+    @Published var isNavigatingToMarker: Bool = false
+    @Published private(set) var markerNavigationSession: MarkerNavigationSession?
+
     private var earliestHistoricalCandleTimestamp: Date?
     private let historicalCandlePageSize = 1000
     
@@ -254,7 +267,7 @@ class ChartViewModel: ObservableObject {
 
             if mergeWithExisting, !dataManager.candles.isEmpty {
                 let prependedCount = dataManager.mergeHistoricalMarketData(chartData.candles)
-                if prependedCount > 0 {
+                if prependedCount > 0 && !isNavigatingToMarker {
                     gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
                 }
                 hasMoreHistoricalCandles = hasMoreHistoricalCandles || chartData.hasMoreCandles
@@ -295,6 +308,7 @@ class ChartViewModel: ObservableObject {
                         candles: dataManager.candles
                     )
                 }
+                markerManager.recalculateCandleIndices(candles: dataManager.candles)
             }
 
         } catch {
@@ -396,6 +410,94 @@ class ChartViewModel: ObservableObject {
         handleTimeframeChange()
     }
 
+    @discardableResult
+    func beginMarkerNavigation(_ target: MarkerNavigationTarget) -> UUID {
+        let session = MarkerNavigationSession(target: target)
+        markerNavigationSession = session
+        isNavigatingToMarker = true
+        return session.id
+    }
+
+    func updateMarkerNavigationPhase(sessionId: UUID, phase: MarkerNavigationPhase) {
+        guard var session = markerNavigationSession, session.id == sessionId else { return }
+        session.phase = phase
+        markerNavigationSession = session
+    }
+
+    func isMarkerNavigationSessionActive(_ sessionId: UUID) -> Bool {
+        markerNavigationSession?.id == sessionId && isNavigatingToMarker
+    }
+
+    func finishMarkerNavigation(sessionId: UUID, phase: MarkerNavigationPhase) {
+        guard var session = markerNavigationSession, session.id == sessionId else { return }
+        session.phase = phase
+        markerNavigationSession = session
+        isNavigatingToMarker = false
+
+        let clearDelay: TimeInterval
+        switch phase {
+        case .failed:
+            clearDelay = 2.2
+        default:
+            clearDelay = 0.35
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + clearDelay) { [weak self] in
+            guard self?.markerNavigationSession?.id == sessionId else { return }
+            self?.markerNavigationSession = nil
+        }
+    }
+
+    /// Change symbol and timeframe as a single marker-navigation operation. This avoids the
+    /// duplicate chart-data fetches caused by calling setSymbol and setTimeframe back-to-back.
+    @discardableResult
+    func prepareForMarkerNavigation(
+        _ target: MarkerNavigationTarget,
+        symbol: RLTradingSymbolDTO,
+        timeframe: RLChartTimeframe
+    ) async -> Bool {
+        _ = target
+        guard symbol.isSelectableForActiveProvider else {
+            appState.showError(
+                title: "Symbol Unavailable",
+                message: "\(symbol.ticker) is not supported by the active market data provider.",
+                style: .toast
+            )
+            return false
+        }
+        guard let guildId = appState.currentGuild?.id else {
+            errorMessage = "No guild selected"
+            return false
+        }
+
+        let needsReload = currentSymbol?.id != symbol.id
+            || currentTimeframe != timeframe
+            || dataManager.candles.isEmpty
+            || dataManager.currentTimeframe != timeframe
+
+        currentSymbol = symbol
+        currentTimeframe = timeframe
+        dataManager.currentSymbol = symbol
+        dataManager.currentTimeframe = timeframe
+        syncChartDrawingStorageContext()
+        activeMarketProvider = symbol.activeMarketProvider ?? activeMarketProvider
+
+        if needsReload {
+            markerManager?.clearMarkers()
+            subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: timeframe)
+            await loadChartData(
+                symbolId: symbol.id,
+                guildId: guildId,
+                timeframe: timeframe,
+                skipSubscribe: true
+            )
+            scheduleIndicatorRecalc()
+        } else {
+            markerManager?.recalculateCandleIndices(candles: dataManager.candles)
+        }
+        return true
+    }
+
     private func detailMessage(forUnsupportedSymbolDetail detail: String) -> String {
         if APIEnvironment.current == .production {
             return "Public beta currently supports live Binance crypto markets only. Broader markets unlock in production."
@@ -434,7 +536,7 @@ class ChartViewModel: ObservableObject {
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
             let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
-            if prependedCount > 0 {
+            if prependedCount > 0 && !isNavigatingToMarker {
                 gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
             }
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
@@ -453,9 +555,10 @@ class ChartViewModel: ObservableObject {
                     startTime: candlesResponse.candles.first?.timestamp,
                     endTime: previousFirstTimestamp ?? candlesResponse.candles.last?.timestamp
                 )
+                markerManager.recalculateCandleIndices(candles: dataManager.candles)
             }
 
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
         } catch {
             print("Failed to load navigation window: \(error)")
         }
@@ -497,7 +600,7 @@ class ChartViewModel: ObservableObject {
             )
 
             let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
-            if prependedCount > 0 {
+            if prependedCount > 0 && !isNavigatingToMarker {
                 gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
             }
 
@@ -519,7 +622,7 @@ class ChartViewModel: ObservableObject {
             }
 
             if prependedCount > 0 {
-                indicatorManager.recalculateIndicators(candles: dataManager.candles)
+                scheduleIndicatorRecalc()
             }
             return prependedCount
         } catch {
@@ -548,7 +651,7 @@ class ChartViewModel: ObservableObject {
                 style: .toast
             )
             dataManager.updateWithMarketData([])
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
             return
         }
 
@@ -562,7 +665,7 @@ class ChartViewModel: ObservableObject {
         // Load real chart data from backend
         Task {
             await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe, skipSubscribe: true)
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
 
             // Unsubscribe from OLD channels after data is loaded
             var oldChannels: [String] = []
@@ -587,7 +690,7 @@ class ChartViewModel: ObservableObject {
                 style: .toast
             )
             dataManager.updateWithMarketData([])
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
             return
         }
 
@@ -601,7 +704,7 @@ class ChartViewModel: ObservableObject {
         Task {
             // Load data (skip subscribe since we already did it above)
             await loadChartData(symbolId: symbol.id, guildId: guildId, timeframe: currentTimeframe, skipSubscribe: true)
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
 
             // Unsubscribe from OLD channels after data is loaded
             var oldChannels: [String] = []
@@ -925,6 +1028,17 @@ class ChartViewModel: ObservableObject {
         lastRealtimeMarketEventAt = Date()
     }
     
+    private func scheduleIndicatorRecalc() {
+        guard !pendingIndicatorRecalc else { return }
+        pendingIndicatorRecalc = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64((self?.indicatorRecalcCoalesceWindow ?? 0.08) * 1_000_000_000))
+            guard let self else { return }
+            self.pendingIndicatorRecalc = false
+            self.indicatorManager.recalculateIndicators(candles: self.dataManager.candles)
+        }
+    }
+
     /// Handle incoming WebSocket messages for chart data
     private func handleRealTimeMessage(_ message: WSIncomingMessage) {
         // Only handle messages on our subscribed market channels
@@ -942,7 +1056,7 @@ class ChartViewModel: ObservableObject {
                 timestamp: tickData.timestamp
             )
             noteRealtimeMarketEvent()
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
         }
         // Handle completed candle messages (type: "candle_complete")
         else if message.type == "candle_complete" {
@@ -964,7 +1078,7 @@ class ChartViewModel: ObservableObject {
             let trimmedCount = dataManager.processRealCandle(candle)
             let firstTimestampAfter = dataManager.candles.first?.timestamp
 
-            if trimmedCount > 0 {
+            if trimmedCount > 0 && !isNavigatingToMarker {
                 // Preserve viewport continuity when front candles are dropped.
                 gestureState.panOffset.width += CGFloat(trimmedCount) * totalCandleWidth
             }
@@ -975,7 +1089,7 @@ class ChartViewModel: ObservableObject {
             }
 
             noteRealtimeMarketEvent()
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
         }
         else if message.type == "candle_update" {
             guard let candlePayload = message.payload(as: MarketCandlePayload.self) else { return }
@@ -987,7 +1101,7 @@ class ChartViewModel: ObservableObject {
                 timestamp: candlePayload.candle.timestamp
             )
             noteRealtimeMarketEvent()
-            indicatorManager.recalculateIndicators(candles: dataManager.candles)
+            scheduleIndicatorRecalc()
         }
     }
     

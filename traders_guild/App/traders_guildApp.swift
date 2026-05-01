@@ -87,7 +87,7 @@ struct traders_guildApp: App {
                     rlAppState.handleSceneDidBecomeActive()
                     if rlAppState.currentUser != nil {
                         Task {
-                            await PushNotificationManager.shared.registerForRemoteNotifications(reason: .appActive)
+                            await PushNotificationManager.shared.requestPermissionAndRegister(reason: .appActive)
                         }
                     }
                 case .inactive:
@@ -130,14 +130,6 @@ struct traders_guildApp: App {
             .fullScreenCover(isPresented: $rlAppState.showBetaWelcomeSheet) {
                 BetaWelcomeSheetView()
                     .environmentObject(rlAppState)
-            }
-            .sheet(isPresented: $rlAppState.showSignupWelcomeCarousel, onDismiss: {
-                rlAppState.dismissSignupWelcomeCarousel()
-            }) {
-                SignupWelcomeCarouselView()
-                    .environmentObject(rlAppState)
-                    .presentationDetents([.fraction(0.58)])
-                    .presentationDragIndicator(.visible)
             }
             .task(id: rlAppState.isAuthenticated) {
                 guard rlAppState.isAuthenticated else { return }

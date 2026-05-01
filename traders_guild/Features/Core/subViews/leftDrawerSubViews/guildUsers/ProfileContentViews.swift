@@ -911,9 +911,15 @@ struct AwardCard: View {
                 // Glow effect for rare+ awards
                 if rarity != .common {
                     Circle()
-                        .fill(rarity.glowColor)
-                        .frame(width: 56, height: 56)
-                        .blur(radius: 8)
+                        .fill(
+                            RadialGradient(
+                                colors: [rarity.glowColor, rarity.glowColor.opacity(0)],
+                                center: .center,
+                                startRadius: 12,
+                                endRadius: 32
+                            )
+                        )
+                        .frame(width: 64, height: 64)
                 }
                 
                 Circle()

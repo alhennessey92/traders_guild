@@ -2176,6 +2176,13 @@ struct ChartMarkerSystem {
         dimmed: Bool = false,
         editingEmojiOverride: (markerId: UUID, emoji: String)? = nil
     ) {
+        guard priceRange.max > priceRange.min,
+              chartSize.width > 0,
+              chartSize.height > 0,
+              priceScale > 0,
+              totalCandleWidth > 0,
+              actualCandleWidth > 0 else { return }
+
         var markerContext = context
         let isDimmed = dimmed
         if dimmed {
@@ -2534,6 +2541,13 @@ struct ChartMarkerSystem {
         actualCandleWidth: CGFloat,
         totalOffset: CGFloat
     ) -> ChartMarkerUI? {
+        guard priceRange.max > priceRange.min,
+              chartSize.width > 0,
+              chartSize.height > 0,
+              priceScale > 0,
+              totalCandleWidth > 0,
+              actualCandleWidth > 0 else { return nil }
+
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
