@@ -2593,6 +2593,14 @@ struct RLSignupData {
     var selectedInterests: [String] = []
     var language: String = RLSignupData.defaultLanguage()
     var location: String = RLSignupData.defaultLocation()
+    var profileBio: String = ""
+    var profileTradingStyle: String = ""
+    var profileTwitterHandle: String = ""
+    var profileDiscordHandle: String = ""
+    var profileTelegramHandle: String = ""
+    var profileTradingViewHandle: String = ""
+    var profileYoutubeHandle: String = ""
+    var profileAvatarImageData: Data?
 
     /// True when this signup was initiated via Apple Sign In (skips password, pre-fills Apple data)
     var isAppleSignUp: Bool = false
@@ -2686,7 +2694,6 @@ enum RLSignupStep: Hashable {
     case accountInfo
     case appleProfileCompletion
     case username
-    case basics
     case interests
     case guild
     case profile

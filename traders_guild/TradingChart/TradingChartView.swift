@@ -435,6 +435,9 @@ struct TradingChartView: View {
     
     /// Track if chart is loading (waiting for data)
     @State private var isChartLoading = true
+
+    /// Breathing animation for marker-navigation loading state.
+    @State private var markerNavigationPulse = false
     
     /// Track the marker ID that was just tapped (for animation)
     @State private var tappedMarkerId: UUID? = nil
@@ -1072,7 +1075,9 @@ struct TradingChartView: View {
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
             }
             .onChange(of: gestureState.panOffset.width) { _, _ in
-                syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                if !isChartPanning {
+                    syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                }
                 syncChartDrawingPlacementAnchorToVisibleCenter()
                 requestOlderCandlesIfNeeded(chartWidth: geometry.size.width)
             }
@@ -1759,6 +1764,7 @@ struct TradingChartView: View {
         let severity = session.target.alertSeverity
         let symbol = MarkerVisualSpec.symbol(for: intent, severity: severity)
         let palette = MarkerVisualSpec.palette(for: intent, severity: severity)
+        let accent = palette.first ?? AppColors.primaryForeground
         let title = session.phase.title
         let subtitle = session.phase.subtitle
 
@@ -1768,6 +1774,27 @@ struct TradingChartView: View {
 
             VStack(spacing: 14) {
                 ZStack {
+                    if session.phase.isLoading {
+                        Circle()
+                            .stroke(accent.opacity(0.45), lineWidth: 1.4)
+                            .frame(width: 68, height: 68)
+                            .scaleEffect(markerNavigationPulse ? 1.18 : 0.88)
+                            .opacity(markerNavigationPulse ? 0.05 : 0.62)
+                            .animation(
+                                .easeOut(duration: 1.15).repeatForever(autoreverses: false),
+                                value: markerNavigationPulse
+                            )
+
+                        Circle()
+                            .fill(accent.opacity(0.12))
+                            .frame(width: 58, height: 58)
+                            .scaleEffect(markerNavigationPulse ? 1.1 : 0.96)
+                            .animation(
+                                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                                value: markerNavigationPulse
+                            )
+                    }
+
                     Circle()
                         .fill(.ultraThinMaterial)
                         .overlay(
@@ -1775,17 +1802,21 @@ struct TradingChartView: View {
                                 .stroke(MarkerVisualSpec.borderColor(for: intent, severity: severity), lineWidth: 1)
                         )
                         .frame(width: 58, height: 58)
+                        .scaleEffect(session.phase.isLoading && markerNavigationPulse ? 1.03 : 1.0)
                         .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-
-                    if session.phase.isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: palette.first ?? AppColors.primaryForeground))
-                            .scaleEffect(1.45)
-                    }
+                        .animation(
+                            .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                            value: markerNavigationPulse
+                        )
 
                     Image(systemName: symbol)
                         .font(.system(size: 23, weight: .bold))
-                        .foregroundColor(palette.first ?? MarkerVisualSpec.iconBaseColor)
+                        .foregroundColor(accent)
+                        .scaleEffect(session.phase.isLoading && markerNavigationPulse ? 1.07 : 1.0)
+                        .animation(
+                            .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                            value: markerNavigationPulse
+                        )
                 }
 
                 Text(title)
@@ -1808,6 +1839,15 @@ struct TradingChartView: View {
             )
         }
         .transition(.opacity.animation(.easeOut(duration: 0.2)))
+        .onAppear {
+            markerNavigationPulse = false
+            DispatchQueue.main.async {
+                markerNavigationPulse = true
+            }
+        }
+        .onDisappear {
+            markerNavigationPulse = false
+        }
     }
 
     @ViewBuilder
@@ -3020,7 +3060,7 @@ struct TradingChartView: View {
     }
 
     private func syncChartDrawingPlacementAnchorToVisibleCenter() {
-        guard !chartData.candles.isEmpty else { return }
+        guard isDefaultChartDrawingContextEnabled, !isChartPanning, !chartData.candles.isEmpty else { return }
         let centerIndex = snappedMarkerCandleIndex(from: calculateCenterCandleIndex())
             ?? max(0, min(chartData.candles.count - 1, calculateCenterCandleIndex()))
         guard chartData.candles.indices.contains(centerIndex) else { return }

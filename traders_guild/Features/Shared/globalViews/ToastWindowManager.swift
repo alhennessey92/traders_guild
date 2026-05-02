@@ -15,10 +15,13 @@ private final class ToastPassthroughWindow: UIWindow {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let inToastRegion = point.y >= bounds.maxY - toastRegionHeight
-        if inToastRegion {
-            return super.hitTest(point, with: event)
+        guard inToastRegion else { return nil }
+
+        let hitView = super.hitTest(point, with: event)
+        if hitView === rootViewController?.view {
+            return nil
         }
-        return nil
+        return hitView
     }
 }
 
@@ -27,10 +30,13 @@ class ToastWindowManager: ObservableObject {
     static let shared = ToastWindowManager()
     
     private var toastWindow: UIWindow?
+    private var activeAlertId: UUID?
     
     private init() {}
     
     func showToast(_ alert: RLAppAlert, onDismiss: @escaping () -> Void) {
+        activeAlertId = alert.id
+
         // Create window if needed (passthrough so touches outside toast don't block app)
         if toastWindow == nil {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
@@ -48,8 +54,10 @@ class ToastWindowManager: ObservableObject {
         let toastView = VStack {
             Spacer()
             ErrorToastView(alert: alert, onDismiss: {
-                onDismiss()
-                self.hideToast()
+                if self.activeAlertId == alert.id {
+                    onDismiss()
+                    self.hideToast()
+                }
             })
             .padding(.bottom, 20)
         }
@@ -69,6 +77,7 @@ class ToastWindowManager: ObservableObject {
     
     func hideToast() {
         guard let window = toastWindow else { return }
+        activeAlertId = nil
         
         UIView.animate(withDuration: 0.3, animations: {
             window.alpha = 0

@@ -265,7 +265,7 @@ struct WatchlistView: View {
         let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
 
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -275,7 +275,7 @@ struct WatchlistView: View {
                         count: classSymbols.count,
                         icon: assetClass.icon,
                         iconColor: colorForAssetClass(assetClass),
-                        isExpandedByDefault: true
+                        isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in
@@ -300,7 +300,7 @@ struct WatchlistView: View {
         let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -310,7 +310,7 @@ struct WatchlistView: View {
                         count: classSymbols.count,
                         icon: assetClass.icon,
                         iconColor: colorForAssetClass(assetClass),
-                        isExpandedByDefault: true
+                        isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in
@@ -336,7 +336,7 @@ struct WatchlistView: View {
         let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -346,7 +346,7 @@ struct WatchlistView: View {
                         count: classSymbols.count,
                         icon: assetClass.icon,
                         iconColor: colorForAssetClass(assetClass),
-                        isExpandedByDefault: true
+                        isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in
@@ -415,7 +415,7 @@ struct WatchlistView: View {
         let grouped = Dictionary(grouping: searchResults) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -425,7 +425,7 @@ struct WatchlistView: View {
                         count: classSymbols.count,
                         icon: assetClass.icon,
                         iconColor: colorForAssetClass(assetClass),
-                        isExpandedByDefault: true
+                        isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in

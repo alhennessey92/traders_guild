@@ -31,8 +31,6 @@ struct ContentView: View {
                         AppleProfileCompletionView(data: $data, path: $path)
                     case .username:
                         SignupUsernameView(data: $data, path: $path)
-                    case .basics:
-                        SignupBasicsView(data: $data, path: $path)
                     case .interests:
                         SignupInterestsView(data: $data, path: $path)
                     case .guild:
@@ -116,8 +114,6 @@ struct ContentView: View {
 //                                SignupEmailView(data: $data, path: $path)
 //                            case .username:
 //                                SignupUsernameView(data: $data, path: $path)
-//                            case .basics:
-//                                SignupBasicsView(data: $data, path: $path)
 //                            case .guild:
 //                                SignupGuildView(data: $data, path: $path)
 //                            }

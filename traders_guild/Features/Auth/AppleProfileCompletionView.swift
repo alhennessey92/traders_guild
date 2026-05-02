@@ -35,7 +35,7 @@ struct AppleProfileCompletionView: View {
             StaticAuthBackgroundView()
             ScrollView(showsIndicators: false) {
                 VStack {
-                    Text("Step 1 of 6")
+                    Text("Step 1 of 5")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -44,7 +44,6 @@ struct AppleProfileCompletionView: View {
 
                     HStack(spacing: 6) {
                         Capsule().fill(AppColors.whiteText).frame(height: 5)
-                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)

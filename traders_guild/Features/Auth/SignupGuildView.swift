@@ -32,7 +32,7 @@ struct SignupGuildView: View {
             StaticAuthBackgroundView()
 
             VStack(spacing: 0) {
-                Text("Step 5 of 6")
+                Text("Step 5 of 5")
                     .font(AppFonts.smallNotice())
                     .foregroundColor(AppColors.greyText)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,7 +45,6 @@ struct SignupGuildView: View {
                     Capsule().fill(AppColors.whiteText).frame(height: 5)
                     Capsule().fill(AppColors.whiteText).frame(height: 5)
                     Capsule().fill(AppColors.whiteText).frame(height: 5)
-                    Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
@@ -248,12 +247,12 @@ struct SignupGuildView: View {
         if isContinuing { return "Continuing..." }
         if isRetryAssignmentState { return "Retry assignment" }
         if shouldShowAssignedFallback, let selectedGuild {
-            return "Continue with \(selectedGuild.name)"
+            return "Finish with \(selectedGuild.name)"
         }
-        if requiresGuildSelection { return "Select a Guild to Continue" }
-        if let selectedGuild { return "Continue with \(selectedGuild.name)" }
-        if availableGuilds.isEmpty { return "Continue" }
-        return "Continue"
+        if requiresGuildSelection { return "Select a Guild to Finish" }
+        if let selectedGuild { return "Finish with \(selectedGuild.name)" }
+        if availableGuilds.isEmpty { return "Finish Registration" }
+        return "Finish Registration"
     }
 
     private var continueDisabled: Bool {
@@ -347,7 +346,9 @@ struct SignupGuildView: View {
                rlAppState.currentGuild?.id != selectedGuild.id {
                 _ = try await rlAppState.joinGuild(guildId: selectedGuild.id, showTransition: false)
             }
-            path.append(.profile)
+            await applyProfileDraftIfNeeded()
+            rlAppState.onboardingState = .guildSelected
+            rlAppState.completeOnboardingAndEnterApp()
         } catch is CancellationError {
             return
         } catch {
@@ -360,7 +361,9 @@ struct SignupGuildView: View {
            assignmentErrorMessage == nil,
            selectedGuild != nil,
            rlAppState.isAuthenticated {
-            path.append(.profile)
+            await applyProfileDraftIfNeeded()
+            rlAppState.onboardingState = .guildSelected
+            rlAppState.completeOnboardingAndEnterApp()
             return
         }
 
@@ -371,9 +374,15 @@ struct SignupGuildView: View {
             selectedGuild = assignedGuild
             guildMode = .assignedFallbackMode
             assignmentErrorMessage = nil
+            await applyProfileDraftIfNeeded()
+            rlAppState.onboardingState = .guildSelected
+            rlAppState.completeOnboardingAndEnterApp()
         } catch {
             if await recoverAssignedGuildFromCurrentState() {
                 assignmentErrorMessage = nil
+                await applyProfileDraftIfNeeded()
+                rlAppState.onboardingState = .guildSelected
+                rlAppState.completeOnboardingAndEnterApp()
                 return
             }
 
@@ -395,6 +404,62 @@ struct SignupGuildView: View {
         defer { isPreparingAccount = false }
         try await rlAppState.signUp(data: data, beginOnboarding: true)
         path = [.guild]
+    }
+
+    private func applyProfileDraftIfNeeded() async {
+        do {
+            if let imageData = data.profileAvatarImageData {
+                _ = try await rlAppState.uploadAvatar(imageData: imageData, mimeType: "image/jpeg")
+            }
+
+            let orderedSelectedNames = RLTradingInterestsCatalog.allItems
+                .map(\.name)
+                .filter { data.selectedInterests.contains($0) }
+
+            let tradingInterests = RLTradingInterestsCatalog.allItems
+                .filter { data.selectedInterests.contains($0.name) }
+                .map { base in
+                    RLTradingInterestItem(
+                        name: base.name,
+                        icon: base.icon,
+                        isPrimary: orderedSelectedNames.first == base.name
+                    )
+                }
+
+            let links: [RLSocialLinkItem] = [
+                RLSocialLinkItem(platform: "twitter", username: RLAuthValidator.trimmed(data.profileTwitterHandle), url: nil),
+                RLSocialLinkItem(platform: "discord", username: RLAuthValidator.trimmed(data.profileDiscordHandle), url: nil),
+                RLSocialLinkItem(platform: "telegram", username: RLAuthValidator.trimmed(data.profileTelegramHandle), url: nil),
+                RLSocialLinkItem(platform: "tradingview", username: RLAuthValidator.trimmed(data.profileTradingViewHandle), url: nil),
+                RLSocialLinkItem(platform: "youtube", username: RLAuthValidator.trimmed(data.profileYoutubeHandle), url: nil),
+            ].filter { !$0.username.isEmpty }
+
+            let bio = RLAuthValidator.trimmed(data.profileBio)
+            let tradingStyle = RLAuthValidator.trimmed(data.profileTradingStyle)
+            let language = RLAuthValidator.trimmed(data.language)
+            let location = RLAuthValidator.trimmed(data.location)
+
+            let hasProfileFields = !bio.isEmpty
+                || !tradingStyle.isEmpty
+                || !language.isEmpty
+                || !location.isEmpty
+                || !links.isEmpty
+                || !tradingInterests.isEmpty
+
+            guard hasProfileFields else { return }
+
+            let request = RLUserProfileUpdateRequest(
+                bio: bio.isEmpty ? nil : bio,
+                language: language.isEmpty ? nil : language,
+                location: location.isEmpty ? nil : location,
+                tradingStyle: tradingStyle.isEmpty ? nil : tradingStyle,
+                socialLinks: links.isEmpty ? nil : links,
+                tradingInterests: tradingInterests.isEmpty ? nil : tradingInterests
+            )
+            _ = try await rlAppState.updateCurrentUserProfile(request)
+        } catch {
+            // Optional profile details should not block the user from entering their guild.
+        }
     }
 
     private func recoverAssignedGuildFromCurrentState() async -> Bool {
@@ -456,7 +521,7 @@ struct SignupProfileSetupView: View {
                 VStack(spacing: 16) {
                     // Step indicator
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Step 6 of 6")
+                        Text("Step 4 of 5")
                             .font(AppFonts.smallNotice())
                             .foregroundColor(AppColors.greyText)
 
@@ -473,8 +538,10 @@ struct SignupProfileSetupView: View {
                     .padding(.top, 12)
 
                     HStack(spacing: 6) {
-                        ForEach(0..<6, id: \.self) { _ in
-                            Capsule().fill(AppColors.whiteText).frame(height: 5)
+                        ForEach(0..<5, id: \.self) { index in
+                            Capsule()
+                                .fill(index < 4 ? AppColors.whiteText : AppColors.whiteText.opacity(0.25))
+                                .frame(height: 5)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -679,11 +746,8 @@ struct SignupProfileSetupView: View {
 
                 HStack(spacing: 10) {
                     Button {
-                        if rlAppState.currentUser?.isVerified == false {
-                            path.append(.emailVerification)
-                        } else {
-                            rlAppState.completeOnboardingAndEnterApp()
-                        }
+                        clearProfileDraft()
+                        path.append(.guild)
                     } label: {
                         Text("Skip for now")
                             .font(.subheadline)
@@ -717,13 +781,36 @@ struct SignupProfileSetupView: View {
             if selectedInterests.isEmpty, !data.selectedInterests.isEmpty {
                 selectedInterests = Set(data.selectedInterests)
             }
+            if bio.isEmpty {
+                bio = data.profileBio
+            }
             if selectedLanguageCode.isEmpty {
-                // data.language stores a code from locale detection
-                selectedLanguageCode = data.language
+                selectedLanguageCode = languageCode(from: data.language)
             }
             if selectedCountryCode.isEmpty {
-                // data.location stores a code from locale detection
-                selectedCountryCode = data.location
+                selectedCountryCode = countryCode(from: data.location)
+            }
+            if tradingStyle.isEmpty {
+                tradingStyle = data.profileTradingStyle
+            }
+            if twitterHandle.isEmpty {
+                twitterHandle = data.profileTwitterHandle
+            }
+            if discordHandle.isEmpty {
+                discordHandle = data.profileDiscordHandle
+            }
+            if telegramHandle.isEmpty {
+                telegramHandle = data.profileTelegramHandle
+            }
+            if tradingViewHandle.isEmpty {
+                tradingViewHandle = data.profileTradingViewHandle
+            }
+            if youtubeHandle.isEmpty {
+                youtubeHandle = data.profileYoutubeHandle
+            }
+            if selectedAvatarImage == nil,
+               let imageData = data.profileAvatarImageData {
+                selectedAvatarImage = UIImage(data: imageData)
             }
         }
     }
@@ -800,57 +887,56 @@ struct SignupProfileSetupView: View {
         isSaving = true
         defer { isSaving = false }
 
-        do {
-            if let selectedAvatarImage {
-                if let imageData = selectedAvatarImage.jpegData(compressionQuality: 0.82) {
-                    _ = try await rlAppState.uploadAvatar(imageData: imageData, mimeType: "image/jpeg")
-                }
-            }
+        saveProfileDraft()
+        path.append(.guild)
+    }
 
-            let orderedSelectedNames = suggestedInterests
-                .map(\.name)
-                .filter { selectedInterests.contains($0) }
+    private func saveProfileDraft() {
+        data.profileBio = RLAuthValidator.trimmed(bio)
+        data.profileTradingStyle = RLAuthValidator.trimmed(tradingStyle)
+        data.profileTwitterHandle = RLAuthValidator.trimmed(twitterHandle)
+        data.profileDiscordHandle = RLAuthValidator.trimmed(discordHandle)
+        data.profileTelegramHandle = RLAuthValidator.trimmed(telegramHandle)
+        data.profileTradingViewHandle = RLAuthValidator.trimmed(tradingViewHandle)
+        data.profileYoutubeHandle = RLAuthValidator.trimmed(youtubeHandle)
+        data.profileAvatarImageData = selectedAvatarImage?.jpegData(compressionQuality: 0.82)
+        data.selectedInterests = suggestedInterests
+            .map(\.name)
+            .filter { selectedInterests.contains($0) }
 
-            let selected = suggestedInterests.map { base -> RLTradingInterestItem in
-                RLTradingInterestItem(
-                    name: base.name,
-                    icon: base.icon,
-                    isPrimary: orderedSelectedNames.first == base.name
-                )
-            }.filter { selectedInterests.contains($0.name) }
+        let languageLabel = LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
+        let countryLabel = LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
+        data.language = languageLabel ?? ""
+        data.location = countryLabel ?? ""
+    }
 
-            let links: [RLSocialLinkItem] = [
-                RLSocialLinkItem(platform: "twitter", username: RLAuthValidator.trimmed(twitterHandle), url: nil),
-                RLSocialLinkItem(platform: "discord", username: RLAuthValidator.trimmed(discordHandle), url: nil),
-                RLSocialLinkItem(platform: "telegram", username: RLAuthValidator.trimmed(telegramHandle), url: nil),
-                RLSocialLinkItem(platform: "tradingview", username: RLAuthValidator.trimmed(tradingViewHandle), url: nil),
-                RLSocialLinkItem(platform: "youtube", username: RLAuthValidator.trimmed(youtubeHandle), url: nil),
-            ].filter { !$0.username.isEmpty }
+    private func clearProfileDraft() {
+        data.profileBio = ""
+        data.profileTradingStyle = ""
+        data.profileTwitterHandle = ""
+        data.profileDiscordHandle = ""
+        data.profileTelegramHandle = ""
+        data.profileTradingViewHandle = ""
+        data.profileYoutubeHandle = ""
+        data.profileAvatarImageData = nil
+    }
 
-            let languageLabel = LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
-            let countryLabel = LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
-
-            let request = RLUserProfileUpdateRequest(
-                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio.trimmingCharacters(in: .whitespacesAndNewlines),
-                language: languageLabel,
-                location: countryLabel,
-                tradingStyle: tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : tradingStyle.trimmingCharacters(in: .whitespacesAndNewlines),
-                socialLinks: links.isEmpty ? nil : links,
-                tradingInterests: selected.isEmpty ? nil : selected
-            )
-            _ = try await rlAppState.updateCurrentUserProfile(request)
-            data.language = languageLabel ?? ""
-            data.location = countryLabel ?? ""
-        } catch {
-            // Error surfaced by RLAppState
+    private func languageCode(from value: String) -> String {
+        let normalized = RLAuthValidator.trimmed(value)
+        guard !normalized.isEmpty else { return "" }
+        if LocaleOptionCatalog.languages.contains(where: { $0.code == normalized }) {
+            return normalized
         }
+        return LocaleOptionCatalog.languages.first(where: { $0.label == normalized })?.code ?? ""
+    }
 
-        // Navigate to email verification step if user is not yet verified
-        if rlAppState.currentUser?.isVerified == false {
-            path.append(.emailVerification)
-        } else {
-            rlAppState.completeOnboardingAndEnterApp()
+    private func countryCode(from value: String) -> String {
+        let normalized = RLAuthValidator.trimmed(value)
+        guard !normalized.isEmpty else { return "" }
+        if LocaleOptionCatalog.countries.contains(where: { $0.code == normalized }) {
+            return normalized
         }
+        return LocaleOptionCatalog.countries.first(where: { $0.label == normalized })?.code ?? ""
     }
 }
 

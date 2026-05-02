@@ -190,6 +190,7 @@ class RLAppState: ObservableObject {
     
     @Published var isLoading: Bool = false
     @Published var isCompletingSignup: Bool = false
+    @Published var isLoggingOut: Bool = false
     @Published var errorMessage: String?
     @Published var currentAlert: RLAppAlert?
     
@@ -549,6 +550,7 @@ class RLAppState: ObservableObject {
     
     /// Login with identifier (email or username) and password
     func login(identifier: String, password: String) async throws {
+        guard !isLoggingOut else { throw CancellationError() }
         isLoading = true
         errorMessage = nil
         clearAlert()
@@ -621,6 +623,7 @@ class RLAppState: ObservableObject {
     /// Login or register via Apple Sign In.
     /// Routes new Apple users into onboarding; returning users straight to guild setup.
     func loginWithApple(identityToken: String, authorizationCode: String, fullName: String?, email: String?) async throws {
+        guard !isLoggingOut else { throw CancellationError() }
         isLoading = true
         isHandlingAuthFlow = true
         isCompletingSignup = true
@@ -852,14 +855,19 @@ class RLAppState: ObservableObject {
 
     /// Logout and clear session
     func logout() {
+        guard !isLoggingOut else { return }
+        isLoggingOut = true
         // Unsubscribe from notifications
-        unsubscribeFromNotifications()
+        unsubscribeFromNotifications(deregisterDeviceToken: false)
         Task {
+            await PushNotificationManager.shared.deregisterToken()
             await realApi.logout()
+            await MainActor.run {
+                clearLocalSessionState(clearAlertState: true)
+                showInfo(RLUserFacingCopy.text(.infoLoggedOut))
+                isLoggingOut = false
+            }
         }
-
-        clearLocalSessionState(clearAlertState: true)
-        showInfo(RLUserFacingCopy.text(.infoLoggedOut))
     }
 
     /// Leave signup/onboarding mid-flow: revoke tokens, clear local session, return user to welcome/sign-in.
@@ -1371,6 +1379,15 @@ class RLAppState: ObservableObject {
                 throw error
             }
             if case APIError.serverError(let statusCode, let detail) = error, statusCode == 403 {
+                if detail.localizedCaseInsensitiveContains("verify") {
+                    showError(
+                        title: "Verify Email",
+                        message: "Verify your email before joining another guild.",
+                        severity: .warning,
+                        style: .toast
+                    )
+                    throw error
+                }
                 if detail == "approval_required" {
                     showError(
                         title: "Approval Required",
@@ -1501,6 +1518,17 @@ class RLAppState: ObservableObject {
             showSuccess(RLUserFacingCopy.format(.successCreatedGuildNamed, guildWithMembership.guild.name))
             return guildWithMembership
         } catch {
+            if case APIError.serverError(let statusCode, let detail) = error,
+               statusCode == 403,
+               detail.localizedCaseInsensitiveContains("verify") {
+                showError(
+                    title: "Verify Email",
+                    message: "Verify your email before creating a guild.",
+                    severity: .warning,
+                    style: .toast
+                )
+                throw error
+            }
             if case APIError.badRequest(let detail) = error, detail == "guild_create_limit_reached" {
                 showError(
                     title: "Guild Limit Reached",
@@ -2668,6 +2696,7 @@ class RLAppState: ObservableObject {
         showGuildSelectionSheet = false
         showBetaWelcomeSheet = false
         isHandlingAuthFlow = false
+        isLoggingOut = false
         isOnboardingFlowActive = false
         runtimeFlags = .disabled
         reportedUserStateVersion = 0
@@ -3900,13 +3929,15 @@ class RLAppState: ObservableObject {
     }
 
     /// Unsubscribe when logging out
-    func unsubscribeFromNotifications() {
+    func unsubscribeFromNotifications(deregisterDeviceToken: Bool = true) {
         guard let userId = currentUser?.id else { return }
         let channel = "user:\(userId):notifications"
         RealTimeService.shared.unsubscribe(from: [channel], owner: "notifications")
 
-        Task {
-            await PushNotificationManager.shared.deregisterToken()
+        if deregisterDeviceToken {
+            Task {
+                await PushNotificationManager.shared.deregisterToken()
+            }
         }
     }
     

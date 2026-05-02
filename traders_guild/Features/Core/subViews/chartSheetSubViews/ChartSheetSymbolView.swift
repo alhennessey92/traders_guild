@@ -807,7 +807,7 @@ struct ChartSheetSymbolView: View {
         let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
         
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -816,6 +816,7 @@ struct ChartSheetSymbolView: View {
                         assetClass: assetClass,
                         symbols: classSymbols,
                         currentSymbolId: currentSymbolDTO?.id,
+                        isExpandedByDefault: assetClass == .crypto,
                         onSelectSymbol: { symbol in
                             selectSymbol(symbol)
                         }
@@ -829,7 +830,7 @@ struct ChartSheetSymbolView: View {
         let grouped = Dictionary(grouping: symbols) { symbol -> RLAssetClass in
             RLAssetClass.fromBackendString(symbol.assetClass) ?? .forex
         }
-        let orderedClasses: [RLAssetClass] = [.forex, .crypto, .stocks, .commodities, .indices, .futures]
+        let orderedClasses: [RLAssetClass] = [.crypto, .forex, .stocks, .commodities, .indices, .futures]
 
         return VStack(spacing: 10) {
             ForEach(orderedClasses, id: \.self) { assetClass in
@@ -839,7 +840,7 @@ struct ChartSheetSymbolView: View {
                         count: classSymbols.count,
                         icon: assetClass.icon,
                         iconColor: assetClassColor(assetClass),
-                        isExpandedByDefault: true
+                        isExpandedByDefault: assetClass == .crypto
                     ) {
                         LazyVStack(spacing: 6) {
                             ForEach(classSymbols) { symbol in
@@ -1066,6 +1067,7 @@ struct SymbolAssetGroup: View {
     let assetClass: RLAssetClass
     let symbols: [RLTradingSymbolDTO]
     let currentSymbolId: UUID?
+    let isExpandedByDefault: Bool
     let onSelectSymbol: (RLTradingSymbolDTO) -> Void
     
     var body: some View {
@@ -1074,7 +1076,7 @@ struct SymbolAssetGroup: View {
             count: symbols.count,
             icon: assetClass.icon,
             iconColor: assetClassColor(assetClass),
-            isExpandedByDefault: true
+            isExpandedByDefault: isExpandedByDefault
         ) {
             LazyVStack(spacing: 6) {
                 ForEach(symbols) { symbol in

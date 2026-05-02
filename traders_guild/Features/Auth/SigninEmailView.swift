@@ -58,7 +58,7 @@ struct SigninEmailView: View {
 
                     StandardTextFieldView(title: "Email or Username", text: $emailOrUsername)
                         .padding(.bottom, 10)
-                        .disabled(isLoggingIn)
+                        .disabled(isLoggingIn || RLAppState.isLoggingOut)
 
                     if let identifierHint {
                         Text(identifierHint)
@@ -71,7 +71,7 @@ struct SigninEmailView: View {
 
                     StandardTextFieldView(title: "Password", text: $password, isSecure: true)
                         .padding(.bottom, 10)
-                        .disabled(isLoggingIn)
+                        .disabled(isLoggingIn || RLAppState.isLoggingOut)
 
                     Spacer(minLength: 120)
                 }
@@ -113,8 +113,8 @@ struct SigninEmailView: View {
                             await handleLogin()
                         }
                     }
-                    .disabled(!isFormValid || isLoggingIn)
-                    .opacity(isFormValid && !isLoggingIn ? 1.0 : 0.5)
+                    .disabled(!isFormValid || isLoggingIn || RLAppState.isLoggingOut)
+                    .opacity(isFormValid && !isLoggingIn && !RLAppState.isLoggingOut ? 1.0 : 0.5)
                     .overlay {
                         if isLoggingIn {
                             HStack {
@@ -136,7 +136,7 @@ struct SigninEmailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding()
                     }
-                    .disabled(isLoggingIn)
+                    .disabled(isLoggingIn || RLAppState.isLoggingOut)
                 }
                 .background(Color.clear)
             }
@@ -144,6 +144,7 @@ struct SigninEmailView: View {
     }
 
     private func handleLogin() async {
+        guard !RLAppState.isLoggingOut else { return }
         isLoggingIn = true
 
         do {

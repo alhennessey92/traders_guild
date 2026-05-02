@@ -58,7 +58,7 @@ struct WelcomeView: View {
                                 foregroundColor: AppColors.whiteText
                             )
                         }
-                        .disabled(isBiometricLoading)
+                        .disabled(isBiometricLoading || RLAppState.isLoggingOut)
                     }
 
                     Button {
@@ -71,7 +71,7 @@ struct WelcomeView: View {
                             foregroundColor: AppColors.gradientBackgroundDark
                         )
                     }
-                    .disabled(isAppleSignInLoading)
+                    .disabled(isAppleSignInLoading || RLAppState.isLoggingOut)
 
                     HStack(alignment: .center) {
                         Rectangle()
@@ -99,6 +99,7 @@ struct WelcomeView: View {
                             foregroundColor: AppColors.gradientBackgroundDark
                         )
                     }
+                    .disabled(RLAppState.isLoggingOut)
 
                     Button {
                         RLAppState.showInfo("Google sign-in will be enabled in an upcoming release.")
@@ -168,6 +169,7 @@ struct WelcomeView: View {
     }
 
     private func handleBiometricLogin(autoTriggered: Bool = false) {
+        guard !RLAppState.isLoggingOut else { return }
         guard !isBiometricLoading else { return }
         isBiometricLoading = true
         Task {
@@ -191,6 +193,7 @@ struct WelcomeView: View {
     }
 
     private func handleAppleSignIn() {
+        guard !RLAppState.isLoggingOut else { return }
         isAppleSignInLoading = true
         Task {
             do {

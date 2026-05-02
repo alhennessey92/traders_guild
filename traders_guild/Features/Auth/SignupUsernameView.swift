@@ -31,7 +31,7 @@ struct SignupUsernameView: View {
             StaticAuthBackgroundView()
             ScrollView(showsIndicators: false) {
                 VStack {
-                    Text("Step 2 of 6")
+                    Text("Step 2 of 5")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,7 +41,6 @@ struct SignupUsernameView: View {
                     HStack(spacing: 6) {
                         Capsule().fill(AppColors.whiteText).frame(height: 5)
                         Capsule().fill(AppColors.whiteText).frame(height: 5)
-                        Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
                         Capsule().fill(AppColors.whiteText.opacity(0.25)).frame(height: 5)
@@ -164,7 +163,7 @@ struct SignupUsernameView: View {
             }
 
             data.username = normalizedUsername
-            path.append(.basics)
+            path.append(.interests)
         } catch {
             if case APIError.badRequest(let detail) = error {
                 usernameAvailabilityError = detail
