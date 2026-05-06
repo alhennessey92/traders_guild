@@ -407,7 +407,18 @@ struct MACDPanelView: View {
     }
 
     private var activeGuideX: CGFloat {
-        gestureState.crosshairActive ? gestureState.crosshairX : gestureState.markerPlacementGuide.x
+        if gestureState.crosshairActive {
+            return gestureState.crosshairX
+        }
+        return liveGuideX(forCandleIndex: gestureState.markerPlacementGuide.candleIndex)
+            ?? gestureState.markerPlacementGuide.x
+    }
+
+    private func liveGuideX(forCandleIndex index: Int) -> CGFloat? {
+        guard index >= 0, totalCandleWidth > 0 else { return nil }
+        return CGFloat(index) * totalCandleWidth
+            + gestureState.panOffset.width
+            + actualCandleWidth / 2
     }
 
     private var activeGuideColor: Color {
@@ -537,7 +548,9 @@ struct MACDPanelView: View {
                 if gestureState.crosshairActive, let timestamp = gestureState.crosshairTimestamp {
                     crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.crosshairX)
                 } else if gestureState.markerPlacementGuide.isActive, let timestamp = gestureState.markerPlacementGuide.timestamp {
-                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: gestureState.markerPlacementGuide.x)
+                    let liveX = liveGuideX(forCandleIndex: gestureState.markerPlacementGuide.candleIndex)
+                        ?? gestureState.markerPlacementGuide.x
+                    crosshairTimeLabelOverlay(timestamp: timestamp, xPosition: liveX)
                 }
             }
             .frame(height: labelH)

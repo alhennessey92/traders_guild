@@ -15,8 +15,13 @@ protocol ComponentsHostAdapter {
     var currentChartTimeframe: RLChartTimeframe? { get }
     var onBeginInteractiveDrawing: (() -> Void)? { get }
     var showsMirrorButtons: Bool { get }
+    var viewportAnchorProvider: (() -> (time: Date, price: Double)?)? { get }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe)
+}
+
+extension ComponentsHostAdapter {
+    var viewportAnchorProvider: (() -> (time: Date, price: Double)?)? { nil }
 }
 
 @MainActor
@@ -33,7 +38,8 @@ struct UnifiedComponentsHostView<Adapter: ComponentsHostAdapter>: View {
                 adapter.selectTimeframe(timeframe)
             },
             onBeginInteractiveDrawing: adapter.onBeginInteractiveDrawing,
-            showsMirrorButtons: adapter.showsMirrorButtons
+            showsMirrorButtons: adapter.showsMirrorButtons,
+            viewportAnchorProvider: adapter.viewportAnchorProvider
         )
     }
 }
@@ -47,6 +53,7 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
     let onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
     let showsMirrorButtons: Bool
+    let viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     init(
         placementState: MarkerPlacementState,
@@ -55,7 +62,8 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
         currentChartTimeframe: RLChartTimeframe?,
         onSelectTimeframeAction: ((RLChartTimeframe) -> Void)?,
         onBeginInteractiveDrawing: (() -> Void)?,
-        showsMirrorButtons: Bool = true
+        showsMirrorButtons: Bool = true,
+        viewportAnchorProvider: (() -> (time: Date, price: Double)?)? = nil
     ) {
         self.placementState = placementState
         self.activeChartIndicators = activeChartIndicators
@@ -64,6 +72,7 @@ struct MarkerComponentsAdapter: ComponentsHostAdapter {
         self.onSelectTimeframeAction = onSelectTimeframeAction
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.showsMirrorButtons = showsMirrorButtons
+        self.viewportAnchorProvider = viewportAnchorProvider
     }
 
     func selectTimeframe(_ timeframe: RLChartTimeframe) {

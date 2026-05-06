@@ -17,9 +17,16 @@ enum MarkerPlacementGuideSource: String, Equatable {
 }
 
 /// Shared placement guide state so chart and indicator panels can render a synchronized marker guide.
+///
+/// `x` is a cached screen position computed at the time the guide state was
+/// last published. For surfaces that have access to the live coordinate system
+/// (e.g. the chart Canvas), prefer recomputing x from `candleIndex` on every
+/// draw — the cached value lags one onChange tick behind a pan and that
+/// causes the line to drift out of sync with the candles mid-pan.
 struct MarkerPlacementGuideState: Equatable {
     var isActive: Bool = false
     var x: CGFloat = 0
+    var candleIndex: Int = -1
     var timestamp: Date?
     var markerIntent: RLMarkerIntent?
     var source: MarkerPlacementGuideSource = .placement

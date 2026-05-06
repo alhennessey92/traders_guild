@@ -70,12 +70,19 @@ struct ContentView: View {
         }
         .onAppear {
             showResetFromDeepLink = RLAppState.pendingPasswordResetToken != nil
+            resumeEmailVerificationIfNeeded()
         }
         .onReceive(RLAppState.$appleSignUpPrefill) { prefill in
             guard let prefill = prefill else { return }
             data = prefill
             RLAppState.appleSignUpPrefill = nil
             path = [.appleProfileCompletion]
+        }
+        .onChange(of: RLAppState.onboardingState) { _, _ in
+            resumeEmailVerificationIfNeeded()
+        }
+        .onChange(of: RLAppState.currentUser?.isVerified) { _, _ in
+            resumeEmailVerificationIfNeeded()
         }
         .onChange(of: RLAppState.pendingPasswordResetToken) { _, newValue in
             showResetFromDeepLink = newValue != nil
@@ -90,6 +97,21 @@ struct ContentView: View {
                 )
                 .environmentObject(RLAppState)
             }
+        }
+    }
+
+    private func resumeEmailVerificationIfNeeded() {
+        guard RLAppState.isAuthenticated,
+              RLAppState.isOnboardingFlowActive,
+              RLAppState.onboardingState == .guildSelected,
+              let user = RLAppState.currentUser,
+              user.isVerified == false else {
+            return
+        }
+
+        data.email = user.email
+        if path.last != .emailVerification {
+            path = [.emailVerification]
         }
     }
 }

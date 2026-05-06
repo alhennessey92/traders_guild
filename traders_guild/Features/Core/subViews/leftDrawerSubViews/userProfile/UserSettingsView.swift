@@ -92,18 +92,6 @@ struct UserSettingsSheetView: View {
             ChangeEmailView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
 
-        case .verifyEmail:
-            NavigationStack {
-                EmailVerificationView(
-                    userEmail: rlAppState.currentUser?.email ?? "",
-                    onContinue: {
-                        currentDestination = nil
-                    },
-                    showSkipUnverifiedOption: false
-                )
-                .environmentObject(rlAppState)
-            }
-            
         case .changePassword:
             ChangePasswordView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
@@ -147,8 +135,39 @@ struct UserSettingsSheetView: View {
                 }
             
         case .termsPrivacy:
-            TermsPrivacyView(onBack: { currentDestination = nil })
-            
+            TermsPrivacyView(
+                onBack: { currentDestination = nil },
+                onSelectDocument: { currentDestination = $0 }
+            )
+
+        case .termsOfService:
+            LegalDocumentView(
+                title: "Terms of Service",
+                resourceName: "terms_of_service",
+                onBack: { currentDestination = .termsPrivacy }
+            )
+
+        case .privacyPolicy:
+            LegalDocumentView(
+                title: "Privacy Policy",
+                resourceName: "privacy_policy",
+                onBack: { currentDestination = .termsPrivacy }
+            )
+
+        case .communityGuidelines:
+            LegalDocumentView(
+                title: "Community Guidelines",
+                resourceName: "community_guidelines",
+                onBack: { currentDestination = .termsPrivacy }
+            )
+
+        case .legalInformation:
+            LegalDocumentView(
+                title: "Legal Information",
+                resourceName: "legal_information",
+                onBack: { currentDestination = .termsPrivacy }
+            )
+
         case .about:
             AboutView(onBack: { currentDestination = nil })
             
@@ -175,7 +194,7 @@ struct UserSettingsSheetView: View {
     
     private var mainSettingsView: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                 // Header with Back Button
                 HStack {
                     Button(action: onBack) {
@@ -243,54 +262,6 @@ struct UserSettingsSheetView: View {
             .padding(.horizontal, 25)
             .padding(.bottom, 10)
             .padding(.top, 20)
-
-            if let user = rlAppState.currentUser, !user.isVerified {
-                SettingsSectionHeader(title: "Verification Required")
-
-                Button {
-                    withAnimation {
-                        currentDestination = .verifyEmail
-                    }
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: "envelope.badge.fill")
-                            .font(.title3)
-                            .foregroundColor(AppColors.statusWarning95)
-                            .frame(width: 20)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Verify your email")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(AppColors.whiteText)
-                            Text(user.email)
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                            Text("Enter your code or resend the verification email to unlock full access.")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.statusWarning95)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppColors.statusWarning95)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(AppColors.statusWarning80.opacity(0.16))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(AppColors.statusWarning80.opacity(0.55), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                }
-                .buttonStyle(.plain)
-            }
 
             // Account & Profile
             SettingsSectionHeader(title: "Profile")

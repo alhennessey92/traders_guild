@@ -933,19 +933,14 @@ class RLAppState: ObservableObject {
             onboardingState = .complete
             accountCreatedDuringOnboarding = false
             isOnboardingFlowActive = false
-            showTransitionForChartLoad(minimumDuration: 2.5)
+            showTransitionForChartLoad(minimumDuration: 0.6)
             queueBetaWelcomeIfNeeded()
 
-            // Defer the fullScreenCover presentation to the next runloop so
-            // SwiftUI fully processes the mainContent flip (ContentView→MainView)
-            // and TransitionView mount before we ask it to present the cover.
-            // Doing all four state changes in the same tick caused SwiftUI to
-            // drop the cover during reconciliation — the binding stayed true
-            // but the cover never visibly settled until the chart finished
-            // loading much later.
-            DispatchQueue.main.async { [weak self] in
-                self?.presentPendingBetaWelcomeIfNeeded()
-            }
+            // The beta welcome sheet is presented exclusively by
+            // finishTransition() once the chart is ready and the view
+            // tree has settled. Presenting it here as well caused the
+            // fullScreenCover to flicker and re-present during the
+            // ContentView→MainView reconciliation.
 
             // Offer biometric enrollment after the chart transition finishes
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
@@ -1104,7 +1099,11 @@ class RLAppState: ObservableObject {
             shouldClearStoredSession = true
         }
 
-        // Set tokens on realApi and try to refresh before publishing accessToken
+        // Set tokens on realApi and try to refresh before publishing accessToken.
+        // We only treat the cached tokens as truly invalid on a real auth-level
+        // failure (401 from the refresh endpoint). Transient errors — network
+        // unreachable, server hiccup, decoding glitch — must not silently log
+        // the user out: keep the cached tokens for next launch's retry.
         if let access = resolvedAccessToken, let refresh = resolvedRefreshToken {
             realApi.setTokens(access: access, refresh: refresh)
             print("🔄 restoreSession: Tokens set on API service")
@@ -1113,12 +1112,18 @@ class RLAppState: ObservableObject {
                 resolvedAccessToken = refreshed.accessToken
                 resolvedRefreshToken = refreshed.refreshToken
                 print("🔄 restoreSession: Tokens refreshed")
-            } catch {
-                print("⚠️ restoreSession: Token refresh failed: \(error)")
+            } catch APIError.unauthorized {
+                print("⚠️ restoreSession: Refresh token rejected (401), clearing session")
                 resolvedAccessToken = nil
                 resolvedRefreshToken = nil
                 shouldClearStoredSession = true
                 realApi.clearTokens()
+            } catch {
+                // Transient failure — keep cached tokens so the next launch
+                // (or the next authenticated request, which will trigger an
+                // in-flight refresh) can retry. The cached access token may be
+                // briefly expired; the network layer will refresh on demand.
+                print("⚠️ restoreSession: Token refresh transient failure, keeping cached tokens: \(error)")
             }
         } else if resolvedAccessToken != nil || resolvedRefreshToken != nil {
             print("⚠️ restoreSession: Incomplete cached token pair, clearing session restore state")

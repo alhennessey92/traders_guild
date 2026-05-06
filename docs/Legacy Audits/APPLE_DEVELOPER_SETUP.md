@@ -12,11 +12,11 @@ All iOS code changes are already in place and ready to test.
 
 1. Go to **Certificates, Identifiers & Profiles** > **Identifiers**
 2. Select (or register) the App ID for Traders Guild
-3. The Bundle ID should match `AppConfig.appleSignInClientID`: currently set to `projectkaos.traders-guild`
+3. The Bundle ID should match `AppConfig.appleSignInClientID`: currently set to `co.tradersguild.app`
 4. Under **Capabilities**, enable **Sign In with Apple**
 5. Save
 
-**Note:** If the production Bundle ID differs from `projectkaos.traders-guild`, update
+**Note:** If the production Bundle ID differs from `co.tradersguild.app`, update
 `AppConfig.appleSignInClientID` in `traders_guild/App/AppConfig.swift` to match.
 
 ## 2. Add Entitlement in Xcode

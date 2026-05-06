@@ -9,6 +9,7 @@ struct MarkerPlacementPanel: View {
     let onBeginInteractiveDrawing: (() -> Void)?
     let onCancel: (() -> Void)?
     let onPlace: (() -> Void)?
+    let viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     init(
         placementState: MarkerPlacementState,
@@ -18,7 +19,8 @@ struct MarkerPlacementPanel: View {
         onSelectTimeframe: ((RLChartTimeframe) -> Void)? = nil,
         onBeginInteractiveDrawing: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
-        onPlace: (() -> Void)? = nil
+        onPlace: (() -> Void)? = nil,
+        viewportAnchorProvider: (() -> (time: Date, price: Double)?)? = nil
     ) {
         self.placementState = placementState
         self.activeChartIndicators = activeChartIndicators
@@ -28,6 +30,7 @@ struct MarkerPlacementPanel: View {
         self.onBeginInteractiveDrawing = onBeginInteractiveDrawing
         self.onCancel = onCancel
         self.onPlace = onPlace
+        self.viewportAnchorProvider = viewportAnchorProvider
     }
 
     var body: some View {
@@ -44,7 +47,8 @@ struct MarkerPlacementPanel: View {
                         currentChartTimeframe: currentChartTimeframe,
                         onSelectTimeframeAction: onSelectTimeframe,
                         onBeginInteractiveDrawing: onBeginInteractiveDrawing,
-                        showsMirrorButtons: true
+                        showsMirrorButtons: true,
+                        viewportAnchorProvider: viewportAnchorProvider
                     )
                 )
             }

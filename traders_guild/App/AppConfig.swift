@@ -18,7 +18,7 @@ struct AppConfig {
     static let baseURL = "https://api.yourapp.com"
 
     // Apple Sign-In Client ID for authentication
-    static let appleSignInClientID = "projectkaos.traders-guild"
+    static let appleSignInClientID = "co.tradersguild.app"
 
     // Routing mode for dev-first direct services vs future gateway
     static var apiRoutingMode: APIRoutingMode {

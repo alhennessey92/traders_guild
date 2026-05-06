@@ -21,6 +21,10 @@ struct MarkerPlacementDrawingsTab: View {
     var mirrorSourceDrawings: [ChartDrawing] = []
     var showsTitleHeader: Bool = true
     var showsMirrorButton: Bool = false
+    /// Returns the current chart viewport center as (time, price) so newly-
+    /// added text/emoji annotations land where the user is looking. Falls
+    /// back to the marker anchor when nil.
+    var viewportAnchorProvider: (() -> (time: Date, price: Double)?)? = nil
 
     @State private var selectedSubTab: DrawingSubTab = .lines
     @State private var limitWarning: String?
@@ -386,6 +390,10 @@ struct MarkerPlacementDrawingsTab: View {
             }
 
         case .note(let payload):
+            let resolvedNoteColor = placementState.drawingColor(
+                for: draft.id,
+                fallback: AppColors.primaryForeground
+            )
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "text.bubble")
@@ -395,6 +403,16 @@ struct MarkerPlacementDrawingsTab: View {
                         .font(.caption)
                         .foregroundColor(AppColors.primaryForeground)
                     Spacer(minLength: 0)
+                    Button {
+                        openDrawingColorEditor(for: draft.id)
+                    } label: {
+                        Image(systemName: "paintpalette.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(resolvedNoteColor)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
                     removeDraftButton(draft.id)
                 }
 
@@ -405,7 +423,7 @@ struct MarkerPlacementDrawingsTab: View {
                 )
                 .textFieldStyle(.plain)
                 .font(.caption)
-                .foregroundColor(AppColors.primaryForeground)
+                .foregroundColor(resolvedNoteColor)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(
@@ -658,103 +676,150 @@ struct MarkerPlacementDrawingsTab: View {
     }
 
     private var noteAnnotationCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let drafts = textNoteDrafts
+        return VStack(alignment: .leading, spacing: 8) {
             toolCard(
                 title: "Text Note",
-                subtitle: textNoteDraft == nil
+                subtitle: drafts.isEmpty
                     ? "Add an anchored text annotation."
-                    : "Edit the note inline below.",
+                    : "Tap Activate to add another, or edit any below.",
                 icon: "text.bubble",
-                isActive: textNoteDraft != nil,
-                actionTitle: textNoteDraft == nil ? "Activate" : "Edit"
+                isActive: !drafts.isEmpty,
+                actionTitle: "Activate"
             ) {
                 addTextNote()
             }
 
-            if let noteDraft = textNoteDraft,
-               case let .note(payload) = noteDraft.payload {
-                annotationEditorCard {
-                    TextField(
-                        "Write annotation",
-                        text: noteBinding(for: noteDraft.id, fallback: payload.text),
-                        axis: .vertical
+            ForEach(drafts, id: \.id) { noteDraft in
+                if case let .note(payload) = noteDraft.payload {
+                    let resolvedColor = placementState.drawingColor(
+                        for: noteDraft.id,
+                        fallback: AppColors.primaryForeground
                     )
-                    .textFieldStyle(.plain)
-                    .font(.caption)
-                    .foregroundColor(AppColors.primaryForeground)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(AppColors.whiteText.opacity(0.07))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                            )
-                    )
-                }
+                    annotationEditorCard {
+                        HStack(spacing: 8) {
+                            Spacer(minLength: 0)
+                            Button {
+                                openDrawingColorEditor(for: noteDraft.id)
+                            } label: {
+                                Image(systemName: "paintpalette.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(resolvedColor)
+                                    .frame(width: 28, height: 28)
+                                    .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+                            }
+                            .buttonStyle(.plain)
+                            Button {
+                                placementState.removeComponent(id: noteDraft.id)
+                                infoMessage = nil
+                                limitWarning = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppColors.statusNegative85)
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                        }
 
-                annotationRemoveButton("Remove Note") {
-                    placementState.removeComponent(.textNote)
-                    infoMessage = nil
-                    limitWarning = nil
+                        TextField(
+                            "Write annotation",
+                            text: noteBinding(for: noteDraft.id, fallback: payload.text),
+                            axis: .vertical
+                        )
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                        .foregroundColor(resolvedColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(AppColors.whiteText.opacity(0.07))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                    }
                 }
             }
         }
     }
 
     private var emojiAnnotationCard: some View {
-        let currentEmoji = currentEmojiValue
-
+        let drafts = emojiDrafts
         return VStack(alignment: .leading, spacing: 4) {
             toolCard(
                 title: "Emoji",
-                subtitle: currentEmoji == nil
-                    ? "Pick a single emoji anchored to this marker."
-                    : "Choose the emoji below.",
+                subtitle: drafts.isEmpty
+                    ? "Pick an emoji anchored to this marker."
+                    : "Tap Activate to add another, or change any below.",
                 icon: "face.smiling",
-                isActive: currentEmoji != nil,
-                actionTitle: currentEmoji == nil ? "Activate" : "Edit"
+                isActive: !drafts.isEmpty,
+                actionTitle: "Activate"
             ) {
-                setAnnotationEmoji(currentEmoji ?? (annotationEmojis.first ?? "🎯"))
+                setAnnotationEmoji(annotationEmojis.first ?? "🎯")
             }
 
-            if currentEmoji != nil {
-                // Compact horizontal strip — minimises vertical space so the
-                // panel stays small and horizontal scroll doesn't fight chart pan.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(annotationEmojis, id: \.self) { emoji in
-                            let isSelected = currentEmoji == emoji
+            ForEach(drafts, id: \.id) { emojiDraft in
+                if case let .reactionEmoji(payload) = emojiDraft.payload {
+                    annotationEditorCard {
+                        HStack(spacing: 8) {
+                            Text(payload.emoji)
+                                .font(.system(size: 18))
+                            Spacer(minLength: 0)
                             Button {
-                                setAnnotationEmoji(emoji)
+                                placementState.removeComponent(id: emojiDraft.id)
+                                infoMessage = nil
+                                limitWarning = nil
                             } label: {
-                                Text(emoji)
-                                    .font(.system(size: 15))
-                                    .frame(width: 30, height: 30)
-                                    .background(
-                                        Circle()
-                                            .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
-                                    )
-                                    .overlay(
-                                        Circle()
-                                            .stroke(
-                                                AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
-                                                lineWidth: isSelected ? 1.5 : 1
-                                            )
-                                    )
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppColors.statusNegative85)
+                                    .frame(width: 28, height: 28)
                             }
                             .buttonStyle(.plain)
                         }
-                    }
-                    .padding(.horizontal, 4)
-                }
-                .contentShape(Rectangle())
 
-                annotationRemoveButton("Remove Emoji") {
-                    placementState.removeComponent(.reactionEmoji)
-                    infoMessage = nil
-                    limitWarning = nil
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(annotationEmojis, id: \.self) { emoji in
+                                    let isSelected = payload.emoji == emoji
+                                    Button {
+                                        placementState.updateComponent(
+                                            id: emojiDraft.id,
+                                            payload: .reactionEmoji(
+                                                placementState.anchoredEmojiPayload(
+                                                    emoji: emoji,
+                                                    offsetX: payload.offsetX,
+                                                    offsetY: payload.offsetY,
+                                                    preserving: payload
+                                                )
+                                            )
+                                        )
+                                    } label: {
+                                        Text(emoji)
+                                            .font(.system(size: 15))
+                                            .frame(width: 30, height: 30)
+                                            .background(
+                                                Circle()
+                                                    .fill(AppColors.whiteText.opacity(isSelected ? 0.14 : 0.08))
+                                            )
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(
+                                                        AppColors.surfaceWhite70.opacity(isSelected ? 0.85 : 0.18),
+                                                        lineWidth: isSelected ? 1.5 : 1
+                                                    )
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                        .contentShape(Rectangle())
+                    }
                 }
             }
         }
@@ -811,15 +876,12 @@ struct MarkerPlacementDrawingsTab: View {
         }
     }
 
-    private var textNoteDraft: MarkerComponentDraft? {
-        placementState.component(.textNote)
+    private var textNoteDrafts: [MarkerComponentDraft] {
+        placementState.components.filter { $0.componentType == .textNote }
     }
 
-    private var currentEmojiValue: String? {
-        guard case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload else {
-            return nil
-        }
-        return payload.emoji
+    private var emojiDrafts: [MarkerComponentDraft] {
+        placementState.components.filter { $0.componentType == .reactionEmoji }
     }
 
     private var overlayCardBackground: some View {
@@ -1451,57 +1513,62 @@ struct MarkerPlacementDrawingsTab: View {
         limitWarning = nil
     }
 
+    private func resolvedViewportAnchor() -> (time: Date?, price: Double?) {
+        if let provided = viewportAnchorProvider?() {
+            return (provided.time, provided.price)
+        }
+        return (
+            placementState.currentViewportAnchorTime,
+            placementState.currentViewportAnchorPrice
+        )
+    }
+
     private func addTextNote() {
-        if placementState.component(.textNote) == nil && !placementState.canAddDrawing {
+        guard placementState.canAddDrawing else {
             applyDrawingLimitWarning()
             return
         }
 
+        let anchor = resolvedViewportAnchor()
         let text = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
-        placementState.upsertComponent(
+        let newId = placementState.appendComponent(
             .textNote,
             payload: .note(
-                placementState.anchoredNotePayload(text: text.isEmpty ? "Add your context" : text)
+                placementState.anchoredNotePayload(
+                    text: text.isEmpty ? "Add your context" : text,
+                    anchorTime: anchor.time,
+                    anchorPrice: anchor.price
+                )
             )
         )
-        if let draft = placementState.component(.textNote) {
-            beginInteractiveDrawingSession()
-            selectedSubTab = .annotations
-            placementState.beginEditingDrawing(draft.id, tool: .note)
-        }
+        beginInteractiveDrawingSession()
+        selectedSubTab = .annotations
+        placementState.beginEditingDrawing(newId, tool: .note)
         infoMessage = "Text note added."
         limitWarning = nil
     }
 
     private func setAnnotationEmoji(_ emoji: String) {
-        if placementState.component(.reactionEmoji) == nil && !placementState.canAddDrawing {
+        guard placementState.canAddDrawing else {
             applyDrawingLimitWarning()
             return
         }
 
-        let existingPayload: EmojiPayload?
-        if case let .reactionEmoji(payload)? = placementState.component(.reactionEmoji)?.payload {
-            existingPayload = payload
-        } else {
-            existingPayload = nil
-        }
-
-        placementState.upsertComponent(
+        let anchor = resolvedViewportAnchor()
+        let newId = placementState.appendComponent(
             .reactionEmoji,
             payload: .reactionEmoji(
                 placementState.anchoredEmojiPayload(
                     emoji: emoji,
-                    offsetX: existingPayload?.offsetX,
-                    offsetY: existingPayload?.offsetY,
-                    preserving: existingPayload
+                    anchorTime: anchor.time,
+                    anchorPrice: anchor.price
                 )
             )
         )
-        if placementState.intent != .reaction,
-           let draft = placementState.component(.reactionEmoji) {
+        if placementState.intent != .reaction {
             beginInteractiveDrawingSession()
             selectedSubTab = .annotations
-            placementState.beginEditingDrawing(draft.id, tool: .emoji)
+            placementState.beginEditingDrawing(newId, tool: .emoji)
         }
         infoMessage = nil
         limitWarning = nil

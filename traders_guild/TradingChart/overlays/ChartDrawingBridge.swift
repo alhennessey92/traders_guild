@@ -128,7 +128,8 @@ enum ChartDrawingBridge {
                         offsetY: drawing.offsetY,
                         anchorTime: noteAnchor.time,
                         anchorPrice: noteAnchor.price,
-                        fontSize: drawing.fontSize
+                        fontSize: drawing.fontSize,
+                        colorHex: drawing.colorHex
                     )
                 )
             )
@@ -229,7 +230,7 @@ enum ChartDrawingBridge {
                         price: payload.anchorPrice ?? anchorPrice
                     ),
                 ],
-                colorHex: ChartDrawingType.textNote.defaultColorHex,
+                colorHex: payload.colorHex ?? ChartDrawingType.textNote.defaultColorHex,
                 note: payload.text,
                 offsetX: payload.offsetX,
                 offsetY: payload.offsetY,

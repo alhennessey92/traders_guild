@@ -18,8 +18,6 @@ struct EmailVerificationView: View {
 
     let userEmail: String
     let onContinue: () -> Void
-    /// When `false` (e.g. opened from settings), hide the skip action and keep the flow sheet-driven.
-    var showSkipUnverifiedOption: Bool = true
 
     private var canResend: Bool {
         !isResending && resendCooldown == 0
@@ -134,7 +132,7 @@ struct EmailVerificationView: View {
                             .padding(.bottom, 8)
                     }
 
-                    Text("You can verify later, but some features will be restricted until you do.")
+                    Text("Verification is required before continuing.")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
                         .multilineTextAlignment(.center)
@@ -190,18 +188,6 @@ struct EmailVerificationView: View {
                 }
                 .disabled(!canResend)
 
-                if showSkipUnverifiedOption {
-                    Button {
-                        onContinue()
-                    } label: {
-                        LoginButton(
-                            title: "Continue without verifying",
-                            iconName: "arrow.right",
-                            backgroundColor: AppColors.unhighlightedButtonBackground,
-                            foregroundColor: AppColors.gradientBackgroundDark
-                        )
-                    }
-                }
             }
             .padding(.top, 10)
             .padding(.bottom, 10)

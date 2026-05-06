@@ -172,23 +172,31 @@ struct traders_guildApp: App {
     
     @ViewBuilder
     private var mainContent: some View {
+        #if DEBUG
         let _ = print("📱 mainContent: isAuthenticated=\(rlAppState.isAuthenticated), currentGuild=\(rlAppState.currentGuild?.name ?? "nil"), showSheet=\(rlAppState.showGuildSelectionSheet)")
+        #endif
 
         // Keep login/signup and authenticated-onboarding in the same branch so
         // ContentView identity is stable while auth state flips during signup.
         if !rlAppState.isAuthenticated || rlAppState.isOnboardingFlowActive {
+            #if DEBUG
             let _ = print("📱 → Showing ContentView (\(rlAppState.isOnboardingFlowActive ? "onboarding active" : "login"))")
+            #endif
             ContentView()
         } else if rlAppState.currentGuild != nil {
             // Fully authenticated with guild selected
+            #if DEBUG
             let _ = print("📱 → Showing MainView")
+            #endif
             MainView()
                 .preferredColorScheme(themeManager.currentTheme.colorScheme)
                 .id(themeManager.currentTheme)
-                
+
         } else {
             // Authenticated but no guild selected - show loading/waiting view
+            #if DEBUG
             let _ = print("📱 → Showing Loading View")
+            #endif
             VStack(spacing: 20) {
                 ProgressView()
                     .scaleEffect(1.5)
@@ -204,15 +212,21 @@ struct traders_guildApp: App {
                 // FIXED: Check ALL conditions before calling openGuildSelector
                 // This prevents race conditions during login flow
                 guard !rlAppState.isCompletingSignup else {
+                    #if DEBUG
                     print("⏳ Skipping openGuildSelector - completing signup")
+                    #endif
                     return
                 }
                 guard !rlAppState.isHandlingAuthFlow else {
+                    #if DEBUG
                     print("⏳ Skipping openGuildSelector - auth flow in progress")
+                    #endif
                     return
                 }
                 guard !rlAppState.showGuildSelectionSheet else {
+                    #if DEBUG
                     print("⏳ Skipping openGuildSelector - sheet already showing")
+                    #endif
                     return
                 }
                 

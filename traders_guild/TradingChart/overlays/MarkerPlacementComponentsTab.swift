@@ -26,6 +26,7 @@ struct MarkerPlacementComponentsTab: View {
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
     var showsMirrorButtons: Bool = true
+    var viewportAnchorProvider: (() -> (time: Date, price: Double)?)? = nil
 
     @State private var selectedSubTab: MarkerComponentSubTab = .active
     @State private var limitWarning: String?
@@ -128,7 +129,8 @@ struct MarkerPlacementComponentsTab: View {
                 mirrorSourceIndicators: activeChartIndicators,
                 mirrorSourceDrawings: activeChartDrawings,
                 showsTitleHeader: false,
-                showsMirrorButton: showsMirrorButtons
+                showsMirrorButton: showsMirrorButtons,
+                viewportAnchorProvider: viewportAnchorProvider
             )
         case .timeframes:
             MarkerPlacementTimeframesTab(

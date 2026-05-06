@@ -32,12 +32,12 @@ struct ChartDrawingsSubTab: View {
         .init(name: "Slate", hex: "#94A3B8"),
     ]
 
-    private var textNoteDrawing: ChartDrawing? {
-        drawingManager.drawings.first(where: { $0.type == .textNote })
+    private var textNoteDrawings: [ChartDrawing] {
+        drawingManager.drawings.filter { $0.type == .textNote }
     }
 
-    private var emojiDrawing: ChartDrawing? {
-        drawingManager.drawings.first(where: { $0.type == .emoji })
+    private var emojiDrawings: [ChartDrawing] {
+        drawingManager.drawings.filter { $0.type == .emoji }
     }
 
     var body: some View {
@@ -168,19 +168,20 @@ struct ChartDrawingsSubTab: View {
     }
 
     private var noteAnnotationCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let drawings = textNoteDrawings
+        return VStack(alignment: .leading, spacing: 8) {
             catalogRow(
                 title: "Text Note",
-                subtitle: textNoteDrawing == nil
+                subtitle: drawings.isEmpty
                     ? "Add anchored context to the chart"
-                    : "Edit the note inline below",
+                    : "Tap to add another, or edit any below",
                 icon: "text.bubble",
                 tint: RLComponentType.textNote.color
             ) {
                 addTextNote()
             }
 
-            if let drawing = textNoteDrawing {
+            ForEach(drawings, id: \.id) { drawing in
                 annotationEditorCard {
                     TextField(
                         "Write annotation",
@@ -188,7 +189,7 @@ struct ChartDrawingsSubTab: View {
                     )
                     .textFieldStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(AppColors.primaryForeground)
+                    .foregroundColor(Color(hex: drawing.colorHex) ?? AppColors.primaryForeground)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
@@ -211,28 +212,27 @@ struct ChartDrawingsSubTab: View {
     }
 
     private var emojiAnnotationCard: some View {
-        let currentEmoji = emojiDrawing?.emoji
-
+        let drawings = emojiDrawings
         return VStack(alignment: .leading, spacing: 8) {
             catalogRow(
                 title: "Emoji",
-                subtitle: currentEmoji == nil
-                    ? "Add a single emoji annotation"
-                    : "Choose the emoji below",
+                subtitle: drawings.isEmpty
+                    ? "Add an emoji annotation"
+                    : "Tap to add another, or change any below",
                 icon: "face.smiling",
                 tint: RLComponentType.reactionEmoji.color
             ) {
-                setAnnotationEmoji(currentEmoji ?? (annotationEmojis.first ?? "🎯"))
+                setAnnotationEmoji(annotationEmojis.first ?? "🎯")
             }
 
-            if currentEmoji != nil {
+            ForEach(drawings, id: \.id) { drawing in
                 annotationEditorCard {
                     let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
                     LazyVGrid(columns: columns, spacing: 8) {
                         ForEach(annotationEmojis, id: \.self) { emoji in
-                            let isSelected = currentEmoji == emoji
+                            let isSelected = drawing.emoji == emoji
                             Button {
-                                setAnnotationEmoji(emoji)
+                                drawingManager.updateEmoji(id: drawing.id, emoji: emoji)
                             } label: {
                                 Text(emoji)
                                     .font(.system(size: 18))
@@ -256,11 +256,9 @@ struct ChartDrawingsSubTab: View {
                 }
 
                 annotationRemoveButton("Remove Emoji") {
-                    if let drawing = emojiDrawing {
-                        drawingManager.removeDrawing(id: drawing.id)
-                        infoMessage = nil
-                        limitWarning = nil
-                    }
+                    drawingManager.removeDrawing(id: drawing.id)
+                    infoMessage = nil
+                    limitWarning = nil
                 }
             }
         }
@@ -382,7 +380,6 @@ struct ChartDrawingsSubTab: View {
     }
 
     private func addTextNote() {
-        guard textNoteDrawing == nil else { return }
         guard drawingManager.drawings.count < maxDrawingOverlays else {
             limitWarning = "Maximum \(maxDrawingOverlays) drawing overlays"
             HapticFeedback.light.trigger()
@@ -399,11 +396,6 @@ struct ChartDrawingsSubTab: View {
     }
 
     private func setAnnotationEmoji(_ emoji: String) {
-        if let existing = emojiDrawing {
-            drawingManager.updateEmoji(id: existing.id, emoji: emoji)
-            infoMessage = "Updated Emoji."
-            return
-        }
         guard drawingManager.drawings.count < maxDrawingOverlays else {
             limitWarning = "Maximum \(maxDrawingOverlays) drawing overlays"
             HapticFeedback.light.trigger()

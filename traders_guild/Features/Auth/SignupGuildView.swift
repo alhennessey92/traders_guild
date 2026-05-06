@@ -347,8 +347,7 @@ struct SignupGuildView: View {
                 _ = try await rlAppState.joinGuild(guildId: selectedGuild.id, showTransition: false)
             }
             await applyProfileDraftIfNeeded()
-            rlAppState.onboardingState = .guildSelected
-            rlAppState.completeOnboardingAndEnterApp()
+            finishRegistrationAfterGuildSelection()
         } catch is CancellationError {
             return
         } catch {
@@ -362,8 +361,7 @@ struct SignupGuildView: View {
            selectedGuild != nil,
            rlAppState.isAuthenticated {
             await applyProfileDraftIfNeeded()
-            rlAppState.onboardingState = .guildSelected
-            rlAppState.completeOnboardingAndEnterApp()
+            finishRegistrationAfterGuildSelection()
             return
         }
 
@@ -375,14 +373,12 @@ struct SignupGuildView: View {
             guildMode = .assignedFallbackMode
             assignmentErrorMessage = nil
             await applyProfileDraftIfNeeded()
-            rlAppState.onboardingState = .guildSelected
-            rlAppState.completeOnboardingAndEnterApp()
+            finishRegistrationAfterGuildSelection()
         } catch {
             if await recoverAssignedGuildFromCurrentState() {
                 assignmentErrorMessage = nil
                 await applyProfileDraftIfNeeded()
-                rlAppState.onboardingState = .guildSelected
-                rlAppState.completeOnboardingAndEnterApp()
+                finishRegistrationAfterGuildSelection()
                 return
             }
 
@@ -404,6 +400,15 @@ struct SignupGuildView: View {
         defer { isPreparingAccount = false }
         try await rlAppState.signUp(data: data, beginOnboarding: true)
         path = [.guild]
+    }
+
+    private func finishRegistrationAfterGuildSelection() {
+        rlAppState.onboardingState = .guildSelected
+        if rlAppState.currentUser?.isVerified == false {
+            path = [.emailVerification]
+        } else {
+            rlAppState.completeOnboardingAndEnterApp()
+        }
     }
 
     private func applyProfileDraftIfNeeded() async {

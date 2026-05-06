@@ -607,13 +607,13 @@ struct GhostPreviewLayer: View {
                 case .note(let payload):
                     let resolvedFontSize = CGFloat(payload.fontSize ?? Double(ChartAnnotationBubbleMetrics.fontSize))
                     if isSelectedForEditing {
-                        annotationNoteView(text: payload.text, isSelected: true, fontSize: resolvedFontSize)
+                        annotationNoteView(text: payload.text, isSelected: true, fontSize: resolvedFontSize, colorHex: payload.colorHex)
                             .position(x: x, y: y)
                             .highPriorityGesture(annotationDragGesture(draftId: draft.id, payload: draft.payload))
                             .simultaneousGesture(annotationTextScaleGesture(draftId: draft.id, payload: payload))
                             .allowsHitTesting(true)
                     } else {
-                        annotationNoteView(text: payload.text, isSelected: false, fontSize: resolvedFontSize)
+                        annotationNoteView(text: payload.text, isSelected: false, fontSize: resolvedFontSize, colorHex: payload.colorHex)
                             .position(x: x, y: y)
                             .allowsHitTesting(false)
                     }
@@ -638,11 +638,17 @@ struct GhostPreviewLayer: View {
         }
     }
 
-    private func annotationNoteView(text: String, isSelected: Bool, fontSize: CGFloat = ChartAnnotationBubbleMetrics.fontSize) -> some View {
+    private func annotationNoteView(
+        text: String,
+        isSelected: Bool,
+        fontSize: CGFloat = ChartAnnotationBubbleMetrics.fontSize,
+        colorHex: String? = nil
+    ) -> some View {
         let displayText = ChartAnnotationBubbleMetrics.displayText(text)
+        let resolvedColor = Color(hex: colorHex ?? "") ?? AppColors.primaryForeground
         return Text(verbatim: displayText)
             .font(.system(size: fontSize, weight: .semibold))
-            .foregroundColor(AppColors.primaryForeground)
+            .foregroundColor(resolvedColor)
             .lineLimit(ChartAnnotationBubbleMetrics.maxVisibleLines)
             .multilineTextAlignment(.center)
             .frame(maxWidth: ChartAnnotationBubbleMetrics.maxBubbleWidth(plotWidth: width))
@@ -769,7 +775,8 @@ struct GhostPreviewLayer: View {
                             offsetY: payload.offsetY,
                             anchorTime: payload.anchorTime,
                             anchorPrice: payload.anchorPrice,
-                            fontSize: Double(newSize)
+                            fontSize: Double(newSize),
+                            colorHex: payload.colorHex
                         )
                     )
                 )
@@ -840,7 +847,8 @@ struct GhostPreviewLayer: View {
                         offsetY: resolvedAnchorY.map { Double(center.y - $0) } ?? note.offsetY,
                         anchorTime: resolvedAnchorTime,
                         anchorPrice: resolvedAnchorPrice,
-                        fontSize: note.fontSize
+                        fontSize: note.fontSize,
+                        colorHex: note.colorHex
                     )
                 )
             )

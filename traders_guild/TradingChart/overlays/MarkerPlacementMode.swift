@@ -183,6 +183,13 @@ final class MarkerPlacementState: ObservableObject {
     /// Placement-local emoji scale while editing (interaction-only, non-persisted).
     @Published var emojiScaleOverrides: [UUID: CGFloat] = [:]
     @Published var drawingSession: MarkerDrawingSession = .inactive
+
+    /// Live viewport-center anchor pushed by the chart so newly-added text/emoji
+    /// annotations can default to where the user is looking, not the marker's
+    /// own anchor (which may be off-screen, especially for setup intents pinned
+    /// to the latest candle).
+    var currentViewportAnchorTime: Date?
+    var currentViewportAnchorPrice: Double?
     @Published var editingMarkerId: UUID?
     @Published var isAnchorLocked: Bool = false
 
@@ -1088,6 +1095,16 @@ final class MarkerPlacementState: ObservableObject {
         return (added, blockedByLimit)
     }
 
+    /// Append a fresh draft for component types that allow multiples
+    /// (text notes, emoji reactions). Returns the new draft's id so callers
+    /// can begin editing it.
+    @discardableResult
+    func appendComponent(_ componentType: RLComponentType, payload: MarkerComponentPayload) -> UUID {
+        let draft = MarkerComponentDraft(componentType: componentType, payload: payload)
+        components.append(draft)
+        return draft.id
+    }
+
     func upsertComponent(_ componentType: RLComponentType, payload: MarkerComponentPayload) {
         if componentType == .anchor, isAnchorLocked {
             return
@@ -1245,6 +1262,21 @@ final class MarkerPlacementState: ObservableObject {
                         colorHex: normalized,
                         lineStyle: payload.lineStyle,
                         lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .note(payload):
+            setComponentPayload(
+                at: index,
+                to: .note(
+                    NotePayload(
+                        text: payload.text,
+                        offsetX: payload.offsetX,
+                        offsetY: payload.offsetY,
+                        anchorTime: payload.anchorTime,
+                        anchorPrice: payload.anchorPrice,
+                        fontSize: payload.fontSize,
+                        colorHex: normalized
                     )
                 )
             )
@@ -1430,15 +1462,19 @@ final class MarkerPlacementState: ObservableObject {
         text: String,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
+        anchorTime explicitAnchorTime: Date? = nil,
+        anchorPrice explicitAnchorPrice: Double? = nil,
+        colorHex: String? = nil,
         preserving existing: NotePayload? = nil
     ) -> NotePayload {
         NotePayload(
             text: text,
             offsetX: offsetX,
             offsetY: offsetY,
-            anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
-            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
-            fontSize: existing?.fontSize
+            anchorTime: explicitAnchorTime ?? existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
+            anchorPrice: explicitAnchorPrice ?? existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
+            fontSize: existing?.fontSize,
+            colorHex: colorHex ?? existing?.colorHex
         )
     }
 
@@ -1446,14 +1482,16 @@ final class MarkerPlacementState: ObservableObject {
         emoji: String,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
+        anchorTime explicitAnchorTime: Date? = nil,
+        anchorPrice explicitAnchorPrice: Double? = nil,
         preserving existing: EmojiPayload? = nil
     ) -> EmojiPayload {
         EmojiPayload(
             emoji: emoji,
             offsetX: offsetX,
             offsetY: offsetY,
-            anchorTime: existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
-            anchorPrice: existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
+            anchorTime: explicitAnchorTime ?? existing?.anchorTime ?? anchorDraft?.payload.anchorTime,
+            anchorPrice: explicitAnchorPrice ?? existing?.anchorPrice ?? anchorDraft?.payload.levelPrice,
             scale: existing?.scale
         )
     }
@@ -2366,6 +2404,8 @@ final class MarkerPlacementState: ObservableObject {
         case let .drawingHorizontalLine(value):
             return normalizedHexColor(value.colorHex)
         case let .drawingZone(value):
+            return normalizedHexColor(value.colorHex)
+        case let .note(value):
             return normalizedHexColor(value.colorHex)
         default:
             return nil

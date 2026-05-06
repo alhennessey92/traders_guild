@@ -166,7 +166,7 @@ enum ChartXAxisLabelEngine {
         let clipRect = CGRect(x: 0, y: 0, width: size.width - rightClipMargin, height: size.height)
         ctx.clip(to: Path(clipRect))
 
-        let labels = makeLabels(input: input)
+        let labels = dedupeOverlaps(makeLabels(input: input), style: style)
         for label in labels {
             let weight: Font.Weight
             let fontSize: CGFloat
@@ -337,6 +337,74 @@ enum ChartXAxisLabelEngine {
         let sorted = labels.sorted { $0.x < $1.x }
         labelsCache.setObject(LabelsCacheValue(sorted), forKey: cacheKey)
         return sorted
+    }
+
+    // Approximate per-character glyph width as a fraction of font size. The
+    // system font's average character width is ~0.55 em; using 0.32 here as
+    // a half-width gives us a slightly conservative collision box (leaves
+    // visual breathing room between adjacent labels).
+    private static func estimatedHalfWidth(
+        for label: ChartXAxisLabel,
+        style: ChartXAxisLabelStyle
+    ) -> CGFloat {
+        let fontSize: CGFloat
+        switch label.kind {
+        case .primary:
+            fontSize = style == .mainChart ? 13 : style.primaryFontSize
+        case .secondary:
+            if style == .mainChart {
+                fontSize = label.isHourBoundary ? 12 : 11
+            } else {
+                fontSize = label.isHourBoundary
+                    ? max(12, style.secondaryFontSize)
+                    : style.secondaryFontSize
+            }
+        }
+        return CGFloat(label.text.count) * fontSize * 0.32
+    }
+
+    /// Drop secondary labels that visually overlap an adjacent primary label.
+    /// Primary labels (day/month boundaries) always win; secondary labels
+    /// (HH:mm / dd MMM on D1+) are filtered when their bounding interval
+    /// intersects a kept label's interval.
+    private static func dedupeOverlaps(
+        _ labels: [ChartXAxisLabel],
+        style: ChartXAxisLabelStyle,
+        padding: CGFloat = 4
+    ) -> [ChartXAxisLabel] {
+        guard labels.count > 1 else { return labels }
+
+        struct Kept {
+            let label: ChartXAxisLabel
+            let halfWidth: CGFloat
+        }
+
+        var kept: [Kept] = []
+        kept.reserveCapacity(labels.count)
+
+        // First pass: keep all primary labels unconditionally.
+        for label in labels where label.kind == .primary {
+            kept.append(Kept(label: label, halfWidth: estimatedHalfWidth(for: label, style: style)))
+        }
+
+        // Second pass: keep secondary labels that don't collide with primaries
+        // or with previously-kept secondaries.
+        for label in labels where label.kind == .secondary {
+            let halfWidth = estimatedHalfWidth(for: label, style: style)
+            let lo = label.x - halfWidth - padding
+            let hi = label.x + halfWidth + padding
+
+            let collides = kept.contains { existing in
+                let exLo = existing.label.x - existing.halfWidth
+                let exHi = existing.label.x + existing.halfWidth
+                return lo <= exHi && exLo <= hi
+            }
+            if !collides {
+                kept.append(Kept(label: label, halfWidth: halfWidth))
+            }
+        }
+
+        return kept.map { $0.label }.sorted { $0.x < $1.x }
     }
 
     static func formatCrosshairTimestamp(

@@ -1100,6 +1100,7 @@ struct TradingChartView: View {
                     coordinateSystem: coordinateSystem,
                     size: geometry.size
                 )
+                syncChartDrawingPlacementAnchorToVisibleCenter()
             }
             .onChange(of: placementState.activeTool) { _, _ in
                 seedInitialDrawingGuidePointIfNeeded(
@@ -2338,6 +2339,18 @@ struct TradingChartView: View {
         return "🎯"
     }
 
+    /// Compute a placement-guide x from a candle index using the live pan
+    /// offset. Mirrors `ChartCoordinateSystem.xCenterPosition(forCandleIndex:)`
+    /// without the `dragState`/`pinchScale` fields (the chart's pan path
+    /// commits directly to `panOffset`, so dragState is always zero here).
+    private func liveGuideXPosition(forCandleIndex index: Int) -> CGFloat? {
+        guard index >= 0 else { return nil }
+        let total = totalCandleWidth
+        guard total > 0 else { return nil }
+        let baseX = CGFloat(index) * total
+        return baseX + gestureState.panOffset.width + actualCandleWidth / 2
+    }
+
     private func updatePlacementGuideState(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) {
         guard !isInteractiveDrawingSessionActive else {
             applyPlacementGuideState(MarkerPlacementGuideState())
@@ -2362,6 +2375,7 @@ struct TradingChartView: View {
         applyPlacementGuideState(MarkerPlacementGuideState(
             isActive: isVisible,
             x: x,
+            candleIndex: effectiveCandleIndex,
             timestamp: candle.timestamp,
             markerIntent: markerIntent,
             source: .placement
@@ -2423,6 +2437,7 @@ struct TradingChartView: View {
         applyPlacementGuideState(MarkerPlacementGuideState(
             isActive: isVisible,
             x: x,
+            candleIndex: selectedMarker.candleIndex,
             timestamp: candle.timestamp,
             markerIntent: selectedMarker.intent,
             source: .selected
@@ -3060,12 +3075,19 @@ struct TradingChartView: View {
     }
 
     private func syncChartDrawingPlacementAnchorToVisibleCenter() {
-        guard isDefaultChartDrawingContextEnabled, !isChartPanning, !chartData.candles.isEmpty else { return }
+        guard !chartData.candles.isEmpty else { return }
         let centerIndex = snappedMarkerCandleIndex(from: calculateCenterCandleIndex())
             ?? max(0, min(chartData.candles.count - 1, calculateCenterCandleIndex()))
         guard chartData.candles.indices.contains(centerIndex) else { return }
 
         let candle = chartData.candles[centerIndex]
+        // Push the viewport center to marker placement state so newly-added
+        // text/emoji annotations land where the user is looking, not at the
+        // marker's own anchor (which may be the latest candle for setups).
+        placementState.currentViewportAnchorTime = candle.timestamp
+        placementState.currentViewportAnchorPrice = candle.close
+
+        guard isDefaultChartDrawingContextEnabled, !isChartPanning else { return }
         chartViewModel.updateChartDrawingPlacementAnchor(
             time: candle.timestamp,
             price: candle.close
@@ -5388,15 +5410,18 @@ struct TradingChartView: View {
                !crosshairManager.isActive,
                !isInteractiveDrawingSessionActive,
                gestureState.markerPlacementGuide.isActive,
-               let timestamp = gestureState.markerPlacementGuide.timestamp,
-               gestureState.markerPlacementGuide.x.isFinite {
-                MarkerXAxisTimeIndicator(
-                    timestamp: timestamp,
-                    xPosition: gestureState.markerPlacementGuide.x,
-                    chartHeight: geometry.size.height,
-                    timeframe: chartViewModel.currentTimeframe,
-                    timeZone: axisTimeZone
-                )
+               let timestamp = gestureState.markerPlacementGuide.timestamp {
+                let liveX = liveGuideXPosition(forCandleIndex: gestureState.markerPlacementGuide.candleIndex)
+                    ?? gestureState.markerPlacementGuide.x
+                if liveX.isFinite {
+                    MarkerXAxisTimeIndicator(
+                        timestamp: timestamp,
+                        xPosition: liveX,
+                        chartHeight: geometry.size.height,
+                        timeframe: chartViewModel.currentTimeframe,
+                        timeZone: axisTimeZone
+                    )
+                }
             }
         }
         .ignoresSafeArea(edges: .bottom)
@@ -6326,7 +6351,8 @@ struct TradingChartView: View {
                     offsetY: payload.offsetY,
                     anchorTime: payload.anchorTime,
                     anchorPrice: payload.anchorPrice,
-                    fontSize: Double(newSize)
+                    fontSize: Double(newSize),
+                    colorHex: payload.colorHex
                 )
             )
         )
@@ -6429,7 +6455,8 @@ struct TradingChartView: View {
                         offsetY: payload.offsetY,
                         anchorTime: payload.anchorTime,
                         anchorPrice: payload.anchorPrice,
-                        fontSize: payload.fontSize
+                        fontSize: payload.fontSize,
+                        colorHex: payload.colorHex
                     )
                 )
             )
@@ -6782,18 +6809,24 @@ struct TradingChartView: View {
         if !crosshairManager.isActive,
            !isInteractiveDrawingSessionActive,
            gestureState.markerPlacementGuide.isActive,
-           gestureState.markerPlacementGuide.timestamp != nil,
-           gestureState.markerPlacementGuide.x.isFinite {
-            let guideX = gestureState.markerPlacementGuide.x
-            let guidePath = Path { path in
-                path.move(to: CGPoint(x: guideX, y: 0))
-                path.addLine(to: CGPoint(x: guideX, y: size.height))
+           gestureState.markerPlacementGuide.timestamp != nil {
+            // Recompute x from the cached candle index using the live pan
+            // offset. The cached `x` field updates one onChange tick behind the
+            // pan, which would cause the line to drift mid-pan and snap back
+            // when the gesture settles.
+            let liveGuideX = liveGuideXPosition(forCandleIndex: gestureState.markerPlacementGuide.candleIndex)
+                ?? gestureState.markerPlacementGuide.x
+            if liveGuideX.isFinite {
+                let guidePath = Path { path in
+                    path.move(to: CGPoint(x: liveGuideX, y: 0))
+                    path.addLine(to: CGPoint(x: liveGuideX, y: size.height))
+                }
+                drawingContext.stroke(
+                    guidePath,
+                    with: .color(placementGuideLineColor.opacity(0.55)),
+                    style: StrokeStyle(lineWidth: 2, dash: [5, 5])
+                )
             }
-            drawingContext.stroke(
-                guidePath,
-                with: .color(placementGuideLineColor.opacity(0.55)),
-                style: StrokeStyle(lineWidth: 2, dash: [5, 5])
-            )
         }
 
         // Reset opacity after dimmed-base pass.

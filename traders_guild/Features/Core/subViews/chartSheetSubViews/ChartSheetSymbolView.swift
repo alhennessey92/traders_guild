@@ -175,8 +175,8 @@ struct ChartSheetSymbolView: View {
                         // Symbol Icon - top aligned
                         SymbolIconView(symbol: symbol, size: 48)
                         
-                        // Middle section: name, ticker, asset class
-                        VStack(alignment: .leading, spacing: 3) {
+                        // Middle section: name, ticker + status, pills
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(symbol.displayName)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(AppColors.onSymbolBlueBackground)
@@ -184,31 +184,31 @@ struct ChartSheetSymbolView: View {
                                 .minimumScaleFactor(0.85)
                                 .fixedSize(horizontal: false, vertical: true)
 
-                            FlowLayout(spacing: 5) {
+                            HStack(alignment: .center, spacing: 6) {
                                 Text(symbol.ticker)
                                     .font(.system(size: 11))
                                     .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
 
-                                // Market status
                                 SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
 
-                                SymbolProviderBadge(provider: symbol.providerDisplayLabel)
+                                SymbolWatchlistIndicators(
+                                    inPersonal: symbol.inPersonalWatchlist == true,
+                                    inGuild: symbol.inGuildWatchlist == true
+                                )
+                            }
 
-                                if !symbol.isSelectableForActiveProvider {
-                                    UnsupportedSymbolBadge()
-                                }
+                            FlowLayout(spacing: 5) {
+                                SymbolProviderBadge(provider: symbol.providerDisplayLabel)
 
                                 ForEach(symbol.activityBadgeValues, id: \.self) { badge in
                                     SymbolActivityBadge(label: badge)
                                 }
 
-                                Text("•")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
+                                SymbolAssetClassBadge(assetClass: symbol.assetClass)
 
-                                Text(symbol.assetClass.capitalized)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(AppColors.onSymbolBlueBackgroundMuted)
+                                if !symbol.isSelectableForActiveProvider {
+                                    UnsupportedSymbolBadge()
+                                }
                             }
                         }
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -1127,6 +1127,11 @@ struct SymbolListRow: View {
 
                         // Market status indicator
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+
+                        SymbolWatchlistIndicators(
+                            inPersonal: symbol.inPersonalWatchlist == true,
+                            inGuild: symbol.inGuildWatchlist == true
+                        )
                     }
 
                     Text(symbol.displayName)
@@ -1216,12 +1221,6 @@ struct GlobalSymbolListRow: View {
 
     private var statusBadges: [String] {
         var badges: [String] = []
-        if symbol.inPersonalWatchlist == true {
-            badges.append("Personal")
-        }
-        if symbol.inGuildWatchlist == true {
-            badges.append("Guild")
-        }
         if symbol.isRequestedForGuild == true {
             badges.append("Requested")
         }
@@ -1253,6 +1252,11 @@ struct GlobalSymbolListRow: View {
                                 .foregroundColor(AppColors.primaryForeground)
 
                             SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+
+                            SymbolWatchlistIndicators(
+                                inPersonal: symbol.inPersonalWatchlist == true,
+                                inGuild: symbol.inGuildWatchlist == true
+                            )
                         }
 
                         Text(symbol.displayName)
@@ -1351,18 +1355,66 @@ struct GlobalSymbolListRow: View {
 
 struct SymbolMarketStatus: View {
     let isMarketOpen: Bool
-    
+
     var body: some View {
-        if isMarketOpen {
-            Circle()
-                .fill(AppColors.statusPositive)
-                .frame(width: 6, height: 6)
-                .shadow(color: AppColors.statusPositive50, radius: 2)
-        } else {
-            Image(systemName: "moon.fill")
-                .font(.system(size: 8))
-                .foregroundColor(AppColors.surfaceGray70)
+        Group {
+            if isMarketOpen {
+                Circle()
+                    .fill(AppColors.statusPositive)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: AppColors.statusPositive50, radius: 2)
+            } else {
+                Image(systemName: "moon.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(AppColors.surfaceGray70)
+            }
         }
+        // Match cap height of adjacent ticker text so the indicator visually
+        // centers on the ticker's x-height rather than its baseline.
+        .frame(height: 12)
+    }
+}
+
+struct SymbolAssetClassBadge: View {
+    let assetClass: String
+
+    private var displayLabel: String {
+        switch assetClass.lowercased() {
+        case "crypto", "cryptocurrency": return "Crypto"
+        case "stock", "stocks", "equity": return "Stock"
+        case "forex", "fx": return "Forex"
+        case "commodity", "commodities": return "Commodity"
+        case "index", "indices": return "Index"
+        default: return assetClass.capitalized
+        }
+    }
+
+    private var iconName: String {
+        switch assetClass.lowercased() {
+        case "crypto", "cryptocurrency": return "bitcoinsign.circle.fill"
+        case "stock", "stocks", "equity": return "building.columns.fill"
+        case "forex", "fx": return "dollarsign.arrow.circlepath"
+        case "commodity", "commodities": return "leaf.fill"
+        case "index", "indices": return "chart.bar.fill"
+        default: return "tag.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: iconName)
+                .font(.system(size: 8, weight: .bold))
+            Text(displayLabel)
+                .font(.system(size: 9, weight: .semibold))
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(AppColors.surfaceWhite20)
+        .clipShape(Capsule())
+        .accessibilityLabel(displayLabel)
     }
 }
 
@@ -1383,8 +1435,8 @@ struct SymbolProviderBadge: View {
             }
         }
         .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
         .background(AppColors.statusInfo25)
         .clipShape(Capsule())
         .accessibilityLabel(provider)
@@ -1417,6 +1469,31 @@ struct UnsupportedSymbolBadge: View {
     }
 }
 
+/// Small inline indicators that show whether a symbol is in the user's
+/// personal watchlist (star) and/or the current guild's watchlist (group).
+/// Renders next to the ticker / market-status indicator.
+struct SymbolWatchlistIndicators: View {
+    let inPersonal: Bool
+    let inGuild: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if inPersonal {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(AppColors.statusWarning95)
+                    .accessibilityLabel("In your personal watchlist")
+            }
+            if inGuild {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(AppColors.statusInfo90)
+                    .accessibilityLabel("In guild watchlist")
+            }
+        }
+    }
+}
+
 struct SymbolActivityBadge: View {
     let label: String
     var isCompact: Bool = false
@@ -1437,7 +1514,7 @@ struct SymbolActivityBadge: View {
     private var backgroundColor: Color {
         switch label.lowercased() {
         case "trending":
-            return AppColors.statusWarning28
+            return AppColors.statusWarning80
         case "hot":
             return AppColors.statusNegative.opacity(0.28)
         case "new markers":
@@ -1453,7 +1530,7 @@ struct SymbolActivityBadge: View {
                 Image(systemName: iconName)
                     .font(.system(size: 10, weight: .bold))
             } else {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Image(systemName: iconName)
                         .font(.system(size: 8, weight: .bold))
                     Text(label)
@@ -1464,8 +1541,8 @@ struct SymbolActivityBadge: View {
             }
         }
         .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
         .background(backgroundColor)
         .clipShape(Capsule())
         .accessibilityLabel(label)

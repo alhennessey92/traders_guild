@@ -2702,7 +2702,7 @@ enum RLSignupStep: Hashable {
 
 /// Tracks how far a user has progressed through onboarding.
 /// Persisted locally so returning users (including Apple users) can resume.
-enum RLOnboardingState: String, Codable {
+enum RLOnboardingState: String, Codable, Equatable {
     case accountCreated = "account_created"
     case profileCompleted = "profile_completed"
     case usernameCompleted = "username_completed"

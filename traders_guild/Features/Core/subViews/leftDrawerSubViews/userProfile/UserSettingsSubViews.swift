@@ -32,10 +32,13 @@ enum SettingsDestination: Hashable {
     case contactSupport
     case rateApp
     case termsPrivacy
+    case termsOfService
+    case privacyPolicy
+    case communityGuidelines
+    case legalInformation
     case about
     case leaveGuild
     case deleteAccount
-    case verifyEmail
 }
 
 
@@ -2231,8 +2234,8 @@ struct SupportMessageEditorCard: View {
 // ================================================================================================
 
 struct TermsPrivacyView: View {
-    @Environment(\.openURL) private var openURL
     let onBack: () -> Void
+    let onSelectDocument: (SettingsDestination) -> Void
 
     var body: some View {
         ZStack {
@@ -2250,9 +2253,7 @@ struct TermsPrivacyView: View {
                             subtitle: "Review our terms and conditions",
                             iconColor: .blue
                         ) {
-                            if let url = URL(string: "https://tradersguild.co/terms") {
-                                openURL(url)
-                            }
+                            onSelectDocument(.termsOfService)
                         }
 
                         SettingsButtonRow(
@@ -2261,9 +2262,7 @@ struct TermsPrivacyView: View {
                             subtitle: "Learn how we protect your data",
                             iconColor: .purple
                         ) {
-                            if let url = URL(string: "https://tradersguild.co/privacy") {
-                                openURL(url)
-                            }
+                            onSelectDocument(.privacyPolicy)
                         }
 
                         SettingsButtonRow(
@@ -2272,9 +2271,7 @@ struct TermsPrivacyView: View {
                             subtitle: "Our rules for respectful interaction",
                             iconColor: .green
                         ) {
-                            if let url = URL(string: "https://tradersguild.co/guidelines") {
-                                openURL(url)
-                            }
+                            onSelectDocument(.communityGuidelines)
                         }
 
                         SettingsButtonRow(
@@ -2283,9 +2280,7 @@ struct TermsPrivacyView: View {
                             subtitle: "Licenses and legal notices",
                             iconColor: .orange
                         ) {
-                            if let url = URL(string: "https://tradersguild.co/legal") {
-                                openURL(url)
-                            }
+                            onSelectDocument(.legalInformation)
                         }
                     }
                     .padding(.top, 16)

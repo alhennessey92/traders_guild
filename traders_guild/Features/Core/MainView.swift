@@ -102,7 +102,6 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
-    @State private var showEmailVerificationCover: Bool = false
 
     // MARK: - Tutorial Auto-Start Gate
     @State private var didScheduleTutorialAutoStart: Bool = false
@@ -536,16 +535,6 @@ struct MainView: View {
                         .animation(.linear(duration: 0.05), value: showSheetOverlay)
                 }
 
-                if user.isVerified == false {
-                    VStack {
-                        emailVerificationBanner(email: user.email)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 54)
-                        Spacer()
-                    }
-                    .allowsHitTesting(true)
-                    .zIndex(120)
-                }
             }
             .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
             .onPreferenceChange(SpotlightFrameKey.self) { frames in
@@ -618,22 +607,6 @@ struct MainView: View {
                         PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
                             .opacity(0.012)
                     }
-                }
-            }
-            .fullScreenCover(isPresented: $showEmailVerificationCover, onDismiss: {
-                if !showLeftDrawer && !showRightDrawer {
-                    showBottomSheet = true
-                }
-            }) {
-                NavigationStack {
-                    EmailVerificationView(
-                        userEmail: rlAppState.currentUser?.email ?? user.email,
-                        onContinue: {
-                            showEmailVerificationCover = false
-                        },
-                        showSkipUnverifiedOption: false
-                    )
-                    .environmentObject(rlAppState)
                 }
             }
             .onAppear {
@@ -857,63 +830,6 @@ struct MainView: View {
     
     // MARK: - View Components
 
-    private func presentEmailVerification() {
-        dismissKeyboard()
-        dismissLeftSheetsSignal = true
-        dismissRightSheetsSignal = true
-        withAnimation(AnimationConstants.standard) {
-            showLeftDrawer = false
-            showRightDrawer = false
-            showOverlay = false
-            showSheetOverlay = false
-            showBottomSheet = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            showEmailVerificationCover = true
-        }
-    }
-
-    private func emailVerificationBanner(email: String) -> some View {
-        Button(action: presentEmailVerification) {
-            HStack(spacing: 10) {
-                Image(systemName: "envelope.badge.shield.half.filled")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(AppColors.statusWarning95)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(AppColors.statusWarning16))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Verify your email")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppColors.whiteText)
-                    Text("Required before joining or creating guilds.")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(AppColors.greyText)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.drawerBackground.opacity(0.94))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(AppColors.statusWarning45, lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.22), radius: 12, x: 0, y: 6)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Verify email \(email)")
-    }
-    
     private var mainContentStack: some View {
         NavigationStack {
             ZStack {
@@ -1136,7 +1052,7 @@ struct MainView: View {
         guard !rlAppState.showBetaWelcomeSheet else { return }
         guard !rlAppState.showingTransition else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             guard rlAppState.currentUser?.id == userId else { return }
             guard !tutorialManager.isActive else { return }
             // Re-verify — the welcome sheet may have been presented during the delay.
@@ -2956,6 +2872,14 @@ struct ChartBottomSheet: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedDetent = .fraction(0.11)
                 }
+            },
+            viewportAnchorProvider: { [weak placementState] in
+                guard let state = placementState,
+                      let time = state.currentViewportAnchorTime,
+                      let price = state.currentViewportAnchorPrice else {
+                    return nil
+                }
+                return (time: time, price: price)
             }
         )
         .padding(.horizontal, 16)

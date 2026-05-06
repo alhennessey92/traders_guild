@@ -638,6 +638,11 @@ struct PersonalWatchlistRow: View {
                             .foregroundColor(AppColors.primaryForeground)
 
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+
+                        SymbolWatchlistIndicators(
+                            inPersonal: false,
+                            inGuild: symbol.inGuildWatchlist == true
+                        )
                     }
 
                     Text(symbol.displayName)
@@ -734,6 +739,11 @@ struct GuildWatchlistRow: View {
                             .foregroundColor(AppColors.primaryForeground)
 
                         SymbolMarketStatus(isMarketOpen: symbol.effectiveIsMarketOpen)
+
+                        SymbolWatchlistIndicators(
+                            inPersonal: symbol.inPersonalWatchlist == true,
+                            inGuild: false
+                        )
                     }
 
                     Text(symbol.displayName)
@@ -812,9 +822,16 @@ struct SearchResultSymbolRow: View {
 
                 // Symbol info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(symbol.ticker)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppColors.primaryForeground)
+                    HStack(spacing: 6) {
+                        Text(symbol.ticker)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.primaryForeground)
+
+                        SymbolWatchlistIndicators(
+                            inPersonal: false,
+                            inGuild: symbol.inGuildWatchlist == true
+                        )
+                    }
 
                     Text(symbol.displayName)
                         .font(.system(size: 11))
@@ -833,7 +850,7 @@ struct SearchResultSymbolRow: View {
                 .frame(maxHeight: 64)
 
                 Spacer()
-                
+
                 // Personal watchlist button only
                 Button(action: onAddToPersonal) {
                     Image(systemName: inPersonal ? "star.fill" : "star")

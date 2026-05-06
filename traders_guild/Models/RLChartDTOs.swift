@@ -563,6 +563,7 @@ struct NotePayload: Codable {
     let anchorTime: Date?
     let anchorPrice: Double?
     let fontSize: Double?
+    let colorHex: String?
 
     init(
         text: String,
@@ -570,7 +571,8 @@ struct NotePayload: Codable {
         offsetY: Double? = nil,
         anchorTime: Date? = nil,
         anchorPrice: Double? = nil,
-        fontSize: Double? = nil
+        fontSize: Double? = nil,
+        colorHex: String? = nil
     ) {
         self.text = text
         self.offsetX = offsetX
@@ -578,6 +580,7 @@ struct NotePayload: Codable {
         self.anchorTime = anchorTime
         self.anchorPrice = anchorPrice
         self.fontSize = fontSize
+        self.colorHex = colorHex
     }
 }
 
@@ -1007,7 +1010,10 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     }
 
     var activityBadgeValues: [String] {
-        activityBadges ?? []
+        // Pre-beta: keep only the "Trending" pill on watchlist rows. The
+        // provider/origin pill (e.g. Binance) is rendered separately via
+        // SymbolProviderBadge and is unaffected by this filter.
+        (activityBadges ?? []).filter { $0.lowercased() == "trending" }
     }
 }
 
