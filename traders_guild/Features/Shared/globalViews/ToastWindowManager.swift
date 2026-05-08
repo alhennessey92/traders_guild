@@ -8,36 +8,54 @@
 import SwiftUI
 import UIKit
 
-/// Window that only accepts touches in the bottom toast region so the rest of the app stays interactive.
-private final class ToastPassthroughWindow: UIWindow {
-    /// Height of the bottom strip where the toast lives; touches outside pass through.
-    private let toastRegionHeight: CGFloat = 140
+/// Window that only intercepts touches landing on the actual toast bubble.
+/// Everything else passes through to the app underneath.
+///
+/// SwiftUI's `Button` (and most other interactive controls) doesn't expose
+/// a per-element UIView for hit testing — `super.hitTest` for a tap inside a
+/// SwiftUI hierarchy returns the hosting view itself. The previous heuristic
+/// (filter out hits on `rootViewController.view`) therefore swallowed every
+/// tap on the dismiss button: the system reported the host view, we
+/// returned nil, and the tap fell through to the content behind the toast.
+///
+/// Fix: track the toast bubble's actual frame in window coordinates (reported
+/// from SwiftUI via a `PreferenceKey`) and only accept hits that land inside
+/// that frame. SwiftUI then dispatches the tap to the right control, while
+/// taps outside the bubble cleanly pass through.
+final class ToastPassthroughWindow: UIWindow {
+    var toastFrame: CGRect = .zero
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let inToastRegion = point.y >= bounds.maxY - toastRegionHeight
-        guard inToastRegion else { return nil }
-
-        let hitView = super.hitTest(point, with: event)
-        if hitView === rootViewController?.view {
+        guard !toastFrame.isEmpty, toastFrame.contains(point) else {
             return nil
         }
-        return hitView
+        return super.hitTest(point, with: event)
+    }
+}
+
+/// Preference key the SwiftUI toast view uses to report its bubble frame
+/// (in global coordinates) up to the window manager.
+struct ToastFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
 
 @MainActor
 class ToastWindowManager: ObservableObject {
     static let shared = ToastWindowManager()
-    
-    private var toastWindow: UIWindow?
+
+    private var toastWindow: ToastPassthroughWindow?
     private var activeAlertId: UUID?
-    
+
     private init() {}
-    
+
     func showToast(_ alert: RLAppAlert, onDismiss: @escaping () -> Void) {
         activeAlertId = alert.id
 
-        // Create window if needed (passthrough so touches outside toast don't block app)
+        // Create window if needed (passthrough so touches outside the toast
+        // bubble still reach the app underneath).
         if toastWindow == nil {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 let window = ToastPassthroughWindow(windowScene: windowScene)
@@ -47,72 +65,57 @@ class ToastWindowManager: ObservableObject {
                 toastWindow = window
             }
         }
-        
+
         guard let window = toastWindow else { return }
-        
-        // ✅ Uses your ErrorToastView!
+
+        // Capture-frame container: ErrorToastView reports its rendered
+        // frame in global coordinates so the window can hit-test against it.
         let toastView = VStack {
             Spacer()
-            ErrorToastView(alert: alert, onDismiss: {
+            ErrorToastView(alert: alert, onDismiss: { [weak self] in
+                guard let self = self else { return }
                 if self.activeAlertId == alert.id {
                     onDismiss()
                     self.hideToast()
                 }
             })
             .padding(.bottom, 20)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: ToastFrameKey.self,
+                        value: proxy.frame(in: .global)
+                    )
+                }
+            )
         }
-        
+        .onPreferenceChange(ToastFrameKey.self) { [weak self] frame in
+            self?.toastWindow?.toastFrame = frame
+        }
+
         let hostingController = UIHostingController(rootView: toastView)
         hostingController.view.backgroundColor = .clear
-        
+
         window.rootViewController = hostingController
         window.isHidden = false
-        
+
         // Animate in
         window.alpha = 0
         UIView.animate(withDuration: 0.3) {
             window.alpha = 1
         }
     }
-    
+
     func hideToast() {
         guard let window = toastWindow else { return }
         activeAlertId = nil
-        
+
         UIView.animate(withDuration: 0.3, animations: {
             window.alpha = 0
         }) { _ in
             window.isHidden = true
             window.rootViewController = nil
+            window.toastFrame = .zero
         }
     }
 }
-
-//struct GlobalAlertModifier: ViewModifier {
-//    @EnvironmentObject var appState: AppState
-//    
-//    func body(content: Content) -> some View {
-//        ZStack {
-//            content
-//            
-//            // Toast overlay
-//            if let alert = appState.currentAlert, alert.style == .toast {
-//                VStack {
-//                    Spacer()
-//                    ErrorToastView(alert: alert, onDismiss: {
-//                        appState.clearAlert()
-//                    })
-//                    .padding(.bottom, 20)
-//                    .transition(.move(edge: .bottom).combined(with: .opacity))
-//                }
-//                .animation(.spring(), value: appState.currentAlert?.id)
-//            }
-//        }
-//    }
-//}
-//
-//extension View {
-//    func withGlobalAlerts() -> some View {
-//        self.modifier(GlobalAlertModifier())
-//    }
-//}

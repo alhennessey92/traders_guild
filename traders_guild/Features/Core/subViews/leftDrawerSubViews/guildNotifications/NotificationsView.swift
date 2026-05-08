@@ -50,6 +50,7 @@ struct NotificationsListView: View {
                 size: .compact,
                 theme: .blue,
                 countForTab: { tab in getCountForTab(tab) },
+                titleForTab: { tab in tabTitle(for: tab) },
                 spacing: 6
             )
             .padding(.horizontal, 12)
@@ -98,38 +99,78 @@ struct NotificationsListView: View {
     // MARK: - Tab Counts
     
     private func getCountForTab(_ tab: NotificationTab) -> Int {
+        // The Guild tab is scoped to the currently-active guild; backend stats are
+        // aggregated across every guild the user belongs to, so always derive the
+        // Guild count from the locally-filtered list to match what is shown.
+        if tab == .guild {
+            return filteredNotifications(for: .guild).filter { !$0.isRead }.count
+        }
+
         if let stats = leftDrawerViewModel.notificationStats {
             switch tab {
             case .all:
                 return stats.unreadCount
-            case .guild:
-                return stats.guildCount
             case .personal:
                 return stats.personalCount
+            case .guild:
+                return 0 // unreachable, handled above
             }
         }
 
         switch tab {
         case .all:
             return leftDrawerViewModel.userNotifications.filter { !$0.isRead }.count
-        case .guild:
-            return filteredNotifications(for: .guild).filter { !$0.isRead }.count
         case .personal:
             return filteredNotifications(for: .personal).filter { !$0.isRead }.count
+        case .guild:
+            return 0 // unreachable
         }
     }
     
+    // MARK: - Tab Titles
+
+    /// Resolve a tab's display title; the Guild tab shows the current guild's name
+    /// so users know notifications under it are scoped to the active guild.
+    private func tabTitle(for tab: NotificationTab) -> String {
+        switch tab {
+        case .all, .personal:
+            return tab.title
+        case .guild:
+            if let name = rlAppState.currentGuild?.name, !name.isEmpty {
+                return name.hasSuffix(" Guild") ? name : "\(name) Guild"
+            }
+            return tab.title
+        }
+    }
+
     // MARK: - Filtered Notifications
-    
+
+    /// Returns the guild_id associated with a notification, preferring the destination
+    /// payload (most reliable) and falling back to the data payload.
+    private func notificationGuildId(_ notification: RLNotificationDTO) -> UUID? {
+        notification.destination?.guildId ?? notification.guildId
+    }
+
     private func filteredNotifications(for tab: NotificationTab) -> [RLNotificationDTO] {
         switch tab {
         case .all:
+            // All notifications across every guild the user belongs to
             return leftDrawerViewModel.userNotifications
         case .guild:
-            // Guild tab: announcements, events, guild invites
-            return leftDrawerViewModel.userNotifications.filter { $0.type?.isGuild == true }
+            // Guild tab: announcements, events, member events — scoped to the active guild only
+            let activeGuildId = rlAppState.currentGuild?.id
+            return leftDrawerViewModel.userNotifications.filter { notification in
+                guard notification.type?.isGuild == true else { return false }
+                guard let activeGuildId else { return true }
+                guard let notificationGuildId = notificationGuildId(notification) else {
+                    // No guild_id on the notification — show under the active guild as a safe default
+                    return true
+                }
+                return notificationGuildId == activeGuildId
+            }
         case .personal:
-            // Personal tab: DMs, chatroom mentions, friend requests, mentions
+            // Personal tab: cross-guild user-personal events (DMs, mentions, friend events,
+            // marker reactions, reputation changes). These are scoped to the user, not a guild.
             return leftDrawerViewModel.userNotifications.filter { $0.type?.isPersonal == true }
         }
     }

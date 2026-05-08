@@ -462,18 +462,20 @@ struct UnifiedTabButton<Tab: UnifiedTabItem>: View {
     let theme: UnifiedTabTheme
     let index: Int
     var count: Int? = nil
+    var titleOverride: String? = nil
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: tab.icon)
                     .font(.system(size: size.iconSize, weight: .semibold))
-                
+
                 // Show label based on size variant
                 if size != .iconOnly {
-                    Text(tab.title)
+                    Text(titleOverride ?? tab.title)
                         .font(.system(size: size.labelSize, weight: .medium))
+                        .lineLimit(1)
                 }
                 
                 // Optional count badge
@@ -513,6 +515,7 @@ struct UnifiedTabBar<Tab: UnifiedTabItem>: View where Tab.AllCases: RandomAccess
     var size: UnifiedTabSize = .standard
     var theme: UnifiedTabTheme = .blue
     var countForTab: ((Tab) -> Int)? = nil
+    var titleForTab: ((Tab) -> String)? = nil
     var spacing: CGFloat = 6
 
     var body: some View {
@@ -526,7 +529,8 @@ struct UnifiedTabBar<Tab: UnifiedTabItem>: View where Tab.AllCases: RandomAccess
                         size: size,
                         theme: theme,
                         index: index,
-                        count: countForTab?(tab)
+                        count: countForTab?(tab),
+                        titleOverride: titleForTab?(tab)
                     ) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = tab

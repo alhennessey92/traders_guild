@@ -293,13 +293,13 @@ struct RLMessagingSheet: View {
             
             // User profile view for DMs
             if showUserProfile, case .dmThread(let thread) = contentType {
-                userProfileView(for: thread.participant, backTitle: "Back to Chat")
+                userProfileView(for: thread.participant)
                     .transition(.move(edge: .trailing))
             }
-            
+
             // User profile view for chatroom users
             if showUserProfile, case .chatroom = contentType, let selectedUser = selectedChatroomUser {
-                userProfileView(for: selectedUser, backTitle: "Back to Chatroom")
+                userProfileView(for: selectedUser)
                     .transition(.move(edge: .trailing))
             }
             
@@ -1223,36 +1223,47 @@ struct RLMessagingSheet: View {
     }
 
     // MARK: - User Profile View
-    private func userProfileView(for member: RLGuildMemberDTO, backTitle: String) -> some View {
+    private func userProfileView(for member: RLGuildMemberDTO) -> some View {
         VStack(spacing: 0) {
-            HStack {
-                ChatBackButton(title: backTitle) {
-                    withAnimation {
-                        showUserProfile = false
-                        selectedChatroomUser = nil
-                    }
-                }
-                
-                Spacer()
-                
+            // ZStack overlay keeps the title visually centered regardless of the
+            // back/dismiss button widths — using two Spacers around the title made
+            // it drift left because the back button was wider than the close button.
+            ZStack {
                 Text("Profile")
                     .font(.headline)
                     .foregroundColor(AppColors.whiteText)
-                
-                Spacer()
-                
-                ChatDismissButton {
-                    messagingManager.closeMessage()
-                    dismiss()
+
+                HStack {
+                    Button {
+                        withAnimation {
+                            showUserProfile = false
+                            selectedChatroomUser = nil
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                            Text("Back")
+                                .font(.headline)
+                        }
+                        .foregroundColor(AppColors.whiteText)
+                    }
+
+                    Spacer()
+
+                    ChatDismissButton {
+                        messagingManager.closeMessage()
+                        dismiss()
+                    }
                 }
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)
             .padding(.bottom, 16)
             .background(AppColors.sheetBackground)
-            
+
             Divider()
-            
+
             ScrollView {
                 VStack(spacing: 16) {
                     GuildMemberProfileHeaderViewRL(member: member)
@@ -1283,9 +1294,12 @@ struct RLMessagingSheet: View {
             }
         }
         .background(
+            // The chat sheet hosting this view is already presented over a frosted
+            // material; layering another `.ultraThinMaterial` here produced a
+            // translucent strip across the device's bottom safe area that sat on
+            // top of the rounded-corner mask. A solid sheet background plus the
+            // honeycomb pattern is enough.
             ZStack {
-                Color.clear
-                    .background(.ultraThinMaterial)
                 AppColors.sheetBackground
                 StaticPatternView()
             }

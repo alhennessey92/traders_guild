@@ -6,6 +6,32 @@
 import SwiftUI
 import AuthenticationServices
 
+/// Identifies which bundled legal document the welcome screen should present
+/// in its sheet. The Welcome view exposes the Terms of Service and Privacy
+/// Policy via inline links in the consent line so users can review them
+/// before authenticating (post-login they're also reachable via Settings →
+/// Terms & Privacy).
+private enum WelcomeLegalDocument: String, Identifiable {
+    case termsOfService
+    case privacyPolicy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .termsOfService: return "Terms of Service"
+        case .privacyPolicy: return "Privacy Policy"
+        }
+    }
+
+    var resourceName: String {
+        switch self {
+        case .termsOfService: return "terms_of_service"
+        case .privacyPolicy: return "privacy_policy"
+        }
+    }
+}
+
 struct WelcomeView: View {
     @Binding var path: [RLSignupStep]
     @Binding var data: RLSignupData
@@ -15,6 +41,7 @@ struct WelcomeView: View {
     @State private var isAppleSignInLoading = false
     @State private var isBiometricLoading = false
     @State private var hasAttemptedAutoBiometricLogin = false
+    @State private var presentedLegalDocument: WelcomeLegalDocument?
     private let appleSignInCoordinator = AppleSignInCoordinator()
     private let biometricManager = BiometricAuthManager.shared
 
@@ -115,12 +142,29 @@ struct WelcomeView: View {
 
                 Divider()
 
-                Text("By signing in, you agree to our Terms Of Use, Privacy Policy and Cookies Policy")
+                // Inline markdown links open the bundled in-app legal docs as a
+                // sheet rather than navigating to the marketing site. We hand
+                // SwiftUI a custom OpenURLAction so it can intercept the
+                // `tg://` scheme and route to `LegalDocumentView` directly.
+                Text(.init("By signing in, you agree to our [Terms of Service](tg://terms) and [Privacy Policy](tg://privacy)."))
                     .font(AppFonts.smallNotice())
                     .foregroundColor(AppColors.whiteText)
+                    .tint(AppColors.accentColor)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .environment(\.openURL, OpenURLAction { url in
+                        switch url.absoluteString {
+                        case "tg://terms":
+                            presentedLegalDocument = .termsOfService
+                            return .handled
+                        case "tg://privacy":
+                            presentedLegalDocument = .privacyPolicy
+                            return .handled
+                        default:
+                            return .systemAction
+                        }
+                    })
 
                 Spacer()
 
@@ -150,6 +194,13 @@ struct WelcomeView: View {
             .padding()
         }
         .opacity(opacity)
+        .sheet(item: $presentedLegalDocument) { document in
+            LegalDocumentView(
+                title: document.title,
+                resourceName: document.resourceName,
+                onBack: { presentedLegalDocument = nil }
+            )
+        }
         .onAppear {
             withAnimation(.easeIn(duration: 0.5)) {
                 opacity = 1

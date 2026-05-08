@@ -25,8 +25,10 @@ class RLAppState: ObservableObject {
             isAuthenticated = currentUser != nil
             if let user = currentUser {
                 saveUserToKeychain(user)
+                saveUserIdToKeychain(user.id)
             } else {
                 clearUserFromKeychain()
+                clearUserIdFromKeychain()
                 currentGlobalAccuracy = nil
             }
         }
@@ -823,9 +825,24 @@ class RLAppState: ObservableObject {
             self.refreshToken = refreshed.refreshToken
             self.isSessionRestored = true
 
-            // Restore cached user
-            if let user = getUserFromKeychain() {
-                self.currentUser = user
+            // Always verify the user against /users/me — the biometric refresh token
+            // and the cached user blob can diverge if multiple accounts have been
+            // signed in on this device, so we trust the API as the source of truth.
+            let cachedBeforeBiometric = getUserFromKeychain()
+            do {
+                let liveUser = try await realApi.getCurrentUser()
+                if let cachedBeforeBiometric, cachedBeforeBiometric.id != liveUser.id {
+                    print("⚠️ loginWithBiometric: Cached user (\(cachedBeforeBiometric.id)) does not match biometric token owner (\(liveUser.id)) — clearing stale local data")
+                    clearGuildFromKeychain()
+                    clearMembershipFromKeychain()
+                    self.currentGuild = nil
+                    self.currentMembership = nil
+                }
+                self.currentUser = liveUser
+            } catch {
+                // Without API confirmation we cannot safely publish a cached user —
+                // it may belong to a different account. Surface the error instead.
+                throw error
             }
 
             // Fetch guilds
@@ -1152,17 +1169,55 @@ class RLAppState: ObservableObject {
         if let refresh = resolvedRefreshToken {
             self.refreshToken = refresh
         }
-        
-        if let user = getUserFromKeychain() {
+
+        // Resolve the live user from the API when we have a usable access token.
+        // This is the safety net for the multi-account-on-device race: the cached
+        // user blob in keychain may belong to a different account than the token
+        // the refresh just produced. Always trust /users/me when we can reach it.
+        var resolvedUser: RLUserDTO? = nil
+        let cachedUser = getUserFromKeychain()
+        let cachedUserId = getUserIdFromKeychain() ?? cachedUser?.id
+
+        if resolvedAccessToken != nil {
+            do {
+                let liveUser = try await realApi.getCurrentUser()
+                if let cachedUserId, cachedUserId != liveUser.id {
+                    print("⚠️ restoreSession: Cached user (\(cachedUserId)) does not match token owner (\(liveUser.id)) — clearing stale local data")
+                    clearGuildFromKeychain()
+                    clearMembershipFromKeychain()
+                    self.currentGuild = nil
+                    self.currentMembership = nil
+                }
+                resolvedUser = liveUser
+                print("🔄 restoreSession: Verified user via API: \(liveUser.username)")
+            } catch APIError.unauthorized {
+                print("⚠️ restoreSession: /users/me 401 — clearing session")
+                clearLocalSessionState(clearAlertState: true)
+                isSessionRestored = true
+                return
+            } catch {
+                // Transient (network/decoding) — fall back to cached user, but only
+                // if the cached userId matches what we have on file. Otherwise we'd
+                // be publishing the wrong account.
+                print("⚠️ restoreSession: /users/me transient failure: \(error)")
+                if let cachedUser, cachedUserId == cachedUser.id {
+                    resolvedUser = cachedUser
+                }
+            }
+        } else if let cachedUser, cachedUserId == cachedUser.id {
+            resolvedUser = cachedUser
+        }
+
+        if let user = resolvedUser {
             self.currentUser = user
             print("🔄 restoreSession: Found user: \(user.username)")
         }
-        
+
         if let guild = getGuildFromKeychain() {
             self.currentGuild = guild
             print("🔄 restoreSession: Found guild: \(guild.name)")
         }
-        
+
         if let membership = getMembershipFromKeychain() {
             self.currentMembership = membership
             print("🔄 restoreSession: Found membership")
@@ -2754,6 +2809,7 @@ class RLAppState: ObservableObject {
 
     private var tokenStorageKey: String { "\(keychainPrefix)token" }
     private var userStorageKey: String { "\(keychainPrefix)user" }
+    private var userIdStorageKey: String { "\(keychainPrefix)user_id" }
     private var guildStorageKey: String { "\(keychainPrefix)guild" }
     private var membershipStorageKey: String { "\(keychainPrefix)membership" }
     private var refreshTokenStorageKey: String { "\(keychainPrefix)refresh_token" }
@@ -2812,6 +2868,22 @@ class RLAppState: ObservableObject {
 
     private func clearUserFromKeychain() {
         KeychainPreferences.removeValue(forKey: userStorageKey)
+    }
+
+    // User ID — written alongside the user/token bundle so session restore can verify
+    // that the cached user matches the token's actual owner. Stops a stale cached user
+    // (e.g. account A) from being published when the live tokens belong to account B.
+    private func saveUserIdToKeychain(_ userId: UUID) {
+        KeychainPreferences.setString(userId.uuidString, forKey: userIdStorageKey)
+    }
+
+    private func getUserIdFromKeychain() -> UUID? {
+        guard let raw = KeychainPreferences.string(forKey: userIdStorageKey) else { return nil }
+        return UUID(uuidString: raw)
+    }
+
+    private func clearUserIdFromKeychain() {
+        KeychainPreferences.removeValue(forKey: userIdStorageKey)
     }
 
     // Guild
@@ -2886,7 +2958,7 @@ class RLAppState: ObservableObject {
         pendingBetaWelcomeUserId = userId
     }
 
-    private func presentPendingBetaWelcomeIfNeeded() {
+    func presentPendingBetaWelcomeIfNeeded() {
         if let betaUserId = pendingBetaWelcomeUserId {
             guard currentUser?.id == betaUserId else {
                 pendingBetaWelcomeUserId = nil
@@ -3063,6 +3135,7 @@ class RLAppState: ObservableObject {
         clearTokenFromKeychain()
         clearRefreshTokenFromKeychain()
         clearUserFromKeychain()
+        clearUserIdFromKeychain()
         clearGuildFromKeychain()
         clearMembershipFromKeychain()
         clearOnboardingState()

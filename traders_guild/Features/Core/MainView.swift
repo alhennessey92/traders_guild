@@ -717,6 +717,19 @@ struct MainView: View {
                 // Auto-launch tutorial for new users. Gated on welcome sheets
                 // being dismissed so the tutorial doesn't start underneath them.
                 scheduleTutorialAutoStartIfEligible(for: user.id)
+
+                // Belt-and-braces: ensure the beta welcome sheet actually
+                // surfaces after the chart settles. The existing chain
+                // (finishTransition → presentPendingBetaWelcomeIfNeeded) can
+                // miss when chart-ready races with the transition fade or
+                // when state propagation only kicks in after a user touch.
+                // A direct delayed call here gives the user the welcome
+                // 4 seconds after they land on the chart, every time.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    guard rlAppState.currentUser?.id == user.id else { return }
+                    rlAppState.presentPendingBetaWelcomeIfNeeded()
+                }
             }
             .onChange(of: rlAppState.showBetaWelcomeSheet) { _, isShowing in
                 if !isShowing, let userId = rlAppState.currentUser?.id {

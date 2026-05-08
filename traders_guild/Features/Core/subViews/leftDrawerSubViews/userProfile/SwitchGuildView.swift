@@ -107,7 +107,7 @@ struct SwitchGuildView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    LazyVStack(spacing: 12) {
                         ForEach(rlAppState.userGuilds) { item in
                             GuildSwitchRow(
                                 item: item,
@@ -581,7 +581,7 @@ struct JoinGuildView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        VStack(spacing: 14) {
+                        LazyVStack(spacing: 14) {
                             ForEach(filteredGuilds) { guild in
                                 JoinGuildRow(
                                     guild: guild.guild,
@@ -1787,7 +1787,7 @@ struct CreateGuildView: View {
                                     .foregroundColor(AppColors.guildReputationAccent)
                             }
 
-                            Text(guildName.isEmpty ? "Your Guild" : guildName)
+                            Text(guildName.isEmpty ? "Your Guild" : "\(guildName) Guild")
                                 .font(.title3.bold())
                                 .foregroundColor(guildName.isEmpty ? AppColors.greyText : AppColors.whiteText)
                                 .lineLimit(1)
@@ -1800,21 +1800,31 @@ struct CreateGuildView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             requiredFieldLabel("Guild Name")
 
-                            TextField("Guild name", text: $guildName)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.words)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
+                            HStack(spacing: 0) {
+                                TextField("Guild name", text: $guildName)
+                                    .font(.body)
+                                    .foregroundColor(AppColors.whiteText)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.words)
+
+                                if !guildName.isEmpty {
+                                    Text(" Guild")
+                                        .font(.body)
+                                        .foregroundColor(AppColors.greyText.opacity(0.7))
+                                        .fixedSize()
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                                    )
+                            )
 
                             Text("\(guildName.count)/50")
                                 .font(.caption2)
@@ -2103,9 +2113,26 @@ struct CreateGuildView: View {
         isCreating = true
         defer { isCreating = false }
 
+        // Defensive: strip a trailing " Guild" the user may have typed manually so
+        // the backend doesn't end up with "MyName Guild Guild" once display code
+        // appends the suffix again.
+        var trimmedName = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmedName.lowercased().hasSuffix(" guild") {
+            trimmedName = String(trimmedName.dropLast(" guild".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard !trimmedName.isEmpty else {
+            rlAppState.showError(
+                title: "Guild Name Required",
+                message: "Enter a name for your guild before continuing.",
+                style: .toast
+            )
+            return
+        }
+
         do {
             let _ = try await rlAppState.createGuild(
-                name: guildName,
+                name: trimmedName,
                 description: guildDescription.isEmpty ? nil : guildDescription,
                 isOpen: isOpen,
                 language: selectedLanguageValue,
