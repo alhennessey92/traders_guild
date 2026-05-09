@@ -1213,14 +1213,48 @@ class RLAppState: ObservableObject {
             print("🔄 restoreSession: Found user: \(user.username)")
         }
 
-        if let guild = getGuildFromKeychain() {
-            self.currentGuild = guild
-            print("🔄 restoreSession: Found guild: \(guild.name)")
+        var didResolveGuildFromLiveMemberships = false
+        let cachedGuild = getGuildFromKeychain()
+        let cachedMembership = getMembershipFromKeychain()
+
+        if resolvedAccessToken != nil, currentUser != nil {
+            do {
+                try await fetchUserGuilds()
+                if let cachedGuild,
+                   let liveGuild = userGuilds.first(where: { $0.guild.id == cachedGuild.id }) {
+                    self.currentGuild = liveGuild.guild
+                    self.currentMembership = liveGuild.membership
+                    didResolveGuildFromLiveMemberships = true
+                    print("🔄 restoreSession: Restored live guild: \(liveGuild.guild.name)")
+                } else {
+                    if cachedGuild != nil {
+                        print("⚠️ restoreSession: Cached guild is not in live memberships — clearing stale guild")
+                        clearGuildFromKeychain()
+                        clearMembershipFromKeychain()
+                    }
+                    if userGuilds.count == 1, let onlyGuild = userGuilds.first {
+                        selectGuild(onlyGuild, showTransition: false)
+                        didResolveGuildFromLiveMemberships = true
+                        print("🔄 restoreSession: Selected only live guild: \(onlyGuild.guild.name)")
+                    } else if !userGuilds.isEmpty {
+                        showGuildSelectionSheet = true
+                    }
+                }
+            } catch {
+                print("⚠️ restoreSession: Failed to fetch live guilds: \(error)")
+            }
         }
 
-        if let membership = getMembershipFromKeychain() {
-            self.currentMembership = membership
-            print("🔄 restoreSession: Found membership")
+        if !didResolveGuildFromLiveMemberships {
+            if let guild = cachedGuild {
+                self.currentGuild = guild
+                print("🔄 restoreSession: Found cached guild: \(guild.name)")
+            }
+
+            if let membership = cachedMembership {
+                self.currentMembership = membership
+                print("🔄 restoreSession: Found cached membership")
+            }
         }
 
         if currentUser != nil {
