@@ -782,6 +782,8 @@ private func makeTopMarker(
         intent: intent,
         title: nil,
         notePreview: "preview",
+        pollQuestion: nil,
+        pollOptions: nil,
         selectedEmoji: nil,
         alertSeverity: nil,
         createdAt: createdAt,

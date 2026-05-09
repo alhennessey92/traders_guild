@@ -263,8 +263,12 @@ class RLAppState: ObservableObject {
     // MARK: - Initialization
     // ================================================================================================
     
-    init() {
+    init(restoreSessionOnInit: Bool = true) {
         print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
+
+        guard restoreSessionOnInit else {
+            return
+        }
 
         // Lift any pre-existing tokens/DTOs out of UserDefaults into the
         // Keychain before restoreSession() reads them back. Runs once

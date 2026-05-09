@@ -411,9 +411,9 @@ struct MainView: View {
         let dataManager = ChartDataManager()
         _chartDataManager = StateObject(wrappedValue: dataManager)
         // ChartViewModel will be properly initialized in onAppear with rlAppState
-        // For now, create a temporary one - it will be replaced
+        // For now, create a temporary app state without session side effects.
         _chartViewModel = StateObject(wrappedValue: ChartViewModel(
-            appState: RLAppState(),
+            appState: RLAppState(restoreSessionOnInit: false),
             dataManager: dataManager,
             api: RealAPIService()
         ))

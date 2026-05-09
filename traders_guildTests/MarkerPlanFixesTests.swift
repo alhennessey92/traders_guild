@@ -412,6 +412,56 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func copyChartDrawingsPreservesZoneAndTextColors() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = Date(timeIntervalSince1970: 1_700_003_600)
+        let drawings = [
+            ChartDrawing(
+                type: .zone,
+                points: [
+                    ChartDrawingPoint(time: start, price: 1.25),
+                    ChartDrawingPoint(time: end, price: 1.20),
+                ],
+                colorHex: "#F43F5E",
+                lineStyle: .solid,
+                lineWidth: 2.0
+            ),
+            ChartDrawing(
+                type: .textNote,
+                points: [ChartDrawingPoint(time: start, price: 1.22)],
+                colorHex: "#38BDF8",
+                note: "Watch reaction",
+                offsetX: 12,
+                offsetY: -6,
+                fontSize: 18
+            ),
+        ]
+
+        let state = MarkerPlacementState()
+        let result = state.attachActiveChartDrawings(drawings)
+
+        #expect(result.added == 2)
+        if case let .drawingZone(payload)? = state.components.first(where: { $0.componentType == .drawingZone })?.payload {
+            #expect(payload.colorHex == "#F43F5E")
+            #expect(payload.lineStyle == .solid)
+            #expect(payload.lineWidth == 2.0)
+            #expect(state.drawingColorHex(for: drawings[0].id) == "#F43F5E")
+        } else {
+            Issue.record("Expected copied zone payload")
+        }
+
+        if case let .note(payload)? = state.components.first(where: { $0.componentType == .textNote })?.payload {
+            #expect(payload.colorHex == "#38BDF8")
+            #expect(payload.fontSize == 18)
+            #expect(payload.offsetX == 12)
+            #expect(payload.offsetY == -6)
+            #expect(state.drawingColorHex(for: drawings[1].id) == "#38BDF8")
+        } else {
+            Issue.record("Expected copied text note payload")
+        }
+    }
+
+    @Test
     func legendSummaryIncludesPanelIndicators() {
         var active = ActiveIndicators()
         active.rsi = RSIConfig(period: 14)

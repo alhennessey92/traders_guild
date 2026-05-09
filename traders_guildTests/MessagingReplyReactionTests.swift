@@ -147,7 +147,9 @@ struct MessagingReplyReactionTests {
                 preview: "Tonight",
                 eventDate: Date(timeIntervalSince1970: 1_700_000_000),
                 isImportant: false,
-                iconKey: .calendar
+                iconKey: .calendar,
+                locationType: nil,
+                locationId: nil
             )
         )
         #expect(eventRequest["icon_key"] as? String == "calendar")
