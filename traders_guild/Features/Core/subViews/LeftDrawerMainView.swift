@@ -768,7 +768,7 @@ struct SectionDrawerView: View {
                             Image(systemName: "chevron.left")
                                 .font(.title3)
                                 .fontWeight(.semibold)
-                            Text("KAOS")
+                            Text(guild.name)
                                 .font(.headline)
                                 .fontWeight(.bold)
                             + Text(" Guild")

@@ -581,7 +581,7 @@ extension RealAPIService {
     
     /// Register new user
     func register(data: RLSignupData) async throws -> RLRegistrationResponseDTO {
-        let requestBody = data.toRequest()
+        let requestBody = try data.toRequest()
         
         let response: RLRegistrationResponseDTO = try await request(
             "/auth/register",

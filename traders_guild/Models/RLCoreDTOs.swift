@@ -24,6 +24,7 @@ struct RLRegisterRequestDTO: Codable {
     let username: String
     let displayName: String          // backend: display_name
     let password: String
+    let dateOfBirth: Date            // backend: date_of_birth
     let language: String?
     let location: String?
 }
@@ -2585,6 +2586,17 @@ enum RLTradingInterestsCatalog {
 // ================================================================================================
 
 /// Form data collected during signup flow - NOT sent directly to API
+enum RLSignupValidationError: LocalizedError {
+    case missingDateOfBirth
+
+    var errorDescription: String? {
+        switch self {
+        case .missingDateOfBirth:
+            return "Date of birth is required."
+        }
+    }
+}
+
 struct RLSignupData {
     var email: String = ""
     var username: String = ""
@@ -2622,14 +2634,18 @@ struct RLSignupData {
     }
     
     /// Convert to API request format
-    func toRequest() -> RLRegisterRequestDTO {
+    func toRequest() throws -> RLRegisterRequestDTO {
         let normalizedLanguage = RLAuthValidator.trimmed(language)
         let normalizedLocation = RLAuthValidator.trimmed(location)
+        guard let dateOfBirth else {
+            throw RLSignupValidationError.missingDateOfBirth
+        }
         return RLRegisterRequestDTO(
             email: email,
             username: username,
             displayName: name,
             password: password,
+            dateOfBirth: dateOfBirth,
             language: normalizedLanguage.isEmpty ? nil : normalizedLanguage,
             location: normalizedLocation.isEmpty ? nil : normalizedLocation
         )
@@ -2637,6 +2653,8 @@ struct RLSignupData {
 }
 
 enum RLAuthValidator {
+    static let minimumSignupAgeYears = 13
+
     private static let emailRegex = #"^[A-Z0-9a-z._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,64}$"#
     private static let usernameRegex = #"^[A-Za-z0-9_.-]{3,50}$"#
 
@@ -2687,6 +2705,24 @@ enum RLAuthValidator {
 
     static func doPasswordsMatch(_ first: String, _ second: String) -> Bool {
         !first.isEmpty && first == second
+    }
+
+    static func maximumAllowedDateOfBirth(
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date {
+        calendar.date(byAdding: .year, value: -minimumSignupAgeYears, to: referenceDate) ?? referenceDate
+    }
+
+    static func isAtLeastMinimumSignupAge(
+        _ dateOfBirth: Date,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        let dob = calendar.startOfDay(for: dateOfBirth)
+        let reference = calendar.startOfDay(for: referenceDate)
+        let components = calendar.dateComponents([.year], from: dob, to: reference)
+        return (components.year ?? 0) >= minimumSignupAgeYears
     }
 }
 

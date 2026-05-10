@@ -12,7 +12,7 @@ Contact: support@tradersguild.co
 
 ## 2. Eligibility
 
-You must be at least 18 years old (or the age of majority in your jurisdiction) to use Traders Guild. By using the app you confirm that you meet this requirement and that the information you provide is accurate.
+You must be at least 13 years old, or meet the minimum legal age required in your jurisdiction, to use Traders Guild. By using the app you confirm that you meet this requirement and that the information you provide is accurate.
 
 ## 3. Your Account
 

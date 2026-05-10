@@ -19,6 +19,8 @@ struct SignupEmailView: View {
 
     @State private var name: String = ""
     @State private var email: String = ""
+    @State private var dateOfBirth: Date = RLAuthValidator.maximumAllowedDateOfBirth()
+    @State private var hasSetDOB: Bool = false
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
     @State private var emailAvailabilityError: String?
@@ -35,6 +37,8 @@ struct SignupEmailView: View {
     private var isFormValid: Bool {
         RLAuthValidator.isValidDisplayName(normalizedName) &&
         RLAuthValidator.isValidEmail(normalizedEmail) &&
+        hasSetDOB &&
+        RLAuthValidator.isAtLeastMinimumSignupAge(dateOfBirth) &&
         RLAuthValidator.isValidPassword(password) &&
         RLAuthValidator.doPasswordsMatch(password, confirmPassword)
     }
@@ -135,6 +139,35 @@ struct SignupEmailView: View {
                             .padding(.bottom, 4)
                     }
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Date of Birth")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .padding(.horizontal, 24)
+
+                        DatePicker(
+                            "Date of Birth",
+                            selection: $dateOfBirth,
+                            in: ...RLAuthValidator.maximumAllowedDateOfBirth(),
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 20)
+                        .onChange(of: dateOfBirth) { _, _ in
+                            hasSetDOB = true
+                            dismissKeyboard()
+                        }
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                dismissKeyboard()
+                            }
+                        )
+                    }
+                    .padding(.bottom, 10)
+
                     Text("Password requirements")
                         .font(AppFonts.smallNotice())
                         .foregroundColor(AppColors.greyText)
@@ -212,6 +245,10 @@ struct SignupEmailView: View {
                 if password.isEmpty {
                     password = data.password
                 }
+                if let dob = data.dateOfBirth {
+                    dateOfBirth = dob
+                    hasSetDOB = true
+                }
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
             .navigationBarBackButtonHidden(true)
@@ -270,6 +307,7 @@ struct SignupEmailView: View {
 
             data.name = normalizedName
             data.email = normalizedEmail
+            data.dateOfBirth = dateOfBirth
             data.password = password
             path.append(.username)
         } catch {

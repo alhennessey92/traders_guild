@@ -25,11 +25,15 @@ struct traders_guildApp: App {
     init() {
         let rlAppState = RLAppState()
         let rlMessagingManager = RLMessagingManager()
-        
+
         // Configure the connections
         rlMessagingManager.configure(with: rlAppState)       // RL system - chatrooms/DMs
         PushNotificationManager.shared.configure(apiService: rlAppState.realApi)
-        
+
+        // App Store review prompt — fires after the user has placed a
+        // meaningful number of markers (see ReviewPromptManager).
+        ReviewPromptManager.shared.start()
+
         _rlAppState = StateObject(wrappedValue: rlAppState)
         _rlMessagingManager = StateObject(wrappedValue: rlMessagingManager)
     }
@@ -208,35 +212,42 @@ struct traders_guildApp: App {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppColors.gradientBackgroundDark.opacity(0.9))
-            .onAppear {
-                // FIXED: Check ALL conditions before calling openGuildSelector
-                // This prevents race conditions during login flow
-                guard !rlAppState.isCompletingSignup else {
-                    #if DEBUG
-                    print("⏳ Skipping openGuildSelector - completing signup")
-                    #endif
-                    return
-                }
-                guard !rlAppState.isHandlingAuthFlow else {
-                    #if DEBUG
-                    print("⏳ Skipping openGuildSelector - auth flow in progress")
-                    #endif
-                    return
-                }
-                guard !rlAppState.showGuildSelectionSheet else {
-                    #if DEBUG
-                    print("⏳ Skipping openGuildSelector - sheet already showing")
-                    #endif
-                    return
-                }
-                
-                // Only trigger if we're NOT in the middle of auth
-                // This handles the case of returning to app with saved session but no guild
-                Task {
-                    await rlAppState.openGuildSelector()
-                }
+            .task(id: rlAppState.isSessionRestored) {
+                await openGuildSelectorAfterSessionRestoreIfNeeded()
             }
         }
+    }
+
+    @MainActor
+    private func openGuildSelectorAfterSessionRestoreIfNeeded() async {
+        guard rlAppState.isSessionRestored else {
+            #if DEBUG
+            print("⏳ Skipping openGuildSelector - session restore still running")
+            #endif
+            return
+        }
+        guard rlAppState.isAuthenticated, rlAppState.currentGuild == nil else { return }
+        guard !rlAppState.isOnboardingFlowActive else { return }
+        guard !rlAppState.isCompletingSignup else {
+            #if DEBUG
+            print("⏳ Skipping openGuildSelector - completing signup")
+            #endif
+            return
+        }
+        guard !rlAppState.isHandlingAuthFlow else {
+            #if DEBUG
+            print("⏳ Skipping openGuildSelector - auth flow in progress")
+            #endif
+            return
+        }
+        guard !rlAppState.showGuildSelectionSheet else {
+            #if DEBUG
+            print("⏳ Skipping openGuildSelector - sheet already showing")
+            #endif
+            return
+        }
+
+        await rlAppState.openGuildSelector()
     }
 }
 

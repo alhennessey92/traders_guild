@@ -494,6 +494,7 @@ class RLAppState: ObservableObject {
     
     func clearAlert() {
         currentAlert = nil
+        ToastWindowManager.shared.hideToast()
     }
 
     private func syncNotificationBadge() {
@@ -545,6 +546,8 @@ class RLAppState: ObservableObject {
             if beginOnboarding {
                 isOnboardingFlowActive = true
             } else {
+                queueBetaWelcomeIfNeeded()
+                queueInitialTutorialAutoStartIfNeeded()
                 showTransitionForChartLoad()
             }
             
@@ -703,9 +706,10 @@ class RLAppState: ObservableObject {
         )
         self.currentUser = updatedUser
 
-        if let dob = data.dateOfBirth {
-            _ = try await realApi.updateDateOfBirth(RLDOBUpdateRequest(dateOfBirth: dob))
+        guard let dob = data.dateOfBirth else {
+            throw RLSignupValidationError.missingDateOfBirth
         }
+        _ = try await realApi.updateDateOfBirth(RLDOBUpdateRequest(dateOfBirth: dob))
     }
 
     /// Verify email address with token
@@ -956,6 +960,7 @@ class RLAppState: ObservableObject {
             isOnboardingFlowActive = false
             showTransitionForChartLoad(minimumDuration: 0.6)
             queueBetaWelcomeIfNeeded()
+            queueInitialTutorialAutoStartIfNeeded()
 
             // The beta welcome sheet is presented exclusively by
             // finishTransition() once the chart is ready and the view
@@ -1218,8 +1223,8 @@ class RLAppState: ObservableObject {
         }
 
         var didResolveGuildFromLiveMemberships = false
-        let cachedGuild = getGuildFromKeychain()
-        let cachedMembership = getMembershipFromKeychain()
+        var cachedGuild = getGuildFromKeychain()
+        var cachedMembership = getMembershipFromKeychain()
 
         if resolvedAccessToken != nil, currentUser != nil {
             do {
@@ -1235,6 +1240,8 @@ class RLAppState: ObservableObject {
                         print("⚠️ restoreSession: Cached guild is not in live memberships — clearing stale guild")
                         clearGuildFromKeychain()
                         clearMembershipFromKeychain()
+                        cachedGuild = nil
+                        cachedMembership = nil
                     }
                     if userGuilds.count == 1, let onlyGuild = userGuilds.first {
                         selectGuild(onlyGuild, showTransition: false)
@@ -1277,7 +1284,6 @@ class RLAppState: ObservableObject {
                 }
                 armBiometricAppLockIfNeeded(reason: "session_restore")
                 subscribeToNotifications(reason: .sessionRestore)
-                queueBetaWelcomeIfNeeded()
             }
         }
 
@@ -1538,7 +1544,6 @@ class RLAppState: ObservableObject {
             print("🔐 \(context): Guild selection required (\(userGuilds.count) guilds)")
             showGuildSelectionSheet = true
         }
-        queueBetaWelcomeIfNeeded()
         isHandlingAuthFlow = false
     }
     
@@ -2987,9 +2992,8 @@ class RLAppState: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)onboarding_state")
     }
 
-    /// Queue the beta welcome sheet for any authenticated user who hasn't seen it.
-    /// Safe to call from signup, login, Apple Sign In, biometric login, and session restore —
-    /// each path funnels here so the sheet is guaranteed to fire once per user before the tutorial.
+    /// Queue the beta welcome sheet after first registration only.
+    /// Normal login, biometric login, and session restore intentionally do not call this.
     func queueBetaWelcomeIfNeeded() {
         guard let userId = currentUser?.id else { return }
         guard !hasSeenBetaWelcome(for: userId) else { return }
@@ -3000,6 +3004,11 @@ class RLAppState: ObservableObject {
         if let betaUserId = pendingBetaWelcomeUserId {
             guard currentUser?.id == betaUserId else {
                 pendingBetaWelcomeUserId = nil
+                return
+            }
+            guard currentGuild != nil,
+                  !showGuildSelectionSheet,
+                  !showingTransition else {
                 return
             }
             if !hasSeenBetaWelcome(for: betaUserId) {
@@ -3014,15 +3023,33 @@ class RLAppState: ObservableObject {
     }
 
     private func hasSeenBetaWelcome(for userId: UUID) -> Bool {
-        UserDefaults.standard.bool(forKey: betaWelcomeKey(for: userId))
+        let keys = [
+            betaWelcomeKey(for: userId),
+            globalBetaWelcomeKey(for: userId)
+        ]
+        if keys.contains(where: { KeychainPreferences.bool(forKey: $0) || UserDefaults.standard.bool(forKey: $0) }) {
+            return true
+        }
+
+        let suffix = "beta_welcome_seen_\(userId.uuidString)"
+        return UserDefaults.standard.dictionaryRepresentation().contains { entry in
+            entry.key.hasSuffix(suffix) && ((entry.value as? Bool) == true)
+        }
     }
 
     private func markBetaWelcomeSeen(for userId: UUID) {
-        UserDefaults.standard.set(true, forKey: betaWelcomeKey(for: userId))
+        [betaWelcomeKey(for: userId), globalBetaWelcomeKey(for: userId)].forEach { key in
+            KeychainPreferences.setBool(true, forKey: key)
+            UserDefaults.standard.set(true, forKey: key)
+        }
     }
 
     private func betaWelcomeKey(for userId: UUID) -> String {
         "\(keychainPrefix)beta_welcome_seen_\(userId.uuidString)"
+    }
+
+    private func globalBetaWelcomeKey(for userId: UUID) -> String {
+        "traders_guild_beta_welcome_seen_\(userId.uuidString)"
     }
 
     func hasReportedUser(guildId: UUID, userId: UUID) -> Bool {
@@ -3133,6 +3160,50 @@ class RLAppState: ObservableObject {
 
     // MARK: - In-App Tutorial Persistence
 
+    func queueInitialTutorialAutoStartIfNeeded() {
+        guard let userId = currentUser?.id else { return }
+        guard !hasTutorialCompleted(for: userId) else { return }
+        guard !hasInitialTutorialAutoStartShown(for: userId) else { return }
+
+        let key = tutorialAutoStartPendingKey(for: userId)
+        KeychainPreferences.setBool(true, forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
+    }
+
+    func shouldAutoStartInitialTutorial(for userId: UUID) -> Bool {
+        guard !hasTutorialCompleted(for: userId) else { return false }
+        guard !hasInitialTutorialAutoStartShown(for: userId) else { return false }
+
+        let key = tutorialAutoStartPendingKey(for: userId)
+        return KeychainPreferences.bool(forKey: key) || UserDefaults.standard.bool(forKey: key)
+    }
+
+    func markInitialTutorialAutoStartShown(for userId: UUID) {
+        let pendingKey = tutorialAutoStartPendingKey(for: userId)
+        KeychainPreferences.removeValue(forKey: pendingKey)
+        UserDefaults.standard.removeObject(forKey: pendingKey)
+
+        [tutorialAutoStartShownKey(for: userId), globalTutorialAutoStartShownKey(for: userId)].forEach { key in
+            KeychainPreferences.setBool(true, forKey: key)
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }
+
+    private func hasInitialTutorialAutoStartShown(for userId: UUID) -> Bool {
+        let keys = [
+            tutorialAutoStartShownKey(for: userId),
+            globalTutorialAutoStartShownKey(for: userId)
+        ]
+        if keys.contains(where: { KeychainPreferences.bool(forKey: $0) || UserDefaults.standard.bool(forKey: $0) }) {
+            return true
+        }
+
+        let suffix = "tutorial_auto_start_shown_\(userId.uuidString)"
+        return UserDefaults.standard.dictionaryRepresentation().contains { entry in
+            entry.key.hasSuffix(suffix) && ((entry.value as? Bool) == true)
+        }
+    }
+
     func hasTutorialCompleted(for userId: UUID) -> Bool {
         let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
         // Check Keychain first (survives reinstall), fall back to UserDefaults for migration
@@ -3166,6 +3237,18 @@ class RLAppState: ObservableObject {
         KeychainPreferences.removeValue(forKey: key)
         UserDefaults.standard.removeObject(forKey: key)
         clearTutorialProgress(for: userId)
+    }
+
+    private func tutorialAutoStartPendingKey(for userId: UUID) -> String {
+        "\(keychainPrefix)tutorial_auto_start_pending_\(userId.uuidString)"
+    }
+
+    private func tutorialAutoStartShownKey(for userId: UUID) -> String {
+        "\(keychainPrefix)tutorial_auto_start_shown_\(userId.uuidString)"
+    }
+
+    private func globalTutorialAutoStartShownKey(for userId: UUID) -> String {
+        "traders_guild_tutorial_auto_start_shown_\(userId.uuidString)"
     }
 
     // Clear all

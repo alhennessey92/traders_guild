@@ -127,6 +127,9 @@ struct WelcomeView: View {
                         )
                     }
                     .disabled(RLAppState.isLoggingOut)
+                    .simultaneousGesture(TapGesture().onEnded {
+                        RLAppState.clearAlert()
+                    })
 
                     Button {
                         RLAppState.showInfo("Google sign-in will be enabled in an upcoming release.")
@@ -180,6 +183,7 @@ struct WelcomeView: View {
                             .bold()
                             .foregroundColor(AppColors.accentColor)
                             .onTapGesture {
+                                RLAppState.clearAlert()
                                 path.append(.accountInfo)
                             }
                     }
@@ -222,6 +226,7 @@ struct WelcomeView: View {
     private func handleBiometricLogin(autoTriggered: Bool = false) {
         guard !RLAppState.isLoggingOut else { return }
         guard !isBiometricLoading else { return }
+        RLAppState.clearAlert()
         isBiometricLoading = true
         Task {
             do {
@@ -245,6 +250,7 @@ struct WelcomeView: View {
 
     private func handleAppleSignIn() {
         guard !RLAppState.isLoggingOut else { return }
+        RLAppState.clearAlert()
         isAppleSignInLoading = true
         Task {
             do {

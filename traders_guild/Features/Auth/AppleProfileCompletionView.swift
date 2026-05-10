@@ -14,7 +14,7 @@ struct AppleProfileCompletionView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     @State private var name: String = ""
-    @State private var dateOfBirth: Date = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
+    @State private var dateOfBirth: Date = RLAuthValidator.maximumAllowedDateOfBirth()
     @State private var hasSetDOB: Bool = false
 
     private var normalizedName: String {
@@ -22,12 +22,9 @@ struct AppleProfileCompletionView: View {
     }
 
     private var isFormValid: Bool {
-        RLAuthValidator.isValidDisplayName(normalizedName) && hasSetDOB
-    }
-
-    private let minimumAge: Int = 13
-    private var maximumDate: Date {
-        Calendar.current.date(byAdding: .year, value: -minimumAge, to: Date()) ?? Date()
+        RLAuthValidator.isValidDisplayName(normalizedName) &&
+        hasSetDOB &&
+        RLAuthValidator.isAtLeastMinimumSignupAge(dateOfBirth)
     }
 
     var body: some View {
@@ -78,7 +75,7 @@ struct AppleProfileCompletionView: View {
                         DatePicker(
                             "Date of Birth",
                             selection: $dateOfBirth,
-                            in: ...maximumDate,
+                            in: ...RLAuthValidator.maximumAllowedDateOfBirth(),
                             displayedComponents: .date
                         )
                         .datePickerStyle(.wheel)

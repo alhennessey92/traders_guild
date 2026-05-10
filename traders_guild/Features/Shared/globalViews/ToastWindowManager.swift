@@ -25,6 +25,8 @@ import UIKit
 final class ToastPassthroughWindow: UIWindow {
     var toastFrame: CGRect = .zero
 
+    override var canBecomeKey: Bool { false }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !toastFrame.isEmpty, toastFrame.contains(point) else {
             return nil

@@ -7,7 +7,8 @@ struct BetaWelcomeSheetView: View {
         ("flask.fill", "Early Access", "You’re one of the first to explore Traders Guild while we keep polishing the experience."),
         ("person.2.wave.2.fill", "Synthetic Users", "You’ll notice demo accounts and sample activity around the guild. They’re here to show how chat, markers, and leaderboards come alive — we’ll dial them back as real activity grows."),
         ("lifepreserver.fill", "Send Support & Feedback", "Found a bug or have a suggestion? Use Beta Feedback (left drawer) for quick reports, or Contact Support in Settings for account help."),
-        ("wrench.and.screwdriver.fill", "Things May Change", "Some flows may evolve quickly between releases — your feedback directly shapes what we work on next.")
+        ("wrench.and.screwdriver.fill", "Things May Change", "Some flows may evolve quickly between releases — your feedback directly shapes what we work on next."),
+        ("exclamationmark.shield.fill", "Not Financial Advice", "Traders Guild is a collaboration and tracking tool for educational and discussion purposes only. Nothing in the app is financial, investment, or trading advice. Trading involves substantial risk — you are solely responsible for your own decisions.")
     ]
 
     var body: some View {
@@ -67,6 +68,18 @@ struct BetaWelcomeSheetView: View {
                         )
                     }
                 }
+
+                VStack(spacing: 4) {
+                    Text("Crypto market data powered by Binance.")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText.opacity(0.7))
+                    Text("By continuing you acknowledge this is early-access software and not financial advice.")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)

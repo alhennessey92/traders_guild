@@ -1060,6 +1060,7 @@ struct MainView: View {
     /// can change between scheduling and firing.
     private func scheduleTutorialAutoStartIfEligible(for userId: UUID) {
         guard !didScheduleTutorialAutoStart else { return }
+        guard rlAppState.shouldAutoStartInitialTutorial(for: userId) else { return }
         guard !rlAppState.hasTutorialCompleted(for: userId) else { return }
         guard rlAppState.getTutorialProgress(for: userId) == nil else { return }
         guard !rlAppState.showBetaWelcomeSheet else { return }
@@ -1090,6 +1091,8 @@ struct MainView: View {
                 rightDragTranslation = 0
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                guard rlAppState.currentUser?.id == userId else { return }
+                rlAppState.markInitialTutorialAutoStartShown(for: userId)
                 tutorialManager.startTutorial(fromBeginning: true)
             }
         }

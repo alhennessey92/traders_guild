@@ -995,10 +995,7 @@ struct DateOfBirthView: View {
     @State private var showSuccessAlert = false
     
     private var ageRequirementMet: Bool {
-        let calendar = Calendar.current
-        let now = Date()
-        let ageComponents = calendar.dateComponents([.year], from: selectedDate, to: now)
-        return (ageComponents.year ?? 0) >= 13
+        RLAuthValidator.isAtLeastMinimumSignupAge(selectedDate)
     }
     
     var body: some View {
@@ -2384,22 +2381,38 @@ struct AboutView: View {
                             .foregroundColor(AppColors.greyText)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
-                        
+
+                        // Risk Disclosure
+                        AboutInfoCard(
+                            icon: "exclamationmark.shield.fill",
+                            title: "Risk Disclosure",
+                            message: "Traders Guild is for educational and discussion purposes only. Nothing in this app constitutes financial, investment, or trading advice. Markers, leaderboards, and chat reflect user opinions — not recommendations. Trading involves substantial risk of loss. You are solely responsible for your own decisions."
+                        )
+                        .padding(.horizontal, 25)
+
+                        // Data Sources
+                        AboutInfoCard(
+                            icon: "antenna.radiowaves.left.and.right",
+                            title: "Data Sources",
+                            message: "Crypto market data is sourced from the public Binance API. Prices are provided as-is for informational purposes and may be delayed or interrupted. Traders Guild does not execute trades."
+                        )
+                        .padding(.horizontal, 25)
+
                         // Links
                         VStack(spacing: 12) {
-                            AboutLinkRow(icon: "globe", title: "Website", subtitle: "traders.guild")
-                            AboutLinkRow(icon: "envelope.fill", title: "Support", subtitle: "support@traders.guild")
+                            AboutLinkRow(icon: "globe", title: "Website", subtitle: "tradersguild.co")
+                            AboutLinkRow(icon: "envelope.fill", title: "Support", subtitle: "support@tradersguild.co")
                             AboutLinkRow(icon: "bubble.left.and.bubble.right.fill", title: "Twitter", subtitle: "@tradersguild")
                         }
                         .padding(.horizontal, 25)
-                        
+
                         // Copyright
                         Text("© 2026 Traders Guild\nAll rights reserved")
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText.opacity(0.6))
                             .multilineTextAlignment(.center)
                             .padding(.top, 20)
-                        
+
                         Spacer(minLength: 100)
                     }
                 }
@@ -2412,7 +2425,7 @@ struct AboutLinkRow: View {
     let icon: String
     let title: String
     let subtitle: String
-    
+
     var body: some View {
         Button(action: {}) {
             HStack(spacing: 12) {
@@ -2420,20 +2433,20 @@ struct AboutLinkRow: View {
                     .font(.system(size: 20))
                     .foregroundColor(AppColors.accentColor)
                     .frame(width: 32)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.whiteText)
-                    
+
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(AppColors.greyText)
@@ -2442,6 +2455,41 @@ struct AboutLinkRow: View {
             .background(AppColors.insetPanelBackground)
             .cornerRadius(12)
         }
+    }
+}
+
+struct AboutInfoCard: View {
+    let icon: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(AppColors.accentColor)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(AppColors.accentColor.opacity(0.14))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(AppColors.insetPanelBackground)
+        .cornerRadius(12)
     }
 }
 
