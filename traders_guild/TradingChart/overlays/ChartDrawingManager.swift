@@ -10,6 +10,7 @@ enum ChartDrawingType: String, Codable, CaseIterable, Hashable {
     case trendline
     case horizontalLine
     case zone
+    case pattern
     case supportLevel
     case resistanceLevel
     case textNote
@@ -23,6 +24,8 @@ enum ChartDrawingType: String, Codable, CaseIterable, Hashable {
             return "Horizontal Line"
         case .zone:
             return "Zone"
+        case .pattern:
+            return "Pattern"
         case .supportLevel:
             return "Support"
         case .resistanceLevel:
@@ -42,6 +45,8 @@ enum ChartDrawingType: String, Codable, CaseIterable, Hashable {
             return "line.3.horizontal"
         case .zone:
             return "square.dashed"
+        case .pattern:
+            return "triangle"
         case .supportLevel:
             return "arrow.down.to.line"
         case .resistanceLevel:
@@ -61,6 +66,8 @@ enum ChartDrawingType: String, Codable, CaseIterable, Hashable {
             return "#9CA3AF"
         case .zone:
             return "#22C55E"
+        case .pattern:
+            return "#F59E0B"
         case .supportLevel:
             return "#7C3AED"
         case .resistanceLevel:
@@ -83,6 +90,7 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
     var isVisible: Bool
     var note: String?
     var emoji: String?
+    var patternKey: String?
     var offsetX: Double?
     var offsetY: Double?
     var scale: Double?
@@ -98,6 +106,7 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         isVisible: Bool = true,
         note: String? = nil,
         emoji: String? = nil,
+        patternKey: String? = nil,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
         scale: Double? = nil,
@@ -112,6 +121,7 @@ struct ChartDrawing: Identifiable, Codable, Hashable {
         self.isVisible = isVisible
         self.note = note
         self.emoji = emoji
+        self.patternKey = patternKey
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.scale = scale
@@ -222,6 +232,7 @@ final class ChartDrawingManager: ObservableObject {
         lineWidth: Double? = nil,
         note: String? = nil,
         emoji: String? = nil,
+        patternKey: String? = nil,
         offsetX: Double? = nil,
         offsetY: Double? = nil,
         scale: Double? = nil,
@@ -235,6 +246,7 @@ final class ChartDrawingManager: ObservableObject {
             lineWidth: lineWidth,
             note: note,
             emoji: emoji,
+            patternKey: patternKey,
             offsetX: offsetX,
             offsetY: offsetY,
             scale: scale,

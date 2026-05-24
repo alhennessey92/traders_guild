@@ -274,7 +274,7 @@ struct InviteMembersView: View {
                 Text("Cancel")
                     .font(.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColors.statusNegative)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)

@@ -23,6 +23,145 @@ private struct GuildFlowBackground: View {
     }
 }
 
+struct LocalePreferenceChips: View {
+    let language: String?
+    let location: String?
+    var preferredLanguage: String = ""
+    var preferredLocation: String = ""
+    var compact: Bool = false
+
+    private var normalizedLanguage: String {
+        LocaleOptionCatalog.languageCode(from: language)
+    }
+
+    private var normalizedLocation: String {
+        LocaleOptionCatalog.countryCode(from: location)
+    }
+
+    private var matchScore: Int {
+        LocaleOptionCatalog.matchScore(
+            language: language,
+            location: location,
+            preferredLanguage: preferredLanguage,
+            preferredLocation: preferredLocation
+        )
+    }
+
+    var body: some View {
+        // Language and location are always shown so the row layout stays
+        // consistent across guilds; a guild with no preference set reads as
+        // "All languages" / "All locations" rather than disappearing.
+        HStack(spacing: 6) {
+            LocalePreferenceChip(
+                icon: languageIconName,
+                text: LocaleOptionCatalog.languageLabel(for: normalizedLanguage),
+                isMatched: LocaleOptionCatalog.languageMatches(normalizedLanguage, preferred: preferredLanguage),
+                compact: compact
+            )
+
+            LocalePreferenceChip(
+                icon: locationIconName,
+                text: LocaleOptionCatalog.countryDisplay(for: normalizedLocation),
+                isMatched: LocaleOptionCatalog.countryMatches(normalizedLocation, preferred: preferredLocation),
+                compact: compact
+            )
+
+            if matchScore > 0 {
+                LocalePreferenceChip(
+                    icon: "checkmark.seal.fill",
+                    text: "Matches you",
+                    isMatched: true,
+                    compact: compact
+                )
+            }
+        }
+    }
+
+    private var languageIconName: String {
+        normalizedLanguage == LocaleOptionCatalog.allPreferenceCode ? "globe" : "character.book.closed"
+    }
+
+    private var locationIconName: String? {
+        if normalizedLocation == LocaleOptionCatalog.allPreferenceCode || normalizedLocation.isEmpty {
+            return "globe"
+        }
+        return nil
+    }
+}
+
+private struct LocalePreferenceChip: View {
+    let icon: String?
+    let text: String
+    let isMatched: Bool
+    let compact: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(compact ? .caption2 : .caption)
+            }
+            Text(text)
+                .font(compact ? .caption2 : .caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundColor(isMatched ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.78))
+        .padding(.horizontal, compact ? 7 : 9)
+        .padding(.vertical, compact ? 3 : 5)
+        .background(
+            Capsule().fill(isMatched ? AppColors.guildReputationAccent.opacity(0.18) : AppColors.whiteText.opacity(0.08))
+        )
+    }
+}
+
+// MARK: - Shared Guild Components
+
+/// Compact single-line `members · online · reputation` strip shared by the
+/// switch row and the discover row.
+private struct GuildStatStrip: View {
+    let memberCount: Int
+    let membersOnline: Int
+    let reputationDisplay: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("\(memberCount) members")
+                .font(.caption)
+                .foregroundColor(AppColors.whiteText.opacity(0.7))
+
+            separator
+
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(AppColors.statusPositive)
+                    .frame(width: 6, height: 6)
+                Text("\(membersOnline) online")
+                    .font(.caption)
+                    .foregroundColor(AppColors.whiteText.opacity(0.7))
+            }
+
+            separator
+
+            HStack(spacing: 2) {
+                Image(systemName: "star.hexagon.fill")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.guildReputationAccent)
+                Text(reputationDisplay)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.guildReputationAccent)
+            }
+        }
+    }
+
+    private var separator: some View {
+        Circle()
+            .fill(AppColors.whiteText.opacity(0.3))
+            .frame(width: 3, height: 3)
+    }
+}
+
 // MARK: - Switch Guild Main View
 struct SwitchGuildView: View {
     let onBack: () -> Void
@@ -94,15 +233,25 @@ struct SwitchGuildView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if rlAppState.userGuilds.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "shield.slash")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    Text("No guilds found")
-                        .foregroundColor(.secondary)
-                    Text("Join or create a guild to get started")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                VStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.whiteText.opacity(0.06))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: "shield.slash")
+                            .font(.system(size: 28))
+                            .foregroundColor(AppColors.greyText)
+                    }
+
+                    Text("No guilds yet")
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+
+                    Text("Join or create a guild to get started.")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -209,7 +358,11 @@ struct GuildSwitchRow: View {
     let item: RLGuildWithMembership
     let isCurrentGuild: Bool
     let onSelect: () -> Void
-    
+
+    private var ownerName: String {
+        item.guild.ownerDisplayName ?? item.guild.ownerUsername ?? "Unknown owner"
+    }
+
     var body: some View {
         Button(action: {
             // Only execute action if not current guild
@@ -217,130 +370,71 @@ struct GuildSwitchRow: View {
                 onSelect()
             }
         }) {
-            HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    // Guild name
-                    HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.title2)
-                            .foregroundColor(AppColors.guildReputationAccent.opacity(0.6))
-                        
-                        Text(item.guild.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                        + Text(" Guild")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                    }
-                    
-                    // Member count and status
-                    Text("\(item.guild.memberCount) Members - \(item.guild.statusText)")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText)
-                        .padding(.leading, 15)
-                    
-                    // Owner info
-                    HStack(spacing: 3) {
-                        Text(item.guild.ownerDisplayName ?? item.guild.ownerUsername ?? "Unknown Owner")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
-                            .lineLimit(1)
-                        
-                        Text("-")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
-                        
-                        Text("Owner")
-                            .font(.caption)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, 15)
+            HStack(alignment: .top, spacing: 14) {
+                GuildCrestView(guild: item.guild, size: 42)
 
-                    if item.guild.language != nil || item.guild.location != nil {
-                        HStack(spacing: 6) {
-                            if let language = item.guild.language, !language.isEmpty {
-                                Text(language)
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
-                            }
-                            if let location = item.guild.location, !location.isEmpty {
-                                Text("• \(location)")
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
-                            }
-                        }
-                        .padding(.leading, 15)
-                    }
-                    
-                    // Members online
-                    HStack(spacing: 3) {
-                        Circle()
-                            .fill(AppColors.statusPositive)
-                            .frame(width: 6, height: 6)
-                        Text("\(item.guild.membersOnline) online")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-                    }
-                    .padding(.leading, 15)
-                    
-                    // Guild reputation
-                    HStack(spacing: 2) {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.caption2)
+                VStack(alignment: .leading, spacing: 8) {
+                    // Guild name (always shown in full) + selection state
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(item.guild.name)
+                            .font(.headline)
                             .fontWeight(.bold)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                        Text(item.guild.reputationDisplay)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                        Text(" Guild Reputation")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, 15)
-                    
-                    Divider()
-                    
-                    // User's role · reputation · accuracy in this guild
-                    HStack(spacing: 4) {
-                        Text("You are a ")
-                            .font(.caption)
                             .foregroundColor(AppColors.whiteText)
-                        UnifiedRoleBadge(
-                            roleName: item.role.displayName,
-                            roleColor: item.role.color,
-                            reputation: item.membership.reputation,
-                            accuracy: item.membership.accuracyFormatted,
-                            showReputation: true,
-                            fontSize: .caption,
-                            iconSize: .caption2
-                        )
-                    }
-                    .padding(.leading, 15)
-                }
-                
-                Spacer()
-                
-                // Selection indicator
-                VStack {
-                    if isCurrentGuild {
-                        Image(systemName: "checkmark.circle.fill")
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer(minLength: 6)
+
+                        if isCurrentGuild {
+                            HStack(spacing: 3) {
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.weight(.bold))
+                                Text("Current")
+                                    .font(.caption2.weight(.semibold))
+                            }
                             .foregroundColor(AppColors.guildReputationAccent)
-                            .font(.system(size: 20))
-                        
-                        Text("Current")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(AppColors.greyText.opacity(0.6))
-                            .font(.system(size: 16))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(AppColors.guildReputationAccent.opacity(0.18))
+                            )
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppColors.greyText.opacity(0.7))
+                                .padding(.top, 3)
+                        }
                     }
+
+                    // Owner
+                    Text("Owned by \(ownerName)")
+                        .font(.caption)
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // Your role in this guild
+                    UnifiedRoleBadge(
+                        roleName: item.role.displayName,
+                        roleColor: item.role.color,
+                        reputation: item.membership.reputation,
+                        accuracy: item.membership.accuracyFormatted,
+                        showReputation: true,
+                        fontSize: .caption,
+                        iconSize: .caption2
+                    )
+
+                    // Guild stats
+                    GuildStatStrip(
+                        memberCount: item.guild.memberCount,
+                        membersOnline: item.guild.membersOnline,
+                        reputationDisplay: item.guild.reputationDisplay
+                    )
+
+                    // Language / location
+                    LocalePreferenceChips(
+                        language: item.guild.language,
+                        location: item.guild.location,
+                        compact: true
+                    )
                 }
             }
             .padding(16)
@@ -363,7 +457,6 @@ struct GuildSwitchRow: View {
             )
         }
         .buttonStyle(.plain)
-        .opacity(isCurrentGuild ? 0.8 : 1.0)
     }
 }
 
@@ -454,6 +547,9 @@ struct JoinGuildView: View {
     @State private var languageFilter: String = ""
     @State private var locationFilter: String = ""
     @State private var hasLoadedMemberships: Bool = false
+    @State private var hasLoadedLocalePreferences: Bool = false
+    @State private var preferredLanguage: String = ""
+    @State private var preferredLocation: String = ""
 
     var filteredGuilds: [DiscoverGuildItem] {
         discoverGuilds
@@ -465,10 +561,10 @@ struct JoinGuildView: View {
             badges.append(selectedAccess.rawValue)
         }
         if !languageFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            badges.append("Language")
+            badges.append(LocaleOptionCatalog.languageLabel(for: languageFilter))
         }
         if !locationFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            badges.append("Location")
+            badges.append(LocaleOptionCatalog.countryDisplay(for: locationFilter))
         }
         return badges
     }
@@ -586,6 +682,8 @@ struct JoinGuildView: View {
                                 JoinGuildRow(
                                     guild: guild.guild,
                                     isJoined: guild.isJoined,
+                                    preferredLanguage: preferredLanguage,
+                                    preferredLocation: preferredLocation,
                                     onTap: {
                                         onSelectGuild(guild.guild)
                                     }
@@ -631,12 +729,15 @@ struct JoinGuildView: View {
                 try? await rlAppState.fetchUserGuilds()
                 hasLoadedMemberships = true
             }
+            await loadLocalePreferencesIfNeeded()
 
             let guilds = try await rlAppState.fetchJoinableGuilds(
                 search: searchText.isEmpty ? nil : searchText,
                 isOpen: selectedAccess.isOpenValue,
                 language: languageFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : languageFilter,
                 location: locationFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : locationFilter,
+                preferredLanguage: preferredLanguage.isEmpty ? nil : preferredLanguage,
+                preferredLocation: preferredLocation.isEmpty ? nil : preferredLocation,
                 sort: selectedSort.backendValue
             )
 
@@ -670,16 +771,14 @@ struct JoinGuildView: View {
 
         let language = languageFilter.trimmingCharacters(in: .whitespacesAndNewlines)
         if !language.isEmpty {
-            let guildLanguage = guild.language ?? ""
-            if !guildLanguage.localizedCaseInsensitiveContains(language) {
+            if !LocaleOptionCatalog.languageMatches(guild.language, preferred: language) {
                 return false
             }
         }
 
         let location = locationFilter.trimmingCharacters(in: .whitespacesAndNewlines)
         if !location.isEmpty {
-            let guildLocation = guild.location ?? ""
-            if !guildLocation.localizedCaseInsensitiveContains(location) {
+            if !LocaleOptionCatalog.countryMatches(guild.location, preferred: location) {
                 return false
             }
         }
@@ -693,6 +792,14 @@ struct JoinGuildView: View {
         }
 
         return guild.isActive
+    }
+
+    private func loadLocalePreferencesIfNeeded() async {
+        guard !hasLoadedLocalePreferences else { return }
+        hasLoadedLocalePreferences = true
+        guard let profile = try? await rlAppState.realApi.getCurrentUserExtendedProfile() else { return }
+        preferredLanguage = LocaleOptionCatalog.languageCode(from: profile.language)
+        preferredLocation = LocaleOptionCatalog.countryCode(from: profile.location)
     }
 
     private func sortGuilds(_ guilds: [DiscoverGuildItem]) -> [DiscoverGuildItem] {
@@ -797,7 +904,7 @@ struct JoinGuildFilterSheet: View {
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Text(languageFilter.isEmpty ? "Any" : (LocaleOptionCatalog.languages.first(where: { $0.code == languageFilter })?.label ?? languageFilter))
+                                Text(languageFilter.isEmpty ? "Any" : LocaleOptionCatalog.languageLabel(for: languageFilter))
                                     .font(.body)
                                     .foregroundColor(AppColors.whiteText)
                                     .lineLimit(1)
@@ -829,11 +936,11 @@ struct JoinGuildFilterSheet: View {
                             Button("Any") { locationFilter = "" }
                             Divider()
                             ForEach(LocaleOptionCatalog.countries) { option in
-                                Button(option.label) { locationFilter = option.code }
+                                Button(LocaleOptionCatalog.countryDisplay(for: option.code)) { locationFilter = option.code }
                             }
                         } label: {
                             HStack(spacing: 8) {
-                                Text(locationFilter.isEmpty ? "Any" : (LocaleOptionCatalog.countries.first(where: { $0.code == locationFilter })?.label ?? locationFilter))
+                                Text(locationFilter.isEmpty ? "Any" : LocaleOptionCatalog.countryDisplay(for: locationFilter))
                                     .font(.body)
                                     .foregroundColor(AppColors.whiteText)
                                     .lineLimit(1)
@@ -946,27 +1053,21 @@ private struct GuildFlowTitleHeader: View {
 struct JoinGuildRow: View {
     let guild: RLGuildDTO
     let isJoined: Bool
+    let preferredLanguage: String
+    let preferredLocation: String
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 14) {
-                // Icon circle
-                ZStack {
-                    Circle()
-                        .fill(AppColors.guildReputationAccent.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.title3)
-                        .foregroundColor(AppColors.guildReputationAccent)
-                }
+            HStack(alignment: .top, spacing: 14) {
+                GuildCrestView(guild: guild, size: 42)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    // Guild name
+                    // Guild name (always shown in full)
                     Text(guild.name)
                         .font(.headline)
                         .foregroundColor(AppColors.whiteText)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     // Access badge + joined pill
                     HStack(spacing: 8) {
@@ -993,6 +1094,15 @@ struct JoinGuildRow: View {
                         }
                     }
 
+                    // Language / location
+                    LocalePreferenceChips(
+                        language: guild.language,
+                        location: guild.location,
+                        preferredLanguage: preferredLanguage,
+                        preferredLocation: preferredLocation,
+                        compact: true
+                    )
+
                     // Description
                     if let description = guild.description, !description.isEmpty {
                         Text(description)
@@ -1001,46 +1111,19 @@ struct JoinGuildRow: View {
                             .lineLimit(2)
                     }
 
-                    // Compact stat row
-                    HStack(spacing: 6) {
-                        Text("\(guild.memberCount) members")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.7))
-
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.3))
-                            .frame(width: 3, height: 3)
-
-                        HStack(spacing: 3) {
-                            Circle()
-                                .fill(AppColors.statusPositive)
-                                .frame(width: 6, height: 6)
-                            Text("\(guild.membersOnline) online")
-                                .font(.caption)
-                                .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        }
-
-                        Circle()
-                            .fill(AppColors.whiteText.opacity(0.3))
-                            .frame(width: 3, height: 3)
-
-                        HStack(spacing: 2) {
-                            Image(systemName: "shield.pattern.checkered")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.guildReputationAccent)
-                            Text(guild.reputationDisplay)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.guildReputationAccent)
-                        }
-                    }
+                    GuildStatStrip(
+                        memberCount: guild.memberCount,
+                        membersOnline: guild.membersOnline,
+                        reputationDisplay: guild.reputationDisplay
+                    )
                 }
 
-                Spacer()
+                Spacer(minLength: 6)
 
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
                     .foregroundColor(AppColors.whiteText.opacity(0.4))
+                    .padding(.top, 3)
             }
             .padding(14)
             .background(
@@ -1137,26 +1220,10 @@ struct GuildDetailView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        HStack(spacing: 8) {
-                        GuildMetaChip(label: "Members", value: "\(guild.memberCount)")
-                        GuildMetaChip(label: "Online", value: "\(guild.membersOnline)")
-                        GuildMetaChip(label: "Rep", value: guild.reputationDisplay)
-                    }
-                    .opacity(visibleSections.contains(0) ? 1 : 0)
-                    .offset(y: visibleSections.contains(0) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
-
                     // Guild header card
                     sectionCard {
                         HStack(alignment: .top, spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.guildReputationAccent.opacity(0.12))
-                                    .frame(width: 48, height: 48)
-                                Image(systemName: "shield.lefthalf.filled")
-                                    .font(.title3)
-                                    .foregroundColor(AppColors.guildReputationAccent)
-                            }
+                            GuildCrestView(guild: guild, size: 48)
 
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(guild.name)
@@ -1178,6 +1245,12 @@ struct GuildDetailView: View {
                                         .font(.caption)
                                         .foregroundColor(AppColors.whiteText.opacity(0.7))
                                 }
+
+                                LocalePreferenceChips(
+                                    language: guild.language,
+                                    location: guild.location,
+                                    compact: true
+                                )
                             }
                         }
 
@@ -1187,9 +1260,9 @@ struct GuildDetailView: View {
                                 .foregroundColor(AppColors.whiteText.opacity(0.85))
                         }
                     }
-                    .opacity(visibleSections.contains(1) ? 1 : 0)
-                    .offset(y: visibleSections.contains(1) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
+                    .opacity(visibleSections.contains(0) ? 1 : 0)
+                    .offset(y: visibleSections.contains(0) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
 
                     // Guild Snapshot card
                     sectionCard {
@@ -1206,9 +1279,9 @@ struct GuildDetailView: View {
                             StatBox(label: "Type", value: guild.isOpen ? "Open" : "Private")
                         }
                     }
-                    .opacity(visibleSections.contains(2) ? 1 : 0)
-                    .offset(y: visibleSections.contains(2) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
+                    .opacity(visibleSections.contains(1) ? 1 : 0)
+                    .offset(y: visibleSections.contains(1) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
 
                     // Guild Information card
                     sectionCard {
@@ -1217,12 +1290,12 @@ struct GuildDetailView: View {
                             .foregroundColor(AppColors.whiteText)
 
                         GuildInfoRow(icon: "person.crop.circle", title: "Owner", value: ownerName)
-                        GuildInfoRow(icon: "globe", title: "Language", value: displayValue(guild.language))
-                        GuildInfoRow(icon: "mappin.and.ellipse", title: "Location", value: displayValue(guild.location))
+                        GuildInfoRow(icon: "globe", title: "Language", value: LocaleOptionCatalog.languageLabel(for: guild.language))
+                        GuildInfoRow(icon: "mappin.and.ellipse", title: "Location", value: LocaleOptionCatalog.countryDisplay(for: guild.location))
                     }
-                    .opacity(visibleSections.contains(3) ? 1 : 0)
-                    .offset(y: visibleSections.contains(3) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
+                    .opacity(visibleSections.contains(2) ? 1 : 0)
+                    .offset(y: visibleSections.contains(2) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
 
                     // Join Requirements card
                     VStack(alignment: .leading, spacing: 8) {
@@ -1244,15 +1317,15 @@ struct GuildDetailView: View {
                                     .stroke(AppColors.guildReputationAccent.opacity(0.32), lineWidth: 1)
                             )
                     )
-                    .opacity(visibleSections.contains(4) ? 1 : 0)
-                    .offset(y: visibleSections.contains(4) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: visibleSections.contains(4))
+                    .opacity(visibleSections.contains(3) ? 1 : 0)
+                    .offset(y: visibleSections.contains(3) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 140)
                 .onAppear {
-                    for i in 0...4 {
+                    for i in 0...3 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                             visibleSections.insert(i)
                         }
@@ -1652,6 +1725,10 @@ struct CreateGuildView: View {
     @State private var initialAnnouncementImportant: Bool = true
     @State private var joinQuestions: [String] = [""]
     @State private var visibleSections: Set<Int> = []
+    @State private var selectedCrestSymbol: String = GuildCrestCatalog.defaultSymbolKey
+    @State private var selectedCrestColor: String = GuildCrestCatalog.defaultColorKey
+    @State private var pickedCrestImage: UIImage?
+    @State private var showCrestImagePicker = false
 
     private var normalizedJoinQuestions: [RLGuildJoinQuestionInputDTO] {
         joinQuestions
@@ -1670,26 +1747,25 @@ struct CreateGuildView: View {
         return !name.isEmpty
             && !announcementTitle.isEmpty
             && !announcementContent.isEmpty
-            && !selectedLanguageCode.isEmpty
-            && !selectedCountryCode.isEmpty
             && (isOpen || !normalizedJoinQuestions.isEmpty)
     }
 
     private var selectedLanguageLabel: String {
-        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label ?? "Select language"
+        selectedLanguageCode.isEmpty ? "Use profile language" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode)
     }
 
     private var selectedCountryLabel: String {
-        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label ?? "Select country"
+        selectedCountryCode.isEmpty ? "Use profile country" : LocaleOptionCatalog.countryDisplay(for: selectedCountryCode)
     }
 
     private var selectedLanguageValue: String? {
-        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
+        selectedLanguageCode.isEmpty ? nil : selectedLanguageCode
     }
 
     private var selectedCountryValue: String? {
-        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
+        selectedCountryCode.isEmpty ? nil : selectedCountryCode
     }
+
 
     // Section card helper
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1747,6 +1823,25 @@ struct CreateGuildView: View {
         )
     }
 
+    /// The guild preview emblem — the picked image, else the symbol + colour.
+    @ViewBuilder
+    private func crestPreview(size: CGFloat) -> some View {
+        if let image = pickedCrestImage {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            GuildCrestView(
+                crestSymbol: selectedCrestSymbol,
+                crestColor: selectedCrestColor,
+                fallbackInitial: guildName.first ?? "G",
+                size: size
+            )
+        }
+    }
+
     var body: some View {
         ZStack {
             GuildFlowBackground()
@@ -1778,14 +1873,7 @@ struct CreateGuildView: View {
 
                         // Guild preview
                         VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(AppColors.guildReputationAccent.opacity(0.12))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "shield.lefthalf.filled")
-                                    .font(.title)
-                                    .foregroundColor(AppColors.guildReputationAccent)
-                            }
+                            crestPreview(size: 64)
 
                             Text(guildName.isEmpty ? "Your Guild" : "\(guildName) Guild")
                                 .font(.title3.bold())
@@ -1831,6 +1919,104 @@ struct CreateGuildView: View {
                                 .foregroundColor(guildName.count > 50 ? .red : AppColors.greyText)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
+
+                        // Guild crest — pick a symbol + colour, or upload an image
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Guild Crest")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                            Text("Your guild's emblem — shown everywhere your guild appears.")
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText.opacity(0.85))
+
+                            if let image = pickedCrestImage {
+                                HStack(spacing: 12) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 44, height: 44)
+                                        .clipShape(Circle())
+                                    Button {
+                                        pickedCrestImage = nil
+                                    } label: {
+                                        Label("Remove image", systemImage: "xmark.circle.fill")
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.statusNegative80)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            } else {
+                                // Symbol options
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(GuildCrestCatalog.symbolKeys, id: \.self) { key in
+                                            Button {
+                                                selectedCrestSymbol = key
+                                            } label: {
+                                                Image(systemName: GuildCrestCatalog.sfSymbol(for: key))
+                                                    .font(.system(size: 22, weight: .semibold))
+                                                    .foregroundColor(GuildCrestCatalog.color(for: selectedCrestColor))
+                                                    .frame(width: 44, height: 44)
+                                                    .background(
+                                                        RoundedRectangle(cornerRadius: 10)
+                                                            .fill(key == selectedCrestSymbol ? AppColors.guildReputationAccent.opacity(0.18) : Color.clear)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 10)
+                                                                    .stroke(
+                                                                        key == selectedCrestSymbol ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.12),
+                                                                        lineWidth: key == selectedCrestSymbol ? 1.5 : 1
+                                                                    )
+                                                            )
+                                                    )
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                }
+
+                                // Colour options
+                                HStack(spacing: 12) {
+                                    ForEach(GuildCrestCatalog.colorKeys, id: \.self) { key in
+                                        Button {
+                                            selectedCrestColor = key
+                                        } label: {
+                                            Circle()
+                                                .fill(GuildCrestCatalog.color(for: key))
+                                                .frame(width: 26, height: 26)
+                                                .overlay(
+                                                    Circle().stroke(AppColors.whiteText, lineWidth: key == selectedCrestColor ? 2 : 0)
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+
+                            Button {
+                                showCrestImagePicker = true
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "photo.on.rectangle")
+                                    Text(pickedCrestImage == nil ? "Upload an image" : "Choose a different image")
+                                        .fontWeight(.semibold)
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.guildReputationAccent.opacity(0.14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.guildReputationAccent.opacity(0.5), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .opacity(visibleSections.contains(1) ? 1 : 0)
                     .offset(y: visibleSections.contains(1) ? 0 : 12)
@@ -1864,9 +2050,15 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Language")
+                            Text("Language")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
 
                             Menu {
+                                Button("Use profile language") {
+                                    selectedLanguageCode = ""
+                                }
+                                Divider()
                                 ForEach(LocaleOptionCatalog.languages) { option in
                                     Button(option.label) {
                                         selectedLanguageCode = option.code
@@ -1878,11 +2070,17 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Country")
+                            Text("Country")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
 
                             Menu {
+                                Button("Use profile country") {
+                                    selectedCountryCode = ""
+                                }
+                                Divider()
                                 ForEach(LocaleOptionCatalog.countries) { option in
-                                    Button(option.label) {
+                                    Button(LocaleOptionCatalog.countryDisplay(for: option.code)) {
                                         selectedCountryCode = option.code
                                     }
                                 }
@@ -2051,7 +2249,7 @@ struct CreateGuildView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 140)
+                    .padding(.bottom, 200)
                     .onAppear {
                         for i in 0...4 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
@@ -2062,6 +2260,11 @@ struct CreateGuildView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .dismissKeyboardOnTapAndDragBackground()
+            }
+        }
+        .sheet(isPresented: $showCrestImagePicker) {
+            SharedImagePicker(sourceType: .photoLibrary) { image in
+                pickedCrestImage = image
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -2092,15 +2295,6 @@ struct CreateGuildView: View {
 
     // Create guild
     private func createGuild() async {
-        guard let selectedLanguageValue,
-              let selectedCountryValue else {
-            rlAppState.showError(
-                title: "Missing Required Fields",
-                message: "Choose both a language and a country before creating your guild.",
-                style: .toast
-            )
-            return
-        }
         guard isOpen || !normalizedJoinQuestions.isEmpty else {
             rlAppState.showError(
                 title: "Join Question Required",
@@ -2141,8 +2335,17 @@ struct CreateGuildView: View {
                 initialAnnouncementTitle: initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines),
                 initialAnnouncementContent: initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines),
                 initialAnnouncementPreview: String(initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180)),
-                initialAnnouncementIsImportant: initialAnnouncementImportant
+                initialAnnouncementIsImportant: initialAnnouncementImportant,
+                crestSymbol: selectedCrestSymbol,
+                crestColor: selectedCrestColor
             )
+            // If the user picked a custom image, upload it to the new guild
+            // (now the current guild). A failure here is non-fatal — the guild
+            // still has its symbol crest.
+            if let image = pickedCrestImage,
+               let data = image.jpegData(compressionQuality: 0.85) {
+                _ = try? await rlAppState.uploadGuildAvatar(imageData: data)
+            }
             onComplete()
         } catch is CancellationError {
             return

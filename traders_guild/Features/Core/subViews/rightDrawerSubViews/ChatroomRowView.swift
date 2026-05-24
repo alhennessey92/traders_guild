@@ -42,7 +42,7 @@ struct RLChatroomRowView: View {
                     if chatroom.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
-                            .foregroundColor(.yellow)
+                            .foregroundColor(AppColors.themeAwareYellow)
                             .offset(x: 14, y: -14)
                     }
                 }
@@ -108,7 +108,7 @@ struct RLChatroomRowView: View {
                         // Active indicator
                         if chatroom.isActive && !chatroom.hasUnread {
                             Circle()
-                                .fill(AppColors.bullCandleGreen)
+                                .fill(AppColors.onlineStatusGreen)
                                 .frame(width: 8, height: 8)
                         }
                         

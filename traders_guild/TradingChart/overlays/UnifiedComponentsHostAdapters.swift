@@ -365,6 +365,7 @@ final class ChartComponentsAdapter: ObservableObject, ComponentsHostAdapter {
         case .drawingTrendline,
              .drawingHorizontalLine,
              .drawingZone,
+             .drawingPattern,
              .levelSupport,
              .levelResistance,
              .textNote,

@@ -130,7 +130,7 @@ struct PriceIndicatorView: View {
                         )
 
                         let roundedPath = Path(roundedRect: labelRect, cornerRadius: ChartAxisMetrics.horizontalPriceChipCornerRadius)
-                        context.fill(roundedPath, with: .color(.yellow))
+                        context.fill(roundedPath, with: .color(AppColors.themeAwareYellow))
 
                         let text = Text(formattedPrice)
                             .font(.system(size: ChartAxisMetrics.horizontalPriceFontSize, weight: .semibold, design: .monospaced))

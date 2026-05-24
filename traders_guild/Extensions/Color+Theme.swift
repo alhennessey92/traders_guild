@@ -74,10 +74,25 @@ enum AppColors {
             Color(red: 62.0 / 255, green: 48.0 / 255, blue: 158.0 / 255)
         }
 
-        /// Deep forest green for semantic positive UI (accuracy, profit, status) on light grey.
+        /// Lifted forest green for semantic positive UI (accuracy, profit, status) on light grey.
+        /// Was RGB 14/108/52 — too dark/muddy. Lifted to a brighter forest green that still passes
+        /// AA contrast on `#C0C2C9` chrome but reads as crisp rather than near-black.
         /// Separated from `defaultBullishCandleGreen` (RGB 88,185,138) so candle hue is unchanged.
         static var semanticGreenAnchor: Color {
-            Color(red: 14.0 / 255, green: 108.0 / 255, blue: 52.0 / 255)
+            Color(red: 32.0 / 255, green: 140.0 / 255, blue: 70.0 / 255)
+        }
+
+        /// Deeper royal blue for `tgFriend` chrome on light grey (friend tick, user gradients).
+        /// Same hue family as the `TGFriend` asset (#0574D5), darkened so it sits coherently on pale chrome.
+        static var friendBlueAnchor: Color {
+            Color(red: 5.0 / 255, green: 96.0 / 255, blue: 176.0 / 255)
+        }
+
+        /// Deep navy for inline link text and "Sign up Here" style affordances on pale chrome.
+        /// Darker than `infoBlueAnchor` so links read as ink-on-paper rather than mid-tone-on-grey,
+        /// fixing the "too bright / hard to see" feedback for the Welcome / auth landing.
+        static var linkInk: Color {
+            Color(red: 10.0 / 255, green: 56.0 / 255, blue: 120.0 / 255)
         }
     }
 
@@ -162,17 +177,37 @@ enum AppColors {
                     : Color("TGGrey")
     }
 
-    /// TGAccent asset. Hex #0F9EB4 alpha 1.0.
-    static let tgAccent = Color("TGAccent")
+    /// TGAccent. Dark/MidGrey: asset #0F9EB4. LightGrey: `LightGreyPalette.reputationAccent` (#0A8A9E) — deeper teal so the brand accent reads
+    /// coherently on pale chrome instead of glowing bright. Same routing as `guildReputationAccent`.
+    static var tgAccent: Color {
+        isLightGrey ? LightGreyPalette.reputationAccent : Color("TGAccent")
+    }
     /// TGAccentDark asset. Hex #026675 alpha 1.0.
     static let tgAccentDark = Color("TGAccentDark")
-    /// TGFriend asset. Hex #0574D5 alpha 1.0.
-    static let tgFriend = Color("TGFriend")
+    /// TGFriend. Dark/MidGrey: asset #0574D5. LightGrey: `LightGreyPalette.friendBlueAnchor` (#0560B0) — deeper royal blue.
+    static var tgFriend: Color {
+        isLightGrey ? LightGreyPalette.friendBlueAnchor : Color("TGFriend")
+    }
 
-    /// TGBull asset. Hex #4A9476 alpha 1.0.
+    /// TGBull asset. Hex #4A9476 alpha 1.0. Theme-stable — candle / chart use only. For semantic
+    /// positive chrome (online dots, status badges, etc.) use `onlineStatusGreen` or `statusPositive`.
     static let tgBull = Color("TGBull")
-    /// TGBear asset. Hex #A62C2B alpha 1.0.
+    /// TGBear asset. Hex #A62C2B alpha 1.0. Theme-stable — already a deep red that reads on pale chrome.
     static let tgBear = Color("TGBear")
+
+    /// Semantic positive status (online dot, "+%", liked heart). Light grey: deep forest green from
+    /// `themeAwareGreen`; dark/mid: `tgBull` so existing chrome stays visually identical to today.
+    /// Use this **instead of `bullCandleGreen`** in non-candle UI surfaces.
+    static var onlineStatusGreen: Color {
+        isLightGrey ? themeAwareGreen : tgBull
+    }
+
+    /// Inline link / "tap to sign up" affordance text on pale chrome. Dark/MidGrey: bright `tgAccent`
+    /// (matches existing brand accent links). LightGrey: deep navy `linkInk` — much darker than
+    /// `accentColor` so link text reads as ink-on-paper rather than glowing teal.
+    static var linkText: Color {
+        isLightGrey ? LightGreyPalette.linkInk : tgAccent
+    }
 
     /// TGButtonSearchBackground. Dark: #191921, MidGrey: same ratio, LightGrey: #D0D2D7.
     static var tgButtonSearchBackground: Color {
@@ -219,7 +254,7 @@ enum AppColors {
 
     /// Canonical positive green: iOS system green on dark/mid; deep forest green on light grey
     /// (high contrast against ~#C0C2C9; candle colour is unaffected — see `defaultBullishCandleGreen`).
-    private static var themeAwareGreen: Color {
+    static var themeAwareGreen: Color {
         switch theme {
         case .lightGrey:
             return LightGreyPalette.semanticGreenAnchor
@@ -229,7 +264,7 @@ enum AppColors {
     }
 
     /// Info / link blue: system blue on dark/mid; deeper blue on light grey (audit 39).
-    private static var themeAwareInfoBlue: Color {
+    static var themeAwareInfoBlue: Color {
         switch theme {
         case .lightGrey:
             return LightGreyPalette.infoBlueAnchor
@@ -239,7 +274,7 @@ enum AppColors {
     }
 
     /// Reports / moderator orange: system orange on dark/mid; darker amber on light grey (audit 40).
-    private static var themeAwareModerationOrange: Color {
+    static var themeAwareModerationOrange: Color {
         switch theme {
         case .lightGrey:
             return Color(red: 196.0 / 255, green: 92.0 / 255, blue: 22.0 / 255)
@@ -249,7 +284,7 @@ enum AppColors {
     }
 
     /// Negative / stop loss red: system red on dark/mid; firebrick on light grey (audit 42).
-    private static var themeAwareRed: Color {
+    static var themeAwareRed: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.negativeRedAnchor
         case .midGrey, .dark: return systemRed
@@ -257,7 +292,7 @@ enum AppColors {
     }
 
     /// Warning orange: system orange on dark/mid; deep amber on light grey (audit 42).
-    private static var themeAwareOrange: Color {
+    static var themeAwareOrange: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.warningOrangeAnchor
         case .midGrey, .dark: return systemOrange
@@ -265,7 +300,7 @@ enum AppColors {
     }
 
     /// Highlight yellow: system yellow on dark/mid; dark goldenrod on light grey (audit 42).
-    private static var themeAwareYellow: Color {
+    static var themeAwareYellow: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.highlightYellowAnchor
         case .midGrey, .dark: return systemYellow
@@ -273,7 +308,7 @@ enum AppColors {
     }
 
     /// Secondary purple: system purple on dark/mid; deeper purple on light grey (audit 42).
-    private static var themeAwarePurple: Color {
+    static var themeAwarePurple: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.secondaryPurpleAnchor
         case .midGrey, .dark: return systemPurple
@@ -281,7 +316,7 @@ enum AppColors {
     }
 
     /// Accent cyan: system cyan on dark/mid; teal-cyan on light grey (audit 42).
-    private static var themeAwareCyan: Color {
+    static var themeAwareCyan: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.accentCyanAnchor
         case .midGrey, .dark: return systemCyan
@@ -289,7 +324,7 @@ enum AppColors {
     }
 
     /// Teal: system teal on dark/mid; deeper teal on light grey (audit 42).
-    private static var themeAwareTeal: Color {
+    static var themeAwareTeal: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.tealAnchor
         case .midGrey, .dark: return systemTeal
@@ -297,7 +332,7 @@ enum AppColors {
     }
 
     /// Pink: system pink on dark/mid; deeper rose on light grey (audit 42).
-    private static var themeAwarePink: Color {
+    static var themeAwarePink: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.pinkAnchor
         case .midGrey, .dark: return systemPink
@@ -305,7 +340,7 @@ enum AppColors {
     }
 
     /// Indigo: system indigo on dark/mid; deeper indigo on light grey (audit 42).
-    private static var themeAwareIndigo: Color {
+    static var themeAwareIndigo: Color {
         switch theme {
         case .lightGrey: return LightGreyPalette.indigoAnchor
         case .midGrey, .dark: return systemIndigo
@@ -1218,7 +1253,7 @@ enum AppColors {
     /// Chat composer attachment action sheet (light grey: slightly more see-through vs content behind).
     static var chatAttachmentActionPanelFill: Color {
         switch theme {
-        case .lightGrey: return Color(red: 246.0 / 255, green: 247.0 / 255, blue: 249.0 / 255).opacity(0.86)
+        case .lightGrey: return Color(red: 246.0 / 255, green: 247.0 / 255, blue: 249.0 / 255).opacity(0.94)
         case .midGrey, .dark: return panelFillEmphasis
         }
     }
@@ -2088,9 +2123,11 @@ enum AppColors {
 
     static var whiteText: Color { tgWhiteText }
     static var greyText: Color { tgMidGrey }
-    static let accentColor = tgAccent
+    /// Backward-compatible accent. Computed so it picks up the theme-aware `tgAccent` on lightGrey.
+    static var accentColor: Color { tgAccent }
     static let accentDarkColor = tgAccentDark
-    static let friendAccent = tgFriend
+    /// Backward-compatible friend accent. Computed so it picks up the theme-aware `tgFriend` on lightGrey.
+    static var friendAccent: Color { tgFriend }
     static let bullCandleGreen = tgBull
     static let bearCandleRed = tgBear
 

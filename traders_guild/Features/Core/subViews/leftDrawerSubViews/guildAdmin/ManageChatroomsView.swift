@@ -105,7 +105,7 @@ struct ManageChatroomsView: View {
                                 .font(.caption.weight(.semibold))
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.cyan)
+                        .tint(AppColors.themeAwareCyan)
                     }
                 }
 
@@ -146,7 +146,7 @@ struct ManageChatroomsView: View {
                         if chatroom.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
-                                .foregroundColor(.yellow)
+                                .foregroundColor(AppColors.themeAwareYellow)
                         }
                         if chatroom.isMuted {
                             Image(systemName: "speaker.slash.fill")

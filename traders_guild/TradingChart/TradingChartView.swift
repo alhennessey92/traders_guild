@@ -815,7 +815,7 @@ struct TradingChartView: View {
     private var hasDefaultChartDrawingComponents: Bool {
         chartDrawingPlacementState.components.contains { draft in
             switch draft.componentType {
-            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
+            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
                 return true
             default:
                 return false
@@ -1948,7 +1948,7 @@ struct TradingChartView: View {
             VStack(spacing: 20) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 50))
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning)
                 
                 Text("Marker Exists")
                     .font(.title2)
@@ -1994,7 +1994,7 @@ struct TradingChartView: View {
             Button(action: handleDismissDuplicateAlert) {
                 Text("Cancel")
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppColors.statusInfo)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(AppColors.duplicateDialogSecondaryButtonFill)
@@ -2032,6 +2032,35 @@ struct TradingChartView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(AppColors.statusNegative85)
                     .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            if let instruction = placementState.toolbarInstructionText {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Image(systemName: placementState.activeDrawingWorkflowTool?.icon ?? "pencil.and.ruler")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(placementState.intent.color)
+
+                        Text(instruction)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppColors.primaryForeground)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let detail = placementState.toolbarInstructionDetailText {
+                        Text(detail)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppColors.secondaryForeground)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(width: 260, alignment: .leading)
+                .background(AppColors.chartPanelBackgroundAlt.opacity(0.88))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             // Prediction info box (right-aligned)
@@ -2086,7 +2115,7 @@ struct TradingChartView: View {
                     .foregroundColor(AppColors.secondaryForeground)
                 Text(String(format: "+%.2f%%", state.potentialProfitPercent))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.green)
+                    .foregroundColor(AppColors.statusPositive)
             }
 
             // Risk %
@@ -2096,7 +2125,7 @@ struct TradingChartView: View {
                     .foregroundColor(AppColors.secondaryForeground)
                 Text(String(format: "-%.2f%%", state.potentialLossPercent))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColors.statusNegative)
             }
         }
         .padding(.horizontal, 12)
@@ -3552,12 +3581,13 @@ struct TradingChartView: View {
         case support(UUID)
         case resistance(UUID)
         case zone(UUID)
+        case pattern(UUID)
         case note(UUID)
         case emoji(UUID)
 
         var draftId: UUID {
             switch self {
-            case .trendline(let id), .horizontalLine(let id), .support(let id), .resistance(let id), .zone(let id), .note(let id), .emoji(let id):
+            case .trendline(let id), .horizontalLine(let id), .support(let id), .resistance(let id), .zone(let id), .pattern(let id), .note(let id), .emoji(let id):
                 return id
             }
         }
@@ -3571,7 +3601,7 @@ struct TradingChartView: View {
     private func drawingStateHasEditableComponents(_ drawingState: MarkerPlacementState) -> Bool {
         drawingState.components.contains { draft in
             switch draft.componentType {
-            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
+            case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .textNote, .reactionEmoji, .levelSupport, .levelResistance:
                 return true
             default:
                 return false
@@ -3592,6 +3622,9 @@ struct TradingChartView: View {
             drawingState.beginEditingDrawing(draftId, tool: .resistance)
         case .zone(let draftId):
             drawingState.beginEditingDrawing(draftId, tool: .zone)
+        case .pattern(let draftId):
+            let tool = patternTool(for: draftId, in: drawingState) ?? .headAndShoulders
+            drawingState.beginEditingDrawing(draftId, tool: tool)
         case .note(let draftId):
             drawingState.beginEditingDrawing(draftId, tool: .note)
         case .emoji(let draftId):
@@ -3771,9 +3804,76 @@ struct TradingChartView: View {
                 drawingState.setDrawingFirstPoint(time: time, price: price)
                 liveDrawingGuidePoint = (time: time, price: price)
             }
-        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .breakoutRetest, .rangeReversal, .risingChannel, .headAndShoulders:
+            handlePatternToolTap(tool: tool, drawingState: drawingState, price: price, time: time)
+        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             break
         }
+    }
+
+    private func handlePatternToolTap(
+        tool: MarkerDrawingToolKind,
+        drawingState: MarkerPlacementState,
+        price: Double,
+        time: Date
+    ) {
+        let definition = MarkerDrawingToolRegistry.definition(for: tool)
+        guard definition.componentType == .drawingPattern else { return }
+
+        var points = drawingState.drawingSession.committedPoints
+        let nextPoint = MarkerDrawingGuidePoint(time: time, price: price)
+        if points.count < definition.requiredPointCount {
+            points.append(nextPoint)
+        }
+
+        if points.count < definition.requiredPointCount {
+            drawingState.drawingSession.committedPoints = points
+            drawingState.drawingSession.phase = .placing(stepIndex: points.count)
+            drawingState.drawingSession.isPanLocked = true
+            liveDrawingGuidePoint = (time: time, price: price)
+            return
+        }
+
+        let payload = patternPayload(for: tool, points: points)
+        guard let draftId = drawingState.addDrawingOverlayComponent(.drawingPattern, payload: payload) else {
+            HapticFeedback.light.trigger()
+            return
+        }
+        drawingState.beginDrawingCommit()
+        beginEditing(target: .pattern(draftId))
+    }
+
+    private func patternPayload(
+        for tool: MarkerDrawingToolKind,
+        points: [MarkerDrawingGuidePoint]
+    ) -> MarkerComponentPayload {
+        let template = ChartPatternDrawingTemplate(rawValue: tool.rawValue)
+        let labels = template?.pointLabels ?? []
+        let guidePoints = points.enumerated().map { index, point in
+            PatternGuidePointPayload(
+                time: point.time,
+                price: point.price,
+                label: labels.indices.contains(index) ? labels[index] : nil
+            )
+        }
+        return .drawingPattern(
+            ChartPatternPayload(
+                patternKey: template?.rawValue ?? tool.rawValue,
+                title: template?.title ?? tool.title,
+                points: guidePoints,
+                colorHex: template?.tintHex ?? "#F59E0B",
+                lineStyle: .dashed,
+                lineWidth: 2
+            )
+        )
+    }
+
+    private func patternTool(for draftId: UUID, in drawingState: MarkerPlacementState) -> MarkerDrawingToolKind? {
+        guard let draft = drawingState.components.first(where: { $0.id == draftId }),
+              case let .drawingPattern(payload) = draft.payload else {
+            return nil
+        }
+        return MarkerDrawingToolKind.from(patternKey: payload.patternKey)
     }
 
     private func updateLiveDrawingGuidePoint(
@@ -3953,6 +4053,13 @@ struct TradingChartView: View {
                 updateZoneHandle(
                     draftId: dragOrigin.draftId,
                     isStart: index == 0,
+                    location: translatedLocation,
+                    coordinateSystem: coordinateSystem
+                )
+            case .drawingPattern:
+                updatePatternHandle(
+                    draftId: dragOrigin.draftId,
+                    pointIndex: index,
                     location: translatedLocation,
                     coordinateSystem: coordinateSystem
                 )
@@ -4238,6 +4345,32 @@ struct TradingChartView: View {
                                         location: location,
                                         coordinateSystem: coordinateSystem
                                     )
+                                }
+                            }
+                        case .drawingPattern(let payload):
+                            let patternColor = drawingState.drawingColor(
+                                for: draft.id,
+                                fallback: RLComponentType.drawingPattern.color
+                            )
+                            ForEach(Array(payload.points.enumerated()), id: \.offset) { index, point in
+                                if let handlePoint = drawingHandlePoint(
+                                    time: point.time,
+                                    price: point.price,
+                                    coordinateSystem: coordinateSystem
+                                ) {
+                                    drawingHandleView(
+                                        at: handlePoint,
+                                        handle: .point(index),
+                                        color: patternColor,
+                                        size: 24
+                                    ) { location in
+                                        updatePatternHandle(
+                                            draftId: draft.id,
+                                            pointIndex: index,
+                                            location: location,
+                                            coordinateSystem: coordinateSystem
+                                        )
+                                    }
                                 }
                             }
                         default:
@@ -4529,6 +4662,49 @@ struct TradingChartView: View {
         drawingState.updateComponent(id: draftId, payload: .drawingZone(updatedPayload))
     }
 
+    private func updatePatternHandle(
+        draftId: UUID,
+        pointIndex: Int,
+        location: CGPoint,
+        coordinateSystem: ChartCoordinateSystem
+    ) {
+        guard let drawingState = activeInteractiveDrawingState,
+              let draft = drawingState.drawingOverlayDrafts.first(where: { $0.id == draftId }),
+              case let .drawingPattern(payload) = draft.payload,
+              payload.points.indices.contains(pointIndex) else {
+            return
+        }
+
+        let currentPoint = payload.points[pointIndex]
+        let resolvedTime = resolveHandleTime(
+            locationX: location.x,
+            coordinateSystem: coordinateSystem,
+            fallback: currentPoint.time
+        )
+        let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
+        var updatedPoints = payload.points
+        updatedPoints[pointIndex] = PatternGuidePointPayload(
+            time: resolvedTime,
+            price: resolvedPrice,
+            label: currentPoint.label
+        )
+
+        liveDrawingGuidePoint = (time: resolvedTime, price: resolvedPrice)
+        drawingState.updateComponent(
+            id: draftId,
+            payload: .drawingPattern(
+                ChartPatternPayload(
+                    patternKey: payload.patternKey,
+                    title: payload.title,
+                    points: updatedPoints,
+                    colorHex: payload.colorHex,
+                    lineStyle: payload.lineStyle,
+                    lineWidth: payload.lineWidth
+                )
+            )
+        )
+    }
+
     private func updateEmojiScaleHandle(
         draftId: UUID,
         handleIndex: Int,
@@ -4670,6 +4846,15 @@ struct TradingChartView: View {
                 },
             ].compactMap { $0 }
 
+        case .drawingPattern(let payload):
+            candidates = payload.points.enumerated().compactMap { index, point in
+                drawingHandlePoint(
+                    time: point.time,
+                    price: point.price,
+                    coordinateSystem: coordinateSystem
+                ).map { (.point(index), $0) }
+            }
+
         case .reactionEmoji(let payload):
             let anchorPrice = payload.anchorPrice ?? 0
             let anchorY = coordinateSystem.yPosition(forPrice: anchorPrice)
@@ -4765,6 +4950,26 @@ struct TradingChartView: View {
         ).insetBy(dx: -inset, dy: -inset)
     }
 
+    private func patternScreenPoints(
+        payload: ChartPatternPayload,
+        coordinateSystem: ChartCoordinateSystem
+    ) -> [CGPoint] {
+        payload.points.compactMap { point in
+            drawingHandlePoint(
+                time: point.time,
+                price: point.price,
+                coordinateSystem: coordinateSystem
+            )
+        }
+    }
+
+    private func pointsAdjacentSegments(_ points: [CGPoint]) -> [(start: CGPoint, end: CGPoint)] {
+        guard points.count >= 2 else { return [] }
+        return (1..<points.count).map { index in
+            (start: points[index - 1], end: points[index])
+        }
+    }
+
     private func hitTestEditableDrawing(
         at location: CGPoint,
         coordinateSystem: ChartCoordinateSystem,
@@ -4802,6 +5007,8 @@ struct TradingChartView: View {
                 return .resistance(editingId)
             case .drawingZone:
                 return .zone(editingId)
+            case .drawingPattern:
+                return .pattern(editingId)
             case .note:
                 return .note(editingId)
             case .reactionEmoji:
@@ -4944,6 +5151,22 @@ struct TradingChartView: View {
                 ),
                    zoneRect.contains(location) {
                     return .zone(draft.id)
+                }
+
+            case .drawingPattern(let payload):
+                if intent == .maintainEditing {
+                    continue
+                }
+                let points = patternScreenPoints(payload: payload, coordinateSystem: coordinateSystem)
+                if points.contains(where: { point in
+                    hypot(location.x - point.x, location.y - point.y) <= handleHitRadius
+                }) {
+                    return .pattern(draft.id)
+                }
+                if pointsAdjacentSegments(points).contains(where: { segment in
+                    distanceFromPoint(location, toSegmentStart: segment.start, end: segment.end) <= lineBodyHitRadius
+                }) {
+                    return .pattern(draft.id)
                 }
 
             case .note(let payload):
@@ -6116,7 +6339,7 @@ struct TradingChartView: View {
 
     private func supportsSelectedDrawingLineStyle(_ draft: MarkerComponentDraft) -> Bool {
         switch draft.componentType {
-        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .levelSupport, .levelResistance:
             return true
         default:
             return false
@@ -6142,7 +6365,7 @@ struct TradingChartView: View {
 
     private func defaultLineStyle(for componentType: RLComponentType) -> MarkerDrawingLineStyle {
         switch componentType {
-        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .levelSupport, .levelResistance:
             return .dashed
         default:
             return .solid
@@ -8274,6 +8497,8 @@ struct MarkerDrawingOverlay: View {
                 drawTrendline(context: context, payload: payload)
             case .drawingZone(let payload):
                 drawZone(context: context, payload: payload, marker: marker)
+            case .drawingPattern(let payload):
+                drawPattern(context: context, payload: payload)
             default:
                 continue
             }
@@ -8389,6 +8614,51 @@ struct MarkerDrawingOverlay: View {
                 dash: (payload.lineStyle ?? .dashed).dashPattern
             )
         )
+    }
+
+    private func drawPattern(context: GraphicsContext, payload: ChartPatternPayload) {
+        let points = payload.points.compactMap { point -> CGPoint? in
+            guard let x = xPosition(for: point.time) else { return nil }
+            let y = coordinateSystem.yPosition(forPrice: point.price)
+            guard y.isFinite else { return nil }
+            return CGPoint(x: x, y: y)
+        }
+        guard points.count >= 2 else { return }
+        let patternColor = Color(hex: payload.colorHex ?? "") ?? RLComponentType.drawingPattern.color
+        let style = StrokeStyle(
+            lineWidth: CGFloat(payload.lineWidth ?? 2.0),
+            dash: (payload.lineStyle ?? .dashed).dashPattern
+        )
+
+        for segment in patternSegments(for: payload.patternKey, points: points) {
+            var path = Path()
+            path.move(to: segment.start)
+            path.addLine(to: segment.end)
+            context.stroke(path, with: .color(patternColor.opacity(0.68)), style: style)
+        }
+    }
+
+    private func patternSegments(
+        for patternKey: String,
+        points: [CGPoint]
+    ) -> [(start: CGPoint, end: CGPoint)] {
+        guard points.count >= 2 else { return [] }
+        if patternKey == ChartPatternDrawingTemplate.risingChannel.rawValue, points.count >= 3 {
+            let lowerStart = points[0]
+            let lowerEnd = points[1]
+            let upperStart = points[2]
+            let delta = CGPoint(x: lowerEnd.x - lowerStart.x, y: lowerEnd.y - lowerStart.y)
+            let upperEnd = CGPoint(x: upperStart.x + delta.x, y: upperStart.y + delta.y)
+            return [(lowerStart, lowerEnd), (upperStart, upperEnd)]
+        }
+        if patternKey == ChartPatternDrawingTemplate.headAndShoulders.rawValue, points.count >= 4 {
+            let necklineStart = CGPoint(x: points[0].x, y: points[3].y)
+            let necklineEnd = CGPoint(x: points[2].x, y: points[3].y)
+            return [(points[0], points[1]), (points[1], points[2]), (necklineStart, necklineEnd)]
+        }
+        return (1..<points.count).map { index in
+            (start: points[index - 1], end: points[index])
+        }
     }
 
     private func xPosition(for timestamp: Date) -> CGFloat? {

@@ -168,10 +168,8 @@ struct GuildSelectionRowFull: View {
                 VStack(alignment: .leading, spacing: 6) {
                     // Guild Name
                     HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.title2)
-                            .foregroundColor(AppColors.accentColor.opacity(0.6))
-                        
+                        GuildCrestView(guild: item.guild, size: 26)
+
                         Text("\(item.guild.name)")
                             .font(.title2)
                             .fontWeight(.bold)
@@ -207,21 +205,12 @@ struct GuildSelectionRowFull: View {
                     }
                     .padding(.leading, 15)
 
-                    if item.guild.language != nil || item.guild.location != nil {
-                        HStack(spacing: 6) {
-                            if let language = item.guild.language, !language.isEmpty {
-                                Text(language)
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
-                            }
-                            if let location = item.guild.location, !location.isEmpty {
-                                Text("• \(location)")
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.75))
-                            }
-                        }
-                        .padding(.leading, 15)
-                    }
+                    LocalePreferenceChips(
+                        language: item.guild.language,
+                        location: item.guild.location,
+                        compact: true
+                    )
+                    .padding(.leading, 15)
                     
                     // Members online
                     HStack(spacing: 3) {
@@ -236,7 +225,7 @@ struct GuildSelectionRowFull: View {
                     
                     // Guild reputation
                     HStack(spacing: 2) {
-                        Image(systemName: "shield.pattern.checkered")
+                        Image(systemName: "star.hexagon.fill")
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)

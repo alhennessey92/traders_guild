@@ -84,6 +84,31 @@ enum ChartDrawingBridge {
                 )
             )
 
+        case .pattern:
+            let template = drawing.patternKey.flatMap(ChartPatternDrawingTemplate.init(rawValue:))
+            let labels = template?.pointLabels ?? []
+            let points = drawing.points.enumerated().map { index, point in
+                PatternGuidePointPayload(
+                    time: point.time,
+                    price: point.price,
+                    label: labels.indices.contains(index) ? labels[index] : nil
+                )
+            }
+            return MarkerComponentDraft(
+                id: drawing.id,
+                componentType: .drawingPattern,
+                payload: .drawingPattern(
+                    ChartPatternPayload(
+                        patternKey: drawing.patternKey ?? template?.rawValue ?? "headAndShoulders",
+                        title: drawing.note ?? template?.title ?? "Pattern",
+                        points: points,
+                        colorHex: drawing.colorHex,
+                        lineStyle: drawing.lineStyle,
+                        lineWidth: drawing.lineWidth
+                    )
+                )
+            )
+
         case .supportLevel:
             let price = drawing.points.first?.price ?? anchorPrice
             return MarkerComponentDraft(
@@ -196,6 +221,20 @@ enum ChartDrawingBridge {
                 colorHex: payload.colorHex ?? ChartDrawingType.zone.defaultColorHex,
                 lineStyle: payload.lineStyle,
                 lineWidth: payload.lineWidth
+            )
+
+        case let .drawingPattern(payload):
+            return ChartDrawing(
+                id: draft.id,
+                type: .pattern,
+                points: payload.points.map {
+                    ChartDrawingPoint(time: $0.time, price: $0.price)
+                },
+                colorHex: payload.colorHex ?? ChartDrawingType.pattern.defaultColorHex,
+                lineStyle: payload.lineStyle,
+                lineWidth: payload.lineWidth,
+                note: payload.title,
+                patternKey: payload.patternKey
             )
 
         case let .levelSupport(payload):

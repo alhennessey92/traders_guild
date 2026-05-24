@@ -672,10 +672,10 @@ struct ChartIndicatorBrowser: View {
     private func errorBanner(_ message: String) -> some View {
         HStack {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
+                .foregroundColor(AppColors.statusWarning)
             Text(message)
                 .font(.caption)
-                .foregroundColor(.orange)
+                .foregroundColor(AppColors.statusWarning)
             Spacer()
             Button { indicatorManager.clearError() } label: {
                 Image(systemName: "xmark.circle.fill")
@@ -930,7 +930,7 @@ struct PanelIndicatorRowWithEdit: View {
             if !isActive && !canAdd {
                 Text("MAX")
                     .font(.caption2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(AppColors.statusWarning20)

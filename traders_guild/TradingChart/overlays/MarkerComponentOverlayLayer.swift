@@ -15,6 +15,7 @@ struct MarkerComponentOverlayLayer: View {
                 drawHorizontalLines(context: context)
                 drawTrendlines(context: context)
                 drawZones(context: context)
+                drawPatterns(context: context)
             }
             .allowsHitTesting(false)
         }
@@ -46,6 +47,10 @@ struct MarkerComponentOverlayLayer: View {
 
     private var zoneComponents: [RLMarkerComponentDTO] {
         components.filter { $0.componentTypeEnum == .drawingZone }
+    }
+
+    private var patternComponents: [RLMarkerComponentDTO] {
+        components.filter { $0.componentTypeEnum == .drawingPattern }
     }
 
     private var labeledComponents: [RLMarkerComponentDTO] {
@@ -184,6 +189,54 @@ struct MarkerComponentOverlayLayer: View {
                     lineWidth: CGFloat(payload.lineWidth ?? 1.2)
                 )
             )
+        }
+    }
+
+    private func drawPatterns(context: GraphicsContext) {
+        for component in patternComponents {
+            guard case let .drawingPattern(payload) = component.payload else { continue }
+            let points = payload.points.compactMap { point -> CGPoint? in
+                guard let y = yForPrice(point.price), y.isFinite else { return nil }
+                let x = xForTime?(point.time) ?? width * 0.5
+                guard x.isFinite else { return nil }
+                return CGPoint(x: x, y: y)
+            }
+            guard points.count >= 2 else { continue }
+
+            let color = componentColor(component)
+            let style = drawingStrokeStyle(
+                lineStyle: payload.lineStyle ?? .dashed,
+                lineWidth: CGFloat(payload.lineWidth ?? 2.0)
+            )
+            for segment in patternSegments(for: payload.patternKey, points: points) {
+                var path = Path()
+                path.move(to: segment.start)
+                path.addLine(to: segment.end)
+                context.stroke(path, with: .color(color.opacity(0.72)), style: style)
+            }
+        }
+    }
+
+    private func patternSegments(
+        for patternKey: String,
+        points: [CGPoint]
+    ) -> [(start: CGPoint, end: CGPoint)] {
+        guard points.count >= 2 else { return [] }
+        if patternKey == ChartPatternDrawingTemplate.risingChannel.rawValue, points.count >= 3 {
+            let lowerStart = points[0]
+            let lowerEnd = points[1]
+            let upperStart = points[2]
+            let delta = CGPoint(x: lowerEnd.x - lowerStart.x, y: lowerEnd.y - lowerStart.y)
+            let upperEnd = CGPoint(x: upperStart.x + delta.x, y: upperStart.y + delta.y)
+            return [(lowerStart, lowerEnd), (upperStart, upperEnd)]
+        }
+        if patternKey == ChartPatternDrawingTemplate.headAndShoulders.rawValue, points.count >= 4 {
+            let necklineStart = CGPoint(x: points[0].x, y: points[3].y)
+            let necklineEnd = CGPoint(x: points[2].x, y: points[3].y)
+            return [(points[0], points[1]), (points[1], points[2]), (necklineStart, necklineEnd)]
+        }
+        return (1..<points.count).map { index in
+            (start: points[index - 1], end: points[index])
         }
     }
 

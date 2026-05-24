@@ -426,7 +426,7 @@ struct MarkerShareSheet: View {
             symbolTicker = try? await rlAppState.realApi.getSymbol(symbolId: marker.symbolId).ticker
         } catch {
             if error is CancellationError { return }
-            loadError = RLUserFacingErrorMapper.message(from: error)
+            loadError = RLUserFacingErrorMapper.message(from: error, context: .messaging)
         }
     }
 
@@ -1073,7 +1073,7 @@ struct MarkerDetailHeaderView: View {
                             ForEach(1...5, id: \.self) { star in
                                 Image(systemName: star <= confidence ? "star.fill" : "star")
                                     .font(.system(size: 12))
-                                    .foregroundColor(star <= confidence ? Color(hex: "#FBBF24") ?? .yellow : AppColors.greyText.opacity(0.4))
+                                    .foregroundColor(star <= confidence ? AppColors.symbolDetailPersonalStarActive : AppColors.greyText.opacity(0.4))
                             }
                         }
                     }

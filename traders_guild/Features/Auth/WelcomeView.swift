@@ -152,7 +152,7 @@ struct WelcomeView: View {
                 Text(.init("By signing in, you agree to our [Terms of Service](tg://terms) and [Privacy Policy](tg://privacy)."))
                     .font(AppFonts.smallNotice())
                     .foregroundColor(AppColors.whiteText)
-                    .tint(AppColors.accentColor)
+                    .tint(AppColors.linkText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -181,7 +181,7 @@ struct WelcomeView: View {
 
                         Text("Sign up Here")
                             .bold()
-                            .foregroundColor(AppColors.accentColor)
+                            .foregroundColor(AppColors.linkText)
                             .onTapGesture {
                                 RLAppState.clearAlert()
                                 path.append(.accountInfo)

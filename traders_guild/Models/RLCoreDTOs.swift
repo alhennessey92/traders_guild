@@ -305,7 +305,9 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     let status: String
     let dateCreated: Date            // backend: date_created
     let updatedAt: Date              // backend: updated_at
-    
+    let crestSymbol: String?         // backend: crest_symbol (neutral key, nil → "checkered")
+    let crestColor: String?          // backend: crest_color (palette key, nil → "brand")
+
     // MARK: - Computed Properties
     
     var formattedDate: String {
@@ -335,7 +337,13 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     }
 
     /// Create a copy with updated guild settings fields
-    func withUpdatedSettings(name: String? = nil, description: String? = nil, isOpen: Bool? = nil) -> RLGuildDTO {
+    func withUpdatedSettings(
+        name: String? = nil,
+        description: String? = nil,
+        isOpen: Bool? = nil,
+        language: String? = nil,
+        location: String? = nil
+    ) -> RLGuildDTO {
         RLGuildDTO(
             id: id,
             name: name ?? self.name,
@@ -349,11 +357,13 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             ownerDisplayName: ownerDisplayName,
             ownerUsername: ownerUsername,
             ownerAvatarUrl: ownerAvatarUrl,
-            language: language,
-            location: location,
+            language: language ?? self.language,
+            location: location ?? self.location,
             status: status,
             dateCreated: dateCreated,
-            updatedAt: Date()
+            updatedAt: Date(),
+            crestSymbol: crestSymbol,
+            crestColor: crestColor
         )
     }
 
@@ -375,7 +385,9 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             location: location,
             status: status,
             dateCreated: dateCreated,
-            updatedAt: Date()
+            updatedAt: Date(),
+            crestSymbol: crestSymbol,
+            crestColor: crestColor
         )
     }
 }
@@ -588,7 +600,7 @@ struct RLGuildStatisticsResponse: Codable {
     }
     
     // MARK: - Helper
-    
+
     private func formatNumber(_ number: Int) -> String {
         if number >= 1_000_000 {
             return String(format: "%.1fM", Double(number) / 1_000_000)
@@ -597,6 +609,28 @@ struct RLGuildStatisticsResponse: Codable {
         }
         return "\(number)"
     }
+}
+
+
+/// A single day of guild statistics (backend: GuildStatisticsHistoryPoint).
+struct RLGuildStatisticsHistoryPoint: Codable, Identifiable, Equatable {
+    let day: Date                       // backend: day (yyyy-MM-dd)
+    let reputationEarned: Int           // backend: reputation_earned
+    let predictionsMade: Int            // backend: predictions_made
+    let correctPredictions: Int         // backend: correct_predictions
+    let accuracy: Double                // backend: accuracy (0.0 - 1.0)
+    let activeMembers: Int              // backend: active_members
+    let newMembers: Int                 // backend: new_members
+
+    var id: Date { day }
+}
+
+/// Daily time-series of guild statistics over a recent window.
+struct RLGuildStatisticsHistoryResponse: Codable, Equatable {
+    let guildId: UUID                                       // backend: guild_id
+    let period: String                                      // backend: period ("7d" | "30d" | "90d")
+    let points: [RLGuildStatisticsHistoryPoint]             // backend: points
+    let generatedAt: Date                                   // backend: generated_at
 }
 
 
@@ -617,13 +651,15 @@ struct RLCreateGuildRequestDTO: Codable {
     let name: String
     let description: String?
     let isOpen: Bool                 // backend: is_open
-    let language: String
-    let location: String
+    let language: String?
+    let location: String?
     let joinQuestions: [RLGuildJoinQuestionInputDTO]
     let initialAnnouncementTitle: String
     let initialAnnouncementContent: String
     let initialAnnouncementPreview: String?
     let initialAnnouncementIsImportant: Bool
+    let crestSymbol: String?         // backend: crest_symbol (neutral key)
+    let crestColor: String?          // backend: crest_color (palette key)
 }
 
 struct RLGuildJoinQuestionDTO: Codable, Identifiable {
@@ -769,14 +805,14 @@ enum GuildPostIconKey: String, Codable, CaseIterable, Identifiable {
 
     var accentColor: Color {
         switch self {
-        case .megaphone: return .orange
-        case .calendar: return .green
-        case .bell: return .blue
-        case .chart: return .teal
-        case .flag: return .red
-        case .bolt: return .yellow
-        case .star: return .pink
-        case .trophy: return .indigo
+        case .megaphone: return AppColors.statusWarning
+        case .calendar: return AppColors.statusPositive
+        case .bell: return AppColors.statusInfo
+        case .chart: return AppColors.themeAwareTeal
+        case .flag: return AppColors.statusNegative
+        case .bolt: return AppColors.themeAwareYellow
+        case .star: return AppColors.themeAwarePink
+        case .trophy: return AppColors.themeAwareIndigo
         }
     }
 
@@ -1284,7 +1320,7 @@ struct RLSocialLinkItem: Codable, Identifiable, Equatable, Hashable {
         case "telegram": return AppColors.socialCyan
         case "tradingview": return AppColors.socialOrange
         case "youtube": return AppColors.socialRed
-        default: return .gray
+        default: return AppColors.secondaryForeground
         }
     }
     
@@ -1325,12 +1361,12 @@ struct RLUserProfileDTO: Codable, Equatable {
     
     var experienceColor: Color {
         switch experienceLevel.lowercased() {
-        case "beginner": return .gray
-        case "intermediate": return .blue
-        case "advanced": return .green
-        case "expert": return .purple
-        case "professional": return .orange
-        default: return .gray
+        case "beginner": return AppColors.secondaryForeground
+        case "intermediate": return AppColors.statusInfo
+        case "advanced": return AppColors.statusPositive
+        case "expert": return AppColors.themeAwarePurple
+        case "professional": return AppColors.statusWarning
+        default: return AppColors.secondaryForeground
         }
     }
     
@@ -1481,6 +1517,10 @@ struct RLAwardTypeDTO: Codable, Identifiable, Equatable, Hashable {
     let rarity: String
     let pointsValue: Int                // backend: points_value
     let requiredValue: Int?             // backend: required_value
+    let familyKey: String?              // backend: family_key
+    let tier: Int?
+    let nextAwardTypeId: UUID?          // backend: next_award_type_id
+    let scope: String?
     
     var categoryEnum: RLAwardCategory {
         RLAwardCategory(rawValue: category) ?? .special
@@ -1494,8 +1534,9 @@ struct RLAwardTypeDTO: Codable, Identifiable, Equatable, Hashable {
 /// User's earned award - matches backend UserAwardResponse
 struct RLUserAwardDTO: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
-    let membershipId: UUID              // backend: membership_id
-    let guildId: UUID                   // backend: guild_id
+    let membershipId: UUID?             // backend: membership_id
+    let guildId: UUID?                  // backend: guild_id
+    let userId: UUID?                   // backend: user_id
     let awardTypeId: UUID               // backend: award_type_id
     let name: String                    // From award_type
     let description: String             // From award_type
@@ -1503,6 +1544,9 @@ struct RLUserAwardDTO: Codable, Identifiable, Equatable, Hashable {
     let category: String                // From award_type
     let rarity: String                  // From award_type
     let pointsValue: Int                // backend: points_value
+    let familyKey: String?              // backend: family_key
+    let tier: Int?
+    let scope: String?
     let progress: Double?               // 0.0-1.0, nil if complete
     let currentValue: Int?              // backend: current_value
     let isNew: Bool                     // backend: is_new
@@ -1873,11 +1917,30 @@ struct RLDetailResponseDTO: Codable {
 struct RLRuntimeFlagsDTO: Codable, Equatable {
     let betaWelcomeEnabled: Bool
     let betaFeedbackEnabled: Bool
+    let awardsEnabled: Bool
 
     static let disabled = RLRuntimeFlagsDTO(
         betaWelcomeEnabled: false,
-        betaFeedbackEnabled: false
+        betaFeedbackEnabled: false,
+        awardsEnabled: false
     )
+
+    init(
+        betaWelcomeEnabled: Bool = false,
+        betaFeedbackEnabled: Bool = false,
+        awardsEnabled: Bool = false
+    ) {
+        self.betaWelcomeEnabled = betaWelcomeEnabled
+        self.betaFeedbackEnabled = betaFeedbackEnabled
+        self.awardsEnabled = awardsEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        betaWelcomeEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaWelcomeEnabled) ?? false
+        betaFeedbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaFeedbackEnabled) ?? false
+        awardsEnabled = try container.decodeIfPresent(Bool.self, forKey: .awardsEnabled) ?? false
+    }
 }
 
 
@@ -1947,6 +2010,10 @@ struct RLUpdateGuildRequestDTO: Codable {
     let name: String?
     let description: String?
     let isOpen: Bool?
+    let language: String?
+    let location: String?
+    var crestSymbol: String? = nil   // backend: crest_symbol
+    var crestColor: String? = nil    // backend: crest_color
 }
 
 /// Guild invitation response DTO
@@ -1966,6 +2033,51 @@ struct RLGuildInvitationDTO: Codable, Identifiable {
 /// List of guild invitations
 struct RLGuildInvitationsListDTO: Codable {
     let invitations: [RLGuildInvitationDTO]
+}
+
+/// Request DTO for creating a shareable guild invite/referral link
+struct RLGuildInviteLinkCreateRequestDTO: Codable {
+    let maxUses: Int?
+    let expiresAt: Date?
+
+    init(maxUses: Int? = nil, expiresAt: Date? = nil) {
+        self.maxUses = maxUses
+        self.expiresAt = expiresAt
+    }
+}
+
+/// Shareable guild invite/referral link response DTO
+struct RLGuildInviteLinkDTO: Codable, Identifiable {
+    let id: UUID
+    let guildId: UUID
+    let createdByUserId: UUID
+    let code: String
+    let shareUrl: String
+    let status: String
+    let maxUses: Int?
+    let useCount: Int
+    let expiresAt: Date?
+    let revokedAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+/// List of shareable guild invite/referral links
+struct RLGuildInviteLinksListDTO: Codable {
+    let inviteLinks: [RLGuildInviteLinkDTO]
+}
+
+/// Preview response for a shareable guild invite/referral link
+struct RLGuildInviteLinkResolveDTO: Codable {
+    let code: String
+    let guild: RLGuildDTO
+    let createdByUserId: UUID
+    let createdByDisplayName: String?
+    let status: String
+    let isJoinable: Bool
+    let expiresAt: Date?
+    let maxUses: Int?
+    let useCount: Int
 }
 
 /// User search result for invite
@@ -2116,10 +2228,10 @@ struct RLContentReportDTO: Codable, Identifiable {
 
     var statusColor: Color {
         switch status {
-        case "pending": return .orange
-        case "resolved": return .green
-        case "dismissed": return .gray
-        default: return .secondary
+        case "pending": return AppColors.statusWarning
+        case "resolved": return AppColors.statusPositive
+        case "dismissed": return AppColors.secondaryForeground
+        default: return AppColors.secondaryForeground
         }
     }
 
@@ -2153,6 +2265,10 @@ struct RLResolveReportRequestDTO: Codable {
 /// Award category enum
 enum RLAwardCategory: String, Codable, CaseIterable {
     case trading = "trading"
+    case social = "social"
+    case guild = "guild"
+    case contribution = "contribution"
+    case loyalty = "loyalty"
     case community = "community"
     case milestones = "milestones"
     case special = "special"
@@ -2162,8 +2278,10 @@ enum RLAwardCategory: String, Codable, CaseIterable {
     var color: Color {
         switch self {
         case .trading: return AppColors.awardCategoryTrading
-        case .community: return AppColors.awardCategoryCommunity
-        case .milestones: return AppColors.awardCategoryMilestones
+        case .social, .community: return AppColors.awardCategoryCommunity
+        case .guild: return AppColors.statusInfo
+        case .contribution: return AppColors.statusPositive
+        case .loyalty, .milestones: return AppColors.awardCategoryMilestones
         case .special: return AppColors.awardCategorySpecial
         }
     }
@@ -2171,8 +2289,10 @@ enum RLAwardCategory: String, Codable, CaseIterable {
     var icon: String {
         switch self {
         case .trading: return "chart.line.uptrend.xyaxis"
-        case .community: return "person.3.fill"
-        case .milestones: return "flag.fill"
+        case .social, .community: return "person.3.fill"
+        case .guild: return "shield.lefthalf.filled"
+        case .contribution: return "checkmark.seal.fill"
+        case .loyalty, .milestones: return "flame.fill"
         case .special: return "sparkles"
         }
     }
@@ -2190,7 +2310,7 @@ enum RLAwardRarity: String, Codable, CaseIterable {
     
     var color: Color {
         switch self {
-        case .common: return .gray
+        case .common: return AppColors.secondaryForeground
         case .uncommon: return AppColors.awardRarityUncommon
         case .rare: return AppColors.awardRarityRare
         case .epic: return AppColors.awardRarityEpic
@@ -2292,6 +2412,7 @@ struct RLPushNotificationPreferences: Codable, Equatable {
     var mention: Bool
     var markerResult: Bool
     var markerEngagement: Bool
+    var awards: Bool
     var announcement: Bool
     var event: Bool
     var eventReminder: Bool
@@ -2302,6 +2423,7 @@ struct RLPushNotificationPreferences: Codable, Equatable {
         mention: Bool = true,
         markerResult: Bool = true,
         markerEngagement: Bool = true,
+        awards: Bool = true,
         announcement: Bool = true,
         event: Bool = true,
         eventReminder: Bool = true,
@@ -2311,10 +2433,24 @@ struct RLPushNotificationPreferences: Codable, Equatable {
         self.mention = mention
         self.markerResult = markerResult
         self.markerEngagement = markerEngagement
+        self.awards = awards
         self.announcement = announcement
         self.event = event
         self.eventReminder = eventReminder
         self.friendRequest = friendRequest
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dm = try container.decodeIfPresent(Bool.self, forKey: .dm) ?? true
+        mention = try container.decodeIfPresent(Bool.self, forKey: .mention) ?? true
+        markerResult = try container.decodeIfPresent(Bool.self, forKey: .markerResult) ?? true
+        markerEngagement = try container.decodeIfPresent(Bool.self, forKey: .markerEngagement) ?? true
+        awards = try container.decodeIfPresent(Bool.self, forKey: .awards) ?? true
+        announcement = try container.decodeIfPresent(Bool.self, forKey: .announcement) ?? true
+        event = try container.decodeIfPresent(Bool.self, forKey: .event) ?? true
+        eventReminder = try container.decodeIfPresent(Bool.self, forKey: .eventReminder) ?? true
+        friendRequest = try container.decodeIfPresent(Bool.self, forKey: .friendRequest) ?? true
     }
 }
 
@@ -2323,6 +2459,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
     let mention: Bool?
     let markerResult: Bool?
     let markerEngagement: Bool?
+    let awards: Bool?
     let announcement: Bool?
     let event: Bool?
     let eventReminder: Bool?
@@ -2333,6 +2470,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
         mention: Bool? = nil,
         markerResult: Bool? = nil,
         markerEngagement: Bool? = nil,
+        awards: Bool? = nil,
         announcement: Bool? = nil,
         event: Bool? = nil,
         eventReminder: Bool? = nil,
@@ -2342,6 +2480,7 @@ struct RLPushPreferencesUpdateRequest: Codable {
         self.mention = mention
         self.markerResult = markerResult
         self.markerEngagement = markerEngagement
+        self.awards = awards
         self.announcement = announcement
         self.event = event
         self.eventReminder = eventReminder
@@ -2619,18 +2758,11 @@ struct RLSignupData {
     var dateOfBirth: Date? = nil
 
     static func defaultLanguage() -> String {
-        let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
-        let locale = Locale(identifier: preferred)
-        let code = locale.language.languageCode?.identifier ?? preferred.components(separatedBy: "-").first ?? preferred
-        return Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code.uppercased()
+        LocaleOptionCatalog.defaultLanguageCode()
     }
 
     static func defaultLocation() -> String {
-        if let regionCode = Locale.current.region?.identifier {
-            return Locale.current.localizedString(forRegionCode: regionCode) ?? regionCode
-        }
-        let fallback = TimeZone.current.identifier.components(separatedBy: "/").last ?? ""
-        return fallback.replacingOccurrences(of: "_", with: " ")
+        LocaleOptionCatalog.defaultCountryCode()
     }
     
     /// Convert to API request format

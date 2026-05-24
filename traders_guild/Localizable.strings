@@ -7,7 +7,15 @@
 "message.error.generic" = "Something went wrong. Please try again.";
 "message.error.network" = "Network issue detected. Check your connection and try again.";
 "message.error.unauthorized" = "Your session has expired. Please sign in again.";
+"message.error.auth.invalid_credentials" = "Email/username or password is incorrect. Check your details and try again.";
+"message.error.auth.apple_invalid" = "Apple sign-in could not be verified. Please try again.";
+"message.error.auth.password_reset_invalid_code" = "This reset code is invalid or has expired. Request a new code and try again.";
+"message.error.auth.current_password_incorrect" = "Your current password is incorrect. Check it and try again.";
 "message.error.invalid_request" = "We couldn't complete that request.";
+"message.error.permission_denied" = "You don't have permission to do that.";
+"message.error.not_found" = "We couldn't find that item. It may have been removed.";
+"message.error.conflict" = "That action has already been completed or conflicts with the current state.";
+"message.error.rate_limited" = "Too many attempts. Wait a moment and try again.";
 "message.error.service_unavailable" = "Service is temporarily unavailable. Please try again shortly.";
 "message.error.decode" = "We received an unexpected response. Please try again.";
 "message.error.guild.approval_required" = "This guild is private. Submit a join request instead.";
@@ -80,3 +88,11 @@
 "message.success.removed_watchlist" = "Removed from watchlist";
 "message.success.request_submitted" = "Request submitted";
 "message.success.event_shared" = "Event shared";
+"message.success.invite_link_ready" = "Invite link ready";
+"message.success.referral_accepted" = "Referral accepted";
+"message.success.password_updated_sign_in" = "Password updated. Please sign in with your new password.";
+"message.info.referral_saved" = "Referral saved. Sign up or log in to accept it.";
+"message.info.report.user_already_submitted" = "You already reported this user. Moderators will review it.";
+"message.info.report.message_already_submitted" = "You already reported this message. Moderators will review it.";
+"message.info.report.marker_already_submitted" = "You already reported this marker. Moderators will review it.";
+"message.error.friends.requests_disabled" = "Friend requests are disabled in your settings.";

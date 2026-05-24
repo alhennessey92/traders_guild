@@ -163,6 +163,7 @@ struct UserProfileDetailView: View {
                     isCurrentUser: true,
                     username: rlAppState.currentUser?.username ?? "", // TODO: check for change
                     tabs: [.overview, .markers, .awards, .activity],
+                    awardsEnabled: rlAppState.runtimeFlags.awardsEnabled,
                     activityItems: guildActivity,
                     isActivityLoading: isGuildActivityLoading,
                     activityLoadError: guildActivityLoadError,
@@ -308,13 +309,28 @@ struct UserProfileDetailView: View {
     private func buildStats() -> [ProfileStatDTO] {
         guard let user = rlAppState.currentUser else { return [] }
         guard let membership = rlAppState.currentMembership else { return [] }
+
+        // Sparkline of *cumulative* guild reputation across the trend window so
+        // the line shows trajectory (running total) rather than per-day noise.
+        let reputationSparkline: [Double]? = {
+            guard let trend = guildReputationProfile?.reputationTrend30d, !trend.isEmpty else {
+                return nil
+            }
+            var running = 0
+            return trend.map { point in
+                running += point.value
+                return Double(running)
+            }
+        }()
+
         var items: [ProfileStatDTO] = [
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(membership.reputation)",
-                icon: "shield.checkered",
+                icon: "star.hexagon.fill",
                 color: AppColors.guildReputationAccent,
-                trend: nil
+                trend: nil,
+                sparkline: reputationSparkline
             ),
             ProfileStatDTO(
                 label: "Global Reputation",
@@ -339,13 +355,18 @@ struct UserProfileDetailView: View {
             )
         ]
         if let accuracy = membership.accuracyFormatted {
+            // Use the live accuracy from the guild accuracy profile when available
+            // (more authoritative than the membership snapshot) so the gauge tracks
+            // the same value the breakdown sheet shows.
+            let gaugeProgress = guildAccuracyProfile?.accuracyRate ?? membership.accuracyRate
             items.insert(
                 ProfileStatDTO(
                     label: "Guild Accuracy",
                     value: accuracy,
                     icon: "target",
                     color: AppColors.statusPositive,
-                    trend: nil
+                    trend: nil,
+                    gaugeProgress: gaugeProgress
                 ),
                 at: 2
             )

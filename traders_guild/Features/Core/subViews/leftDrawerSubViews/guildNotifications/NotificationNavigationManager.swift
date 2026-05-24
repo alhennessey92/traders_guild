@@ -83,6 +83,7 @@ class NotificationNavigationManager: ObservableObject {
     /// Main entry point: Handle navigation for a notification
     func navigate(to notification: RLNotificationDTO) async {
         let reportResolutionSummary = notification.contentReportResolutionSummary
+        let requestedProfileTab: ProfileTab? = notification.type == .awardEarned ? .awards : nil
 
         if let payload = notification.markerNavigationPayload {
             openMarker(payload)
@@ -106,11 +107,16 @@ class NotificationNavigationManager: ObservableObject {
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
-        await navigate(to: destination, reportResolutionSummary: reportResolutionSummary)
+        await navigate(
+            to: destination,
+            reportResolutionSummary: reportResolutionSummary,
+            requestedProfileTab: requestedProfileTab
+        )
     }
 
     func navigate(to pushPayload: RLPushNotificationTapPayload) async {
         let reportResolutionSummary = pushPayload.contentReportResolutionSummary
+        let requestedProfileTab: ProfileTab? = pushPayload.notificationType == RLNotificationType.awardEarned.rawValue ? .awards : nil
 
         if let payload = pushPayload.markerNavigationPayload {
             openMarker(payload)
@@ -134,13 +140,18 @@ class NotificationNavigationManager: ObservableObject {
             rlAppState?.showInfo("This notification cannot be opened")
             return
         }
-        await navigate(to: destination, reportResolutionSummary: reportResolutionSummary)
+        await navigate(
+            to: destination,
+            reportResolutionSummary: reportResolutionSummary,
+            requestedProfileTab: requestedProfileTab
+        )
     }
     
     /// Navigate to a specific destination
     func navigate(
         to destination: NotificationDestination,
-        reportResolutionSummary: RLReportResolutionSummary? = nil
+        reportResolutionSummary: RLReportResolutionSummary? = nil,
+        requestedProfileTab: ProfileTab? = nil
     ) async {
         guard let rlAppState = rlAppState,
               let messagingManager = messagingManager else {
@@ -199,6 +210,14 @@ class NotificationNavigationManager: ObservableObject {
                     presentLeftDrawerRoute?(.currentUserProfile)
                 } else {
                     presentLeftDrawerRoute?(.guildMemberProfile(userId: userId))
+                }
+                if let requestedProfileTab {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        NotificationCenter.default.post(
+                            name: .profileTabRequested,
+                            object: requestedProfileTab
+                        )
+                    }
                 }
                 
             // ============================================================================

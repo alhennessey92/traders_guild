@@ -55,7 +55,7 @@ struct RLUserDMRowView: View {
                     
                     // Online indicator (from RLAppState.presenceByUserId to match left drawer)
                     Circle()
-                        .fill(isOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .fill(isOnline ? AppColors.onlineStatusGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()

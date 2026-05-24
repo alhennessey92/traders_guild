@@ -458,7 +458,7 @@ struct IndicatorSettingsEditorSheet: View {
                     .font(.subheadline)
                     .foregroundColor(AppColors.primaryForeground)
             }
-            .tint(.blue)
+            .tint(AppColors.statusInfo)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(

@@ -261,46 +261,44 @@ struct UserGlobalSheetView: View {
                 GridItem(.flexible(), spacing: 12),
                 GridItem(.flexible(), spacing: 12)
             ], spacing: 12) {
-                GlobalStatCard(
-                    title: "Global Reputation",
+                StatKPITile(
+                    label: "Global Reputation",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
-                    icon: "globe",
-                    color: AppColors.guildReputationAccent
+                    tint: AppColors.guildReputationAccent,
+                    sparkline: reputationSparkline,
+                    sparklineTint: AppColors.guildReputationAccent
                 )
 
-                GlobalStatCard(
-                    title: "Global Accuracy",
+                StatKPITile(
+                    label: "Global Accuracy",
                     value: globalAccuracyDisplay,
-                    icon: "target",
-                    color: AppColors.statusPositive
+                    tint: AppColors.statusPositive,
+                    sparkline: accuracySparkline,
+                    sparklineTint: AppColors.statusPositive
                 )
 
-                GlobalStatCard(
-                    title: "Guilds Joined",
+                StatKPITile(
+                    label: "Guilds Joined",
                     value: "\(globalStats?.totalGuildsJoined ?? userGuilds.count)",
-                    icon: "person.3.fill",
-                    color: AppColors.statusInfo
+                    tint: AppColors.statusInfo
                 )
 
-                GlobalStatCard(
-                    title: "Markers Placed",
+                StatKPITile(
+                    label: "Markers Placed",
                     value: "\(globalStats?.totalMarkersPlaced ?? 0)",
-                    icon: "mappin.circle.fill",
-                    color: AppColors.statusNegative
+                    tint: AppColors.statusNegative
                 )
 
-                GlobalStatCard(
-                    title: "Active Streak",
+                StatKPITile(
+                    label: "Active Streak",
                     value: "\(globalRepData?.consecutiveActiveDays ?? globalStats?.currentStreakDays ?? 0)d",
-                    icon: "flame.fill",
-                    color: AppColors.moderationOrange
+                    tint: AppColors.moderationOrange
                 )
 
-                GlobalStatCard(
-                    title: "Awards Earned",
+                StatKPITile(
+                    label: "Awards Earned",
                     value: "\(globalStats?.totalAwardsEarned ?? 0)",
-                    icon: "medal.fill",
-                    color: AppColors.statusHighlight80
+                    tint: AppColors.statusHighlight80
                 )
             }
             .padding(.horizontal, 25)
@@ -335,6 +333,23 @@ struct UserGlobalSheetView: View {
                                 .foregroundColor(AppColors.guildReputationAccent)
                         }
                     }
+
+                    if !rep.reputationTrend30d.isEmpty {
+                        StatTrendBars(
+                            points: rep.reputationTrend30d.map { point in
+                                StatTrendBarPoint(
+                                    day: point.day,
+                                    value: Double(point.value),
+                                    tint: point.value >= 0
+                                        ? AppColors.guildReputationAccent
+                                        : AppColors.statusNegative82
+                                )
+                            },
+                            centeredBaseline: true,
+                            height: 56
+                        )
+                        .padding(.top, 4)
+                    }
                 }
                 .padding()
                 .background(AppColors.insetPanelBackground)
@@ -347,7 +362,7 @@ struct UserGlobalSheetView: View {
                     title: "Global Reputation Breakdown",
                     subtitle: "Tier, weekly delta, guild contributions",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
-                    icon: "shield.checkered",
+                    icon: "star.hexagon.fill",
                     iconColor: AppColors.guildReputationAccent,
                     action: { showGlobalReputationBreakdown = true }
                 )
@@ -628,6 +643,24 @@ struct UserGlobalSheetView: View {
         return "Unknown"
     }
 
+    /// Rolling cumulative reputation values for the sparkline strip on the
+    /// Global Reputation tile. Maps daily deltas to a running total so the line
+    /// shows trajectory rather than per-day noise.
+    private var reputationSparkline: [Double] {
+        guard let trend = globalRepData?.reputationTrend30d, !trend.isEmpty else { return [] }
+        var running = 0
+        return trend.map { point in
+            running += point.value
+            return Double(running)
+        }
+    }
+
+    /// Daily accuracy values (0...1) for the sparkline strip on the Global
+    /// Accuracy tile.
+    private var accuracySparkline: [Double] {
+        globalAccuracyData?.accuracyTrend30d.map(\.value) ?? []
+    }
+
     private var globalAccuracyDisplay: String {
         if let globalAccuracyData {
             return globalAccuracyData.accuracyFormatted
@@ -640,36 +673,6 @@ struct UserGlobalSheetView: View {
 }
 
 // MARK: - Supporting Components
-
-struct GlobalStatCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundColor(color)
-                Spacer()
-            }
-
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.whiteText)
-
-            Text(title)
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-        }
-        .padding()
-        .background(AppColors.insetPanelBackground)
-        .cornerRadius(12)
-    }
-}
 
 struct ReputationBreakdownRow: View {
     let title: String
@@ -758,15 +761,7 @@ struct GlobalGuildCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(accentColor.opacity(0.3))
-                .frame(width: 50, height: 50)
-                .overlay(
-                    Text(String(guildWithMembership.guild.name.prefix(2)).uppercased())
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(accentColor)
-                )
+            GuildCrestView(guild: guildWithMembership.guild, size: 50)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -798,7 +793,7 @@ struct GlobalGuildCard: View {
                     }
 
                     HStack(spacing: 4) {
-                        Image(systemName: "shield.pattern.checkered")
+                        Image(systemName: "star.hexagon.fill")
                             .font(.caption2)
                             .foregroundColor(AppColors.guildReputationAccent)
                         Text("\(guildWithMembership.membership.reputation)")

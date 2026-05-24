@@ -561,11 +561,8 @@ struct MainDrawerView: View {
                 }
                 
                 HStack {
-                    Image(systemName: "shield.pattern.checkered")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(AppColors.guildReputationAccent)
-                    
+                    GuildCrestView(guild: rlGuild, size: 38)
+
                     Text(rlGuild.name)
                         .font(.title2)
                         .fontWeight(.bold)
@@ -601,7 +598,7 @@ struct MainDrawerView: View {
                         .font(.caption)
                         .foregroundColor(AppColors.drawerHeaderSecondaryForeground)
                     Circle()
-                        .fill(AppColors.bullCandleGreen)
+                        .fill(AppColors.onlineStatusGreen)
                         .frame(width: 7, height: 7)
                         .padding(.top, 0)
                         .padding(.leading, 3)
@@ -611,7 +608,7 @@ struct MainDrawerView: View {
                 .padding(.top, 6)
                 
                 HStack(spacing: 2) {
-                    Image(systemName: "shield.pattern.checkered")
+                    Image(systemName: "star.hexagon.fill")
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.guildReputationAccent)

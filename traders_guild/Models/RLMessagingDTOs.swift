@@ -880,6 +880,8 @@ struct WSGuildUpdatedPayload: Codable {
     let name: String?
     let description: String?
     let isOpen: Bool?
+    let language: String?
+    let location: String?
 }
 
 /// Payload for member_role_changed WebSocket event

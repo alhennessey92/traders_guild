@@ -340,10 +340,10 @@ enum ChartDrawingsLegendComposer {
                     accentColor: accentColor
                 )
 
-            case .trendline, .zone:
+            case .trendline, .zone, .pattern:
                 return ChartDrawingLegendEntry(
                     id: drawing.id,
-                    text: drawing.type.title,
+                    text: drawing.note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? drawing.note! : drawing.type.title,
                     accentColor: accentColor
                 )
 

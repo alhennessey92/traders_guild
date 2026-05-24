@@ -1007,7 +1007,7 @@ struct ChatInputFooter: View {
 
             Text("Listening...")
                 .font(.caption)
-                .foregroundColor(.red)
+                .foregroundColor(AppColors.statusNegative)
 
             Spacer()
 
@@ -1024,7 +1024,7 @@ struct ChatInputFooter: View {
                 Text("Stop")
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColors.statusNegative)
             }
         }
         .padding(.horizontal, 16)
@@ -2195,7 +2195,7 @@ struct UnifiedEditMessageSheet: View {
                                     try await onSave(editedText)
                                     dismiss()
                                 } catch {
-                                    errorMessage = RLUserFacingErrorMapper.message(from: error)
+                                    errorMessage = RLUserFacingErrorMapper.message(from: error, context: .messaging)
                                 }
                                 isSaving = false
                             }
@@ -3973,7 +3973,7 @@ struct RLChatroomSettingsView: View {
                                 if isPinned {
                                     Image(systemName: "pin.fill")
                                         .font(.caption)
-                                        .foregroundColor(.yellow)
+                                        .foregroundColor(AppColors.themeAwareYellow)
                                         .offset(x: 20, y: -20)
                                 }
                             }

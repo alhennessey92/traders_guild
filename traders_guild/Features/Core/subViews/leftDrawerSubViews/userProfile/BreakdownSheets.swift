@@ -47,7 +47,7 @@ struct GlobalReputationBreakdownSheetView: View {
                             BreakdownFreshnessBadge(date: lastUpdatedAt)
                         }
 
-                        BreakdownDateBarChart(
+                        StatTrendBars(
                             points: reputationTrendPoints(
                                 from: profile.reputationTrend30d,
                                 positiveTint: AppColors.guildReputationAccent
@@ -58,15 +58,25 @@ struct GlobalReputationBreakdownSheetView: View {
                     }
 
                     BreakdownCard(title: "Breakdown") {
-                        VStack(spacing: 10) {
-                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
-                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
-                            if profile.breakdown.activityRep != 0 {
-                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
+                        HStack(alignment: .center, spacing: 14) {
+                            StatDonut(
+                                slices: breakdownDonutSlices(profile.breakdown),
+                                centerText: "\(profile.breakdown.total)",
+                                centerCaption: "Total",
+                                size: 92
+                            )
+
+                            VStack(spacing: 10) {
+                                StatProgressBar(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
+                                StatProgressBar(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
+                                if profile.breakdown.activityRep != 0 {
+                                    StatProgressBar(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
+                                }
+                                if profile.breakdown.penaltyRep != 0 {
+                                    StatProgressBar(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
+                                }
                             }
-                            if profile.breakdown.penaltyRep != 0 {
-                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
-                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
 
@@ -83,7 +93,7 @@ struct GlobalReputationBreakdownSheetView: View {
                         } else {
                             VStack(spacing: 10) {
                                 ForEach(profile.guildContributions, id: \.guildId) { guild in
-                                    BreakdownBarRow(
+                                    StatProgressBar(
                                         label: guild.guildName,
                                         valueText: "\(guild.reputation)",
                                         progress: max(0, min(1, Double(guild.reputation) / Double(max(1, profile.globalReputation)))),
@@ -163,20 +173,32 @@ struct GlobalAccuracyBreakdownSheetView: View {
                         .padding(.top, 28)
                 } else if let profile {
                     BreakdownCard {
-                        VStack(spacing: 8) {
-                            Text(profile.accuracyDetailedFormatted)
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(breakdownAccuracyColor(profile.accuracyRate))
-                            Text("Global Accuracy")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                            Text(profile.recordFormatted)
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.whiteText)
+                        HStack(alignment: .center, spacing: 14) {
+                            StatGauge(
+                                progress: profile.accuracyRate,
+                                centerText: profile.accuracyFormatted,
+                                captionText: "ACCURACY",
+                                tint: breakdownAccuracyColor(profile.accuracyRate),
+                                size: 104,
+                                lineWidth: 10
+                            )
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Global Accuracy")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                Text(profile.recordFormatted)
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText)
+                                if let rr = profile.rrRatioFormatted {
+                                    Text("Avg R:R \(rr)")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.moderationOrange)
+                                }
+                            }
+                            Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity)
 
-                        BreakdownDateBarChart(
+                        StatTrendBars(
                             points: accuracyTrendPoints(
                                 from: profile.accuracyTrend30d,
                                 tint: breakdownAccuracyColor(profile.accuracyRate)
@@ -192,11 +214,24 @@ struct GlobalAccuracyBreakdownSheetView: View {
                     }
 
                     BreakdownCard(title: "Performance") {
-                        VStack(spacing: 10) {
-                            BreakdownMetricRow(label: "Predictions", value: "\(profile.totalPredictions)", valueColor: AppColors.whiteText)
-                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
-                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: AppColors.statusNegative)
-                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
+                        HStack(alignment: .center, spacing: 14) {
+                            let losses = max(0, profile.totalPredictions - profile.successfulPredictions)
+                            StatDonut(
+                                slices: [
+                                    StatDonutSlice(label: "Wins", value: Double(profile.successfulPredictions), tint: AppColors.statusPositive),
+                                    StatDonutSlice(label: "Losses", value: Double(losses), tint: AppColors.statusNegative)
+                                ],
+                                centerText: "\(profile.totalPredictions)",
+                                centerCaption: "Total",
+                                size: 92
+                            )
+
+                            VStack(spacing: 8) {
+                                BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
+                                BreakdownMetricRow(label: "Losses", value: "\(losses)", valueColor: AppColors.statusNegative)
+                                BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
 
@@ -318,7 +353,7 @@ struct GuildReputationBreakdownSheetView: View {
                             BreakdownFreshnessBadge(date: lastUpdatedAt)
                         }
 
-                        BreakdownDateBarChart(
+                        StatTrendBars(
                             points: reputationTrendPoints(
                                 from: profile.reputationTrend30d,
                                 positiveTint: profile.tier.color
@@ -350,15 +385,25 @@ struct GuildReputationBreakdownSheetView: View {
                     }
 
                     BreakdownCard(title: "Breakdown") {
-                        VStack(spacing: 10) {
-                            BreakdownBarRow(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
-                            BreakdownBarRow(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
-                            if profile.breakdown.activityRep != 0 {
-                                BreakdownBarRow(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
+                        HStack(alignment: .center, spacing: 14) {
+                            StatDonut(
+                                slices: breakdownDonutSlices(profile.breakdown),
+                                centerText: "\(profile.breakdown.total)",
+                                centerCaption: "Total",
+                                size: 92
+                            )
+
+                            VStack(spacing: 10) {
+                                StatProgressBar(label: "Prediction", valueText: "\(profile.breakdown.predictionRep)", progress: fraction(value: profile.breakdown.predictionRep, total: profile.breakdown.total), tint: AppColors.statusPositive)
+                                StatProgressBar(label: "Social", valueText: "\(profile.breakdown.socialRep)", progress: fraction(value: profile.breakdown.socialRep, total: profile.breakdown.total), tint: AppColors.statusInfo)
+                                if profile.breakdown.activityRep != 0 {
+                                    StatProgressBar(label: "Activity", valueText: "\(profile.breakdown.activityRep)", progress: fraction(value: profile.breakdown.activityRep, total: profile.breakdown.total), tint: AppColors.guildReputationAccent)
+                                }
+                                if profile.breakdown.penaltyRep != 0 {
+                                    StatProgressBar(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
+                                }
                             }
-                            if profile.breakdown.penaltyRep != 0 {
-                                BreakdownBarRow(label: "Penalties", valueText: "\(profile.breakdown.penaltyRep)", progress: fraction(value: abs(profile.breakdown.penaltyRep), total: max(1, abs(profile.breakdown.total))), tint: AppColors.statusNegative)
-                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
 
@@ -438,20 +483,37 @@ struct GuildAccuracyBreakdownSheetView: View {
                         .padding(.top, 28)
                 } else if let profile {
                     BreakdownCard {
-                        VStack(spacing: 8) {
-                            Text(profile.accuracyDetailedFormatted)
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(breakdownAccuracyColor(profile.accuracyRate))
-                            Text("Guild Accuracy")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                            Text(profile.recordFormatted)
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.whiteText)
+                        HStack(alignment: .center, spacing: 14) {
+                            StatGauge(
+                                progress: profile.accuracyRate,
+                                centerText: profile.accuracyFormatted,
+                                captionText: "ACCURACY",
+                                tint: breakdownAccuracyColor(profile.accuracyRate),
+                                size: 104,
+                                lineWidth: 10
+                            )
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Guild Accuracy")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                Text(profile.recordFormatted)
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText)
+                                if let rank = profile.rankInGuild {
+                                    Text("Rank #\(rank)")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.guildReputationAccent)
+                                }
+                                if let rr = profile.rrRatioFormatted {
+                                    Text("Avg R:R \(rr)")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.moderationOrange)
+                                }
+                            }
+                            Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity)
 
-                        BreakdownDateBarChart(
+                        StatTrendBars(
                             points: accuracyTrendPoints(
                                 from: profile.accuracyTrend30d,
                                 tint: breakdownAccuracyColor(profile.accuracyRate)
@@ -467,14 +529,24 @@ struct GuildAccuracyBreakdownSheetView: View {
                     }
 
                     BreakdownCard(title: "Performance") {
-                        VStack(spacing: 10) {
-                            BreakdownMetricRow(label: "Predictions", value: "\(profile.totalPredictions)", valueColor: AppColors.whiteText)
-                            BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
-                            BreakdownMetricRow(label: "Losses", value: "\(max(0, profile.totalPredictions - profile.successfulPredictions))", valueColor: AppColors.statusNegative)
-                            BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
-                            if let rank = profile.rankInGuild {
-                                BreakdownMetricRow(label: "Rank in Guild", value: "#\(rank)", valueColor: AppColors.guildReputationAccent)
+                        HStack(alignment: .center, spacing: 14) {
+                            let losses = max(0, profile.totalPredictions - profile.successfulPredictions)
+                            StatDonut(
+                                slices: [
+                                    StatDonutSlice(label: "Wins", value: Double(profile.successfulPredictions), tint: AppColors.statusPositive),
+                                    StatDonutSlice(label: "Losses", value: Double(losses), tint: AppColors.statusNegative)
+                                ],
+                                centerText: "\(profile.totalPredictions)",
+                                centerCaption: "Total",
+                                size: 92
+                            )
+
+                            VStack(spacing: 8) {
+                                BreakdownMetricRow(label: "Wins", value: "\(profile.successfulPredictions)", valueColor: AppColors.statusPositive)
+                                BreakdownMetricRow(label: "Losses", value: "\(losses)", valueColor: AppColors.statusNegative)
+                                BreakdownMetricRow(label: "Avg R:R", value: profile.rrRatioFormatted ?? "--", valueColor: AppColors.moderationOrange)
                             }
+                            .frame(maxWidth: .infinity)
                         }
                     }
 
@@ -635,117 +707,12 @@ private struct BreakdownMetricPill: View {
     }
 }
 
-private struct BreakdownBarRow: View {
-    let label: String
-    let valueText: String
-    let progress: Double
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.whiteText)
-                Spacer()
-                Text(valueText)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(tint)
-            }
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(AppColors.symbolDetailCardFill)
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: geometry.size.width * max(0, min(1, progress)))
-                }
-            }
-            .frame(height: 8)
-        }
-    }
-}
-
-private struct BreakdownDateBarPoint: Identifiable {
-    let day: Date
-    let value: Double
-    let tint: Color
-
-    var id: Date { day }
-}
-
-private struct BreakdownDateBarChart: View {
-    let points: [BreakdownDateBarPoint]
-    let centeredBaseline: Bool
-
-    private var maxMagnitude: Double {
-        max(points.map { abs($0.value) }.max() ?? 1, 1)
-    }
-
-    private var baselineAlignment: Alignment {
-        centeredBaseline ? .center : .bottom
-    }
-
-    var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geometry in
-                if points.isEmpty {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.symbolDetailCardFill)
-                        .overlay(
-                            Text("No 30-day trend data")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.greyText)
-                        )
-                } else {
-                    ZStack(alignment: baselineAlignment) {
-                        if centeredBaseline {
-                            Rectangle()
-                                .fill(AppColors.surfaceWhite12)
-                                .frame(height: 1)
-                        }
-
-                        HStack(alignment: centeredBaseline ? .center : .bottom, spacing: 2) {
-                            ForEach(points) { point in
-                                let ratio = max(0.05, min(1, abs(point.value) / maxMagnitude))
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(point.tint)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: (geometry.size.height - 4) * ratio)
-                                    .offset(y: centeredBaseline ? (point.value >= 0 ? -(geometry.size.height * 0.25 * ratio) : geometry.size.height * 0.25 * ratio) : 0)
-                            }
-                        }
-                    }
-                }
-            }
-            .frame(height: 64)
-
-            HStack {
-                Text(dateLabel(for: points.first?.day))
-                Spacer()
-                Text(dateLabel(for: points.dropFirst(points.count / 2).first?.day))
-                Spacer()
-                Text(dateLabel(for: points.last?.day))
-            }
-            .font(.caption2)
-            .foregroundColor(AppColors.greyText.opacity(0.85))
-        }
-    }
-
-    private func dateLabel(for date: Date?) -> String {
-        guard let date else { return "--" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
-    }
-}
-
 private func reputationTrendPoints(
     from trend: [RLReputationTrendPointDTO],
     positiveTint: Color
-) -> [BreakdownDateBarPoint] {
+) -> [StatTrendBarPoint] {
     trend.map { point in
-        BreakdownDateBarPoint(
+        StatTrendBarPoint(
             day: point.day,
             value: Double(point.value),
             tint: point.value >= 0 ? positiveTint : AppColors.statusNegative82
@@ -756,7 +723,7 @@ private func reputationTrendPoints(
 private func accuracyTrendPoints(
     from trend: [RLAccuracyTrendPointDTO],
     tint: Color
-) -> [BreakdownDateBarPoint] {
+) -> [StatTrendBarPoint] {
     var previous: Double?
     return trend.map { point in
         let value = point.value
@@ -773,7 +740,7 @@ private func accuracyTrendPoints(
             direction = tint
         }
         previous = value
-        return BreakdownDateBarPoint(
+        return StatTrendBarPoint(
             day: point.day,
             value: value,
             tint: direction
@@ -786,6 +753,26 @@ private func breakdownAccuracyColor(_ value: Double) -> Color {
     if value >= 0.5 { return AppColors.statusHighlight80 }
     if value >= 0.3 { return AppColors.moderationOrange }
     return AppColors.statusNegative
+}
+
+/// Builds donut slices for the reputation breakdown. Penalties are tracked as
+/// negative numbers on the DTO; visualise them by their magnitude alongside
+/// the positive contributors so the donut always shows the full activity mix.
+private func breakdownDonutSlices(_ breakdown: RLReputationBreakdownDTO) -> [StatDonutSlice] {
+    var slices: [StatDonutSlice] = []
+    if breakdown.predictionRep > 0 {
+        slices.append(StatDonutSlice(label: "Prediction", value: Double(breakdown.predictionRep), tint: AppColors.statusPositive))
+    }
+    if breakdown.socialRep > 0 {
+        slices.append(StatDonutSlice(label: "Social", value: Double(breakdown.socialRep), tint: AppColors.statusInfo))
+    }
+    if breakdown.activityRep > 0 {
+        slices.append(StatDonutSlice(label: "Activity", value: Double(breakdown.activityRep), tint: AppColors.guildReputationAccent))
+    }
+    if breakdown.penaltyRep != 0 {
+        slices.append(StatDonutSlice(label: "Penalties", value: Double(abs(breakdown.penaltyRep)), tint: AppColors.statusNegative))
+    }
+    return slices
 }
 
 private struct BreakdownRuleItem: Identifiable {

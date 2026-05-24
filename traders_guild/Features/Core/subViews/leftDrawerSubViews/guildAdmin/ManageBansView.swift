@@ -161,7 +161,7 @@ struct ManageBansView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.green)
+            .tint(AppColors.statusPositive)
             .disabled(unbanningId == ban.id)
         }
         .padding(.horizontal)

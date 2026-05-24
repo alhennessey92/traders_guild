@@ -466,7 +466,7 @@ struct ManageMembersView: View {
                 if let suspendedUntil = member.suspendedUntil {
                     Text("Expires \(suspendedUntil, style: .relative)")
                         .font(.caption2)
-                        .foregroundColor(.red)
+                        .foregroundColor(AppColors.statusNegative)
                 }
             }
 
@@ -587,11 +587,11 @@ struct ManageMembersView: View {
                 .font(.caption2)
                 .fontWeight(.semibold)
         }
-        .foregroundColor(isOwner ? .yellow : role.color)
+        .foregroundColor(isOwner ? AppColors.memberRoleColor(.owner) : role.color)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            (isOwner ? AppColors.systemYellow : role.color).opacity(0.1)
+            (isOwner ? AppColors.memberRoleColor(.owner) : role.color).opacity(0.1)
         )
         .cornerRadius(6)
     }

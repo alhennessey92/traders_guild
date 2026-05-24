@@ -32,7 +32,7 @@ struct ErrorToastView: View {
                 Text(alert.message)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(4)
             }
             
             Spacer()

@@ -28,9 +28,13 @@ struct AdminPanelListView: View {
         VStack(spacing: 16) {
             // Section Header
             HStack {
-                Image(systemName: "shield.checkered")
-                    .font(.title3)
-                    .foregroundColor(AppColors.accentColor)
+                if let guild = rlAppState.currentGuild {
+                    GuildCrestView(guild: guild, size: 26)
+                } else {
+                    Image(systemName: "shield.checkered")
+                        .font(.title3)
+                        .foregroundColor(AppColors.accentColor)
+                }
                 Text("Guild Management")
                     .font(.headline)
                     .fontWeight(.bold)

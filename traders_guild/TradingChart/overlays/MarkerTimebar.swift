@@ -785,7 +785,7 @@ struct MarkerPlacementTimeIndicator: View {
         VStack(spacing: 0) {
             Image(systemName: "arrowtriangle.down.fill")
                 .font(.system(size: 10))
-                .foregroundColor(.blue)
+                .foregroundColor(AppColors.statusInfo)
             
             Text(timestamp.chartTimeLabel)
                 .font(.system(size: 13, weight: .semibold))

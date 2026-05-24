@@ -416,7 +416,7 @@ struct UserSettingsSheetView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppColors.statusWarning)
                             .frame(width: 20)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -516,7 +516,7 @@ struct UserSettingsSheetView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     Image(systemName: "paintbrush.fill")
-                        .foregroundColor(.cyan)
+                        .foregroundColor(AppColors.themeAwareCyan)
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -719,13 +719,13 @@ struct UserSettingsSheetView: View {
                 HStack {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
                         .font(.headline)
-                        .foregroundColor(.red)
+                        .foregroundColor(AppColors.statusNegative)
                         .frame(width: 30)
 
                     Text("Logout")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.red)
+                        .foregroundColor(AppColors.statusNegative)
 
                     Spacer()
                 }

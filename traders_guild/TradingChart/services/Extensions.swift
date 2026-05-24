@@ -21,7 +21,8 @@ extension Color {
         static let grid = AppColors.surfaceGray10
         static let gridMajor = AppColors.surfaceGray20
         static let text = AppColors.systemGray
-        static let priceIndicator = AppColors.systemYellow
+        /// Theme-aware: bright iOS yellow on dark/mid; deeper goldenrod on lightGrey.
+        static var priceIndicator: Color { AppColors.themeAwareYellow }
         static let background = AppColors.systemBlack
         static let volumeUp = AppColors.statusPositive50
         static let volumeDown = AppColors.statusNegative50

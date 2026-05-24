@@ -42,6 +42,8 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var userNotifications: [RLNotificationDTO] = []
     @Published var notificationStats: RLNotificationStatsDTO?
     @Published var statistics: RLGuildStatisticsResponse?
+    @Published var statisticsHistory: RLGuildStatisticsHistoryResponse?
+    @Published var isLoadingStatisticsHistory: Bool = false
     
     // New: backend-driven guild members
     @Published var guildMembers: [RLGuildMemberDTO] = []
@@ -445,6 +447,29 @@ class LeftDrawerViewModel: ObservableObject {
                     print("⚠️ Failed to fetch statistics: \(error)")
                 }
             }
+
+            // Statistics history (30-day trend series for sparklines / line charts).
+            // Loaded alongside statistics but failure must never block the screen — the
+            // scalar stats render fine without trend lines.
+            group.addTask {
+                await MainActor.run { self.isLoadingStatisticsHistory = true }
+                do {
+                    let fetched = try await rlAppState.fetchGuildStatisticsHistory(
+                        guildId: guildId,
+                        period: "30d"
+                    )
+                    await MainActor.run {
+                        self.statisticsHistory = fetched
+                        self.isLoadingStatisticsHistory = false
+                    }
+                    print("📋 preloadData: Fetched statistics history (\(fetched.points.count) points)")
+                } catch is CancellationError {
+                    await MainActor.run { self.isLoadingStatisticsHistory = false }
+                } catch {
+                    await MainActor.run { self.isLoadingStatisticsHistory = false }
+                    print("⚠️ Failed to fetch statistics history: \(error)")
+                }
+            }
         }
         
         self.lastRefresh = Date()
@@ -771,6 +796,8 @@ class LeftDrawerViewModel: ObservableObject {
         lastRealtimeNotificationInsertAt = nil
         pendingNotificationCatchUpRefresh = false
         statistics = nil
+        statisticsHistory = nil
+        isLoadingStatisticsHistory = false
         guildMembers = []
         guildMembersTotalCount = 0
         guildMembersOnlineCount = 0
@@ -1462,6 +1489,7 @@ class LeftDrawerViewModel: ObservableObject {
     ) {
         do {
             async let fullProfileTask = rlAppState.fetchUserFullProfile(userId: member.userId, guildId: guildId)
+            async let awardsTask = rlAppState.fetchUserAwards(userId: member.userId, guildId: guildId)
 
             // Fetch member's markers from user-specific markers endpoint
             var markers: [RLTopMarkerDTO] = []
@@ -1473,16 +1501,14 @@ class LeftDrawerViewModel: ObservableObject {
             }
 
             let fullProfile = try await fullProfileTask
-            
-            // Awards will be loaded from backend API when needed
-            // For now, use empty arrays - these should be fetched from rlAppState
-            let awards: [RLUserAwardDTO] = []
-            let awardsSummary = RLAwardsSummaryDTO(
-                totalAwards: 0,
-                totalPoints: 0,
-                rarityBreakdown: [:],
-                recentAwards: []
-            )
+            let awards: [RLUserAwardDTO]
+            do {
+                awards = try await awardsTask
+            } catch {
+                print("⚠️ Failed to load member awards: \(error)")
+                awards = []
+            }
+            let awardsSummary = fullProfile.awardsSummary
             
             return (fullProfile.profile, fullProfile.statistics, markers, awards, awardsSummary)
             

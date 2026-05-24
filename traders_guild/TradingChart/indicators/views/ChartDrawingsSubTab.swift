@@ -297,20 +297,20 @@ struct ChartDrawingsSubTab: View {
 
     private var patternsSubTab: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Pattern templates are coming soon.")
+            Text("Pattern Templates")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.whiteText.opacity(0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                        )
-                )
+
+            ForEach(ChartPatternDrawingTemplate.allCases) { template in
+                catalogRow(
+                    title: template.title,
+                    subtitle: template.subtitle,
+                    icon: template.icon,
+                    tint: Color(hex: template.tintHex) ?? RLComponentType.drawingTrendline.color
+                ) {
+                    addPatternTemplate(template)
+                }
+            }
         }
     }
 
@@ -408,6 +408,28 @@ struct ChartDrawingsSubTab: View {
             emoji: emoji
         )
         infoMessage = "Added Emoji."
+        limitWarning = nil
+    }
+
+    private func addPatternTemplate(_ template: ChartPatternDrawingTemplate) {
+        guard drawingManager.drawings.count + template.requiredDrawingSlots <= maxDrawingOverlays else {
+            limitWarning = "Pattern needs \(template.requiredDrawingSlots) free drawing slots"
+            HapticFeedback.light.trigger()
+            return
+        }
+
+        let anchor = annotationAnchorPoint ?? ChartDrawingPoint(
+            time: defaultAnchorTime ?? Date(),
+            price: defaultAnchorPrice ?? 0
+        )
+        let drawings = template.chartDrawings(
+            anchorTime: anchor.time,
+            anchorPrice: anchor.price,
+            accentColorHex: selectedColorHex
+        )
+
+        drawingManager.setDrawings(drawingManager.drawings + drawings)
+        infoMessage = "Added \(template.title)."
         limitWarning = nil
     }
 

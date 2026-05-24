@@ -20,6 +20,9 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
     case verticalLine
     case crossLine
     case parallelChannel
+    case breakoutRetest
+    case rangeReversal
+    case risingChannel
     case headAndShoulders
     case longPosition
     case shortPosition
@@ -50,6 +53,12 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return "Cross Line"
         case .parallelChannel:
             return "Parallel Channel"
+        case .breakoutRetest:
+            return "Breakout Retest"
+        case .rangeReversal:
+            return "Range Reversal"
+        case .risingChannel:
+            return "Rising Channel"
         case .headAndShoulders:
             return "Head & Shoulders"
         case .longPosition:
@@ -83,6 +92,12 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return "line.diagonal"
         case .crossLine:
             return "plus"
+        case .breakoutRetest:
+            return "arrow.up.right.circle"
+        case .rangeReversal:
+            return "arrow.left.and.right"
+        case .risingChannel:
+            return "line.diagonal.arrow"
         case .headAndShoulders:
             return "waveform.path.ecg"
         case .longPosition, .takeProfitIdea:
@@ -98,7 +113,7 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return .horizontalLevel
         case .note, .emoji:
             return .annotation
-        case .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .breakoutRetest, .rangeReversal, .risingChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return .pattern
         case .trendline, .zone, .rayLine, .parallelChannel:
             return .pointSequence
@@ -113,8 +128,10 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return 1
         case .trendline, .zone, .rayLine:
             return 2
-        case .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .parallelChannel, .breakoutRetest, .risingChannel, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return 3
+        case .rangeReversal, .headAndShoulders:
+            return 4
         }
     }
 
@@ -160,8 +177,10 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return .textNote
         case .emoji:
             return .reactionEmoji
-        case .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .rayLine, .verticalLine, .crossLine, .parallelChannel, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return nil
+        case .breakoutRetest, .rangeReversal, .risingChannel, .headAndShoulders:
+            return .drawingPattern
         }
     }
 
@@ -186,8 +205,10 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
         switch self {
         case .trendline, .horizontalLine, .support, .resistance, .zone, .note, .emoji:
             return true
-        case .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .rayLine, .verticalLine, .crossLine, .parallelChannel, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return false
+        case .breakoutRetest, .rangeReversal, .risingChannel, .headAndShoulders:
+            return true
         }
     }
 
@@ -203,6 +224,8 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
             return .resistance
         case .drawingZone:
             return .zone
+        case .drawingPattern:
+            return .headAndShoulders
         case .textNote:
             return .note
         case .reactionEmoji:
@@ -227,6 +250,11 @@ enum MarkerDrawingToolKind: String, CaseIterable, Hashable {
         default:
             return nil
         }
+    }
+
+    static func from(patternKey: String?) -> MarkerDrawingToolKind? {
+        guard let patternKey else { return nil }
+        return MarkerDrawingToolKind(rawValue: patternKey)
     }
 }
 
@@ -340,6 +368,9 @@ extension MarkerDrawingToolDefinition {
         if requiredPointCount <= 0 {
             return "\(title): drag to place, tap chart to save"
         }
+        if let label = kind.guidePointLabels[safe: stepIndex] {
+            return "Step \(stepIndex + 1)/\(requiredPointCount): place \(label)"
+        }
         return "\(title): drag to \(ordinal(stepIndex + 1)) point, tap to set"
     }
 
@@ -354,6 +385,35 @@ extension MarkerDrawingToolDefinition {
         default:
             return "\(number)th"
         }
+    }
+}
+
+extension MarkerDrawingToolKind {
+    var guidePointLabels: [String] {
+        switch self {
+        case .breakoutRetest:
+            return ["Breakout level start", "Breakout level end", "Retest reaction"]
+        case .rangeReversal:
+            return ["Range high", "Range low", "Rejection", "Target / mean"]
+        case .risingChannel:
+            return ["Lower channel start", "Lower channel end", "Upper guide"]
+        case .headAndShoulders:
+            return ["Left shoulder", "Head", "Right shoulder", "Neckline"]
+        default:
+            return []
+        }
+    }
+
+    var guideSequenceText: String? {
+        let labels = guidePointLabels
+        guard !labels.isEmpty else { return nil }
+        return labels.joined(separator: " -> ")
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

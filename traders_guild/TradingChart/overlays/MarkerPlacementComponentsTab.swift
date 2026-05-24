@@ -444,9 +444,10 @@ struct MarkerPlacementComponentsTab: View {
         case .levelSupport: return 2
         case .levelResistance: return 3
         case .drawingZone: return 4
-        case .textNote: return 5
-        case .reactionEmoji: return 6
-        default: return 7
+        case .drawingPattern: return 5
+        case .textNote: return 6
+        case .reactionEmoji: return 7
+        default: return 8
         }
     }
 
@@ -455,6 +456,7 @@ struct MarkerPlacementComponentsTab: View {
         case .drawingTrendline,
              .drawingHorizontalLine,
              .drawingZone,
+             .drawingPattern,
              .levelSupport,
              .levelResistance,
              .textNote,
@@ -472,6 +474,8 @@ struct MarkerPlacementComponentsTab: View {
             return note.isEmpty ? "Text Note" : note
         case let .reactionEmoji(payload):
             return "Emoji \(payload.emoji)"
+        case let .drawingPattern(payload):
+            return payload.title
         default:
             return draft.componentType.displayName
         }

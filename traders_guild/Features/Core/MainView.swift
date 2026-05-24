@@ -950,15 +950,27 @@ struct MainView: View {
                 closeMarkerViewingMode()
             }
         } else {
-            ToolbarIconButton(
-                systemName: "shield.pattern.checkered",
-                backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
-                fontType: .headline,
-                symbolRenderingMode: .monochrome,
-                foregroundStyle: AppColors.whiteText,
-                padding: 8
-            ) {
-                toggleLeftDrawerFromToolbar()
+            if let guild = rlAppState.currentGuild,
+               let imageUrl = guild.imageUrl, !imageUrl.isEmpty {
+                // Uploaded guild image — circular avatar button.
+                Button {
+                    toggleLeftDrawerFromToolbar()
+                } label: {
+                    GuildCrestView(guild: guild, size: 32)
+                }
+                .buttonStyle(.plain)
+            } else {
+                // Symbol crest — plain white glyph in the standard toolbar button.
+                ToolbarIconButton(
+                    systemName: GuildCrestCatalog.sfSymbol(for: rlAppState.currentGuild?.crestSymbol),
+                    backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
+                    fontType: .headline,
+                    symbolRenderingMode: .monochrome,
+                    foregroundStyle: AppColors.whiteText,
+                    padding: 8
+                ) {
+                    toggleLeftDrawerFromToolbar()
+                }
             }
         }
     }

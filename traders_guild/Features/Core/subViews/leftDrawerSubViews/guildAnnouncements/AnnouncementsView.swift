@@ -15,36 +15,79 @@ import SwiftUI
 // MARK: - ANNOUNCEMENTS LIST VIEW
 // MARK: - ================================================================================================
 
+private enum AnnouncementFeedTab: String, CaseIterable, UnifiedTabItem {
+    case all = "All"
+    case guild = "Guild"
+    case system = "System"
+
+    var title: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .all:
+            return "tray.full.fill"
+        case .guild:
+            return "shield.lefthalf.filled"
+        case .system:
+            return "megaphone.fill"
+        }
+    }
+}
+
 struct AnnouncementsListView: View {
     @Binding var bottomSheetContent: BottomSheetContent?
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
+    @State private var selectedTab: AnnouncementFeedTab = .all
 
     /// Sort: important first, then by chronological order (already sorted by view model).
     /// Pinning important items to the top is the core UX benefit of the "Important" flag.
     private var sortedAnnouncements: [RLGuildAnnouncementWithAuthorDTO] {
-        leftDrawerViewModel.announcements.sorted { lhs, rhs in
+        filteredAnnouncements.sorted { lhs, rhs in
             if lhs.isImportant != rhs.isImportant { return lhs.isImportant }
             return lhs.announcement.postedAt > rhs.announcement.postedAt
         }
     }
 
     private var importantCount: Int {
-        leftDrawerViewModel.announcements.filter(\.isImportant).count
+        filteredAnnouncements.filter(\.isImportant).count
+    }
+
+    private var filteredAnnouncements: [RLGuildAnnouncementWithAuthorDTO] {
+        leftDrawerViewModel.announcements.filter { announcement in
+            switch selectedTab {
+            case .all:
+                return true
+            case .guild:
+                return !isSystemAnnouncement(announcement)
+            case .system:
+                return isSystemAnnouncement(announcement)
+            }
+        }
     }
 
     var body: some View {
         VStack(spacing: 10) {
+            UnifiedTabBar(
+                selectedTab: $selectedTab,
+                size: .compact,
+                theme: .blue,
+                countForTab: { tab in count(for: tab) },
+                spacing: 6
+            )
+            .padding(.top, 4)
+            .padding(.bottom, 4)
+
             // Loading state
             if leftDrawerViewModel.isLoading && leftDrawerViewModel.announcements.isEmpty {
                 UnifiedLoadingState(message: "Loading announcements...")
                     .padding(.top, 40)
             }
             // Empty state
-            else if leftDrawerViewModel.announcements.isEmpty {
+            else if filteredAnnouncements.isEmpty {
                 UnifiedEmptyState(
                     icon: "megaphone",
-                    title: "No announcements yet",
-                    subtitle: "Check back later for guild updates"
+                    title: emptyTitle,
+                    subtitle: emptySubtitle
                 )
                 .padding(.top, 40)
             } else {
@@ -76,6 +119,64 @@ struct AnnouncementsListView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    private var emptyTitle: String {
+        switch selectedTab {
+        case .all:
+            return "No announcements yet"
+        case .guild:
+            return "No guild announcements"
+        case .system:
+            return "No system announcements"
+        }
+    }
+
+    private var emptySubtitle: String {
+        switch selectedTab {
+        case .all:
+            return "Check back later for guild updates"
+        case .guild:
+            return "Guild posts will appear here"
+        case .system:
+            return "Platform broadcasts will appear here"
+        }
+    }
+
+    private func count(for tab: AnnouncementFeedTab) -> Int {
+        switch tab {
+        case .all:
+            return leftDrawerViewModel.announcements.count
+        case .guild:
+            return leftDrawerViewModel.announcements.filter { !isSystemAnnouncement($0) }.count
+        case .system:
+            return leftDrawerViewModel.announcements.filter(isSystemAnnouncement).count
+        }
+    }
+
+    private func isSystemAnnouncement(_ announcement: RLGuildAnnouncementWithAuthorDTO) -> Bool {
+        if isOnboardingWelcomeAnnouncement(announcement) {
+            return false
+        }
+
+        let authorText = "\(announcement.authorUsername) \(announcement.authorDisplayName)".lowercased()
+        return authorText.contains("traders guild system")
+            || authorText.contains("traders guild admin")
+            || authorText == "system"
+            || authorText.hasPrefix("system ")
+            || authorText.contains(" system ")
+    }
+
+    private func isOnboardingWelcomeAnnouncement(_ announcement: RLGuildAnnouncementWithAuthorDTO) -> Bool {
+        let title = announcement.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let content = announcement.content.lowercased()
+
+        return title.hasPrefix("welcome to ")
+            && (
+                content.contains("starting guild while you get set up")
+                || content.contains("this is your starting guild")
+                || title.contains("onboarding guild")
+            )
     }
 }
 

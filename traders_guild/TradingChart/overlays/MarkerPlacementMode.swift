@@ -311,9 +311,9 @@ final class MarkerPlacementState: ObservableObject {
             let definition = MarkerDrawingToolRegistry.definition(for: tool)
             switch drawingInteractionPhase {
             case .placingFirstPoint:
-                return definition.placementInstruction(for: 0)
+                return definition.placementInstruction(for: drawingSession.stepIndex ?? 0)
             case .placingSecondPoint:
-                return definition.placementInstruction(for: 1)
+                return definition.placementInstruction(for: drawingSession.stepIndex ?? 1)
             case .editing:
                 if tool == .note || tool == .emoji {
                     return "\(tool.title): drag to place, tap chart to save"
@@ -352,6 +352,15 @@ final class MarkerPlacementState: ObservableObject {
         }
 
         return nil
+    }
+
+    var toolbarInstructionDetailText: String? {
+        guard let tool = activeDrawingWorkflowTool,
+              tool.group == .pattern,
+              let sequence = tool.guideSequenceText else {
+            return nil
+        }
+        return sequence
     }
 
     var setupEntryPrice: Double? {
@@ -1239,6 +1248,20 @@ final class MarkerPlacementState: ObservableObject {
                     )
                 )
             )
+        case let .drawingPattern(payload):
+            setComponentPayload(
+                at: index,
+                to: .drawingPattern(
+                    ChartPatternPayload(
+                        patternKey: payload.patternKey,
+                        title: payload.title,
+                        points: payload.points,
+                        colorHex: normalized,
+                        lineStyle: payload.lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
         case let .levelSupport(payload):
             setComponentPayload(
                 at: index,
@@ -1346,6 +1369,20 @@ final class MarkerPlacementState: ObservableObject {
                         bottomPrice: payload.bottomPrice,
                         startTime: payload.startTime,
                         endTime: payload.endTime,
+                        colorHex: payload.colorHex,
+                        lineStyle: lineStyle,
+                        lineWidth: payload.lineWidth
+                    )
+                )
+            )
+        case let .drawingPattern(payload):
+            updateComponent(
+                id: draftId,
+                payload: .drawingPattern(
+                    ChartPatternPayload(
+                        patternKey: payload.patternKey,
+                        title: payload.title,
+                        points: payload.points,
                         colorHex: payload.colorHex,
                         lineStyle: lineStyle,
                         lineWidth: payload.lineWidth
@@ -2023,7 +2060,7 @@ final class MarkerPlacementState: ObservableObject {
             return 0
         case .levelEntry, .levelSl, .levelTp, .levelSupport, .levelResistance:
             return 1
-        case .drawingTrendline, .drawingHorizontalLine, .drawingZone:
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern:
             return 2
         case .indicator:
             return 3
@@ -2097,7 +2134,7 @@ final class MarkerPlacementState: ObservableObject {
             return MarkerToolOption.levelResistance.rawValue
         case .zone:
             return MarkerToolOption.drawZone.rawValue
-        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
+        case .note, .emoji, .rayLine, .verticalLine, .crossLine, .parallelChannel, .breakoutRetest, .rangeReversal, .risingChannel, .headAndShoulders, .longPosition, .shortPosition, .takeProfitIdea, .stopLossIdea:
             return nil
         }
     }
@@ -2326,6 +2363,17 @@ final class MarkerPlacementState: ObservableObject {
                     lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
                 )
             )
+        case let (.drawingPattern(existingPayload), .drawingPattern(incomingPayload)):
+            return .drawingPattern(
+                ChartPatternPayload(
+                    patternKey: incomingPayload.patternKey,
+                    title: incomingPayload.title,
+                    points: incomingPayload.points,
+                    colorHex: incomingPayload.colorHex ?? existingPayload.colorHex,
+                    lineStyle: incomingPayload.lineStyle ?? existingPayload.lineStyle,
+                    lineWidth: incomingPayload.lineWidth ?? existingPayload.lineWidth
+                )
+            )
         case let (.levelSupport(existingPayload), .levelSupport(incomingPayload)):
             return .levelSupport(
                 LevelPayload(
@@ -2405,6 +2453,8 @@ final class MarkerPlacementState: ObservableObject {
             return normalizedHexColor(value.colorHex)
         case let .drawingZone(value):
             return normalizedHexColor(value.colorHex)
+        case let .drawingPattern(value):
+            return normalizedHexColor(value.colorHex)
         case let .note(value):
             return normalizedHexColor(value.colorHex)
         default:
@@ -2413,7 +2463,7 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     private func allowedComponentTypes(for intent: RLMarkerIntent) -> Set<RLComponentType> {
-        let drawingAndIndicators: Set<RLComponentType> = [.drawingTrendline, .drawingHorizontalLine, .drawingZone, .indicator]
+        let drawingAndIndicators: Set<RLComponentType> = [.drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .indicator]
 
         switch intent {
         case .analysis:

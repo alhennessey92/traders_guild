@@ -279,8 +279,8 @@ struct SignupGuildView: View {
             let preferredLanguage = data.language.trimmingCharacters(in: .whitespacesAndNewlines)
             let preferredLocation = data.location.trimmingCharacters(in: .whitespacesAndNewlines)
             let guilds = try await rlAppState.fetchPublicOpenGuilds(
-                language: preferredLanguage.isEmpty ? nil : preferredLanguage,
-                location: preferredLocation.isEmpty ? nil : preferredLocation
+                preferredLanguage: preferredLanguage.isEmpty ? nil : preferredLanguage,
+                preferredLocation: preferredLocation.isEmpty ? nil : preferredLocation
             )
             availableGuilds = guilds
             assignmentErrorMessage = nil
@@ -511,11 +511,11 @@ struct SignupProfileSetupView: View {
     private let suggestedInterests: [RLTradingInterestItem] = RLTradingInterestsCatalog.allItems
 
     private var selectedLanguageLabel: String {
-        LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label ?? "Select language"
+        selectedLanguageCode.isEmpty ? "Select language" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode)
     }
 
     private var selectedCountryLabel: String {
-        LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label ?? "Select country"
+        selectedCountryCode.isEmpty ? "Select country" : LocaleOptionCatalog.countryDisplay(for: selectedCountryCode)
     }
 
     var body: some View {
@@ -638,7 +638,7 @@ struct SignupProfileSetupView: View {
                                     }
                                     Divider()
                                     ForEach(LocaleOptionCatalog.countries) { option in
-                                        Button(option.label) {
+                                        Button(LocaleOptionCatalog.countryDisplay(for: option.code)) {
                                             selectedCountryCode = option.code
                                         }
                                     }
@@ -909,10 +909,8 @@ struct SignupProfileSetupView: View {
             .map(\.name)
             .filter { selectedInterests.contains($0) }
 
-        let languageLabel = LocaleOptionCatalog.languages.first(where: { $0.code == selectedLanguageCode })?.label
-        let countryLabel = LocaleOptionCatalog.countries.first(where: { $0.code == selectedCountryCode })?.label
-        data.language = languageLabel ?? ""
-        data.location = countryLabel ?? ""
+        data.language = selectedLanguageCode
+        data.location = selectedCountryCode
     }
 
     private func clearProfileDraft() {
@@ -927,21 +925,11 @@ struct SignupProfileSetupView: View {
     }
 
     private func languageCode(from value: String) -> String {
-        let normalized = RLAuthValidator.trimmed(value)
-        guard !normalized.isEmpty else { return "" }
-        if LocaleOptionCatalog.languages.contains(where: { $0.code == normalized }) {
-            return normalized
-        }
-        return LocaleOptionCatalog.languages.first(where: { $0.label == normalized })?.code ?? ""
+        LocaleOptionCatalog.languageCode(from: value)
     }
 
     private func countryCode(from value: String) -> String {
-        let normalized = RLAuthValidator.trimmed(value)
-        guard !normalized.isEmpty else { return "" }
-        if LocaleOptionCatalog.countries.contains(where: { $0.code == normalized }) {
-            return normalized
-        }
-        return LocaleOptionCatalog.countries.first(where: { $0.label == normalized })?.code ?? ""
+        LocaleOptionCatalog.countryCode(from: value)
     }
 }
 
@@ -969,9 +957,7 @@ struct GuildSelectionRow: View {
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.title2)
-                            .foregroundColor(AppColors.accentColor.opacity(0.6))
+                        GuildCrestView(guild: guild, size: 26)
 
                         Text(guild.name)
                             .font(.title2)
@@ -1017,7 +1003,7 @@ struct GuildSelectionRow: View {
                     .padding(.leading, 15)
 
                     HStack(spacing: 2) {
-                        Image(systemName: "shield.pattern.checkered")
+                        Image(systemName: "star.hexagon.fill")
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.accentColor)

@@ -274,7 +274,7 @@ struct WatchlistView: View {
                         title: assetClass.rawValue,
                         count: classSymbols.count,
                         icon: assetClass.icon,
-                        iconColor: colorForAssetClass(assetClass),
+                        iconColor: assetClassColor(assetClass),
                         isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
@@ -309,7 +309,7 @@ struct WatchlistView: View {
                         title: assetClass.rawValue,
                         count: classSymbols.count,
                         icon: assetClass.icon,
-                        iconColor: colorForAssetClass(assetClass),
+                        iconColor: assetClassColor(assetClass),
                         isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
@@ -345,7 +345,7 @@ struct WatchlistView: View {
                         title: assetClass.rawValue,
                         count: classSymbols.count,
                         icon: assetClass.icon,
-                        iconColor: colorForAssetClass(assetClass),
+                        iconColor: assetClassColor(assetClass),
                         isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
@@ -424,7 +424,7 @@ struct WatchlistView: View {
                         title: assetClass.rawValue,
                         count: classSymbols.count,
                         icon: assetClass.icon,
-                        iconColor: colorForAssetClass(assetClass),
+                        iconColor: assetClassColor(assetClass),
                         isExpandedByDefault: assetClass == .crypto
                     ) {
                         VStack(spacing: 6) {
@@ -441,19 +441,6 @@ struct WatchlistView: View {
                     }
                 }
             }
-        }
-    }
-    
-    // MARK: - Helper: Asset Class Color
-    
-    private func colorForAssetClass(_ assetClass: RLAssetClass) -> Color {
-        switch assetClass {
-        case .forex: return .blue
-        case .crypto: return .orange
-        case .stocks: return .green
-        case .commodities: return .yellow
-        case .indices: return .purple
-        case .futures: return .cyan
         }
     }
     
@@ -682,7 +669,7 @@ struct PersonalWatchlistRow: View {
                 if isRemoving {
                     ProgressView()
                         .scaleEffect(0.7)
-                        .tint(.red)
+                        .tint(AppColors.statusNegative)
                 }
             }
             .padding(.vertical, 10)

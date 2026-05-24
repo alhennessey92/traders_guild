@@ -815,15 +815,16 @@ struct UnifiedLoadingState: View {
 // MARK: - ASSET CLASS HELPERS
 // MARK: - ================================================================================================
 
-/// Get color for asset class (unified across the app)
+/// Get color for asset class (unified across the app). Theme-aware: routes through `AppColors`
+/// status / themeAware tokens so each chip deepens consistently on the lightGrey theme.
 func assetClassColor(_ assetClass: RLAssetClass) -> Color {
     switch assetClass {
-    case .forex: return .blue
-    case .crypto: return .orange
-    case .stocks: return .green
-    case .commodities: return .yellow
-    case .indices: return .purple
-    case .futures: return .cyan
+    case .forex: return AppColors.statusInfo
+    case .crypto: return AppColors.statusWarning
+    case .stocks: return AppColors.statusPositive
+    case .commodities: return AppColors.themeAwareYellow
+    case .indices: return AppColors.themeAwarePurple
+    case .futures: return AppColors.themeAwareCyan
     }
 }
 
@@ -1211,7 +1212,7 @@ struct UnifiedAuthorRow: View {
             UnifiedSeparatorDot()
             
             // Reputation
-            Image(systemName: "shield.pattern.checkered")
+            Image(systemName: "star.hexagon.fill")
                 .font(.system(size: 9))
                 .fontWeight(.bold)
                 .foregroundColor(AppColors.guildReputationAccent)
@@ -1287,7 +1288,7 @@ struct UnifiedAuthorRowFromMember: View {
             UnifiedSeparatorDot()
             
             // Reputation
-            Image(systemName: "shield.pattern.checkered")
+            Image(systemName: "star.hexagon.fill")
                 .font(.caption2)
                 .fontWeight(.bold)
                 .foregroundColor(AppColors.guildReputationAccent)
@@ -1368,7 +1369,7 @@ struct UnifiedRoleBadge: View {
             if showReputation {
                 UnifiedSeparatorDot(size: 4, opacity: 0.7)
 
-                Image(systemName: "shield.pattern.checkered")
+                Image(systemName: "star.hexagon.fill")
                     .font(iconSize)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.guildReputationAccent)
@@ -1982,7 +1983,7 @@ struct UnifiedLeaderboardRow: View {
     /// Rank color based on position
     private var rankColor: Color {
         switch rank {
-        case 1: return AppColors.systemYellow
+        case 1: return AppColors.markerViewingTintPrimaryStar
         case 2: return AppColors.surfaceGray80
         case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
@@ -2043,7 +2044,7 @@ struct UnifiedLeaderboardRow: View {
                 
                 // Reputation (prominent on right)
                 HStack(spacing: 2) {
-                    Image(systemName: "shield.pattern.checkered")
+                    Image(systemName: "star.hexagon.fill")
                         .font(.caption2)
                         .fontWeight(.bold)
                     Text("\(user.reputation)")

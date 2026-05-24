@@ -211,12 +211,12 @@ enum RLTrackingState: String, Codable, CaseIterable {
 
     var color: Color {
         switch self {
-        case .draft: return .gray
+        case .draft: return AppColors.secondaryForeground
         case .armed: return RLComponentType.levelEntry.color
         case .active: return RLComponentType.levelEntry.color
         case .tpHit: return RLComponentType.levelTp.color
         case .slHit: return RLComponentType.levelSl.color
-        case .expired: return .gray
+        case .expired: return AppColors.secondaryForeground
         }
     }
 
@@ -339,6 +339,7 @@ enum RLComponentType: String, Codable, CaseIterable {
     case drawingTrendline = "drawing.trendline"
     case drawingHorizontalLine = "drawing.horizontal_line"
     case drawingZone = "drawing.zone"
+    case drawingPattern = "drawing.pattern"
     case indicator = "indicator"
     case linkURL = "link.url"
     case textNote = "text.note"
@@ -356,6 +357,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .drawingTrendline: return "Trendline"
         case .drawingHorizontalLine: return "Horizontal Line"
         case .drawingZone: return "Zone"
+        case .drawingPattern: return "Pattern"
         case .indicator: return "Indicator"
         case .linkURL: return "Link"
         case .textNote: return "Note"
@@ -376,6 +378,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .drawingTrendline: return "TL"
         case .drawingHorizontalLine: return "HL"
         case .drawingZone: return "ZN"
+        case .drawingPattern: return "PTN"
         case .indicator: return "IND"
         case .linkURL: return "URL"
         case .textNote: return "TXT"
@@ -391,7 +394,7 @@ enum RLComponentType: String, Codable, CaseIterable {
             return "line.3.horizontal"
         case .drawingHorizontalLine:
             return "line.3.horizontal"
-        case .drawingTrendline, .drawingZone:
+        case .drawingTrendline, .drawingZone, .drawingPattern:
             return "pencil.and.ruler"
         case .indicator:
             return "waveform.path.ecg"
@@ -417,6 +420,7 @@ enum RLComponentType: String, Codable, CaseIterable {
         case .drawingTrendline:    return AppColors.componentTrendlineTeal
         case .drawingHorizontalLine: return Color(hex: "#9CA3AF") ?? .gray
         case .drawingZone:         return AppColors.componentZoneGreen
+        case .drawingPattern:      return AppColors.componentIndicatorOrange
         case .indicator:           return AppColors.componentIndicatorOrange
         case .linkURL:             return AppColors.componentLinkPink
         case .textNote:            return Color(hex: "#6B7280") ?? .gray
@@ -534,6 +538,43 @@ struct ZonePayload: Codable {
     }
 }
 
+struct PatternGuidePointPayload: Codable, Hashable {
+    let time: Date
+    let price: Double
+    let label: String?
+
+    init(time: Date, price: Double, label: String? = nil) {
+        self.time = time
+        self.price = price
+        self.label = label
+    }
+}
+
+struct ChartPatternPayload: Codable, Hashable {
+    let patternKey: String
+    let title: String
+    let points: [PatternGuidePointPayload]
+    let colorHex: String?
+    let lineStyle: MarkerDrawingLineStyle?
+    let lineWidth: Double?
+
+    init(
+        patternKey: String,
+        title: String,
+        points: [PatternGuidePointPayload],
+        colorHex: String? = nil,
+        lineStyle: MarkerDrawingLineStyle? = nil,
+        lineWidth: Double? = nil
+    ) {
+        self.patternKey = patternKey
+        self.title = title
+        self.points = points
+        self.colorHex = colorHex
+        self.lineStyle = lineStyle
+        self.lineWidth = lineWidth
+    }
+}
+
 struct IndicatorPayload: Codable {
     let name: String
     let settings: [String: AnyCodable]?
@@ -630,6 +671,7 @@ enum MarkerComponentPayload: Codable {
     case drawingTrendline(TrendlinePayload)
     case drawingHorizontalLine(HorizontalLinePayload)
     case drawingZone(ZonePayload)
+    case drawingPattern(ChartPatternPayload)
     case indicator(IndicatorPayload)
     case note(NotePayload)
     case link(LinkPayload)
@@ -684,6 +726,8 @@ enum MarkerComponentPayload: Codable {
             if let payload = decodePayload(HorizontalLinePayload.self) { return .drawingHorizontalLine(payload) }
         case RLComponentType.drawingZone.rawValue:
             if let payload = decodePayload(ZonePayload.self) { return .drawingZone(payload) }
+        case RLComponentType.drawingPattern.rawValue:
+            if let payload = decodePayload(ChartPatternPayload.self) { return .drawingPattern(payload) }
         case RLComponentType.indicator.rawValue:
             if let payload = decodePayload(IndicatorPayload.self) { return .indicator(payload) }
         case RLComponentType.textNote.rawValue:
@@ -725,6 +769,7 @@ enum MarkerComponentPayload: Codable {
         case .drawingTrendline(let payload): return encodePayload(payload)
         case .drawingHorizontalLine(let payload): return encodePayload(payload)
         case .drawingZone(let payload): return encodePayload(payload)
+        case .drawingPattern(let payload): return encodePayload(payload)
         case .indicator(let payload): return encodePayload(payload)
         case .note(let payload): return encodePayload(payload)
         case .link(let payload): return encodePayload(payload)
@@ -784,6 +829,8 @@ extension MarkerComponentPayload {
             return payload.colorHex
         case .drawingZone(let payload):
             return payload.colorHex
+        case .drawingPattern(let payload):
+            return payload.colorHex
         default:
             return nil
         }
@@ -803,6 +850,8 @@ extension MarkerComponentPayload {
             return payload.lineStyle
         case .drawingZone(let payload):
             return payload.lineStyle
+        case .drawingPattern(let payload):
+            return payload.lineStyle
         default:
             return nil
         }
@@ -821,6 +870,8 @@ extension MarkerComponentPayload {
         case .drawingHorizontalLine(let payload):
             return payload.lineWidth
         case .drawingZone(let payload):
+            return payload.lineWidth
+        case .drawingPattern(let payload):
             return payload.lineWidth
         default:
             return nil
@@ -944,6 +995,9 @@ struct RLTradingSymbolDTO: Codable, Identifiable, Equatable, Hashable {
     let iconUrl: String?
     let primaryColor: String
     let secondaryColor: String
+    let description: String?
+    let infoUrl: String?
+    let marketNotes: [String: AnyCodable]?
     
     // Live price data (from SymbolSnapshot)
     let currentPrice: Double?
@@ -2553,6 +2607,9 @@ extension RLTradingSymbolDTO {
         iconUrl: nil,
         primaryColor: "#F7931A",
         secondaryColor: "#4A4A4A",
+        description: "Bitcoin is the original decentralized crypto asset and the largest cryptocurrency by market capitalization.",
+        infoUrl: "https://bitcoin.org/",
+        marketNotes: [:],
         currentPrice: 97500.50,
         priceFormatted: "97,500.50",
         change24h: 1250.00,
@@ -2587,6 +2644,9 @@ extension RLTradingSymbolDTO {
         iconUrl: nil,
         primaryColor: "#003399",
         secondaryColor: "#FFD700",
+        description: "The euro against the US dollar, the deepest and most liquid currency pair in global foreign exchange markets.",
+        infoUrl: "https://www.ecb.europa.eu/",
+        marketNotes: [:],
         currentPrice: 1.08520,
         priceFormatted: "1.08520",
         change24h: 0.00120,

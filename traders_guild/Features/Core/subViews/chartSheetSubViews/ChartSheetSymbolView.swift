@@ -297,6 +297,15 @@ struct ChartSheetSymbolView: View {
 
                     if isSymbolDetailsExpanded {
                         VStack(alignment: .leading, spacing: 10) {
+                            if let description = symbol.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+                               !description.isEmpty {
+                                SymbolInfoBlock(
+                                    title: "About",
+                                    value: description,
+                                    urlString: symbol.infoUrl
+                                )
+                            }
+
                             SymbolDetailRow(
                                 title: "Provider",
                                 value: symbol.providerDisplayLabel
@@ -382,13 +391,13 @@ struct ChartSheetSymbolView: View {
                 .padding(.vertical, 8)
                 .background(
                     inPersonal ?
-                    AppColors.statusHighlight20 :
+                    AppColors.statusHighlight40 :
                     AppColors.surfaceWhite10
                 )
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(inPersonal ? AppColors.statusHighlight40 : Color.clear, lineWidth: 1)
+                        .stroke(inPersonal ? AppColors.statusHighlight68 : Color.clear, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -582,14 +591,14 @@ struct ChartSheetSymbolView: View {
     }
 
     private func guildButtonBackgroundColor(inGuild: Bool, isRequested: Bool) -> Color {
-        if inGuild { return AppColors.statusInfo20 }
-        if isRequested { return AppColors.statusWarning20 }
+        if inGuild { return AppColors.statusInfo40 }
+        if isRequested { return AppColors.statusWarning40 }
         return AppColors.surfaceWhite10
     }
 
     private func guildButtonStrokeColor(inGuild: Bool, isRequested: Bool) -> Color {
-        if inGuild { return AppColors.statusInfo40 }
-        if isRequested { return AppColors.statusWarning40 }
+        if inGuild { return AppColors.statusInfo65 }
+        if isRequested { return AppColors.statusWarning62 }
         return Color.clear
     }
     
@@ -1566,6 +1575,43 @@ private struct SymbolDetailRow: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct SymbolInfoBlock: View {
+    let title: String
+    let value: String
+    let urlString: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
+
+                if let url = infoURL {
+                    Link(destination: url) {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(AppColors.adaptiveAccessoryForeground)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text(value)
+                .font(.caption)
+                .foregroundColor(AppColors.surfaceDetailSecondaryForeground)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.bottom, 2)
+    }
+
+    private var infoURL: URL? {
+        guard let urlString, let url = URL(string: urlString) else { return nil }
+        return url
     }
 }
 

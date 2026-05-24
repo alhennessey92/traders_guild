@@ -137,7 +137,14 @@ enum APIError: LocalizedError {
         switch self {
         case .invalidURL: return "Unable to complete the request."
         case .invalidResponse: return "Invalid response from server."
-        case .serverError: return "Service is temporarily unavailable."
+        case .serverError(let statusCode, _):
+            switch statusCode {
+            case 403: return "You don't have permission to do that."
+            case 404: return "We couldn't find that item."
+            case 409: return "That action conflicts with the current state."
+            case 429: return "Too many attempts. Please try again shortly."
+            default: return "Service is temporarily unavailable."
+            }
         case .unauthorized: return "Please log in again."
         case .badRequest: return "We couldn't complete that request."
         case .decodingError: return "Unexpected response received."
@@ -806,6 +813,8 @@ extension RealAPIService {
         search: String? = nil,
         language: String? = nil,
         location: String? = nil,
+        preferredLanguage: String? = nil,
+        preferredLocation: String? = nil,
         sort: String? = nil,
         skip: Int = 0,
         limit: Int = 50
@@ -819,6 +828,12 @@ extension RealAPIService {
         }
         if let location = location, !location.isEmpty {
             queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let preferredLanguage = preferredLanguage, !preferredLanguage.isEmpty {
+            queryParts.append("preferred_language=\(preferredLanguage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredLanguage)")
+        }
+        if let preferredLocation = preferredLocation, !preferredLocation.isEmpty {
+            queryParts.append("preferred_location=\(preferredLocation.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredLocation)")
         }
         if let sort = sort, !sort.isEmpty {
             queryParts.append("sort=\(sort)")
@@ -837,6 +852,8 @@ extension RealAPIService {
         isOpen: Bool? = nil,
         language: String? = nil,
         location: String? = nil,
+        preferredLanguage: String? = nil,
+        preferredLocation: String? = nil,
         sort: String? = nil,
         skip: Int = 0,
         limit: Int = 100
@@ -854,6 +871,12 @@ extension RealAPIService {
         }
         if let location = location, !location.isEmpty {
             queryParts.append("location=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location)")
+        }
+        if let preferredLanguage = preferredLanguage, !preferredLanguage.isEmpty {
+            queryParts.append("preferred_language=\(preferredLanguage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredLanguage)")
+        }
+        if let preferredLocation = preferredLocation, !preferredLocation.isEmpty {
+            queryParts.append("preferred_location=\(preferredLocation.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredLocation)")
         }
         if let sort = sort, !sort.isEmpty {
             queryParts.append("sort=\(sort)")
@@ -892,13 +915,15 @@ extension RealAPIService {
         name: String,
         description: String?,
         isOpen: Bool,
-        language: String,
-        location: String,
+        language: String? = nil,
+        location: String? = nil,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
         initialAnnouncementTitle: String,
         initialAnnouncementContent: String,
         initialAnnouncementPreview: String? = nil,
-        initialAnnouncementIsImportant: Bool = true
+        initialAnnouncementIsImportant: Bool = true,
+        crestSymbol: String? = nil,
+        crestColor: String? = nil
     ) async throws -> RLCreateGuildResponseDTO {
         let requestBody = RLCreateGuildRequestDTO(
             name: name,
@@ -910,9 +935,11 @@ extension RealAPIService {
             initialAnnouncementTitle: initialAnnouncementTitle,
             initialAnnouncementContent: initialAnnouncementContent,
             initialAnnouncementPreview: initialAnnouncementPreview,
-            initialAnnouncementIsImportant: initialAnnouncementIsImportant
+            initialAnnouncementIsImportant: initialAnnouncementIsImportant,
+            crestSymbol: crestSymbol,
+            crestColor: crestColor
         )
-        
+
         return try await request(
             "/guilds",
             service: .core,
@@ -921,7 +948,7 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
     /// Leave a guild
     func leaveGuild(guildId: UUID) async throws {
         let _: EmptyResponse = try await request(
@@ -1224,6 +1251,22 @@ extension RealAPIService {
         print("📊 getGuildStatistics: API returned statistics")
         return result
     }
+
+    /// Daily guild-statistics time-series for the requested window.
+    /// GET /guilds/{guild_id}/statistics/history?period={7d|30d|90d}
+    func getGuildStatisticsHistory(
+        guildId: UUID,
+        period: String = "30d"
+    ) async throws -> RLGuildStatisticsHistoryResponse {
+        print("📊 getGuildStatisticsHistory: period=\(period) guild=\(guildId)")
+        let result: RLGuildStatisticsHistoryResponse = try await request(
+            "/guilds/\(guildId.uuidString)/statistics/history?period=\(period)",
+            service: .core,
+            auth: true
+        )
+        print("📊 getGuildStatisticsHistory: API returned \(result.points.count) points")
+        return result
+    }
 }
 
 
@@ -1282,10 +1325,27 @@ extension RealAPIService {
 
     // MARK: Guild Settings
 
-    /// Update guild settings (name, description, is_open)
+    /// Update guild settings (name, description, is_open, crest)
     /// PATCH /guilds/{guild_id}
-    func updateGuild(guildId: UUID, name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
-        let body = RLUpdateGuildRequestDTO(name: name, description: description, isOpen: isOpen)
+    func updateGuild(
+        guildId: UUID,
+        name: String?,
+        description: String?,
+        isOpen: Bool?,
+        language: String? = nil,
+        location: String? = nil,
+        crestSymbol: String? = nil,
+        crestColor: String? = nil
+    ) async throws -> RLGuildDTO {
+        let body = RLUpdateGuildRequestDTO(
+            name: name,
+            description: description,
+            isOpen: isOpen,
+            language: language,
+            location: location,
+            crestSymbol: crestSymbol,
+            crestColor: crestColor
+        )
         return try await request(
             "/guilds/\(guildId.uuidString)",
             service: .core,
@@ -1360,6 +1420,73 @@ extension RealAPIService {
     func declineGuildInvite(guildId: UUID, inviteId: UUID) async throws -> RLDetailResponseDTO {
         return try await request(
             "/guilds/\(guildId.uuidString)/invites/\(inviteId.uuidString)/decline",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    /// Create a shareable guild invite/referral link
+    /// POST /guilds/{guild_id}/invite-links
+    func createGuildInviteLink(guildId: UUID, maxUses: Int? = nil, expiresAt: Date? = nil) async throws -> RLGuildInviteLinkDTO {
+        let body = RLGuildInviteLinkCreateRequestDTO(maxUses: maxUses, expiresAt: expiresAt)
+        do {
+            return try await request(
+                "/guilds/\(guildId.uuidString)/invite-links",
+                service: .core,
+                method: "POST",
+                body: body,
+                auth: true
+            )
+        } catch APIError.serverError(let status, _) where status == 404 {
+            return try await request(
+                "/guilds/\(guildId.uuidString)/invite-link",
+                service: .core,
+                method: "POST",
+                body: body,
+                auth: true
+            )
+        }
+    }
+
+    /// List shareable guild invite/referral links
+    /// GET /guilds/{guild_id}/invite-links
+    func getGuildInviteLinks(guildId: UUID) async throws -> RLGuildInviteLinksListDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invite-links",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Revoke a shareable guild invite/referral link
+    /// DELETE /guilds/{guild_id}/invite-links/{invite_link_id}
+    func revokeGuildInviteLink(guildId: UUID, inviteLinkId: UUID) async throws -> RLDetailResponseDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/invite-links/\(inviteLinkId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Resolve a shareable guild invite/referral link
+    /// GET /guilds/invite-links/{code}
+    func resolveGuildInviteLink(code: String) async throws -> RLGuildInviteLinkResolveDTO {
+        return try await request(
+            "/guilds/invite-links/\(code)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Accept a shareable guild invite/referral link
+    /// POST /guilds/invite-links/{code}/accept
+    func acceptGuildInviteLink(code: String) async throws -> RLGuildWithMembership {
+        return try await request(
+            "/guilds/invite-links/\(code)/accept",
             service: .core,
             method: "POST",
             auth: true
@@ -1612,6 +1739,25 @@ extension RealAPIService {
     /// - Parameter guildId: Optional - filter to specific guild's awards
     func getCurrentUserAwards(guildId: UUID? = nil) async throws -> RLUserAwardsListDTO {
         var path = "/users/me/awards"
+        if let guildId = guildId {
+            path += "?guild_id=\(guildId.uuidString)"
+        }
+        return try await request(
+            path,
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Get another user's awards
+    /// GET /users/{user_id}/awards
+    ///
+    /// - Parameters:
+    ///   - userId: Target user's ID
+    ///   - guildId: Optional - filter to specific guild's awards
+    func getUserAwards(userId: UUID, guildId: UUID? = nil) async throws -> RLUserAwardsListDTO {
+        var path = "/users/\(userId.uuidString)/awards"
         if let guildId = guildId {
             path += "?guild_id=\(guildId.uuidString)"
         }
@@ -2449,6 +2595,69 @@ extension RealAPIService {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(RLAvatarUpdateResponse.self, from: data)
+    }
+
+    /// Upload a guild's avatar image (owner/admin only).
+    /// PUT /guilds/{guildId}/avatar (multipart/form-data) — returns the updated guild.
+    func uploadGuildAvatar(
+        guildId: UUID,
+        imageData: Data,
+        mimeType: String = "image/jpeg"
+    ) async throws -> RLGuildDTO {
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        guard let url = URL(string: "\(APIService.core.baseURL)/guilds/\(guildId.uuidString)/avatar") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw APIError.unauthorized
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"guild_avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetailFromData(data)
+            #if DEBUG
+            print("🛡️ uploadGuildAvatar failed — HTTP \(httpResponse.statusCode): \(detail)")
+            #endif
+            switch httpResponse.statusCode {
+            case 401: throw APIError.unauthorized
+            case 403: throw APIError.serverError(403, detail)
+            case 400, 422: throw APIError.badRequest(detail)
+            default: throw APIError.serverError(httpResponse.statusCode, detail)
+            }
+        }
+        return try decoder.decode(RLGuildDTO.self, from: data)
+    }
+
+    /// Remove a guild's uploaded avatar (owner/admin only).
+    /// DELETE /guilds/{guildId}/avatar — returns the updated guild.
+    func removeGuildAvatar(guildId: UUID) async throws -> RLGuildDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/avatar",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
     }
     
     // MARK: - Message Attachment Upload

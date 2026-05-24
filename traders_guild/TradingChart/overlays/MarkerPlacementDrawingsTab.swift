@@ -389,6 +389,49 @@ struct MarkerPlacementDrawingsTab: View {
                 editZone(draft.id)
             }
 
+        case .drawingPattern(let payload):
+            let patternColor = placementState.drawingColor(
+                for: draft.id,
+                fallback: RLComponentType.drawingPattern.color
+            )
+            HStack(spacing: 10) {
+                Image(systemName: ChartPatternDrawingTemplate(rawValue: payload.patternKey)?.icon ?? "triangle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(patternColor)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(payload.title)
+                        .font(.caption)
+                        .foregroundColor(AppColors.primaryForeground)
+                    Text("Tap row to edit pattern handles")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    openDrawingColorEditor(for: draft.id)
+                } label: {
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(patternColor)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+
+                removeDraftButton(draft.id)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(overlayCardBackground)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture {
+                editPattern(draft.id, patternKey: payload.patternKey)
+            }
+
         case .note(let payload):
             let resolvedNoteColor = placementState.drawingColor(
                 for: draft.id,
@@ -827,51 +870,20 @@ struct MarkerPlacementDrawingsTab: View {
 
     private var patternsSubTab: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Patterns")
+            Text("Pattern Templates")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Planned tools")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text("Phase 2 builds on this workflow with additional line tools and pattern templates.")
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(overlayCardBackground)
-
-            ForEach(MarkerDrawingToolRegistry.futureTools, id: \.kind) { tool in
-                HStack(spacing: 10) {
-                    Image(systemName: tool.icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppColors.surfaceWhite70)
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tool.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppColors.primaryForeground)
-                        Text("Reserved for the phase 2 drawing engine rollout.")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Text("Later")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(AppColors.greyText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+            ForEach(ChartPatternDrawingTemplate.allCases) { template in
+                toolCard(
+                    title: template.title,
+                    subtitle: "\(template.subtitle). Steps: \(template.pointLabels.joined(separator: " -> "))",
+                    icon: template.icon,
+                    isActive: placementState.activeDrawingWorkflowTool == template.toolKind,
+                    actionTitle: "Guide"
+                ) {
+                    addPatternTemplate(template)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(overlayCardBackground)
-                .opacity(0.7)
             }
         }
     }
@@ -1189,6 +1201,8 @@ struct MarkerPlacementDrawingsTab: View {
             return "Horizontal Line"
         case .drawingZone:
             return "Zone"
+        case .drawingPattern:
+            return "Pattern"
         case .levelSupport:
             return "Support Level"
         case .levelResistance:
@@ -1206,6 +1220,8 @@ struct MarkerPlacementDrawingsTab: View {
             return RLComponentType.drawingHorizontalLine.color
         case .drawingZone:
             return RLComponentType.drawingZone.color
+        case .drawingPattern:
+            return RLComponentType.drawingPattern.color
         case .levelSupport:
             return RLComponentType.levelSupport.color
         case .levelResistance:
@@ -1217,7 +1233,7 @@ struct MarkerPlacementDrawingsTab: View {
 
     private func defaultDrawingLineStyle(for componentType: RLComponentType) -> MarkerDrawingLineStyle {
         switch componentType {
-        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance:
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .levelSupport, .levelResistance:
             return .dashed
         default:
             return .solid
@@ -1505,6 +1521,15 @@ struct MarkerPlacementDrawingsTab: View {
         limitWarning = nil
     }
 
+    private func editPattern(_ draftID: UUID, patternKey: String) {
+        beginInteractiveDrawingSession()
+        selectedSubTab = .patterns
+        let tool = MarkerDrawingToolKind.from(patternKey: patternKey) ?? .headAndShoulders
+        placementState.beginEditingDrawing(draftID, tool: tool)
+        infoMessage = "\(tool.title) selected. Drag pattern handles on chart to edit."
+        limitWarning = nil
+    }
+
     private func editLevel(_ draftID: UUID, tool: MarkerDrawingToolKind) {
         beginInteractiveDrawingSession()
         selectedSubTab = .lines
@@ -1571,6 +1596,20 @@ struct MarkerPlacementDrawingsTab: View {
             placementState.beginEditingDrawing(newId, tool: .emoji)
         }
         infoMessage = nil
+        limitWarning = nil
+    }
+
+    private func addPatternTemplate(_ template: ChartPatternDrawingTemplate) {
+        guard placementState.canAddDrawing else {
+            limitWarning = placementState.limitMessage(for: .drawingOverlays)
+            HapticFeedback.light.trigger()
+            return
+        }
+
+        beginInteractiveDrawingSession()
+        placementState.startDrawingWorkflow(tool: template.toolKind)
+        selectedSubTab = .patterns
+        infoMessage = "\(template.title) guide active. Place \(template.pointLabels.first ?? "the first point")."
         limitWarning = nil
     }
 

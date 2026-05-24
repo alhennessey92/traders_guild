@@ -299,6 +299,24 @@ struct NotificationCard: View {
         return showAsUnread ? notificationColor : notificationColor.opacity(0.72)
     }
 
+    private var notificationAvatarURL: URL? {
+        guard let avatarURL = notification.senderAvatarURL,
+              !avatarURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return URL(string: avatarURL)
+    }
+
+    private var notificationAvatarInitials: String {
+        let source = notification.actorDisplayName ?? notification.displayTitle
+        let words = source
+            .split(separator: " ")
+            .prefix(2)
+            .map { String($0.prefix(1)) }
+        let initials = words.joined().uppercased()
+        return initials.isEmpty ? "TG" : initials
+    }
+
     private var titleColor: Color {
         showAsUnread ? AppColors.whiteText : AppColors.whiteText.opacity(0.8)
     }
@@ -328,13 +346,25 @@ struct NotificationCard: View {
             HStack(alignment: .top, spacing: 10) {
                 // Icon badge
                 ZStack {
-                    Circle()
-                        .fill(notificationColor.opacity(iconBadgeFillOpacity))
-                        .frame(width: 36, height: 36)
-                    
-                    Image(systemName: notificationIcon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(notificationIconForeground)
+                    if let notificationAvatarURL {
+                        CachedAvatarImage(
+                            url: notificationAvatarURL,
+                            size: 36,
+                            initials: notificationAvatarInitials
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(notificationColor.opacity(showAsUnread ? 0.75 : 0.35), lineWidth: 1)
+                        )
+                    } else {
+                        Circle()
+                            .fill(notificationColor.opacity(iconBadgeFillOpacity))
+                            .frame(width: 36, height: 36)
+
+                        Image(systemName: notificationIcon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(notificationIconForeground)
+                    }
                 }
                 
                 // Content

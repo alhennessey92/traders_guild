@@ -121,11 +121,12 @@ enum RLNotificationType: String, Codable, CaseIterable {
     case contentReaction = "content_reaction"
     case contentReport = "content_report"
     case reputationTierChange = "reputation_tier_change"
+    case awardEarned = "award_earned"
 
     /// Group for tab filtering
     var isPersonal: Bool {
         switch self {
-        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .markerLike, .markerComment, .contentReaction, .reputationTierChange:
+        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .markerLike, .markerComment, .contentReaction, .reputationTierChange, .awardEarned:
             return true
         case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberUnmuted, .memberSuspended, .memberUnsuspended, .membershipRequestSubmitted, .membershipRequestDecision, .memberJoined, .contentReport:
             return false
@@ -426,6 +427,7 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .contentReaction: return "face.smiling.fill"
         case .contentReport:  return "exclamationmark.bubble.fill"
         case .reputationTierChange: return "star.fill"
+        case .awardEarned:    return "trophy.fill"
         case .none:           return "bell.fill"
         }
     }
@@ -438,30 +440,31 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         }
 
         switch type {
-        case .dm, .mention:                     return .blue
-        case .chatroom:                         return .cyan
-        case .announcement:                     return .orange
-        case .event:                            return .purple
-        case .friendRequest, .friendAccept:     return .green
-        case .guildInvite:                      return .indigo
-        case .memberBanned, .memberKicked:      return .red
-        case .memberUnbanned:                   return .green
-        case .memberUnmuted:                    return .green
-        case .roleChanged:                      return .orange
-        case .memberMuted:                      return .orange
-        case .memberSuspended:                  return .red
-        case .memberUnsuspended:                return .green
-        case .membershipRequestSubmitted:       return .indigo
-        case .membershipRequestDecision:        return .blue
-        case .memberJoined:                     return .green
+        case .dm, .mention:                     return AppColors.statusInfo
+        case .chatroom:                         return AppColors.themeAwareCyan
+        case .announcement:                     return AppColors.statusWarning
+        case .event:                            return AppColors.themeAwarePurple
+        case .friendRequest, .friendAccept:     return AppColors.statusPositive
+        case .guildInvite:                      return AppColors.themeAwareIndigo
+        case .memberBanned, .memberKicked:      return AppColors.statusNegative
+        case .memberUnbanned:                   return AppColors.statusPositive
+        case .memberUnmuted:                    return AppColors.statusPositive
+        case .roleChanged:                      return AppColors.statusWarning
+        case .memberMuted:                      return AppColors.statusWarning
+        case .memberSuspended:                  return AppColors.statusNegative
+        case .memberUnsuspended:                return AppColors.statusPositive
+        case .membershipRequestSubmitted:       return AppColors.themeAwareIndigo
+        case .membershipRequestDecision:        return AppColors.statusInfo
+        case .memberJoined:                     return AppColors.statusPositive
         case .markerResult:
             return markerResultType == "stop_loss" ? AppColors.statusNegative85 : AppColors.statusPositive90
-        case .markerLike:                       return .pink
-        case .markerComment:                    return .orange
-        case .contentReaction:                  return .teal
-        case .contentReport:                    return .red
-        case .reputationTierChange:             return .yellow
-        case .none:                             return .gray
+        case .markerLike:                       return AppColors.themeAwarePink
+        case .markerComment:                    return AppColors.statusWarning
+        case .contentReaction:                  return AppColors.themeAwareTeal
+        case .contentReport:                    return AppColors.statusNegative
+        case .reputationTierChange:             return AppColors.themeAwareYellow
+        case .awardEarned:                      return AppColors.themeAwareYellow
+        case .none:                             return AppColors.secondaryForeground
         }
     }
 
@@ -497,16 +500,72 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
     /// Sender avatar URL extracted from the data payload
     var senderAvatarURL: String? {
         let preferredKeys = [
+            "actor_avatar_url",
             "sender_avatar_url",
             "from_avatar_url",
             "friend_avatar_url",
+            "mentioned_by_avatar_url",
+            "invited_by_avatar_url",
+            "author_avatar_url",
+            "shared_by_avatar_url",
+            "banned_by_avatar_url",
+            "unbanned_by_avatar_url",
+            "changed_by_avatar_url",
+            "kicked_by_avatar_url",
+            "muted_by_avatar_url",
+            "unmuted_by_avatar_url",
+            "suspended_by_avatar_url",
+            "unsuspended_by_avatar_url",
+            "requester_avatar_url",
+            "reviewed_by_avatar_url",
             "liked_by_avatar_url",
             "commenter_avatar_url",
-            "reactor_avatar_url"
+            "reactor_avatar_url",
+            "member_avatar_url",
+            "reporter_avatar_url",
+            "reviewer_avatar_url"
         ]
 
         for key in preferredKeys {
             if let value = stringDataValue(for: key) {
+                return value
+            }
+        }
+
+        return nil
+    }
+
+    /// Best-effort display name for the user represented by this notification.
+    var actorDisplayName: String? {
+        let preferredKeys = [
+            "sender_display_name",
+            "from_display_name",
+            "friend_display_name",
+            "mentioned_by_display_name",
+            "invited_by_display_name",
+            "author_display_name",
+            "shared_by_display_name",
+            "banned_by_display_name",
+            "unbanned_by_display_name",
+            "changed_by_display_name",
+            "kicked_by_display_name",
+            "muted_by_display_name",
+            "unmuted_by_display_name",
+            "suspended_by_display_name",
+            "unsuspended_by_display_name",
+            "requester_display_name",
+            "reviewed_by_display_name",
+            "liked_by_display_name",
+            "commenter_display_name",
+            "reactor_display_name",
+            "member_display_name",
+            "reporter_display_name",
+            "reviewer_display_name"
+        ]
+
+        for key in preferredKeys {
+            if let value = stringDataValue(for: key)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !value.isEmpty {
                 return value
             }
         }

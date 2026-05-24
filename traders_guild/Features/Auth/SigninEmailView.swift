@@ -63,7 +63,7 @@ struct SigninEmailView: View {
                     if let identifierHint {
                         Text(identifierHint)
                             .font(AppFonts.smallNotice())
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppColors.statusWarning)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 24)
                             .padding(.bottom, 8)

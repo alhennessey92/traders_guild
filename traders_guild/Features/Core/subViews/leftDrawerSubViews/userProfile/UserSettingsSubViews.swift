@@ -217,7 +217,8 @@ struct EditProfileView: View {
                                     placeholder: "Preferred language",
                                     text: $language,
                                     icon: "globe",
-                                    options: LocaleOptionCatalog.languages
+                                    options: LocaleOptionCatalog.languages,
+                                    displayValue: { LocaleOptionCatalog.languageLabel(for: $0) }
                                 )
                                 .onChange(of: language) { _, _ in
                                     hasChanges = true
@@ -229,7 +230,9 @@ struct EditProfileView: View {
                                     placeholder: "Select country",
                                     text: $location,
                                     icon: "location.fill",
-                                    options: LocaleOptionCatalog.countries
+                                    options: LocaleOptionCatalog.countries,
+                                    showsFlags: true,
+                                    displayValue: { LocaleOptionCatalog.countryDisplay(for: $0) }
                                 )
                                 .onChange(of: location) { _, _ in
                                     hasChanges = true
@@ -287,8 +290,8 @@ struct EditProfileView: View {
             let profile = try await rlAppState.fetchExtendedProfile()
             extendedProfile = profile
             bio = profile.bio ?? ""
-            language = profile.language ?? ""
-            location = profile.location ?? ""
+            language = LocaleOptionCatalog.languageCode(from: profile.language)
+            location = LocaleOptionCatalog.countryCode(from: profile.location)
         } catch {
             print("Failed to load extended profile: \(error)")
         }
@@ -343,8 +346,8 @@ struct EditProfileView: View {
                 
                 // Update extended profile (bio, language, and location)
                 let hasBioChange = bio != (extendedProfile?.bio ?? "")
-                let hasLanguageChange = language != (extendedProfile?.language ?? "")
-                let hasLocationChange = location != (extendedProfile?.location ?? "")
+                let hasLanguageChange = language != LocaleOptionCatalog.languageCode(from: extendedProfile?.language)
+                let hasLocationChange = location != LocaleOptionCatalog.countryCode(from: extendedProfile?.location)
                 
                 if hasBioChange || hasLanguageChange || hasLocationChange {
                     _ = try await rlAppState.updateUserProfile(
@@ -487,7 +490,7 @@ struct AvatarSelectionView: View {
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(AppColors.greyText)
                             }
-                            .foregroundColor(.red)
+                            .foregroundColor(AppColors.statusNegative)
                             .padding()
                             .background(AppColors.statusNegative10)
                             .cornerRadius(12)
@@ -688,7 +691,7 @@ struct ChangeEmailView: View {
                         // Info box
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "info.circle.fill")
-                                .foregroundColor(.blue)
+                                .foregroundColor(AppColors.statusInfo)
                             
                             Text("After changing your email, you'll need to verify the new address before it becomes active.")
                                 .font(.caption)
@@ -1044,7 +1047,7 @@ struct DateOfBirthView: View {
                         if !ageRequirementMet {
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(AppColors.statusWarning)
                                 
                                 Text("You must be at least 13 years old to use Traders Guild.")
                                     .font(.caption)
@@ -1521,7 +1524,7 @@ struct DataPrivacyView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack(spacing: 10) {
                                     Image(systemName: "paperplane.fill")
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(AppColors.statusWarning)
                                         .frame(width: 20)
 
                                     VStack(alignment: .leading, spacing: 2) {
@@ -2539,7 +2542,7 @@ struct DeleteAccountConfirmationView: View {
                         VStack(spacing: 16) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 60))
-                                .foregroundColor(.red)
+                                .foregroundColor(AppColors.statusNegative)
                             
                             Text("Delete Your Account?")
                                 .font(.title2)
@@ -2604,7 +2607,7 @@ struct DeleteAccountConfirmationView: View {
                                 VStack(spacing: 12) {
                                     Text("⚠️ Final Warning")
                                         .font(.headline)
-                                        .foregroundColor(.red)
+                                        .foregroundColor(AppColors.statusNegative)
                                     
                                     Text("This will permanently delete your account and all associated data. This action cannot be reversed or undone.")
                                         .font(.subheadline)
@@ -2714,7 +2717,7 @@ struct DeleteItemRow: View {
         HStack(spacing: 10) {
             Image(systemName: "trash.fill")
                 .font(.caption)
-                .foregroundColor(.red)
+                .foregroundColor(AppColors.statusNegative)
             
             Text(text)
                 .font(.subheadline)
@@ -2825,7 +2828,7 @@ struct SettingsTextField: View {
             if let error = error {
                 Text(error)
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColors.statusNegative)
             }
         }
     }
@@ -2837,6 +2840,8 @@ struct SettingsDropdownField: View {
     @Binding var text: String
     var icon: String? = nil
     let options: [LocaleOption]
+    var showsFlags: Bool = false
+    var displayValue: (String) -> String = { $0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2853,8 +2858,8 @@ struct SettingsDropdownField: View {
                 Divider()
 
                 ForEach(options) { option in
-                    Button(option.label) {
-                        text = option.label
+                    Button(optionLabel(option)) {
+                        text = option.code
                     }
                 }
             } label: {
@@ -2864,7 +2869,7 @@ struct SettingsDropdownField: View {
                             .foregroundColor(AppColors.greyText)
                     }
 
-                    Text(text.isEmpty ? placeholder : text)
+                    Text(text.isEmpty ? placeholder : displayValue(text))
                         .foregroundColor(text.isEmpty ? AppColors.greyText : AppColors.whiteText)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -2883,6 +2888,13 @@ struct SettingsDropdownField: View {
                 )
             }
         }
+    }
+
+    private func optionLabel(_ option: LocaleOption) -> String {
+        guard showsFlags, let flag = LocaleOptionCatalog.flagEmoji(forCountryCode: option.code) else {
+            return option.label
+        }
+        return "\(flag) \(option.label)"
     }
 }
 
@@ -2945,7 +2957,7 @@ struct SettingsSecureField: View {
             if let error = error {
                 Text(error)
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColors.statusNegative)
             }
         }
     }
@@ -3030,7 +3042,7 @@ struct PushNotificationSettingsView: View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(AppColors.statusWarning)
                 Text("Notifications are disabled at the system level.")
                     .font(.caption)
                     .foregroundColor(AppColors.whiteText)
@@ -3122,6 +3134,18 @@ struct PushNotificationSettingsView: View {
                 .onChange(of: prefs.markerEngagement) { _, newValue in
                     savePreference(\.markerEngagement, value: newValue)
                 }
+
+                SettingsToggleRow(
+                    icon: "trophy.fill",
+                    title: "Awards",
+                    subtitle: "You unlock a new award",
+                    isOn: $prefs.awards,
+                    iconColor: .yellow
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: prefs.awards) { _, newValue in
+                    savePreference(\.awards, value: newValue)
+                }
             }
 
             Divider()
@@ -3203,7 +3227,7 @@ struct PushNotificationSettingsView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     Image(systemName: "shield.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(AppColors.statusNegative)
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -3259,6 +3283,7 @@ struct PushNotificationSettingsView: View {
         case \.mention:           update = RLPushPreferencesUpdateRequest(mention: value)
         case \.markerResult:      update = RLPushPreferencesUpdateRequest(markerResult: value)
         case \.markerEngagement:  update = RLPushPreferencesUpdateRequest(markerEngagement: value)
+        case \.awards:            update = RLPushPreferencesUpdateRequest(awards: value)
         case \.announcement:      update = RLPushPreferencesUpdateRequest(announcement: value)
         case \.event:             update = RLPushPreferencesUpdateRequest(event: value)
         case \.eventReminder:     update = RLPushPreferencesUpdateRequest(eventReminder: value)

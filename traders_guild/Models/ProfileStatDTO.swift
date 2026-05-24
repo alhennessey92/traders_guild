@@ -15,7 +15,14 @@ struct ProfileStatDTO: Identifiable {
     let icon: String
     let color: Color
     let trend: StatTrend?
-    
+
+    /// Optional 30-day sparkline. Rendered under the value when non-nil.
+    var sparkline: [Double]? = nil
+
+    /// Optional gauge progress in [0, 1]. Rendered in place of the value as a
+    /// radial dial when non-nil. Mutually exclusive with `sparkline`.
+    var gaugeProgress: Double? = nil
+
     enum StatTrend {
         case up(String)     // "+12%"
         case down(String)   // "-5%"
@@ -23,9 +30,9 @@ struct ProfileStatDTO: Identifiable {
         
         var color: Color {
             switch self {
-            case .up: return .green
-            case .down: return .red
-            case .neutral: return .gray
+            case .up: return AppColors.statusPositive
+            case .down: return AppColors.statusNegative
+            case .neutral: return AppColors.secondaryForeground
             }
         }
         

@@ -146,11 +146,25 @@ struct traders_guildApp: App {
                 }
                 await rlAppState.consumePendingEmailVerificationToken()
             }
+            .task(id: rlAppState.pendingReferralInviteCode) {
+                await rlAppState.consumePendingReferralInviteCodeIfPossible()
+            }
+            .task(id: rlAppState.isAuthenticated) {
+                await rlAppState.consumePendingReferralInviteCodeIfPossible()
+            }
+            .task(id: rlAppState.currentUser?.isVerified) {
+                await rlAppState.consumePendingReferralInviteCodeIfPossible()
+            }
             .onOpenURL { url in
                 guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
                 let path = components.path.lowercased()
                 let host = (components.host ?? "").lowercased()
                 let fullRoute = "\(host)\(path)"
+
+                if let inviteCode = referralInviteCode(from: components, fullRoute: fullRoute) {
+                    rlAppState.setPendingReferralInviteCode(inviteCode)
+                    return
+                }
 
                 // Handle password reset deep link
                 let matchesResetPath = fullRoute.contains("reset-password") || fullRoute.contains("password/reset")
@@ -172,6 +186,26 @@ struct traders_guildApp: App {
                 }
             }
         }
+    }
+
+    private func referralInviteCode(from components: URLComponents, fullRoute: String) -> String? {
+        let queryItems = components.queryItems ?? []
+        for key in ["code", "ref", "invite", "invite_code"] {
+            if let value = queryItems.first(where: { $0.name.lowercased() == key })?.value,
+               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return value
+            }
+        }
+
+        guard fullRoute.contains("invite") else { return nil }
+        let pathParts = components.path
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        if let last = pathParts.last, last.lowercased() != "invite" {
+            return last
+        }
+        return nil
     }
     
     @ViewBuilder

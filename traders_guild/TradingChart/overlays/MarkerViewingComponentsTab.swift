@@ -312,12 +312,12 @@ struct MarkerViewingComponentsTab: View {
     private func drawingRow(_ component: RLMarkerComponentDTO) -> some View {
         HStack(spacing: 10) {
             Circle()
-                .fill((component.componentTypeEnum?.color ?? .teal).opacity(0.2))
+                .fill((component.componentTypeEnum?.color ?? AppColors.themeAwareTeal).opacity(0.2))
                 .frame(width: 24, height: 24)
                 .overlay(
                     Image(systemName: component.componentTypeEnum?.icon ?? "pencil.and.ruler")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(component.componentTypeEnum?.color ?? .teal)
+                        .foregroundColor(component.componentTypeEnum?.color ?? AppColors.themeAwareTeal)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -357,12 +357,12 @@ struct MarkerViewingComponentsTab: View {
 
         return HStack(spacing: 10) {
             Circle()
-                .fill((Color(hex: "#38BDF8") ?? .cyan).opacity(0.2))
+                .fill(AppColors.componentTimeframeCyan.opacity(0.2))
                 .frame(width: 24, height: 24)
                 .overlay(
                     Image(systemName: "clock.fill")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: "#38BDF8") ?? .cyan)
+                        .foregroundColor(AppColors.componentTimeframeCyan)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -372,7 +372,7 @@ struct MarkerViewingComponentsTab: View {
                         .foregroundColor(AppColors.onAccentForeground)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill((Color(hex: "#38BDF8") ?? .cyan).opacity(0.42)))
+                        .background(Capsule().fill(AppColors.componentTimeframeCyan.opacity(0.42)))
 
                     Text(displayName)
                         .font(.caption.weight(.semibold))
@@ -436,6 +436,8 @@ struct MarkerViewingComponentsTab: View {
             return "\(formattedPrice(payload.startPrice)) -> \(formattedPrice(payload.endPrice))"
         case .drawingZone(let payload):
             return "Top \(formattedPrice(payload.topPrice)) / Bottom \(formattedPrice(payload.bottomPrice))"
+        case .drawingPattern(let payload):
+            return "\(payload.title) · \(payload.points.count) points"
         default:
             return "Coordinates unavailable"
         }

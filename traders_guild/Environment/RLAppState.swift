@@ -220,6 +220,7 @@ class RLAppState: ObservableObject {
     /// Password reset token captured from deep-link.
     @Published var pendingPasswordResetToken: String?
     @Published var pendingEmailVerificationToken: String?
+    @Published var pendingReferralInviteCode: String?
     
     /// Flag to prevent race conditions during login/signup flow
     /// When true, external triggers (like onAppear) should NOT call openGuildSelector
@@ -236,6 +237,10 @@ class RLAppState: ObservableObject {
         isAuthenticated && !isOnboardingFlowActive && BiometricAuthManager.shared.canUseBiometricLogin
     }
     private var shouldTriggerBiometricUnlockOnNextActive = false
+    private var isConsumingPendingReferralInviteCode = false
+    private static var pendingReferralInviteCodeStorageKey: String {
+        "pending_referral_invite_code.\(AppConfig.sessionStorageNamespace)"
+    }
     
     // ================================================================================================
     // MARK: - Services
@@ -265,6 +270,7 @@ class RLAppState: ObservableObject {
     
     init(restoreSessionOnInit: Bool = true) {
         print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
+        pendingReferralInviteCode = UserDefaults.standard.string(forKey: Self.pendingReferralInviteCodeStorageKey)
 
         guard restoreSessionOnInit else {
             return
@@ -424,12 +430,17 @@ class RLAppState: ObservableObject {
         return false
     }
     
-    func showError(_ error: Error, title: String = "Error", style: RLAlertDisplayStyle = .alert) {
+    func showError(
+        _ error: Error,
+        title: String = "Error",
+        style: RLAlertDisplayStyle = .alert,
+        context: RLUserFacingErrorContext = .default
+    ) {
         if isCancellationLikeError(error) {
             return
         }
 
-        let mappedMessage = RLUserFacingErrorMapper.message(from: error)
+        let mappedMessage = RLUserFacingErrorMapper.message(from: error, context: context)
         let resolvedTitle = title == "Error" ? RLUserFacingCopy.text(.errorTitle) : title
         let alert = RLAppAlert(
             title: resolvedTitle,
@@ -443,8 +454,11 @@ class RLAppState: ObservableObject {
         }
     }
 
-    func userSafeMessage(for error: Error) -> String {
-        RLUserFacingErrorMapper.message(from: error)
+    func userSafeMessage(
+        for error: Error,
+        context: RLUserFacingErrorContext = .default
+    ) -> String {
+        RLUserFacingErrorMapper.message(from: error, context: context)
     }
     
     func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .alert) {
@@ -552,7 +566,7 @@ class RLAppState: ObservableObject {
             }
             
         } catch {
-            showError(error, title: "Signup Failed", style: .alert)
+            showError(error, title: "Signup Failed", style: .alert, context: .signup)
             throw error
         }
     }
@@ -619,7 +633,7 @@ class RLAppState: ObservableObject {
 
         } catch {
             isHandlingAuthFlow = false  // ← Clear flag on error
-            showError(error, title: "Login Failed", style: .alert)
+            showError(error, title: "Login Failed", style: .alert, context: .signIn)
             throw error
         }
     }
@@ -689,7 +703,7 @@ class RLAppState: ObservableObject {
 
         } catch {
             isHandlingAuthFlow = false
-            showError(error, title: "Apple Sign In Failed", style: .alert)
+            showError(error, title: "Apple Sign In Failed", style: .alert, context: .appleSignIn)
             throw error
         }
     }
@@ -983,6 +997,71 @@ class RLAppState: ObservableObject {
         pendingEmailVerificationToken = token
     }
 
+    func setPendingReferralInviteCode(_ code: String?) {
+        let normalized = code?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+
+        guard let normalized, !normalized.isEmpty else {
+            pendingReferralInviteCode = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingReferralInviteCodeStorageKey)
+            return
+        }
+
+        pendingReferralInviteCode = normalized
+        UserDefaults.standard.set(normalized, forKey: Self.pendingReferralInviteCodeStorageKey)
+        if !isAuthenticated {
+            showInfo(RLUserFacingCopy.text(.infoReferralSaved))
+        }
+    }
+
+    @discardableResult
+    func consumePendingReferralInviteCodeIfPossible() async -> Bool {
+        guard !isConsumingPendingReferralInviteCode,
+              isAuthenticated,
+              let code = pendingReferralInviteCode,
+              !code.isEmpty else {
+            return false
+        }
+
+        if currentUser?.isVerified == false {
+            return false
+        }
+
+        isConsumingPendingReferralInviteCode = true
+        defer { isConsumingPendingReferralInviteCode = false }
+
+        do {
+            let guildWithMembership = try await realApi.acceptGuildInviteLink(code: code)
+            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id }) {
+                userGuilds[existingIndex] = guildWithMembership
+            } else {
+                userGuilds.append(guildWithMembership)
+            }
+            selectGuild(guildWithMembership, showTransition: false)
+            pendingReferralInviteCode = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingReferralInviteCodeStorageKey)
+            showSuccess(RLUserFacingCopy.text(.successReferralAccepted))
+            return true
+        } catch APIError.unauthorized {
+            return false
+        } catch APIError.serverError(let status, _) where status == 403 {
+            return false
+        } catch APIError.badRequest(let detail) where detail == "invite_link_not_joinable" {
+            pendingReferralInviteCode = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingReferralInviteCodeStorageKey)
+            showError(
+                title: "Invite Unavailable",
+                message: "This referral link is no longer available.",
+                severity: .warning,
+                style: .toast
+            )
+            return false
+        } catch {
+            return false
+        }
+    }
+
     func dismissBetaWelcomeSheet() {
         showBetaWelcomeSheet = false
         presentPendingBetaWelcomeIfNeeded()
@@ -1080,7 +1159,7 @@ class RLAppState: ObservableObject {
             if case BiometricAuthManager.BiometricError.authenticationFailed = error {
                 biometricUnlockErrorMessage = "Unlock cancelled or failed."
             } else {
-                biometricUnlockErrorMessage = RLUserFacingErrorMapper.message(from: error)
+                biometricUnlockErrorMessage = RLUserFacingErrorMapper.message(from: error, context: .signIn)
             }
         }
     }
@@ -1407,6 +1486,8 @@ class RLAppState: ObservableObject {
         isOpen: Bool? = nil,
         language: String? = nil,
         location: String? = nil,
+        preferredLanguage: String? = nil,
+        preferredLocation: String? = nil,
         sort: String? = nil
     ) async throws -> [RLGuildDTO] {
         isLoading = true
@@ -1418,6 +1499,8 @@ class RLAppState: ObservableObject {
                 isOpen: isOpen,
                 language: language,
                 location: location,
+                preferredLanguage: preferredLanguage,
+                preferredLocation: preferredLocation,
                 sort: sort
             )
             print("🏰 fetchJoinableGuilds: Found \(guilds.count) joinable guilds")
@@ -1438,6 +1521,8 @@ class RLAppState: ObservableObject {
         search: String? = nil,
         language: String? = nil,
         location: String? = nil,
+        preferredLanguage: String? = nil,
+        preferredLocation: String? = nil,
         sort: String? = nil
     ) async throws -> [RLGuildDTO] {
         isLoading = true
@@ -1448,6 +1533,8 @@ class RLAppState: ObservableObject {
                 search: search,
                 language: language,
                 location: location,
+                preferredLanguage: preferredLanguage,
+                preferredLocation: preferredLocation,
                 sort: sort
             )
             print("🏰 fetchPublicOpenGuilds: Found \(guilds.count) open guilds")
@@ -1552,16 +1639,18 @@ class RLAppState: ObservableObject {
         name: String,
         description: String?,
         isOpen: Bool,
-        language: String,
-        location: String,
+        language: String? = nil,
+        location: String? = nil,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
         initialAnnouncementTitle: String,
         initialAnnouncementContent: String,
         initialAnnouncementPreview: String? = nil,
-        initialAnnouncementIsImportant: Bool = true
+        initialAnnouncementIsImportant: Bool = true,
+        crestSymbol: String? = nil,
+        crestColor: String? = nil
     ) async throws -> RLGuildWithMembership {
-        let normalizedLanguage = language.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedLanguage = LocaleOptionCatalog.languageCode(from: language)
+        let normalizedLocation = LocaleOptionCatalog.countryCode(from: location)
         let normalizedJoinQuestions = joinQuestions
             .map { $0.prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -1569,22 +1658,6 @@ class RLAppState: ObservableObject {
             .map { index, prompt in
                 RLGuildJoinQuestionInputDTO(prompt: prompt, isRequired: true, displayOrder: index)
             }
-        guard !normalizedLanguage.isEmpty else {
-            showError(
-                title: "Language Required",
-                message: "Choose a language before creating your guild.",
-                style: .toast
-            )
-            throw APIError.badRequest("language_required")
-        }
-        guard !normalizedLocation.isEmpty else {
-            showError(
-                title: "Country Required",
-                message: "Choose a country before creating your guild.",
-                style: .toast
-            )
-            throw APIError.badRequest("country_required")
-        }
         guard isOpen || !normalizedJoinQuestions.isEmpty else {
             showError(
                 title: "Join Question Required",
@@ -1602,13 +1675,15 @@ class RLAppState: ObservableObject {
                 name: name,
                 description: description,
                 isOpen: isOpen,
-                language: normalizedLanguage,
-                location: normalizedLocation,
+                language: normalizedLanguage.isEmpty ? nil : normalizedLanguage,
+                location: normalizedLocation.isEmpty ? nil : normalizedLocation,
                 joinQuestions: normalizedJoinQuestions,
                 initialAnnouncementTitle: initialAnnouncementTitle,
                 initialAnnouncementContent: initialAnnouncementContent,
                 initialAnnouncementPreview: initialAnnouncementPreview,
-                initialAnnouncementIsImportant: initialAnnouncementIsImportant
+                initialAnnouncementIsImportant: initialAnnouncementIsImportant,
+                crestSymbol: crestSymbol,
+                crestColor: crestColor
             )
             let guildWithMembership = response.asGuildWithMembership
             
@@ -2041,6 +2116,24 @@ class RLAppState: ObservableObject {
         }
         return try await fetchGuildStatistics(guildId: guild.id)
     }
+
+    /// Fetch daily statistics history for the guild over a recent window.
+    /// `period` must be one of "7d", "30d", "90d".
+    func fetchGuildStatisticsHistory(
+        guildId: UUID,
+        period: String = "30d"
+    ) async throws -> RLGuildStatisticsHistoryResponse {
+        print("📊 fetchGuildStatisticsHistory: period=\(period) guild=\(guildId)")
+        do {
+            let response = try await realApi.getGuildStatisticsHistory(guildId: guildId, period: period)
+            print("📊 fetchGuildStatisticsHistory: Got \(response.points.count) points")
+            return response
+        } catch {
+            print("📊 fetchGuildStatisticsHistory: Error - \(error)")
+            // Trend data is supplementary; never surface as a blocking error.
+            throw error
+        }
+    }
     
     
     
@@ -2091,18 +2184,73 @@ class RLAppState: ObservableObject {
 
     // MARK: Guild Settings
 
-    /// Update guild settings (name, description, is_open)
-    func updateGuild(name: String?, description: String?, isOpen: Bool?) async throws -> RLGuildDTO {
+    /// Update guild settings (name, description, is_open, crest)
+    func updateGuild(
+        name: String?,
+        description: String?,
+        isOpen: Bool?,
+        language: String? = nil,
+        location: String? = nil,
+        crestSymbol: String? = nil,
+        crestColor: String? = nil
+    ) async throws -> RLGuildDTO {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {
-            let updated = try await realApi.updateGuild(guildId: guild.id, name: name, description: description, isOpen: isOpen)
+            let updated = try await realApi.updateGuild(
+                guildId: guild.id,
+                name: name,
+                description: description,
+                isOpen: isOpen,
+                language: language,
+                location: location,
+                crestSymbol: crestSymbol,
+                crestColor: crestColor
+            )
             // Update local state
-            self.currentGuild = updated
+            applyUpdatedGuild(updated)
             showSuccess(RLUserFacingCopy.text(.successGuildSettingsUpdated))
             return updated
         } catch {
             showError(error, title: "Failed to Update Guild", style: .toast)
             throw error
+        }
+    }
+
+    /// Upload a custom avatar image for the current guild (owner/admin).
+    @discardableResult
+    func uploadGuildAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.uploadGuildAvatar(guildId: guild.id, imageData: imageData, mimeType: mimeType)
+            applyUpdatedGuild(updated)
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild Crest", style: .toast)
+            throw error
+        }
+    }
+
+    /// Remove the current guild's uploaded avatar, reverting to the symbol crest.
+    @discardableResult
+    func removeGuildAvatar() async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.removeGuildAvatar(guildId: guild.id)
+            applyUpdatedGuild(updated)
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild Crest", style: .toast)
+            throw error
+        }
+    }
+
+    /// Propagate an updated guild into `currentGuild` and the `userGuilds` list.
+    private func applyUpdatedGuild(_ updated: RLGuildDTO) {
+        if currentGuild?.id == updated.id {
+            currentGuild = updated
+        }
+        if let index = userGuilds.firstIndex(where: { $0.guild.id == updated.id }) {
+            userGuilds[index] = RLGuildWithMembership(guild: updated, membership: userGuilds[index].membership)
         }
     }
 
@@ -2175,6 +2323,49 @@ class RLAppState: ObservableObject {
             _ = try await realApi.declineGuildInvite(guildId: guildId, inviteId: inviteId)
         } catch {
             showError(error, title: "Failed to Decline Invite", style: .toast)
+            throw error
+        }
+    }
+
+    /// Create a shareable guild invite/referral link
+    func createGuildInviteLink(maxUses: Int? = nil, expiresAt: Date? = nil) async throws -> RLGuildInviteLinkDTO {
+        guard let guild = currentGuild else {
+            throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"])
+        }
+        do {
+            let link = try await realApi.createGuildInviteLink(guildId: guild.id, maxUses: maxUses, expiresAt: expiresAt)
+            showSuccess(RLUserFacingCopy.text(.successInviteLinkReady))
+            return link
+        } catch {
+            showError(error, title: "Failed to Create Invite Link", style: .toast)
+            throw error
+        }
+    }
+
+    /// Resolve a shareable guild invite/referral code
+    func resolveGuildInviteLink(code: String) async throws -> RLGuildInviteLinkResolveDTO {
+        do {
+            return try await realApi.resolveGuildInviteLink(code: code)
+        } catch {
+            showError(error, title: "Failed to Load Invite Link", style: .toast)
+            throw error
+        }
+    }
+
+    /// Accept a shareable guild invite/referral code
+    func acceptGuildInviteLink(code: String) async throws -> RLGuildWithMembership {
+        do {
+            let result = try await realApi.acceptGuildInviteLink(code: code)
+            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == result.guild.id }) {
+                userGuilds[existingIndex] = result
+            } else {
+                userGuilds.append(result)
+            }
+            selectGuild(result, showTransition: false)
+            showSuccess(RLUserFacingCopy.text(.successJoinedGuild))
+            return result
+        } catch {
+            showError(error, title: "Failed to Accept Invite Link", style: .toast)
             throw error
         }
     }
@@ -2500,7 +2691,7 @@ class RLAppState: ObservableObject {
         do {
             return try await realApi.requestPasswordReset(identifier: identifier)
         } catch {
-            showError(error, title: "Password Reset Failed", style: .alert)
+            showError(error, title: "Password Reset Failed", style: .alert, context: .passwordReset)
             throw error
         }
     }
@@ -2511,7 +2702,7 @@ class RLAppState: ObservableObject {
         do {
             return try await realApi.verifyPasswordResetToken(token)
         } catch {
-            showError(error, title: "Invalid Reset Link", style: .alert)
+            showError(error, title: "Invalid Reset Link", style: .alert, context: .passwordReset)
             throw error
         }
     }
@@ -2524,7 +2715,7 @@ class RLAppState: ObservableObject {
             clearLocalSessionState(clearAlertState: true)
             return response
         } catch {
-            showError(error, title: "Reset Password Failed", style: .alert)
+            showError(error, title: "Reset Password Failed", style: .alert, context: .passwordReset)
             throw error
         }
     }
@@ -2537,7 +2728,7 @@ class RLAppState: ObservableObject {
             showSuccess(RLUserFacingCopy.text(.successVerificationEmailSent))
             return response
         } catch {
-            showError(error, title: "Failed to Change Email", style: .toast)
+            showError(error, title: "Failed to Change Email", style: .toast, context: .settings)
             throw error
         }
     }
@@ -2550,7 +2741,7 @@ class RLAppState: ObservableObject {
             showSuccess(RLUserFacingCopy.text(.successPasswordUpdated))
             return response
         } catch {
-            showError(error, title: "Failed to Change Password", style: .toast)
+            showError(error, title: "Failed to Change Password", style: .toast, context: .settings)
             throw error
         }
     }
@@ -2659,6 +2850,17 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
+
+    /// Fetch another user's awards
+    func fetchUserAwards(userId: UUID, guildId: UUID? = nil) async throws -> [RLUserAwardDTO] {
+        do {
+            let response = try await realApi.getUserAwards(userId: userId, guildId: guildId)
+            return response.awards
+        } catch {
+            showError(error, title: "Failed to Load Awards", style: .toast)
+            throw error
+        }
+    }
     
     /// Fetch awards summary for current user
     func fetchCurrentUserAwardsSummary(guildId: UUID? = nil) async throws -> RLAwardsSummaryDTO {
@@ -2700,8 +2902,9 @@ class RLAppState: ObservableObject {
     func sendFriendRequest(toMembershipId: UUID, message: String? = nil) async throws -> RLFriendshipResponseDTO {
         do {
             if userSettings?.allowFriendRequests == false {
-                showError(title: "Action Not Allowed", message: "Friend requests are disabled in your settings", style: .toast)
-                throw APIError.badRequest("Friend requests are disabled in your settings")
+                let message = RLUserFacingCopy.text(.errorFriendRequestsDisabled)
+                showError(title: "Action Not Allowed", message: message, style: .toast)
+                throw APIError.badRequest(message)
             }
             let response = try await realApi.sendFriendRequest(toMembershipId: toMembershipId, message: message)
             showSuccess(RLUserFacingCopy.text(.successFriendRequestSent))
@@ -3978,7 +4181,9 @@ class RLAppState: ObservableObject {
             currentGuild = current.withUpdatedSettings(
                 name: payload.name,
                 description: payload.description,
-                isOpen: payload.isOpen
+                isOpen: payload.isOpen,
+                language: payload.language,
+                location: payload.location
             )
             print("🏰 [AppState] Guild settings updated via WebSocket: \(payload.name ?? "nil")")
         }
@@ -4371,7 +4576,7 @@ class RLAppState: ObservableObject {
         } catch {
             if isDuplicateUserReportError(error) {
                 markReportedUser(guildId: guildId, userId: userId)
-                showInfo("You already reported this user. Moderators will review it.")
+                showInfo(RLUserFacingCopy.text(.infoAlreadyReportedUser))
                 return
             }
             showError(error, title: "Failed to Report User", style: .toast)
@@ -4406,7 +4611,7 @@ class RLAppState: ObservableObject {
                     contentId: messageId,
                     contentNamespace: .chatroomMessage
                 )
-                showInfo("You already reported this message. Moderators will review it.")
+                showInfo(RLUserFacingCopy.text(.infoAlreadyReportedMessage))
                 return .alreadyReported
             }
             showError(error, title: "Failed to Report Message", style: .toast)
@@ -4441,7 +4646,7 @@ class RLAppState: ObservableObject {
                     contentId: messageId,
                     contentNamespace: .dmMessage
                 )
-                showInfo("You already reported this message. Moderators will review it.")
+                showInfo(RLUserFacingCopy.text(.infoAlreadyReportedMessage))
                 return .alreadyReported
             }
             showError(error, title: "Failed to Report Message", style: .toast)
@@ -4474,7 +4679,7 @@ class RLAppState: ObservableObject {
                     contentId: messageId,
                     contentNamespace: .chartChatMessage
                 )
-                showInfo("You already reported this message. Moderators will review it.")
+                showInfo(RLUserFacingCopy.text(.infoAlreadyReportedMessage))
                 return .alreadyReported
             }
             showError(error, title: "Failed to Report Message", style: .toast)
@@ -4507,7 +4712,7 @@ class RLAppState: ObservableObject {
                     contentId: markerId,
                     contentNamespace: .marker
                 )
-                showInfo("You already reported this marker. Moderators will review it.")
+                showInfo(RLUserFacingCopy.text(.infoAlreadyReportedMarker))
                 return .alreadyReported
             }
             showError(error, title: "Failed to Report Marker", style: .toast)

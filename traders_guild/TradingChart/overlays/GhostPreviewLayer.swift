@@ -134,8 +134,10 @@ struct GhostPreviewLayer: View {
                 drawHorizontalLines(context: context)
                 drawTrendlines(context: context)
                 drawZones(context: context)
+                drawPatterns(context: context)
                 drawEmojiResizeHandles(context: context)
                 drawTrendlinePlacementPreview(context: context)
+                drawPatternPlacementPreview(context: context)
                 drawGuideCrosshair(context: context, size: size)
             }
             .allowsHitTesting(false)
@@ -405,7 +407,8 @@ struct GhostPreviewLayer: View {
     }
 
     private func drawTrendlinePlacementPreview(context: GraphicsContext) {
-        guard drawingInteractionPhase == .placingSecondPoint,
+        guard placementState.activeDrawingWorkflowTool?.group == .pointSequence,
+              drawingInteractionPhase == .placingSecondPoint,
               let firstPoint = placementState.pendingDrawingFirstPoint,
               let guidePoint,
               let firstY = yForPrice(firstPoint.price),
@@ -437,6 +440,154 @@ struct GhostPreviewLayer: View {
             color: RLComponentType.drawingTrendline.color,
             size: 18
         )
+    }
+
+    private func drawPatterns(context: GraphicsContext) {
+        for pattern in placementState.components where pattern.componentType == .drawingPattern {
+            guard case let .drawingPattern(payload) = pattern.payload else { continue }
+            let patternColor = placementState.drawingColor(
+                for: pattern.id,
+                fallback: RLComponentType.drawingPattern.color
+            )
+            drawPattern(
+                context: context,
+                payload: payload,
+                color: patternColor,
+                isEditing: drawingInteractionPhase == .editing && editingDrawingId == pattern.id,
+                opacity: 0.76
+            )
+        }
+    }
+
+    private func drawPatternPlacementPreview(context: GraphicsContext) {
+        guard let tool = placementState.activeDrawingWorkflowTool,
+              tool.group == .pattern,
+              placementState.drawingSession.isPointPlacementActive else {
+            return
+        }
+
+        var points = placementState.drawingSession.committedPoints
+        if let guidePoint {
+            points.append(MarkerDrawingGuidePoint(time: guidePoint.time, price: guidePoint.price))
+        }
+        guard !points.isEmpty else { return }
+
+        let template = ChartPatternDrawingTemplate(rawValue: tool.rawValue)
+        let labels = template?.pointLabels ?? []
+        let payload = ChartPatternPayload(
+            patternKey: template?.rawValue ?? tool.rawValue,
+            title: template?.title ?? tool.title,
+            points: points.enumerated().map { index, point in
+                PatternGuidePointPayload(
+                    time: point.time,
+                    price: point.price,
+                    label: labels.indices.contains(index) ? labels[index] : nil
+                )
+            },
+            colorHex: template?.tintHex,
+            lineStyle: .dashed,
+            lineWidth: 2
+        )
+        drawPattern(
+            context: context,
+            payload: payload,
+            color: Color(hex: template?.tintHex ?? "") ?? RLComponentType.drawingPattern.color,
+            isEditing: true,
+            opacity: 0.5
+        )
+    }
+
+    private func drawPattern(
+        context: GraphicsContext,
+        payload: ChartPatternPayload,
+        color: Color,
+        isEditing: Bool,
+        opacity: Double
+    ) {
+        let points = payload.points.compactMap { point -> CGPoint? in
+            guard let y = yForPrice(point.price), y.isFinite else { return nil }
+            let x = xForTime?(point.time) ?? width * 0.5
+            guard x.isFinite else { return nil }
+            return CGPoint(x: x, y: y)
+        }
+        guard !points.isEmpty else { return }
+
+        let lineStyle = payload.lineStyle ?? .dashed
+        let lineWidth = CGFloat(payload.lineWidth ?? 2.0)
+        let stroke = StrokeStyle(
+            lineWidth: isEditing ? max(lineWidth, 2.4) : lineWidth,
+            dash: lineStyle.dashPattern
+        )
+
+        for segment in patternSegments(for: payload.patternKey, points: points) {
+            var path = Path()
+            path.move(to: segment.start)
+            path.addLine(to: segment.end)
+            context.stroke(path, with: .color(color.opacity(opacity)), style: stroke)
+        }
+
+        if isEditing {
+            for (index, point) in points.enumerated() {
+                drawControlHandle(context: context, center: point, color: color, size: 19)
+                let label = payload.points.indices.contains(index)
+                    ? payload.points[index].label
+                    : nil
+                if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    drawPatternPointLabel(context: context, label: label, near: point, color: color)
+                }
+            }
+        }
+    }
+
+    private func drawPatternPointLabel(
+        context: GraphicsContext,
+        label: String,
+        near point: CGPoint,
+        color: Color
+    ) {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let labelWidth = min(max(CGFloat(trimmed.count) * 6.2 + 18, 64), 148)
+        let labelHeight: CGFloat = 22
+        let origin = CGPoint(
+            x: min(max(point.x + 10, 6), max(6, width - labelWidth - 6)),
+            y: max(point.y - 34, 8)
+        )
+        let rect = CGRect(origin: origin, size: CGSize(width: labelWidth, height: labelHeight))
+        let path = Path(roundedRect: rect, cornerRadius: 7)
+        context.fill(path, with: .color(AppColors.chartPanelBackground.opacity(0.88)))
+        context.stroke(path, with: .color(color.opacity(0.72)), lineWidth: 1)
+        context.draw(
+            Text(trimmed)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(AppColors.primaryForeground),
+            at: CGPoint(x: rect.midX, y: rect.midY),
+            anchor: .center
+        )
+    }
+
+    private func patternSegments(
+        for patternKey: String,
+        points: [CGPoint]
+    ) -> [(start: CGPoint, end: CGPoint)] {
+        guard points.count >= 2 else { return [] }
+        if patternKey == ChartPatternDrawingTemplate.risingChannel.rawValue, points.count >= 3 {
+            let lowerStart = points[0]
+            let lowerEnd = points[1]
+            let upperStart = points[2]
+            let delta = CGPoint(x: lowerEnd.x - lowerStart.x, y: lowerEnd.y - lowerStart.y)
+            let upperEnd = CGPoint(x: upperStart.x + delta.x, y: upperStart.y + delta.y)
+            return [(lowerStart, lowerEnd), (upperStart, upperEnd)]
+        }
+        if patternKey == ChartPatternDrawingTemplate.headAndShoulders.rawValue, points.count >= 4 {
+            let necklineStart = CGPoint(x: points[0].x, y: points[3].y)
+            let necklineEnd = CGPoint(x: points[2].x, y: points[3].y)
+            return [(points[0], points[1]), (points[1], points[2]), (necklineStart, necklineEnd)]
+        }
+        return (1..<points.count).map { index in
+            (start: points[index - 1], end: points[index])
+        }
     }
 
     private func drawGuideCrosshair(context: GraphicsContext, size: CGSize) {

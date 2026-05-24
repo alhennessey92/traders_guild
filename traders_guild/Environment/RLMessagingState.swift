@@ -1283,6 +1283,7 @@ struct RLMessagingSheet: View {
                             isCurrentUser: false,
                             username: member.username,
                             tabs: [.overview, .markers, .awards],
+                            awardsEnabled: appState.runtimeFlags.awardsEnabled,
                             onMarkerTap: { marker in
                                 leftDrawerViewModel.requestNavigationToMarker(marker)
                                 dismiss()

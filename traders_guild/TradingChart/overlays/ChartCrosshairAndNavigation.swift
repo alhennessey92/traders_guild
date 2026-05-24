@@ -167,7 +167,7 @@ struct CrosshairPriceLabel: View {
             // Arrow pointing to crosshair
             Image(systemName: "arrowtriangle.left.fill")
                 .font(.system(size: 6))
-                .foregroundColor(.yellow)
+                .foregroundColor(AppColors.themeAwareYellow)
             
             Text(chartData.formatPrice(price))
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -537,14 +537,14 @@ struct CrosshairInfoPopupCompact: View {
                             if let macd = macdValues {
                                 HStack(spacing: 3) {
                                     Circle()
-                                        .fill(AppColors.systemCyan)
+                                        .fill(AppColors.themeAwareCyan)
                                         .frame(width: 5, height: 5)
                                     Text("MACD")
                                         .font(.system(size: 7, weight: .medium))
                                         .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.4f", macd.macd))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                        .foregroundColor(.cyan)
+                                        .foregroundColor(AppColors.themeAwareCyan)
                                 }
                             }
 
@@ -604,7 +604,7 @@ struct CrosshairInfoPopupCompact: View {
                                         .foregroundColor(AppColors.crosshairInfoPopupBodySecondaryText)
                                     Text(String(format: "%.4f", atr))
                                         .font(.system(size: 7, weight: .medium, design: .monospaced))
-                                        .foregroundColor(.red)
+                                        .foregroundColor(AppColors.statusNegative)
                                 }
                             }
                         }
@@ -702,7 +702,7 @@ struct PriceLabelView: View {
             .foregroundColor(.black)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.systemYellow))
+            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.themeAwareYellow))
     }
 }
 
@@ -715,7 +715,7 @@ struct TimeLabelView: View {
             .foregroundColor(.black)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.systemYellow))
+            .background(RoundedRectangle(cornerRadius: 3).fill(AppColors.themeAwareYellow))
     }
 }
 

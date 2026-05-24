@@ -51,47 +51,47 @@ struct UnifiedColors {
     // MARK: - Asset Class Colors (for Disclosure Groups & Categories)
     
     /// Forex - Blue
-    static let assetClassForex = AppColors.statusInfo
-    
+    static var assetClassForex: Color { AppColors.statusInfo }
+
     /// Crypto - Orange
-    static let assetClassCrypto = AppColors.statusWarning
-    
+    static var assetClassCrypto: Color { AppColors.statusWarning }
+
     /// Stocks - Green
-    static let assetClassStocks = AppColors.statusPositive
-    
-    /// Commodities - Yellow
-    static let assetClassCommodities = AppColors.systemYellow
-    
-    /// Indices - Purple
-    static let assetClassIndices = AppColors.systemPurple
-    
-    /// Futures - Cyan
-    static let assetClassFutures = AppColors.systemCyan
-    
+    static var assetClassStocks: Color { AppColors.statusPositive }
+
+    /// Commodities - Yellow (theme-aware; deep amber on light grey)
+    static var assetClassCommodities: Color { AppColors.themeAwareYellow }
+
+    /// Indices - Purple (theme-aware; deeper purple on light grey)
+    static var assetClassIndices: Color { AppColors.themeAwarePurple }
+
+    /// Futures - Cyan (theme-aware; deeper teal-cyan on light grey)
+    static var assetClassFutures: Color { AppColors.themeAwareCyan }
+
     // MARK: - Indicator Add Button Colors
-    
-    /// EMA indicator button color - Cyan
-    static let indicatorEMA = AppColors.systemCyan
-    
+
+    /// EMA indicator button color - Cyan (theme-aware)
+    static var indicatorEMA: Color { AppColors.themeAwareCyan }
+
     /// SMA indicator button color - Orange
-    static let indicatorSMA = AppColors.statusWarning
-    
-    /// RSI indicator color - Purple
-    static let indicatorRSI = AppColors.systemPurple
-    
+    static var indicatorSMA: Color { AppColors.statusWarning }
+
+    /// RSI indicator color - Purple (theme-aware)
+    static var indicatorRSI: Color { AppColors.themeAwarePurple }
+
     /// MACD indicator color - Green
-    static let indicatorMACD = AppColors.statusPositive
-    
-    /// Bollinger Bands indicator color - Yellow
-    static let indicatorBollinger = AppColors.systemYellow
-    
+    static var indicatorMACD: Color { AppColors.statusPositive }
+
+    /// Bollinger Bands indicator color - Yellow (theme-aware)
+    static var indicatorBollinger: Color { AppColors.themeAwareYellow }
+
     /// ATR indicator color - Red
-    static let indicatorATR = AppColors.statusNegative
-    
+    static var indicatorATR: Color { AppColors.statusNegative }
+
     // MARK: - Watchlist Action Button Colors
-    
-    /// Personal watchlist star color (filled)
-    static let personalWatchlistActive = AppColors.systemYellow
+
+    /// Personal watchlist star color (filled) — theme-aware via `symbolDetailPersonalStarActive`.
+    static var personalWatchlistActive: Color { AppColors.symbolDetailPersonalStarActive }
     
     /// Personal watchlist star color (unfilled)
     static let personalWatchlistInactive = AppColors.systemGray
@@ -121,19 +121,19 @@ struct UnifiedColors {
     /// Success/just selected feedback background
     static let cardBackgroundSuccess = AppColors.statusPositive20
     
-    /// Subtle border color
-    static let subtleBorder = AppColors.surfaceWhite15
-    
+    /// Subtle border color (theme-aware adaptive overlay — visible on both light and dark chrome)
+    static var subtleBorder: Color { AppColors.adaptiveOverlay15 }
+
     /// Selected item border
     static let selectedBorder = AppColors.statusInfo40
-    
+
     // MARK: - Text Colors
-    
-    /// Primary text - White
-    static let textPrimary = AppColors.systemWhite
-    
-    /// Secondary text - Gray
-    static let textSecondary = AppColors.systemGray
+
+    /// Primary text — theme-aware. Dark/MidGrey: white. LightGrey: deep ink.
+    static var textPrimary: Color { AppColors.primaryForeground }
+
+    /// Secondary text — theme-aware muted ink.
+    static var textSecondary: Color { AppColors.secondaryForeground }
     
     /// Tertiary/hint text
     static let textTertiary = AppColors.surfaceGray70
@@ -155,8 +155,8 @@ struct UnifiedColors {
     /// Disclosure content background
     static var disclosureContentBackground: Color { AppColors.insetPanelBackground }
     
-    /// Disclosure count badge background
-    static let disclosureCountBadge = AppColors.surfaceWhite15
+    /// Disclosure count badge background (theme-aware adaptive overlay)
+    static var disclosureCountBadge: Color { AppColors.adaptiveOverlay15 }
     
     // MARK: - Search Bar Colors
     

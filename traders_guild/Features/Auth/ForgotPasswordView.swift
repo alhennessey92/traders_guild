@@ -175,7 +175,7 @@ struct ForgotPasswordView: View {
         if requestSubmitted {
             Text("If the account exists, a reset code has been sent.")
                 .font(AppFonts.smallNotice())
-                .foregroundColor(.green)
+                .foregroundColor(AppColors.statusPositive)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 8)
@@ -381,7 +381,7 @@ struct ForgotPasswordView: View {
 
         do {
             _ = try await RLAppState.resetPassword(token: normalizedToken, newPassword: newPassword)
-            RLAppState.showSuccess("Password updated. Please sign in with your new password.")
+            RLAppState.showSuccess(RLUserFacingCopy.text(.successPasswordUpdatedSignIn))
             RLAppState.setPendingPasswordResetToken(nil)
             dismiss()
         } catch {

@@ -35,7 +35,7 @@ private enum GuildLeaderboardMode: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .reputation: return "shield.pattern.checkered"
+        case .reputation: return "star.hexagon.fill"
         case .accuracy: return "target"
         }
     }
@@ -63,7 +63,7 @@ private enum GlobalLeaderboardMode: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .reputation: return "shield.pattern.checkered"
+        case .reputation: return "star.hexagon.fill"
         case .accuracy: return "target"
         }
     }
@@ -796,6 +796,7 @@ private extension LeaderboardListView {
                     LazyVStack(spacing: 8) {
                         ForEach(Array(globalGuildsByReputation.enumerated()), id: \.element.id) { index, guild in
                             GlobalGuildLeaderboardRow(
+                                guild: guild.guild,
                                 guildName: guild.name,
                                 memberCount: guild.memberCount,
                                 membersOnline: guild.membersOnline,
@@ -835,6 +836,7 @@ private extension LeaderboardListView {
                     LazyVStack(spacing: 8) {
                         ForEach(Array(globalGuildsByAccuracy.enumerated()), id: \.element.id) { index, guild in
                             GlobalGuildLeaderboardRow(
+                                guild: guild.guild,
                                 guildName: guild.name,
                                 memberCount: guild.memberCount,
                                 membersOnline: guild.membersOnline,
@@ -921,6 +923,7 @@ private enum GlobalGuildRowMode {
 }
 
 private struct GlobalGuildLeaderboardRow: View {
+    let guild: RLGuildDTO
     let guildName: String
     let memberCount: Int
     let membersOnline: Int
@@ -933,7 +936,7 @@ private struct GlobalGuildLeaderboardRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return AppColors.systemYellow
+        case 1: return AppColors.markerViewingTintPrimaryStar
         case 2: return AppColors.surfaceGray80
         case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
@@ -945,7 +948,7 @@ private struct GlobalGuildLeaderboardRow: View {
         case .reputation:
             return AppColors.accentColor
         case .accuracy:
-            return AppColors.bullCandleGreen
+            return AppColors.onlineStatusGreen
         }
     }
 
@@ -956,14 +959,7 @@ private struct GlobalGuildLeaderboardRow: View {
                 .foregroundColor(rankColor)
                 .frame(width: 24)
 
-            ZStack {
-                Circle()
-                    .fill(AppColors.whiteText.opacity(0.08))
-                    .frame(width: 40, height: 40)
-                Image(systemName: "shield.pattern.checkered")
-                    .font(.headline)
-                    .foregroundColor(AppColors.accentColor)
-            }
+            GuildCrestView(guild: guild, size: 40)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(guildName)
@@ -988,7 +984,7 @@ private struct GlobalGuildLeaderboardRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 2) {
-                    Image(systemName: mode == .reputation ? "shield.pattern.checkered" : "target")
+                    Image(systemName: mode == .reputation ? "star.hexagon.fill" : "target")
                         .font(.caption2)
                         .fontWeight(.bold)
                     Text(mode == .reputation ? reputation : (accuracyText ?? "N/A"))
@@ -1031,7 +1027,7 @@ private struct GlobalUserAccuracyRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return AppColors.systemYellow
+        case 1: return AppColors.markerViewingTintPrimaryStar
         case 2: return AppColors.surfaceGray80
         case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
@@ -1123,7 +1119,7 @@ private struct AccuracyLeaderboardRow: View {
 
     private var rankColor: Color {
         switch member.rank {
-        case 1: return AppColors.systemYellow
+        case 1: return AppColors.markerViewingTintPrimaryStar
         case 2: return AppColors.surfaceGray80
         case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
@@ -1264,7 +1260,7 @@ private struct LeaderboardMemberRow: View {
 
     private var rankColor: Color {
         switch rank {
-        case 1: return AppColors.systemYellow
+        case 1: return AppColors.markerViewingTintPrimaryStar
         case 2: return AppColors.surfaceGray80
         case 3: return AppColors.statusWarning80
         default: return AppColors.whiteText.opacity(0.5)
@@ -1327,7 +1323,7 @@ private struct LeaderboardMemberRow: View {
                 Spacer()
 
                 HStack(spacing: 2) {
-                    Image(systemName: "shield.pattern.checkered")
+                    Image(systemName: "star.hexagon.fill")
                         .font(.caption2)
                         .fontWeight(.bold)
                     Text("\(reputation)")

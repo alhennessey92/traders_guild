@@ -227,8 +227,8 @@ class ChartViewModel: ObservableObject {
             }
             
         } catch {
-            errorMessage = RLUserFacingErrorMapper.message(from: error)
-            appState.showError(error, title: "Failed to Load Chart Data", style: .toast)
+            errorMessage = RLUserFacingErrorMapper.message(from: error, context: .chart)
+            appState.showError(error, title: "Failed to Load Chart Data", style: .toast, context: .chart)
         }
         
         isLoadingData = false
@@ -322,8 +322,8 @@ class ChartViewModel: ObservableObject {
                 )
                 return
             }
-            errorMessage = RLUserFacingErrorMapper.message(from: error)
-            appState.showError(error, title: "Failed to Load Chart", style: .toast)
+            errorMessage = RLUserFacingErrorMapper.message(from: error, context: .chart)
+            appState.showError(error, title: "Failed to Load Chart", style: .toast, context: .chart)
             // Clear candles on error - don't show stale or mock data
             dataManager.updateWithMarketData([])
             earliestHistoricalCandleTimestamp = nil
@@ -855,7 +855,7 @@ class ChartViewModel: ObservableObject {
 
     private func isChartDrawingPlacementComponent(_ componentType: RLComponentType) -> Bool {
         switch componentType {
-        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .levelSupport, .levelResistance, .textNote, .reactionEmoji:
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .levelSupport, .levelResistance, .textNote, .reactionEmoji:
             return true
         default:
             return false

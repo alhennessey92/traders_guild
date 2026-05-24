@@ -152,11 +152,8 @@ struct RLRightDrawerMainView: View {
                     }
                     
                     // Guild Name and icon
-                    HStack(spacing: 4) {
-                        Image(systemName: "shield.pattern.checkered")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.guildReputationAccent)
+                    HStack(spacing: 8) {
+                        GuildCrestView(guild: guild, size: 32)
                         Text("\(guild.name)")
                             .font(.headline)
                             .fontWeight(.bold)
@@ -167,7 +164,7 @@ struct RLRightDrawerMainView: View {
                             .foregroundColor(AppColors.guildReputationAccent)
                         Spacer()
                     }
-                    .padding(.leading, 35)
+                    .padding(.leading, 2)
                     
                     // Search bar using UnifiedSearchBar
                     UnifiedSearchBar(
@@ -517,7 +514,7 @@ struct RLMemberRowView: View {
                     }
 
                     Circle()
-                        .fill(isEffectivelyOnline ? AppColors.bullCandleGreen : AppColors.greyText)
+                        .fill(isEffectivelyOnline ? AppColors.onlineStatusGreen : AppColors.greyText)
                         .frame(width: 10, height: 10)
                         .overlay(
                             Circle()
