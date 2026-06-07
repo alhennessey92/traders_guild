@@ -297,10 +297,12 @@ struct BetaRuntimeAndReportingTests {
         RLGuildDTO(
             id: UUID(),
             name: "Beta",
+            slug: nil,
             description: nil,
             imageUrl: nil,
             ownerId: ownerId,
             isOpen: true,
+            isOnboardingSystemGuild: nil,
             reputation: 0,
             memberCount: 1,
             membersOnline: 1,

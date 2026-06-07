@@ -105,7 +105,7 @@ struct SignupGuildView: View {
                                     ) {}
                                 }
 
-                                Text("You will start in this beta guild.")
+                                Text("You'll start here in your System Guild — try the tutorial and explore. You can join or create a guild anytime from the menu.")
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.center)
@@ -119,11 +119,11 @@ struct SignupGuildView: View {
                                     .font(.system(size: 48))
                                     .foregroundColor(AppColors.greyText.opacity(0.6))
 
-                                Text("No open guilds available right now")
+                                Text("Setting up your System Guild")
                                     .font(.headline)
                                     .foregroundColor(AppColors.whiteText)
 
-                                Text("Continue to get assigned to a beta guild.")
+                                Text("Continue to get set up in your System Guild.")
                                     .font(.subheadline)
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.center)
@@ -238,9 +238,9 @@ struct SignupGuildView: View {
 
     private var subtitleText: String {
         if shouldShowAssignedFallback {
-            return "No open guilds available, so you were assigned this beta guild."
+            return "Everyone starts in a System Guild — a relaxed space to learn the ropes before joining a community."
         }
-        return "Only open guilds are listed here. Private guilds require owner/admin approval after signup."
+        return "Everyone starts in a System Guild — a relaxed space to learn the ropes before joining a community."
     }
 
     private var actionTitle: String {
@@ -275,32 +275,11 @@ struct SignupGuildView: View {
         isLoadingGuilds = true
         defer { isLoadingGuilds = false }
 
-        do {
-            let preferredLanguage = data.language.trimmingCharacters(in: .whitespacesAndNewlines)
-            let preferredLocation = data.location.trimmingCharacters(in: .whitespacesAndNewlines)
-            let guilds = try await rlAppState.fetchPublicOpenGuilds(
-                preferredLanguage: preferredLanguage.isEmpty ? nil : preferredLanguage,
-                preferredLocation: preferredLocation.isEmpty ? nil : preferredLocation
-            )
-            availableGuilds = guilds
-            assignmentErrorMessage = nil
-
-            if guilds.isEmpty {
-                await prepareAssignedFallbackGuild()
-            } else {
-                guildMode = .openSelectionMode
-                if let selectedGuild, !guilds.contains(where: { $0.id == selectedGuild.id }) {
-                    self.selectedGuild = nil
-                }
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            // Error surfaced by rlAppState
-            if availableGuilds.isEmpty {
-                await prepareAssignedFallbackGuild()
-            }
-        }
+        // New users always start in a system (onboarding) guild — a stable home
+        // with the tutorial. They browse/join real guilds from inside the app
+        // afterwards (most public guilds are invite/approval-only anyway).
+        availableGuilds = []
+        await prepareAssignedFallbackGuild()
     }
 
     private func prepareAssignedFallbackGuild() async {
@@ -344,7 +323,15 @@ struct SignupGuildView: View {
 
             if let selectedGuild,
                rlAppState.currentGuild?.id != selectedGuild.id {
-                _ = try await rlAppState.joinGuild(guildId: selectedGuild.id, showTransition: false)
+                if rlAppState.currentUser?.isVerified == true {
+                    _ = try await rlAppState.joinGuild(guildId: selectedGuild.id, showTransition: false)
+                } else {
+                    // Account is created but the email isn't verified yet, and the
+                    // backend gates guild joins on verification. Defer the join
+                    // until after the email-verification step so the user reaches
+                    // the code-entry screen instead of a dead-end error toast.
+                    rlAppState.setPendingOnboardingGuildId(selectedGuild.id)
+                }
             }
             await applyProfileDraftIfNeeded()
             finishRegistrationAfterGuildSelection()

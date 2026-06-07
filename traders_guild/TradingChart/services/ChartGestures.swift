@@ -47,10 +47,13 @@ class ChartGestureState: ObservableObject {
     
     /// Horizontal and vertical pan offset
     @Published var panOffset: CGSize = .zero
+
+    /// True while chart movement is being driven by a user's drag or its momentum.
+    @Published private(set) var isUserDrivenScrollActive: Bool = false
     
     /// Separate vertical pan offset for finer control
     @Published var verticalPanOffset: CGFloat = 0
-    
+
     // MARK: - Crosshair State (shared with RSI panel for sync)
     
     /// Whether crosshair is currently active
@@ -91,13 +94,13 @@ class ChartGestureState: ObservableObject {
     private var lastDragTranslation: CGSize = .zero
     
     /// Deceleration rate (0.95 = smooth, 0.99 = ice-like)
-    private let decelerationRate: CGFloat = 0.955
+    private let decelerationRate: CGFloat = 0.974
     
     /// Minimum velocity to continue momentum (points per second)
-    private let minimumVelocity: CGFloat = 15
+    private let minimumVelocity: CGFloat = 10
     
     /// Maximum velocity to prevent violent scrolling (points per second)
-    private let maxVelocity: CGFloat = 2000
+    private let maxVelocity: CGFloat = 2800
     
     /// Cached chart dimensions for momentum bounds checking
     private var cachedChartWidth: CGFloat = 0
@@ -105,6 +108,8 @@ class ChartGestureState: ObservableObject {
     private var cachedCandleCount: Int = 0
     private var cachedCandleWidth: CGFloat = 0
     private var cachedPriceScale: CGFloat = 1.0
+    private var cachedOlderEdgeGuardCandleCount: Int = 0
+    private var cachedHistoricalRenderIndexOffset: Int = 0
     
     // MARK: - Configuration Constants
     
@@ -125,6 +130,7 @@ class ChartGestureState: ObservableObject {
     /// Begin a drag gesture - call this in onChanged when drag starts
     func beginDrag() {
         stopMomentum()
+        isUserDrivenScrollActive = true
         lastDragTime = Date()
         lastDragTranslation = .zero
         velocity = .zero
@@ -138,6 +144,9 @@ class ChartGestureState: ObservableObject {
         candleWidth: CGFloat,
         chartHeight: CGFloat,
         priceScale: CGFloat,
+        olderEdgeGuardCandleCount: Int = 0,
+        historicalRenderIndexOffset: Int = 0,
+        velocityTranslation: CGSize? = nil,
         trackVelocity: Bool = true
     ) {
         // Cache dimensions for momentum
@@ -146,21 +155,24 @@ class ChartGestureState: ObservableObject {
         cachedCandleCount = candleCount
         cachedCandleWidth = candleWidth
         cachedPriceScale = priceScale
+        cachedOlderEdgeGuardCandleCount = olderEdgeGuardCandleCount
+        cachedHistoricalRenderIndexOffset = historicalRenderIndexOffset
         
         // Calculate velocity if tracking
         // NOTE: translation is INCREMENTAL (per-frame delta), not cumulative
         if trackVelocity, let lastTime = lastDragTime {
             let now = Date()
             let dt = now.timeIntervalSince(lastTime)
+            let velocitySource = velocityTranslation ?? translation
             
             // Only track reasonable intervals (not too fast, not too slow)
             if dt > 0.008 && dt < 0.1 {
                 // Calculate instantaneous velocity
-                let instantVelX = translation.width / CGFloat(dt)
-                let instantVelY = translation.height / CGFloat(dt)
+                let instantVelX = velocitySource.width / CGFloat(dt)
+                let instantVelY = velocitySource.height / CGFloat(dt)
                 
                 // Smooth velocity with exponential moving average (lower alpha = smoother)
-                let alpha: CGFloat = 0.15
+                let alpha: CGFloat = 0.18
                 velocity.width = velocity.width * (1 - alpha) + instantVelX * alpha
                 velocity.height = velocity.height * (1 - alpha) + instantVelY * alpha
                 
@@ -178,7 +190,9 @@ class ChartGestureState: ObservableObject {
             candleCount: candleCount,
             candleWidth: candleWidth,
             chartHeight: chartHeight,
-            priceScale: priceScale
+            priceScale: priceScale,
+            olderEdgeGuardCandleCount: olderEdgeGuardCandleCount,
+            historicalRenderIndexOffset: historicalRenderIndexOffset
         )
     }
     
@@ -189,7 +203,9 @@ class ChartGestureState: ObservableObject {
         candleCount: Int,
         candleWidth: CGFloat,
         chartHeight: CGFloat,
-        priceScale: CGFloat
+        priceScale: CGFloat,
+        olderEdgeGuardCandleCount: Int,
+        historicalRenderIndexOffset: Int
     ) {
         var newHorizontalOffset = panOffset.width + translation.width
         var newVerticalOffset = verticalPanOffset + translation.height
@@ -198,9 +214,13 @@ class ChartGestureState: ObservableObject {
         // computed min/max collapse and the pan offset gets snapped to the first candle.
         if candleCount > 0 && candleWidth > 0 {
             let edgePadding: CGFloat = Self.horizontalEdgePadding
-            let totalChartWidth = CGFloat(candleCount) * candleWidth
-            let maxHorizontalOffset = edgePadding
-            let minHorizontalOffset = -(totalChartWidth - chartWidth + edgePadding)
+            let renderOffset = max(0, min(historicalRenderIndexOffset, candleCount))
+            let visibleContentWidth = CGFloat(max(0, candleCount - renderOffset)) * candleWidth
+            let guardedMaxOffset = CGFloat(renderOffset - max(0, olderEdgeGuardCandleCount)) * candleWidth
+            let maxHorizontalOffset = olderEdgeGuardCandleCount > 0
+                ? guardedMaxOffset
+                : CGFloat(renderOffset) * candleWidth + edgePadding
+            let minHorizontalOffset = -(visibleContentWidth - chartWidth + edgePadding)
 
             newHorizontalOffset = Swift.min(maxHorizontalOffset, Swift.max(minHorizontalOffset, newHorizontalOffset))
         }
@@ -231,12 +251,22 @@ class ChartGestureState: ObservableObject {
     }
     
     /// End drag and start momentum scrolling
-    func endDrag(chartWidth: CGFloat, candleCount: Int, candleWidth: CGFloat, chartHeight: CGFloat, priceScale: CGFloat) {
+    func endDrag(
+        chartWidth: CGFloat,
+        candleCount: Int,
+        candleWidth: CGFloat,
+        chartHeight: CGFloat,
+        priceScale: CGFloat,
+        olderEdgeGuardCandleCount: Int = 0,
+        historicalRenderIndexOffset: Int = 0
+    ) {
         // Cache final dimensions
         cachedChartWidth = chartWidth
         cachedChartHeight = chartHeight
         cachedCandleCount = candleCount
         cachedCandleWidth = candleWidth
+        cachedOlderEdgeGuardCandleCount = olderEdgeGuardCandleCount
+        cachedHistoricalRenderIndexOffset = historicalRenderIndexOffset
         
         // Only start momentum if velocity is significant
         let speed = hypot(velocity.width, velocity.height)
@@ -244,10 +274,21 @@ class ChartGestureState: ObservableObject {
             startMomentum(priceScale: priceScale)
         } else {
             velocity = .zero
+            isUserDrivenScrollActive = false
         }
         
         lastDragTime = nil
         lastDragTranslation = .zero
+    }
+
+    /// Account for historical candles being prepended at the front of the candle array.
+    ///
+    /// The visual x-origin is handled by `ChartDataManager.historicalRenderIndexOffset`; this only
+    /// updates cached momentum bounds so an in-flight deceleration knows the data set expanded.
+    func applyHistoricalPrepend(count: Int, totalCandleWidth: CGFloat) {
+        guard count > 0 else { return }
+        cachedCandleCount += count
+        cachedHistoricalRenderIndexOffset += count
     }
 
     func applyPriceScale(
@@ -278,10 +319,10 @@ class ChartGestureState: ObservableObject {
         // Stop any existing animation but DON'T zero velocity yet
         displayLink?.invalidate()
         displayLink = nil
-        
+
         // Cache priceScale for momentum tick
         cachedPriceScale = priceScale
-        
+
         // Start the animation with current velocity
         displayLink = CADisplayLink(target: self, selector: #selector(momentumTick))
         displayLink?.add(to: .main, forMode: .common)
@@ -315,7 +356,9 @@ class ChartGestureState: ObservableObject {
             candleCount: cachedCandleCount,
             candleWidth: cachedCandleWidth,
             chartHeight: cachedChartHeight,
-            priceScale: cachedPriceScale
+            priceScale: cachedPriceScale,
+            olderEdgeGuardCandleCount: cachedOlderEdgeGuardCandleCount,
+            historicalRenderIndexOffset: cachedHistoricalRenderIndexOffset
         )
     }
     
@@ -323,6 +366,7 @@ class ChartGestureState: ObservableObject {
         displayLink?.invalidate()
         displayLink = nil
         velocity = .zero
+        isUserDrivenScrollActive = false
     }
     
     // MARK: - Scale Methods
@@ -342,6 +386,7 @@ class ChartGestureState: ObservableObject {
     /// Reset all gesture states to default (instant, no animation)
     func reset() {
         stopMomentum()
+        isUserDrivenScrollActive = false
         candleWidthScale = 1.0
         priceScale = 1.0
         panOffset = .zero
@@ -377,10 +422,10 @@ class ChartGestureState: ObservableObject {
     // MARK: - Navigation
     
     /// Center chart on specific candle index (horizontal only)
-    func centerOnCandle(at index: Int, chartWidth: CGFloat, candleWidth: CGFloat) {
+    func centerOnCandle(at index: Int, chartWidth: CGFloat, candleWidth: CGFloat, historicalRenderIndexOffset: Int = 0) {
         guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
-        let targetX = CGFloat(index) * candleWidth
+        let targetX = CGFloat(index - historicalRenderIndexOffset) * candleWidth
         let centerOffset = chartWidth / 2
         panOffset.width = centerOffset - targetX - (candleWidth / 2)
     }
@@ -392,14 +437,15 @@ class ChartGestureState: ObservableObject {
         candleWidth: CGFloat,
         price: Double,
         chartHeight: CGFloat,
-        priceRange: (min: Double, max: Double)
+        priceRange: (min: Double, max: Double),
+        historicalRenderIndexOffset: Int = 0
     ) {
         guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
         stopCenteringAnimation()
 
         // Horizontal: same as centerOnCandle
-        let targetX = CGFloat(index) * candleWidth
+        let targetX = CGFloat(index - historicalRenderIndexOffset) * candleWidth
         let centerOffset = chartWidth / 2
         panOffset.width = centerOffset - targetX - (candleWidth / 2)
 
@@ -419,6 +465,7 @@ class ChartGestureState: ObservableObject {
         price: Double,
         chartHeight: CGFloat,
         priceRange: (min: Double, max: Double),
+        historicalRenderIndexOffset: Int = 0,
         duration: CFTimeInterval = 0.9
     ) {
         guard candleWidth > 0, chartWidth > 0 else { return }
@@ -426,7 +473,7 @@ class ChartGestureState: ObservableObject {
         stopCenteringAnimation()
 
         // Calculate target offsets
-        let targetX = CGFloat(index) * candleWidth
+        let targetX = CGFloat(index - historicalRenderIndexOffset) * candleWidth
         let centerOffset = chartWidth / 2
         let targetPanX = centerOffset - targetX - (candleWidth / 2)
 
@@ -529,7 +576,7 @@ struct LinkedIndicatorPanelGestureSurface<Content: View>: View {
 
     private let pinchSensitivity: CGFloat = 0.7
     private let yAxisSensitivity: CGFloat = 0.7
-    private let panDragSensitivity: CGFloat = 0.78
+    private let panDragSensitivity: CGFloat = 0.84
     private let panDragNoiseFloor: CGFloat = 0.16
     private let maxVerticalScale: CGFloat = 5.0
     private let minHorizontalScale: CGFloat = 0.15

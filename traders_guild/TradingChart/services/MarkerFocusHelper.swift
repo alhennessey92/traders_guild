@@ -10,7 +10,8 @@ struct MarkerFocusHelper {
         verticalOffset: CGFloat,
         totalCandleWidth: CGFloat,
         actualCandleWidth: CGFloat,
-        totalOffset: CGFloat
+        totalOffset: CGFloat,
+        clampToRange: Bool = true
     ) -> Double? {
         guard marker.candleIndex >= 0, marker.candleIndex < candles.count else {
             return nil
@@ -46,7 +47,7 @@ struct MarkerFocusHelper {
 
         let normalizedY = (chartSize.height - (markerPosition.y + verticalOffset)) / scaledHeight
         let unclamped = priceRange.min + Double(normalizedY) * range
-        let resolved = min(priceRange.max, max(priceRange.min, unclamped))
+        let resolved = clampToRange ? min(priceRange.max, max(priceRange.min, unclamped)) : unclamped
 
         guard resolved.isFinite else {
             return nil

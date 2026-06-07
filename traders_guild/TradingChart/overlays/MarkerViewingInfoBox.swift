@@ -59,29 +59,6 @@ struct MarkerViewingInfoBox: View {
         return String(format: "R:R %.2f", reward / risk)
     }
 
-    private var setupResolvedDetailParts: [String] {
-        guard let outcome = setupOutcome else { return [] }
-        return [
-            outcome.triggerPrice.map(formatPrice),
-            outcome.triggeredAtFormatted
-        ].compactMap { $0 }
-    }
-
-    private var setupOutcomePnlText: String? {
-        guard let pnl = setupOutcome?.pnl else { return nil }
-        return pnl >= 0 ? String(format: "+%.2f%%", pnl) : String(format: "%.2f%%", pnl)
-    }
-
-    private var setupOutcomePnlColor: Color {
-        guard let outcome = setupOutcome, let pnl = outcome.pnl else { return AppColors.primaryForeground }
-        return pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color
-    }
-
-    private var setupOutcomeRepTint: Color {
-        guard let outcome = setupOutcome else { return AppColors.primaryForeground }
-        return (outcome.guildRepDelta ?? 0) >= 0 ? outcome.state.color : RLComponentType.levelSl.color
-    }
-
     private var reactionEmoji: String? {
         let trimmed = marker.selectedEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
@@ -233,7 +210,12 @@ struct MarkerViewingInfoBox: View {
     @ViewBuilder
     private var setupContent: some View {
         if let outcome = setupOutcome {
-            resolvedSetupSummary(outcome)
+            SetupOutcomeCard(
+                outcome: outcome,
+                size: .compact,
+                riskRewardText: setupRiskRewardText,
+                formatPrice: formatPrice
+            )
         } else {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
@@ -251,78 +233,6 @@ struct MarkerViewingInfoBox: View {
                 }
             }
         }
-    }
-
-    private func resolvedSetupSummary(_ outcome: SetupOutcome) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                if let trackingState = marker.trackingState {
-                    TrackingStatePill(state: trackingState, size: .compact)
-                }
-                Spacer(minLength: 0)
-            }
-
-            HStack(alignment: .center, spacing: 8) {
-                Image(systemName: outcome.displayIcon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(outcome.state.color)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(outcome.displayLabel)
-                        .font(.system(size: 11.5, weight: .bold))
-                        .foregroundColor(AppColors.primaryForeground)
-
-                    if !setupResolvedDetailParts.isEmpty {
-                        Text(setupResolvedDetailParts.joined(separator: " · "))
-                            .font(.system(size: 9.5, weight: .medium))
-                            .foregroundColor(AppColors.overlayPanelSecondaryText)
-                            .lineLimit(2)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                if let setupOutcomePnlText {
-                    Text(setupOutcomePnlText)
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                        .foregroundColor(setupOutcomePnlColor)
-                }
-            }
-
-            if setupRiskRewardText != nil || outcome.repChangeText != nil {
-                HStack(spacing: 8) {
-                    if let setupRiskRewardText {
-                        compactOutcomeStat(
-                            label: setupRiskRewardText,
-                            tint: AppColors.surfaceWhite70
-                        )
-                    }
-
-                    if let repText = outcome.repChangeText {
-                        compactOutcomeStat(
-                            label: "Rep \(repText)",
-                            tint: setupOutcomeRepTint
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func compactOutcomeStat(label: String, tint: Color) -> some View {
-        Text(label)
-            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-            .foregroundColor(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(AppColors.whiteText.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                    )
-            )
     }
 
     private var pollContent: some View {

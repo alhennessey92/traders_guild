@@ -43,8 +43,7 @@ struct UserListView: View {
     
     // Tab state
     @State private var selectedTab: UserListTab = .guild
-    @State private var isCreatingInviteLink = false
-    @State private var inviteShareItem: InviteShareItem?
+    @State private var showInviteHub = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -93,8 +92,14 @@ struct UserListView: View {
                 await refreshFriendRelationships()
             }
         }
-        .sheet(item: $inviteShareItem) { item in
-            GuildInviteActivityView(item: item)
+        .sheet(isPresented: $showInviteHub) {
+            GuildInviteHubView(
+                headline: "Refer friends to \(rlAppState.currentGuild?.name ?? "your guild")",
+                subheadline: "Share your referral link and earn reputation when friends join.",
+                primaryButtonTitle: "Done",
+                shareMode: .referral
+            )
+            .environmentObject(rlAppState)
         }
     }
     
@@ -109,8 +114,7 @@ struct UserListView: View {
     
     private func loadGuildMembersIfNeeded() async {
         guard let guild = rlAppState.currentGuild else { return }
-        guard leftDrawerViewModel.guildMembers.isEmpty else { return }
-        await leftDrawerViewModel.refreshGuildMembers(guildId: guild.id, rlAppState: rlAppState)
+        await leftDrawerViewModel.refreshGuildMembersIfStale(guildId: guild.id, rlAppState: rlAppState)
     }
 
     private func refreshFriendRelationships() async {
@@ -122,7 +126,7 @@ struct UserListView: View {
 
     private var inviteShareButton: some View {
         Button {
-            Task { await createShareInviteLink() }
+            showInviteHub = true
         } label: {
             HStack(spacing: 12) {
                 ZStack {
@@ -130,15 +134,9 @@ struct UserListView: View {
                         .fill(AppColors.onAccentForeground.opacity(0.16))
                         .frame(width: 42, height: 42)
 
-                    if isCreatingInviteLink {
-                        ProgressView()
-                            .scaleEffect(0.76)
-                            .tint(AppColors.onAccentForeground)
-                    } else {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(AppColors.onAccentForeground)
-                    }
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(AppColors.onAccentForeground)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -180,31 +178,9 @@ struct UserListView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(isCreatingInviteLink || rlAppState.currentGuild == nil)
+        .disabled(rlAppState.currentGuild == nil)
     }
 
-    private func createShareInviteLink() async {
-        guard !isCreatingInviteLink else { return }
-        await MainActor.run { isCreatingInviteLink = true }
-        defer {
-            Task { @MainActor in isCreatingInviteLink = false }
-        }
-
-        do {
-            let link = try await rlAppState.createGuildInviteLink()
-            guard let url = URL(string: link.shareUrl) else {
-                await MainActor.run { rlAppState.showInfo("Invite link created") }
-                return
-            }
-            await MainActor.run {
-                inviteShareItem = InviteShareItem(
-                    url: url,
-                    guildName: rlAppState.currentGuild?.name ?? "my guild"
-                )
-            }
-        } catch { }
-    }
-    
     private func getCountForTab(_ tab: UserListTab) -> Int {
         switch tab {
         case .guild: return leftDrawerViewModel.guildMembers.count
@@ -370,181 +346,6 @@ struct UserListView: View {
     }
 }
 
-private struct InviteShareItem: Identifiable {
-    let id = UUID()
-    let url: URL
-    let guildName: String
-
-    var previewTitle: String {
-        "Join \(guildName)"
-    }
-
-    var previewSubtitle: String {
-        "Refer friends to Traders Guild and earn reputation when they join."
-    }
-
-    var message: String {
-        "Join \(guildName) on Traders Guild. Use my referral link to join the guild and build reputation together: \(url.absoluteString)"
-    }
-}
-
-private struct GuildInviteActivityView: UIViewControllerRepresentable {
-    let item: InviteShareItem
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let source = GuildInviteActivityItemSource(item: item)
-        return UIActivityViewController(activityItems: [source], applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
-private final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
-    private let item: InviteShareItem
-
-    init(item: InviteShareItem) {
-        self.item = item
-        super.init()
-    }
-
-    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
-        item.url
-    }
-
-    func activityViewController(
-        _ activityViewController: UIActivityViewController,
-        itemForActivityType activityType: UIActivity.ActivityType?
-    ) -> Any? {
-        item.message
-    }
-
-    func activityViewController(
-        _ activityViewController: UIActivityViewController,
-        subjectForActivityType activityType: UIActivity.ActivityType?
-    ) -> String {
-        item.previewTitle
-    }
-
-    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
-        let metadata = LPLinkMetadata()
-        metadata.title = item.previewTitle
-        metadata.originalURL = item.url
-        metadata.url = item.url
-
-        if let icon = Self.appIconImage() {
-            let provider = NSItemProvider(object: icon)
-            metadata.iconProvider = provider
-            metadata.imageProvider = provider
-        }
-
-        return metadata
-    }
-
-    private static func appIconImage() -> UIImage? {
-        if let icon = UIImage(named: "AppIcon") {
-            return icon
-        }
-
-        if let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any],
-           let primaryIcon = icons["CFBundlePrimaryIcon"] as? [String: Any],
-           let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String] {
-            for name in iconFiles.reversed() {
-                if let icon = UIImage(named: name) {
-                    return icon
-                }
-            }
-        }
-
-        if let bundledIcon = composedBundledAppIcon() {
-            return bundledIcon
-        }
-
-        return renderedFallbackIcon()
-    }
-
-    private static func bundledImage(named name: String, subdirectory: String) -> UIImage? {
-        let url = Bundle.main.url(
-            forResource: name,
-            withExtension: "png",
-            subdirectory: subdirectory
-        ) ?? Bundle.main.url(forResource: name, withExtension: "png")
-        guard let url else { return nil }
-
-        return UIImage(contentsOfFile: url.path)
-    }
-
-    private static func composedBundledAppIcon() -> UIImage? {
-        let logo = bundledImage(named: "TG 6", subdirectory: "AppIcon.icon/Assets")
-            ?? bundledImage(named: "TG 3", subdirectory: "AppIconPreview/Assets")
-        let background = bundledImage(named: "appiconbg 2", subdirectory: "AppIcon.icon/Assets")
-            ?? bundledImage(named: "appiconbg 2", subdirectory: "AppIconPreview/Assets")
-
-        guard logo != nil || background != nil else { return nil }
-
-        let size = CGSize(width: 96, height: 96)
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            let rect = CGRect(origin: .zero, size: size)
-            if let background {
-                background.draw(in: rect)
-            } else {
-                UIColor(red: 0.06, green: 0.11, blue: 0.22, alpha: 1).setFill()
-                UIBezierPath(roundedRect: rect, cornerRadius: 22).fill()
-            }
-
-            if let logo {
-                let logoWidth = size.width * 0.72
-                let logoHeight = logoWidth * (logo.size.height / max(logo.size.width, 1))
-                let logoRect = CGRect(
-                    x: (size.width - logoWidth) / 2,
-                    y: (size.height - logoHeight) / 2 + 7,
-                    width: logoWidth,
-                    height: logoHeight
-                )
-                logo.draw(in: logoRect)
-            }
-        }
-    }
-
-    private static func renderedFallbackIcon() -> UIImage {
-        let size = CGSize(width: 96, height: 96)
-        return UIGraphicsImageRenderer(size: size).image { context in
-            let rect = CGRect(origin: .zero, size: size)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 22)
-            path.addClip()
-
-            let colors = [
-                UIColor(red: 0.08, green: 0.15, blue: 0.30, alpha: 1).cgColor,
-                UIColor(red: 0.00, green: 0.72, blue: 0.86, alpha: 1).cgColor,
-            ] as CFArray
-            if let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: colors,
-                locations: [0, 1]
-            ) {
-                context.cgContext.drawLinearGradient(
-                    gradient,
-                    start: CGPoint(x: 0, y: 0),
-                    end: CGPoint(x: size.width, y: size.height),
-                    options: []
-                )
-            }
-
-            let text = "TG" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 34, weight: .heavy),
-                .foregroundColor: UIColor.white,
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (size.width - textSize.width) / 2,
-                    y: (size.height - textSize.height) / 2
-                ),
-                withAttributes: attributes
-            )
-        }
-    }
-}
 
 // MARK: - ================================================================================================
 // MARK: - PENDING FRIEND REQUESTS (REAL API)

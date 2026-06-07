@@ -221,6 +221,11 @@ class RLAppState: ObservableObject {
     @Published var pendingPasswordResetToken: String?
     @Published var pendingEmailVerificationToken: String?
     @Published var pendingReferralInviteCode: String?
+    /// Guild vanity handle captured from a /g/{slug} deep link.
+    @Published var pendingGuildSlug: String?
+    /// Guild the user picked during signup but couldn't join yet because their
+    /// email wasn't verified. Joined right after the email verification step.
+    @Published var pendingOnboardingGuildId: UUID?
     
     /// Flag to prevent race conditions during login/signup flow
     /// When true, external triggers (like onAppear) should NOT call openGuildSelector
@@ -240,6 +245,13 @@ class RLAppState: ObservableObject {
     private var isConsumingPendingReferralInviteCode = false
     private static var pendingReferralInviteCodeStorageKey: String {
         "pending_referral_invite_code.\(AppConfig.sessionStorageNamespace)"
+    }
+    private var isConsumingPendingGuildSlug = false
+    private static var pendingGuildSlugStorageKey: String {
+        "pending_guild_slug.\(AppConfig.sessionStorageNamespace)"
+    }
+    private static var pendingOnboardingGuildIdStorageKey: String {
+        "pending_onboarding_guild_id.\(AppConfig.sessionStorageNamespace)"
     }
     
     // ================================================================================================
@@ -271,6 +283,10 @@ class RLAppState: ObservableObject {
     init(restoreSessionOnInit: Bool = true) {
         print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
         pendingReferralInviteCode = UserDefaults.standard.string(forKey: Self.pendingReferralInviteCodeStorageKey)
+        pendingGuildSlug = UserDefaults.standard.string(forKey: Self.pendingGuildSlugStorageKey)
+        if let storedOnboardingGuild = UserDefaults.standard.string(forKey: Self.pendingOnboardingGuildIdStorageKey) {
+            pendingOnboardingGuildId = UUID(uuidString: storedOnboardingGuild)
+        }
 
         guard restoreSessionOnInit else {
             return
@@ -501,9 +517,10 @@ class RLAppState: ObservableObject {
             title: title,
             message: message,
             severity: .warning,
-            style: .alert
+            style: .toast
         )
         currentAlert = alert
+        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func clearAlert() {
@@ -719,11 +736,6 @@ class RLAppState: ObservableObject {
             )
         )
         self.currentUser = updatedUser
-
-        guard let dob = data.dateOfBirth else {
-            throw RLSignupValidationError.missingDateOfBirth
-        }
-        _ = try await realApi.updateDateOfBirth(RLDOBUpdateRequest(dateOfBirth: dob))
     }
 
     /// Verify email address with token
@@ -1058,6 +1070,118 @@ class RLAppState: ObservableObject {
             )
             return false
         } catch {
+            return false
+        }
+    }
+
+    func setPendingGuildSlug(_ slug: String?) {
+        let normalized = slug?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard let normalized, !normalized.isEmpty else {
+            pendingGuildSlug = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingGuildSlugStorageKey)
+            return
+        }
+
+        pendingGuildSlug = normalized
+        UserDefaults.standard.set(normalized, forKey: Self.pendingGuildSlugStorageKey)
+        if !isAuthenticated {
+            showInfo(RLUserFacingCopy.text(.infoReferralSaved))
+        }
+    }
+
+    /// Resolve a pending guild handle once the user is authenticated + verified.
+    /// Already a member → switch to it. Open guild → join + switch. Private
+    /// guild the user can't open-join → point them at an invite link.
+    @discardableResult
+    func consumePendingGuildSlugIfPossible() async -> Bool {
+        guard !isConsumingPendingGuildSlug,
+              isAuthenticated,
+              let slug = pendingGuildSlug,
+              !slug.isEmpty else {
+            return false
+        }
+
+        if currentUser?.isVerified == false {
+            return false
+        }
+
+        isConsumingPendingGuildSlug = true
+        defer { isConsumingPendingGuildSlug = false }
+
+        func clearPending() {
+            pendingGuildSlug = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingGuildSlugStorageKey)
+        }
+
+        do {
+            let guild = try await realApi.resolveGuildBySlug(slug: slug)
+
+            // Already a member — just switch to it.
+            if let existing = userGuilds.first(where: { $0.guild.id == guild.id }) {
+                selectGuild(existing, showTransition: false)
+                clearPending()
+                return true
+            }
+
+            // Open guild — join and switch.
+            if guild.isOpen {
+                _ = try await joinGuild(guildId: guild.id, showTransition: false)
+                clearPending()
+                return true
+            }
+
+            // Private guild — can't open-join from a public handle.
+            clearPending()
+            showInfo("\(guild.name) is invite-only. Ask the guild for an invite link to join.")
+            return false
+        } catch APIError.unauthorized {
+            return false
+        } catch APIError.serverError(let status, _) where status == 403 {
+            return false
+        } catch {
+            // Unknown/expired handle — drop it so we don't retry forever.
+            clearPending()
+            return false
+        }
+    }
+
+    func setPendingOnboardingGuildId(_ id: UUID?) {
+        pendingOnboardingGuildId = id
+        if let id {
+            UserDefaults.standard.set(id.uuidString, forKey: Self.pendingOnboardingGuildIdStorageKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.pendingOnboardingGuildIdStorageKey)
+        }
+    }
+
+    /// Join the guild the user selected during signup, now that their email is
+    /// verified. Called from the email-verification step's continue handler.
+    /// Backend gates joins on verification, so this can only run post-verify.
+    @discardableResult
+    func completeDeferredOnboardingGuildJoinIfNeeded() async -> Bool {
+        guard let guildId = pendingOnboardingGuildId,
+              isAuthenticated,
+              currentUser?.isVerified == true else {
+            return false
+        }
+
+        // Already a member (e.g. retry) — just select it and clear.
+        if let existing = userGuilds.first(where: { $0.guild.id == guildId }) {
+            selectGuild(existing, showTransition: false)
+            setPendingOnboardingGuildId(nil)
+            return true
+        }
+
+        do {
+            _ = try await joinGuild(guildId: guildId, showTransition: false)
+            setPendingOnboardingGuildId(nil)
+            return true
+        } catch {
+            // Leave it pending; completeOnboardingAndEnterApp() recovers with a
+            // fallback guild / the selector if this never resolves.
             return false
         }
     }
@@ -2742,23 +2866,6 @@ class RLAppState: ObservableObject {
             return response
         } catch {
             showError(error, title: "Failed to Change Password", style: .toast, context: .settings)
-            throw error
-        }
-    }
-
-    /// Update date of birth
-    func updateDateOfBirth(_ date: Date) async throws -> RLDetailResponseDTO {
-        do {
-            let request = RLDOBUpdateRequest(dateOfBirth: date)
-            let response = try await realApi.updateDateOfBirth(request)
-            // Refresh user to keep local state in sync
-            if let updatedUser = try? await realApi.getCurrentUser() {
-                currentUser = updatedUser
-            }
-            showSuccess(RLUserFacingCopy.text(.successDateOfBirthUpdated))
-            return response
-        } catch {
-            showError(error, title: "Failed to Update Date of Birth", style: .toast)
             throw error
         }
     }

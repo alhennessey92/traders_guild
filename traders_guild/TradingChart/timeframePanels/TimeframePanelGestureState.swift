@@ -18,6 +18,7 @@ class TimeframePanelGestureState: ObservableObject {
     @Published var candleWidthScale: CGFloat = 1.0
     @Published var priceScale: CGFloat = 1.0
     @Published var verticalPanOffset: CGFloat = 0
+    @Published private(set) var isUserDrivenPanActive: Bool = false
 
     // MARK: - Private
 
@@ -29,13 +30,25 @@ class TimeframePanelGestureState: ObservableObject {
     // MARK: - Pan
 
     func beginDrag() {
+        isUserDrivenPanActive = true
         accumulatedOffset = panOffset
         bodyDragStartVerticalOffset = verticalPanOffset
     }
 
-    func applyPan(translationX: CGFloat, chartWidth: CGFloat, candleCount: Int, candleWidth: CGFloat) {
-        let totalContentWidth = CGFloat(candleCount) * candleWidth
-        let maxLeftOffset = chartWidth * 0.5
+    func applyPan(
+        translationX: CGFloat,
+        chartWidth: CGFloat,
+        candleCount: Int,
+        candleWidth: CGFloat,
+        olderEdgeGuardCandleCount: Int = 0,
+        historicalRenderIndexOffset: Int = 0
+    ) {
+        let renderOffset = max(0, min(historicalRenderIndexOffset, candleCount))
+        let totalContentWidth = CGFloat(max(0, candleCount - renderOffset)) * candleWidth
+        let guardedMaxOffset = CGFloat(renderOffset - max(0, olderEdgeGuardCandleCount)) * candleWidth
+        let maxLeftOffset = olderEdgeGuardCandleCount > 0
+            ? guardedMaxOffset
+            : CGFloat(renderOffset) * candleWidth + chartWidth * 0.5
         let maxRightOffset = -(totalContentWidth - chartWidth * 0.5)
 
         // translationX is incremental (delta since last frame), so add to current panOffset
@@ -45,6 +58,7 @@ class TimeframePanelGestureState: ObservableObject {
 
     func endDrag() {
         accumulatedOffset = panOffset
+        isUserDrivenPanActive = false
     }
 
     func applyBodyPan(
@@ -53,13 +67,17 @@ class TimeframePanelGestureState: ObservableObject {
         chartWidth: CGFloat,
         candleCount: Int,
         candleWidth: CGFloat,
-        panelHeight: CGFloat
+        panelHeight: CGFloat,
+        olderEdgeGuardCandleCount: Int = 0,
+        historicalRenderIndexOffset: Int = 0
     ) {
         applyPan(
             translationX: translationX,
             chartWidth: chartWidth,
             candleCount: candleCount,
-            candleWidth: candleWidth
+            candleWidth: candleWidth,
+            olderEdgeGuardCandleCount: olderEdgeGuardCandleCount,
+            historicalRenderIndexOffset: historicalRenderIndexOffset
         )
 
         let proposedOffset = verticalPanOffset + translationY
@@ -121,6 +139,7 @@ class TimeframePanelGestureState: ObservableObject {
     // MARK: - Reset
 
     func reset() {
+        isUserDrivenPanActive = false
         panOffset = .zero
         candleWidthScale = 1.0
         priceScale = 1.0
@@ -131,16 +150,24 @@ class TimeframePanelGestureState: ObservableObject {
         lastPricePinchScale = 1.0
     }
 
+    func recenterVertical(resetScale: Bool) {
+        if resetScale {
+            priceScale = 1.0
+            lastPricePinchScale = 1.0
+        }
+        verticalPanOffset = 0
+        bodyDragStartVerticalOffset = 0
+    }
+
     /// Center the view on a specific candle index.
-    func centerOn(candleIndex: Int, totalCandleWidth: CGFloat, chartWidth: CGFloat) {
-        let candleX = CGFloat(candleIndex) * totalCandleWidth
+    func centerOn(candleIndex: Int, totalCandleWidth: CGFloat, chartWidth: CGFloat, historicalRenderIndexOffset: Int = 0) {
+        let candleX = CGFloat(candleIndex - historicalRenderIndexOffset) * totalCandleWidth
         panOffset.width = chartWidth / 2 - candleX
         accumulatedOffset = panOffset
     }
 
     func shiftForPrependedCandles(count: Int, totalCandleWidth: CGFloat) {
-        guard count > 0, totalCandleWidth > 0 else { return }
-        panOffset.width -= CGFloat(count) * totalCandleWidth
+        guard count > 0 else { return }
         accumulatedOffset = panOffset
     }
 

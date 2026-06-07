@@ -23,6 +23,7 @@ class ChartViewModel: ObservableObject {
     private var isPerformingRealtimeResync = false
     private var lastRealtimeResyncAt: Date = .distantPast
     private var stalenessWatchdogTask: Task<Void, Never>?
+    private var historicalPreloadTask: Task<Void, Never>?
     private var lastRealtimeMarketEventAt: Date = .distantPast
     
     /// Current WebSocket channel subscriptions for real-time market data
@@ -68,6 +69,8 @@ class ChartViewModel: ObservableObject {
     
     @Published var currentSymbol: RLTradingSymbolDTO?
     @Published var currentTimeframe: RLChartTimeframe = .m5
+    /// 24h price series powering the collapsed symbol panel's mini line chart.
+    @Published var currentSymbolPreview: SymbolPreview?
     @Published var availableSymbols: [RLTradingSymbolDTO] = []
     @Published var activeMarketProvider: String?
     @Published var activeMarketProviderUpdatedAt: Date?
@@ -83,7 +86,7 @@ class ChartViewModel: ObservableObject {
     @Published private(set) var markerNavigationSession: MarkerNavigationSession?
 
     private var earliestHistoricalCandleTimestamp: Date?
-    private let historicalCandlePageSize = 1000
+    private let historicalCandlePageSize = HistoricalPreloadPolicy.pageSize
     
     // MARK: - Watchlists
     
@@ -154,6 +157,7 @@ class ChartViewModel: ObservableObject {
 
     deinit {
         stalenessWatchdogTask?.cancel()
+        historicalPreloadTask?.cancel()
     }
     
     // MARK: - Public Methods
@@ -244,6 +248,10 @@ class ChartViewModel: ObservableObject {
         skipSubscribe: Bool = false,
         mergeWithExisting: Bool = false
     ) async {
+        if !mergeWithExisting {
+            cancelHistoricalPreload()
+        }
+
         do {
             let timeframeString = timeframe.toBackendString()
             let chartData = try await api.getChartData(
@@ -266,10 +274,17 @@ class ChartViewModel: ObservableObject {
             dataManager.currentTimeframe = timeframe
 
             if mergeWithExisting, !dataManager.candles.isEmpty {
-                let prependedCount = dataManager.mergeHistoricalMarketData(chartData.candles)
-                if prependedCount > 0 && !isNavigatingToMarker {
-                    gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
-                }
+                let mergeResult = dataManager.mergeHistoricalMarketData(
+                    chartData.candles,
+                    preservePriceRangeForPurePrepend: false,
+                    beforePublishingPrepend: { [weak self] prependedCount in
+                        guard let self, !self.isNavigatingToMarker else { return }
+                        self.gestureState.applyHistoricalPrepend(
+                            count: prependedCount,
+                            totalCandleWidth: self.totalCandleWidth
+                        )
+                    }
+                )
                 hasMoreHistoricalCandles = hasMoreHistoricalCandles || chartData.hasMoreCandles
             } else {
                 dataManager.updateWithMarketData(chartData.candles)
@@ -328,6 +343,7 @@ class ChartViewModel: ObservableObject {
             dataManager.updateWithMarketData([])
             earliestHistoricalCandleTimestamp = nil
             hasMoreHistoricalCandles = false
+            cancelHistoricalPreload()
         }
     }
 
@@ -363,6 +379,7 @@ class ChartViewModel: ObservableObject {
         dataManager.updateWithMarketData([])
         earliestHistoricalCandleTimestamp = nil
         hasMoreHistoricalCandles = false
+        cancelHistoricalPreload()
         appState.showError(
             title: "No Supported Symbols",
             message: detail.isEmpty
@@ -535,10 +552,17 @@ class ChartViewModel: ObservableObject {
 
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
-            let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
-            if prependedCount > 0 && !isNavigatingToMarker {
-                gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
-            }
+            let mergeResult = dataManager.mergeHistoricalMarketData(
+                candlesResponse.candles,
+                preservePriceRangeForPurePrepend: false,
+                beforePublishingPrepend: { [weak self] prependedCount in
+                    guard let self, !self.isNavigatingToMarker else { return }
+                    self.gestureState.applyHistoricalPrepend(
+                        count: prependedCount,
+                        totalCandleWidth: self.totalCandleWidth
+                    )
+                }
+            )
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
             hasMoreHistoricalCandles = candlesResponse.hasMore
             reconcileCurrentCandleWithSymbolSnapshot(symbol)
@@ -564,27 +588,120 @@ class ChartViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Symbol Preview (compact symbol panel)
+
+    /// Compact 24h price series (closes) for the collapsed symbol panel's line.
+    struct SymbolPreview: Equatable {
+        let symbolId: UUID
+        let closes: [Double]
+    }
+
+    /// Fetch a lightweight 24h price series (fixed 15m resolution → 96 points) so
+    /// the mini line traces accurate "last 24 hours" price flow regardless of the
+    /// chart's current timeframe. Cached per symbol; failures keep any previous
+    /// preview in place.
+    func loadSymbolPreview(for symbolId: UUID) async {
+        if currentSymbolPreview?.symbolId == symbolId { return }
+        do {
+            let response = try await api.getCandles(
+                symbolId: symbolId,
+                timeframe: RLChartTimeframe.m15.toBackendString(),
+                limit: 96
+            )
+            guard response.candles.count >= 2 else {
+                if currentSymbolPreview?.symbolId != symbolId {
+                    currentSymbolPreview = nil
+                }
+                return
+            }
+            currentSymbolPreview = SymbolPreview(
+                symbolId: symbolId,
+                closes: response.candles.map(\.close)
+            )
+        } catch {
+            // Leave any previous preview in place; the panel falls back gracefully.
+        }
+    }
+
     @discardableResult
     func loadOlderCandlesIfNeeded(
         visibleStartIndex: Int,
-        preloadThreshold: Int
+        visibleCandleCount: Int,
+        reason: HistoricalPreloadReason = .viewport
     ) async -> Int {
-        guard visibleStartIndex <= preloadThreshold else { return 0 }
-        return await loadOlderCandles()
+        guard HistoricalPreloadPolicy.shouldPreload(
+            visibleStartIndex: visibleStartIndex,
+            visibleCandleCount: visibleCandleCount,
+            hasMoreHistoricalCandles: hasMoreHistoricalCandles
+        ) else {
+            return 0
+        }
+
+        let outcome = await loadOlderCandlePage(
+            preservePriceRangeForPurePrepend: true,
+            hydrateMarkersImmediately: false
+        )
+        let prependedCount = outcome.mergeResult.prependedCount
+
+        if prependedCount > 0 {
+            scheduleIndicatorRecalc()
+            scheduleHistoricalMarkerHydration(
+                startTime: outcome.startTime,
+                endTime: outcome.endTime,
+                reason: reason
+            )
+        }
+
+        return prependedCount
     }
 
     @discardableResult
     func loadOlderCandles() async -> Int {
+        let outcome = await loadOlderCandlePage(
+            preservePriceRangeForPurePrepend: false,
+            hydrateMarkersImmediately: true
+        )
+        return outcome.mergeResult.prependedCount
+    }
+
+    private func loadOlderCandlePage(
+        preservePriceRangeForPurePrepend: Bool,
+        hydrateMarkersImmediately: Bool
+    ) async -> (
+        mergeResult: HistoricalMergeResult,
+        startTime: Date?,
+        endTime: Date?
+    ) {
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id,
               hasMoreHistoricalCandles,
               !isLoadingOlderCandles,
-              !isLoadingData else {
-            return 0
+              !dataManager.candles.isEmpty else {
+            return (
+                HistoricalMergeResult(
+                    prependedCount: 0,
+                    insertedCount: 0,
+                    duplicateCount: 0,
+                    deferredPriceRangeUpdate: false
+                ),
+                nil,
+                nil
+            )
         }
 
         let endTime = earliestHistoricalCandleTimestamp ?? dataManager.candles.first?.timestamp
-        guard let endTime else { return 0 }
+        guard let endTime else {
+            return (
+                HistoricalMergeResult(
+                    prependedCount: 0,
+                    insertedCount: 0,
+                    duplicateCount: 0,
+                    deferredPriceRangeUpdate: false
+                ),
+                nil,
+                nil
+            )
+        }
 
         isLoadingOlderCandles = true
         defer { isLoadingOlderCandles = false }
@@ -599,15 +716,22 @@ class ChartViewModel: ObservableObject {
                 continuousTime: true
             )
 
-            let prependedCount = dataManager.mergeHistoricalMarketData(candlesResponse.candles)
-            if prependedCount > 0 && !isNavigatingToMarker {
-                gestureState.panOffset.width -= CGFloat(prependedCount) * totalCandleWidth
-            }
+            let mergeResult = dataManager.mergeHistoricalMarketData(
+                candlesResponse.candles,
+                preservePriceRangeForPurePrepend: preservePriceRangeForPurePrepend,
+                beforePublishingPrepend: { [weak self] prependedCount in
+                    guard let self, !self.isNavigatingToMarker else { return }
+                    self.gestureState.applyHistoricalPrepend(
+                        count: prependedCount,
+                        totalCandleWidth: self.totalCandleWidth
+                    )
+                }
+            )
 
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp ?? candlesResponse.earliestTimestamp
-            hasMoreHistoricalCandles = candlesResponse.hasMore && prependedCount > 0
+            hasMoreHistoricalCandles = candlesResponse.hasMore && mergeResult.prependedCount > 0
 
-            if prependedCount > 0, let markerManager {
+            if hydrateMarkersImmediately, mergeResult.prependedCount > 0, let markerManager {
                 await markerManager.mergeMarkersFromAPI(
                     api: api,
                     symbolId: symbol.id,
@@ -621,13 +745,148 @@ class ChartViewModel: ObservableObject {
                 markerManager.recalculateCandleIndices(candles: dataManager.candles)
             }
 
-            if prependedCount > 0 {
+            if hydrateMarkersImmediately, mergeResult.prependedCount > 0 {
                 scheduleIndicatorRecalc()
             }
-            return prependedCount
+
+            return (
+                mergeResult,
+                dataManager.candles.first?.timestamp,
+                previousFirstTimestamp ?? candlesResponse.candles.last?.timestamp
+            )
         } catch {
             print("Failed to load older candles: \(error)")
-            return 0
+            return (
+                HistoricalMergeResult(
+                    prependedCount: 0,
+                    insertedCount: 0,
+                    duplicateCount: 0,
+                    deferredPriceRangeUpdate: false
+                ),
+                nil,
+                nil
+            )
+        }
+    }
+
+    private func scheduleHistoricalWarmupIfNeeded() {
+        cancelHistoricalPreload()
+        guard let symbolId = currentSymbol?.id,
+              let guildId = appState.currentGuild?.id,
+              HistoricalPreloadPolicy.shouldWarmup(
+                candleCount: dataManager.candles.count,
+                timeframe: currentTimeframe,
+                hasMoreHistoricalCandles: hasMoreHistoricalCandles
+              ) else {
+            return
+        }
+
+        let timeframe = currentTimeframe
+        historicalPreloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            await self?.runHistoricalWarmup(
+                symbolId: symbolId,
+                guildId: guildId,
+                timeframe: timeframe
+            )
+        }
+    }
+
+    private func cancelHistoricalPreload() {
+        historicalPreloadTask?.cancel()
+        historicalPreloadTask = nil
+    }
+
+    private func runHistoricalWarmup(
+        symbolId: UUID,
+        guildId: UUID,
+        timeframe: RLChartTimeframe
+    ) async {
+        var totalPrepended = 0
+        var aggregateStartTime: Date?
+        var aggregateEndTime: Date?
+
+        while !Task.isCancelled,
+              isHistoricalPreloadContextCurrent(symbolId: symbolId, guildId: guildId, timeframe: timeframe),
+              HistoricalPreloadPolicy.shouldWarmup(
+                candleCount: dataManager.candles.count,
+                timeframe: timeframe,
+                hasMoreHistoricalCandles: hasMoreHistoricalCandles
+              ) {
+            let outcome = await loadOlderCandlePage(
+                preservePriceRangeForPurePrepend: true,
+                hydrateMarkersImmediately: false
+            )
+            let prependedCount = outcome.mergeResult.prependedCount
+            guard prependedCount > 0 else { break }
+
+            totalPrepended += prependedCount
+            aggregateStartTime = outcome.startTime ?? aggregateStartTime
+            aggregateEndTime = aggregateEndTime ?? outcome.endTime
+        }
+
+        if totalPrepended > 0,
+           isHistoricalPreloadContextCurrent(symbolId: symbolId, guildId: guildId, timeframe: timeframe) {
+            scheduleIndicatorRecalc()
+            scheduleHistoricalMarkerHydration(
+                startTime: aggregateStartTime,
+                endTime: aggregateEndTime,
+                reason: .warmup
+            )
+        }
+
+        if historicalPreloadTask?.isCancelled == false {
+            historicalPreloadTask = nil
+        }
+    }
+
+    private func isHistoricalPreloadContextCurrent(
+        symbolId: UUID,
+        guildId: UUID,
+        timeframe: RLChartTimeframe
+    ) -> Bool {
+        currentSymbol?.id == symbolId &&
+            appState.currentGuild?.id == guildId &&
+            currentTimeframe == timeframe
+    }
+
+    private func scheduleHistoricalMarkerHydration(
+        startTime: Date?,
+        endTime: Date?,
+        reason: HistoricalPreloadReason
+    ) {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id,
+              let startTime,
+              let endTime,
+              startTime < endTime else {
+            return
+        }
+
+        let timeframe = currentTimeframe
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isHistoricalPreloadContextCurrent(
+                    symbolId: symbol.id,
+                    guildId: guildId,
+                    timeframe: timeframe
+                  ),
+                  let markerManager = self.markerManager else {
+                return
+            }
+
+            await markerManager.mergeMarkersFromAPI(
+                api: self.api,
+                symbolId: symbol.id,
+                symbol: symbol.ticker,
+                guildId: guildId,
+                timeframe: timeframe,
+                candles: self.dataManager.candles,
+                startTime: startTime,
+                endTime: endTime
+            )
+            markerManager.recalculateCandleIndices(candles: self.dataManager.candles)
+            print("📈 [Chart] Hydrated historical markers after \(reason.rawValue) preload")
         }
     }
     
@@ -651,6 +910,7 @@ class ChartViewModel: ObservableObject {
                 style: .toast
             )
             dataManager.updateWithMarketData([])
+            cancelHistoricalPreload()
             scheduleIndicatorRecalc()
             return
         }
@@ -690,6 +950,7 @@ class ChartViewModel: ObservableObject {
                 style: .toast
             )
             dataManager.updateWithMarketData([])
+            cancelHistoricalPreload()
             scheduleIndicatorRecalc()
             return
         }

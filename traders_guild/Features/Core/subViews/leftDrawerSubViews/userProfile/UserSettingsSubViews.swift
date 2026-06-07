@@ -23,7 +23,6 @@ enum SettingsDestination: Hashable {
     case avatarSelection
     case changeEmail
     case changePassword
-    case dateOfBirth
     case tradingInterests
     case blockedUsers
     case dataPrivacy
@@ -985,128 +984,9 @@ struct PasswordRequirementRow: View {
 }
 
 
-// ================================================================================================
-// MARK: - Date of Birth View
-// ================================================================================================
-
-struct DateOfBirthView: View {
-    @EnvironmentObject var rlAppState: RLAppState
-    let onBack: () -> Void
-    
-    @State private var selectedDate: Date = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
-    @State private var isSaving = false
-    @State private var showSuccessAlert = false
-    
-    private var ageRequirementMet: Bool {
-        RLAuthValidator.isAtLeastMinimumSignupAge(selectedDate)
-    }
-    
-    var body: some View {
-        ZStack {
-            AppColors.sheetBackground
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                SettingsSubViewHeader(title: "Date of Birth", onBack: onBack)
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Info text
-                        VStack(spacing: 12) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 50))
-                                .foregroundColor(AppColors.accentColor)
-                            
-                            Text("When were you born?")
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.whiteText)
-                            
-                            Text("Your date of birth won't be publicly visible and is used to ensure our community guidelines are followed.")
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.greyText)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
-                        }
-                        .padding(.top, 20)
-                        
-                        // Date picker
-                        DatePicker(
-                            "Date of Birth",
-                            selection: $selectedDate,
-                            in: ...Date(),
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity)
-                        .background(AppColors.symbolSheetGroupedPanelFill)
-                        .cornerRadius(12)
-                        
-                        // Age warning
-                        if !ageRequirementMet {
-                            HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(AppColors.statusWarning)
-                                
-                                Text("You must be at least 13 years old to use Traders Guild.")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.greyText)
-                            }
-                            .padding()
-                            .background(AppColors.statusWarning10)
-                            .cornerRadius(12)
-                        }
-                    }
-                    .padding(.horizontal, 25)
-                }
-                
-                // Save button
-                StandardActionButtonFullWidth(
-                    title: "Save",
-                    backgroundColor: ageRequirementMet ? AppColors.accentColor : AppColors.greyText.opacity(0.5),
-                    foregroundColor: .white,
-                    isLoading: isSaving,
-                    isDisabled: !ageRequirementMet || isSaving,
-                    action: saveDateOfBirth
-                )
-                .padding(.top, 20)
-                .padding(.bottom, 30)
-            }
-        }
-        .onAppear {
-            if let dob = rlAppState.currentUser?.dateOfBirth {
-                selectedDate = dob
-            }
-        }
-        .alert("Date of Birth Updated", isPresented: $showSuccessAlert) {
-            Button("OK") { onBack() }
-        } message: {
-            Text("Your date of birth has been updated successfully.")
-        }
-    }
-    
-    private func saveDateOfBirth() {
-        guard ageRequirementMet else { return }
-        isSaving = true
-        
-        Task {
-            do {
-                _ = try await rlAppState.updateDateOfBirth(selectedDate)
-                
-                await MainActor.run {
-                    isSaving = false
-                    showSuccessAlert = true
-                }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                }
-                print("Failed to update date of birth: \(error)")
-            }
-        }
-    }
-}
+// Date of Birth view removed per App Store Guideline 5.1.1(v):
+// the app does not require date of birth, which is not core to its
+// functionality. Age gating is handled by the App Store age rating.
 
 
 // ================================================================================================
@@ -3135,16 +3015,18 @@ struct PushNotificationSettingsView: View {
                     savePreference(\.markerEngagement, value: newValue)
                 }
 
-                SettingsToggleRow(
-                    icon: "trophy.fill",
-                    title: "Awards",
-                    subtitle: "You unlock a new award",
-                    isOn: $prefs.awards,
-                    iconColor: .yellow
-                )
-                .padding(.horizontal, 16)
-                .onChange(of: prefs.awards) { _, newValue in
-                    savePreference(\.awards, value: newValue)
+                if rlAppState.runtimeFlags.awardsEnabled {
+                    SettingsToggleRow(
+                        icon: "trophy.fill",
+                        title: "Awards",
+                        subtitle: "You unlock a new award",
+                        isOn: $prefs.awards,
+                        iconColor: .yellow
+                    )
+                    .padding(.horizontal, 16)
+                    .onChange(of: prefs.awards) { _, newValue in
+                        savePreference(\.awards, value: newValue)
+                    }
                 }
             }
 

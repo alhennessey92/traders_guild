@@ -280,7 +280,7 @@ struct StochasticPanelView: View {
         let dataPoints = indicatorManager.stochasticData
         guard dataPoints.count >= 2 else { return }
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) + chartData.historicalRenderIndexOffset - 5)
         let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 10)
         
         let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
@@ -310,7 +310,7 @@ struct StochasticPanelView: View {
         let dataPoints = indicatorManager.stochasticData
         guard dataPoints.count >= 2 else { return }
         
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) + chartData.historicalRenderIndexOffset - 5)
         let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(size.width / totalCandleWidth) + 10)
         
         let visiblePoints = dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
@@ -339,7 +339,7 @@ struct StochasticPanelView: View {
     // MARK: - Coordinate Helpers
     
     private func xPosition(for candleIndex: Int) -> CGFloat {
-        CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        CGFloat(candleIndex - chartData.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
 
     private func transformedViewport(height: CGFloat) -> IndicatorPanelViewport {

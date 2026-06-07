@@ -34,6 +34,7 @@ class ChartControlViewModel: ObservableObject {
     // MARK: - Action Closures
     
     var resetChartAction: (() -> Void)?
+    var resetToLatestAction: (() -> Void)?
     var jumpToStartAction: (() -> Void)?
     var jumpToLatestAction: (() -> Void)?
     var toggleAutoScrollAction: (() -> Void)?
@@ -45,6 +46,13 @@ class ChartControlViewModel: ObservableObject {
     /// Reset the chart view to default state
     func resetChart() {
         resetChartAction?()
+        horizontalZoom = 1.0
+        verticalZoom = 1.0
+    }
+
+    /// Reset chart zoom and position to the most recent candle viewport.
+    func resetToLatest() {
+        resetToLatestAction?()
         horizontalZoom = 1.0
         verticalZoom = 1.0
     }

@@ -36,6 +36,7 @@ final class TimeframePanelEntry: ObservableObject, Identifiable {
     @Published var expandedHeight: CGFloat
     @Published var priceScaleBasisHeight: CGFloat
     @Published var isCollapsed: Bool
+    @Published var isLockedToMainChart: Bool
 
     init(
         id: UUID = UUID(),
@@ -57,6 +58,7 @@ final class TimeframePanelEntry: ObservableObject, Identifiable {
         self.expandedHeight = clampedHeight
         self.priceScaleBasisHeight = clampedHeight
         self.isCollapsed = startCollapsed
+        self.isLockedToMainChart = false
     }
 
     func resetPresentationState(

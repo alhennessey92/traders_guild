@@ -588,7 +588,7 @@ extension RealAPIService {
     
     /// Register new user
     func register(data: RLSignupData) async throws -> RLRegistrationResponseDTO {
-        let requestBody = try data.toRequest()
+        let requestBody = data.toRequest()
         
         let response: RLRegistrationResponseDTO = try await request(
             "/auth/register",
@@ -1476,6 +1476,18 @@ extension RealAPIService {
     func resolveGuildInviteLink(code: String) async throws -> RLGuildInviteLinkResolveDTO {
         return try await request(
             "/guilds/invite-links/\(code)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Resolve a guild by its vanity handle (slug) for /g/{slug} deep links.
+    /// GET /guilds/by-slug/{slug}
+    func resolveGuildBySlug(slug: String) async throws -> RLGuildDTO {
+        let encoded = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
+        return try await request(
+            "/guilds/by-slug/\(encoded)",
             service: .core,
             method: "GET",
             auth: true
@@ -2812,22 +2824,6 @@ extension RealAPIService {
             service: .core,
             method: "PUT",
             body: passwordRequest,
-            auth: true
-        )
-    }
-    
-    // =============================================================================================
-    // MARK: - Date of Birth
-    // =============================================================================================
-    
-    /// Update date of birth
-    /// PUT /users/me/dob
-    func updateDateOfBirth(_ dobRequest: RLDOBUpdateRequest) async throws -> RLDetailResponseDTO {
-        return try await request(
-            "/users/me/dob",
-            service: .core,
-            method: "PUT",
-            body: dobRequest,
             auth: true
         )
     }

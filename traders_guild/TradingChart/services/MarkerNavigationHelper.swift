@@ -306,8 +306,7 @@ class MarkerNavigationHelper {
             print("🎯 Candle count: \(candles.count)")
 
             // Center the chart now, and capture the params we'll need for re-centering if more
-            // data arrives during the settle window. centerOnCandle is INSTANT (no display-link
-            // animation) so it can't be interrupted mid-flight by a competing pan write.
+            // data arrives during the settle window.
             capturedChartViewModel.updateMarkerNavigationPhase(sessionId: sessionId, phase: .centering)
             Self.centerChart(
                 on: targetMarker,
@@ -396,8 +395,27 @@ class MarkerNavigationHelper {
             targetCandleIndex = max(0, candles.count - 50)
         }
 
-        let priceRange = chartViewModel.dataManager.priceRange
+        let historicalRenderIndexOffset = chartViewModel.dataManager.historicalRenderIndexOffset
         let chartHeight = UIScreen.main.bounds.height * 0.6
+        let oldPriceRange = chartViewModel.dataManager.priceRange
+        let oldVerticalOffset = gestureState.verticalPanOffset
+        let anchorPrice = targetMarker.price ?? candles[targetCandleIndex].close
+        chartViewModel.dataManager.focusDeferredHistoricalPriceRangeIfNeeded(
+            forCandleIndex: targetCandleIndex,
+            visibleCandleCount: max(1, Int(ceil(chartWidth / totalCandleWidth)))
+        )
+
+        let priceRange = chartViewModel.dataManager.priceRange
+        if oldPriceRange.max > oldPriceRange.min,
+           priceRange.max > priceRange.min {
+            let oldNormalized = (anchorPrice - oldPriceRange.min) / (oldPriceRange.max - oldPriceRange.min)
+            let newNormalized = (anchorPrice - priceRange.min) / (priceRange.max - priceRange.min)
+            if oldNormalized.isFinite, newNormalized.isFinite {
+                let scaledHeight = chartHeight * gestureState.priceScale
+                gestureState.verticalPanOffset = oldVerticalOffset + CGFloat(oldNormalized - newNormalized) * scaledHeight
+            }
+        }
+
         if priceRange.max > priceRange.min {
             let focusMarker = chartViewModel.markerManager.flatMap { manager in
                 matchingMarkerForNavigation(targetMarker, markers: manager.markers)
@@ -412,23 +430,26 @@ class MarkerNavigationHelper {
                     verticalOffset: gestureState.verticalPanOffset,
                     totalCandleWidth: totalCandleWidth,
                     actualCandleWidth: scaledCandleWidth,
-                    totalOffset: gestureState.panOffset.width
+                    totalOffset: gestureState.panOffset.width - CGFloat(historicalRenderIndexOffset) * totalCandleWidth
                 )
             } ?? targetMarker.price ?? candles[targetCandleIndex].close
 
-            gestureState.centerOnMarker(
+            gestureState.animateCenterOnMarker(
                 at: targetCandleIndex,
                 chartWidth: chartWidth,
                 candleWidth: totalCandleWidth,
                 price: focusPrice,
                 chartHeight: chartHeight,
-                priceRange: priceRange
+                priceRange: priceRange,
+                historicalRenderIndexOffset: historicalRenderIndexOffset,
+                duration: 0.85
             )
         } else {
             gestureState.centerOnCandle(
                 at: targetCandleIndex,
                 chartWidth: chartWidth,
-                candleWidth: totalCandleWidth
+                candleWidth: totalCandleWidth,
+                historicalRenderIndexOffset: historicalRenderIndexOffset
             )
         }
     }
@@ -596,7 +617,8 @@ class MarkerNavigationHelper {
             gestureState.centerOnCandle(
                 at: index,
                 chartWidth: chartWidth,
-                candleWidth: totalCandleWidth
+                candleWidth: totalCandleWidth,
+                historicalRenderIndexOffset: chartViewModel?.dataManager.historicalRenderIndexOffset ?? 0
             )
         }
 

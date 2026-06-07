@@ -608,7 +608,7 @@ struct GenericIndicatorPanelView: View {
         let zeroY = viewport.yPosition(for: 0)
 
         for point in data {
-            let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset
+            let x = CGFloat(point.candleIndex - chartData.historicalRenderIndexOffset) * totalCandleWidth + totalOffset
             guard x + actualCandleWidth >= 0 && x <= plotEndX else { continue }
 
             let volumeY = viewport.yPosition(for: point.volume)
@@ -629,7 +629,7 @@ struct GenericIndicatorPanelView: View {
             
             for point in data {
                 guard let ma = point.ma else { continue }
-                let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset + totalCandleWidth / 2
+                let x = CGFloat(point.candleIndex - chartData.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + totalCandleWidth / 2
                 let y = viewport.yPosition(for: ma)
                 
                 if !started {
@@ -719,7 +719,7 @@ struct GenericIndicatorPanelView: View {
         var started = false
         
         for point in data {
-            let x = CGFloat(point.candleIndex) * totalCandleWidth + totalOffset + totalCandleWidth / 2
+            let x = CGFloat(point.candleIndex - chartData.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + totalCandleWidth / 2
             
             guard x >= -totalCandleWidth && x <= chartWidth + totalCandleWidth else { continue }
             
@@ -759,7 +759,7 @@ struct GenericIndicatorPanelView: View {
     private func visibleIndexBounds(totalWidth: CGFloat) -> ClosedRange<Int>? {
         guard !chartData.candles.isEmpty, totalCandleWidth > 0 else { return nil }
         let plotWidth = plotEndX(totalWidth: totalWidth)
-        let start = max(0, Int(floor(-totalOffset / totalCandleWidth)) - 5)
+        let start = max(0, Int(floor(-totalOffset / totalCandleWidth)) + chartData.historicalRenderIndexOffset - 5)
         let end = min(chartData.candles.count - 1, start + Int(ceil(plotWidth / totalCandleWidth)) + 10)
         guard start <= end else { return nil }
         return start...end

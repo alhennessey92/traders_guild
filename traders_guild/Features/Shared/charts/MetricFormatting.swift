@@ -21,6 +21,38 @@ enum MetricFormat {
         return "\(value)"
     }
 
+    /// Friendlier compact form used in headers/badges:
+    /// 9923 → "9.9k", 17000 → "17k", 1_234_567 → "1.2M".
+    /// Drops trailing ".0" and uses lowercase k for thousands.
+    static func compactCount(_ value: Int) -> String {
+        let magnitude = Swift.abs(value)
+        let sign = value < 0 ? "-" : ""
+        if magnitude >= 1_000_000 {
+            return "\(sign)" + trimmingDecimal(Double(magnitude) / 1_000_000) + "M"
+        }
+        if magnitude >= 10_000 {
+            return "\(sign)\(magnitude / 1_000)k"
+        }
+        if magnitude >= 1_000 {
+            return "\(sign)" + trimmingDecimal(Double(magnitude) / 1_000) + "k"
+        }
+        return "\(value)"
+    }
+
+    /// Exact integer with locale-aware thousands separators (e.g. "17,000").
+    /// Use in places where the precise value matters (statistics, breakdowns).
+    static func exactInt(_ value: Int) -> String {
+        value.formatted()
+    }
+
+    private static func trimmingDecimal(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded == rounded.rounded() {
+            return "\(Int(rounded))"
+        }
+        return String(format: "%.1f", rounded)
+    }
+
     /// One-decimal percentage (e.g. 0.723 → "72.3%").
     static func percent(_ ratio: Double, decimals: Int = 1) -> String {
         String(format: "%.\(decimals)f%%", ratio * 100)

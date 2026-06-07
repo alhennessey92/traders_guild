@@ -10,6 +10,7 @@ enum ChartAxisMetrics {
     static let horizontalPriceChipHorizontalPadding: CGFloat = 6
     static let horizontalPriceChipVerticalPadding: CGFloat = 3
     static let horizontalPriceChipCornerRadius: CGFloat = 4
+    static let horizontalPriceChipEdgeClearance: CGFloat = 4
     static let horizontalLabelFontSize: CGFloat = 10
     static let horizontalPriceFontSize: CGFloat = 11
     static let horizontalChipTrailingInset: CGFloat = 6
@@ -46,6 +47,33 @@ enum ChartAxisMetrics {
         return trailingLabelMaxX(totalWidth: totalWidth, width: labelWidth)
     }
 
+    static func priceLineVisibleMaskHeight(
+        totalHeight: CGFloat,
+        xAxisReservedHeight: CGFloat,
+        topExclusionHeight: CGFloat
+    ) -> CGFloat {
+        max(0, totalHeight - xAxisReservedHeight - topExclusionHeight)
+    }
+
+    static func clampedPriceChipCenterY(
+        centerY: CGFloat,
+        totalHeight: CGFloat,
+        chipHeight: CGFloat,
+        topExclusionHeight: CGFloat = 0,
+        bottomExclusionHeight: CGFloat = 0
+    ) -> CGFloat {
+        let halfHeight = chipHeight * 0.5
+        let topLimit = max(
+            halfHeight + horizontalPriceChipEdgeClearance,
+            topExclusionHeight + halfHeight + horizontalPriceChipEdgeClearance
+        )
+        let bottomLimit = max(
+            topLimit,
+            totalHeight - bottomExclusionHeight - halfHeight - horizontalPriceChipEdgeClearance
+        )
+        return min(max(centerY, topLimit), bottomLimit)
+    }
+
     static func yAxisLaneCenterX(totalWidth: CGFloat, axisLaneWidth: CGFloat = yAxisLaneWidth) -> CGFloat {
         max(0, totalWidth - (axisLaneWidth * 0.5))
     }
@@ -74,6 +102,25 @@ enum ChartAxisMetrics {
             width: width,
             height: height
         )
+    }
+
+    static func clampedLabelRect(
+        totalWidth: CGFloat,
+        centerY: CGFloat,
+        width: CGFloat,
+        height: CGFloat = horizontalPriceChipHeight,
+        totalHeight: CGFloat,
+        topExclusionHeight: CGFloat = 0,
+        bottomExclusionHeight: CGFloat = 0
+    ) -> CGRect {
+        let displayY = clampedPriceChipCenterY(
+            centerY: centerY,
+            totalHeight: totalHeight,
+            chipHeight: height,
+            topExclusionHeight: topExclusionHeight,
+            bottomExclusionHeight: bottomExclusionHeight
+        )
+        return labelRect(totalWidth: totalWidth, centerY: displayY, width: width, height: height)
     }
 
     static func setupCoreLabelRect(totalWidth: CGFloat, centerY: CGFloat) -> CGRect {

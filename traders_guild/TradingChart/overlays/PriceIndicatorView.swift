@@ -208,10 +208,14 @@ extension PriceIndicatorView {
         let normalizedPrice = (currentPrice - priceRange.min) / priceSpan
         let rawY = chartHeight - (CGFloat(normalizedPrice) * chartHeight * priceScale) - verticalOffset
         let inlineChipHalf = ChartAxisMetrics.currentPriceChipHeight * 0.5
-        let topLimit = max(inlineChipHalf + 4, topExclusionHeight + inlineChipHalf + 4)
+        let edgeClearance = ChartAxisMetrics.horizontalPriceChipEdgeClearance
+        let topLimit = max(
+            inlineChipHalf + edgeClearance,
+            topExclusionHeight + inlineChipHalf + edgeClearance
+        )
         let bottomLimit = max(
             topLimit,
-            chartHeight - bottomExclusionHeight - inlineChipHalf - 4
+            chartHeight - bottomExclusionHeight - inlineChipHalf - edgeClearance
         )
 
         if rawY >= topLimit && rawY <= bottomLimit {
@@ -231,10 +235,10 @@ extension PriceIndicatorView {
         }
 
         let arrowChipHalf = ChartAxisMetrics.directionalArrowChipHeight * 0.5
-        let arrowTopY = max(topLimit, topExclusionHeight + arrowChipHalf + 4)
+        let arrowTopY = max(topLimit, topExclusionHeight + arrowChipHalf + edgeClearance)
         let arrowBottomY = max(
             arrowTopY,
-            chartHeight - bottomExclusionHeight - arrowChipHalf - 4
+            chartHeight - bottomExclusionHeight - arrowChipHalf - edgeClearance
         )
         let displayY = mode == .clampedToTop ? arrowTopY : arrowBottomY
 

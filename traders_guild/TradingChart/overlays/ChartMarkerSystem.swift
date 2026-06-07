@@ -314,6 +314,14 @@ class MarkerManager: ObservableObject {
         timeframe: RLChartTimeframe,
         candles: [RLCandleDTO]
     ) async {
+        // Discard loads whose candle array belongs to a different timeframe than the one being
+        // loaded — a stale race during a rapid timeframe/symbol switch. Positioning against a
+        // mismatched array assigns wrong candle indices (see candleArrayMatchesTimeframe).
+        guard candleArrayMatchesTimeframe(candles, timeframe) else {
+            print("⏭️ [Markers] Skipping load — candle array does not match timeframe \(timeframe.rawValue)")
+            return
+        }
+
         // Configure MarkerManager with API for persistence
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
 
@@ -352,6 +360,13 @@ class MarkerManager: ObservableObject {
         startTime: Date?,
         endTime: Date?
     ) async {
+        // Discard merges whose candle array belongs to a different timeframe than the one being
+        // loaded — a stale race during a rapid timeframe/symbol switch (see candleArrayMatchesTimeframe).
+        guard candleArrayMatchesTimeframe(candles, timeframe) else {
+            print("⏭️ [Markers] Skipping merge — candle array does not match timeframe \(timeframe.rawValue)")
+            return
+        }
+
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
         self.currentGuildId = guildId
 
@@ -376,8 +391,13 @@ class MarkerManager: ObservableObject {
                 }
 
                 var mergedMarkers = Array(mergedById.values)
+                let indexByTimestamp = self.candleIndexMap(for: candles)
                 for i in 0..<mergedMarkers.count {
-                    if let newIndex = self.findCandleIndex(timestamp: mergedMarkers[i].candleTimestamp, in: candles) {
+                    if let newIndex = self.findCandleIndex(
+                        timestamp: mergedMarkers[i].candleTimestamp,
+                        in: candles,
+                        indexByTimestamp: indexByTimestamp
+                    ) {
                         mergedMarkers[i].candleIndex = newIndex
                     }
                 }
@@ -440,9 +460,14 @@ class MarkerManager: ObservableObject {
         candles: [RLCandleDTO]
     ) -> [ChartMarkerUI] {
         var convertedMarkers: [ChartMarkerUI] = []
+        let indexByTimestamp = candleIndexMap(for: candles)
         for rlMarker in fetchedMarkers {
             guard canRenderMarker(rlMarker) else { continue }
-            if let candleIndex = findCandleIndex(timestamp: rlMarker.candleTimestamp, in: candles) {
+            if let candleIndex = findCandleIndex(
+                timestamp: rlMarker.candleTimestamp,
+                in: candles,
+                indexByTimestamp: indexByTimestamp
+            ) {
                 convertedMarkers.append(ChartMarkerUI(marker: rlMarker, candleIndex: candleIndex))
             }
         }
@@ -461,8 +486,25 @@ class MarkerManager: ObservableObject {
         )
     }
 
-    private func findCandleIndex(timestamp: Date, in candles: [RLCandleDTO]) -> Int? {
+    private func candleIndexMap(for candles: [RLCandleDTO]) -> [Date: Int] {
+        var indexByTimestamp: [Date: Int] = [:]
+        indexByTimestamp.reserveCapacity(candles.count)
+        for (index, candle) in candles.enumerated() {
+            indexByTimestamp[candle.timestamp] = index
+        }
+        return indexByTimestamp
+    }
+
+    private func findCandleIndex(
+        timestamp: Date,
+        in candles: [RLCandleDTO],
+        indexByTimestamp: [Date: Int]? = nil
+    ) -> Int? {
         guard !candles.isEmpty else { return nil }
+        if let exactIndex = indexByTimestamp?[timestamp] {
+            return exactIndex
+        }
+
         var closestIndex: Int?
         var smallestDiff: TimeInterval = .greatestFiniteMagnitude
         let tolerance = candleMatchTolerance(in: candles)
@@ -505,8 +547,41 @@ class MarkerManager: ObservableObject {
         let median = sorted[sorted.count / 2]
         return max(30, median * 0.6)
     }
-    
-    
+
+    /// Guard against positioning markers onto a candle array from a *different* timeframe.
+    ///
+    /// During a rapid symbol/timeframe switch (e.g. navigating to a 4h marker, then switching
+    /// to 5m before the 5m candles arrive), an in-flight marker load can run with the new
+    /// timeframe but the previous timeframe's candle array still in place. Because candle-index
+    /// matching uses a spacing-relative tolerance, markers then snap onto the wrong (sparser)
+    /// candles and keep those stale indices when the correct candles load — surfacing as a mass
+    /// of mis-placed markers that navigate to arbitrary positions. Adjacent timeframes differ by
+    /// ≥2x in spacing, so comparing the array's median spacing to the expected timeframe spacing
+    /// reliably detects the mismatch.
+    private func candleArrayMatchesTimeframe(_ candles: [RLCandleDTO], _ timeframe: RLChartTimeframe) -> Bool {
+        guard candles.count > 1 else { return true } // not enough data to judge — allow
+
+        var diffs: [TimeInterval] = []
+        diffs.reserveCapacity(candles.count - 1)
+        for idx in 1..<candles.count {
+            let diff = candles[idx].timestamp.timeIntervalSince(candles[idx - 1].timestamp)
+            if diff > 0 { diffs.append(diff) }
+        }
+        guard !diffs.isEmpty else { return true }
+
+        let sorted = diffs.sorted()
+        let median = sorted[sorted.count / 2]
+        let expected = timeframe.seconds
+        guard expected > 0 else { return true }
+
+        // Same-timeframe arrays land at ratio ≈ 1.0 (crypto is exact; weekend/DST/month-length
+        // irregularity on higher timeframes stays well within this band because the median is
+        // dominated by regular steps). Any other timeframe sits ≥2x away.
+        let ratio = median / expected
+        return ratio >= 0.6 && ratio <= 1.7
+    }
+
+
     // MARK: - Real-Time Subscriptions
 
     func configureRealTime(dataManager: ChartDataManager) {
@@ -522,8 +597,10 @@ class MarkerManager: ObservableObject {
     }
 
     private func subscribeToMarkerChannel(guildId: UUID) {
-        unsubscribeFromMarkerChannel()
         let channel = "guild:\(guildId.uuidString.lowercased()):markers"
+        guard currentMarkerChannel != channel else { return }
+
+        unsubscribeFromMarkerChannel()
         currentMarkerChannel = channel
         RealTimeService.shared.subscribe(to: [channel], owner: "markers")
     }
@@ -571,7 +648,11 @@ class MarkerManager: ObservableObject {
         // Dedup — ignore if already present
         guard !markers.contains(where: { $0.id == markerDTO.id }) else { return }
 
+        // Don't position against a candle array from a different timeframe — during a
+        // timeframe switch the marker's timeframe can already match `currentTf` while the
+        // previous timeframe's candles are still in place (see candleArrayMatchesTimeframe).
         guard let candles = dataManager?.candles,
+              candleArrayMatchesTimeframe(candles, currentTf),
               let candleIndex = findCandleIndex(timestamp: markerDTO.candleTimestamp, in: candles) else { return }
 
         var marker = ChartMarkerUI(marker: markerDTO, candleIndex: candleIndex)
@@ -729,13 +810,22 @@ class MarkerManager: ObservableObject {
     }
 
     func recalculateCandleIndices(candles: [RLCandleDTO]) {
+        let indexByTimestamp = candleIndexMap(for: candles)
         // Remove markers whose candles no longer exist in the visible window
         markers.removeAll { marker in
-            findCandleIndex(timestamp: marker.candleTimestamp, in: candles) == nil
+            findCandleIndex(
+                timestamp: marker.candleTimestamp,
+                in: candles,
+                indexByTimestamp: indexByTimestamp
+            ) == nil
         }
         // Update indices for remaining markers
         for i in 0..<markers.count {
-            if let newIndex = findCandleIndex(timestamp: markers[i].candleTimestamp, in: candles) {
+            if let newIndex = findCandleIndex(
+                timestamp: markers[i].candleTimestamp,
+                in: candles,
+                indexByTimestamp: indexByTimestamp
+            ) {
                 markers[i].candleIndex = newIndex
             }
         }
@@ -2193,6 +2283,10 @@ struct ChartMarkerSystem {
         let allVisibleMarkers = markers.filter { $0.isVisible }
         let groupedMarkers = Dictionary(grouping: allVisibleMarkers) { $0.candleIndex }
         let sortedCandleIndices = groupedMarkers.keys.sorted()
+        let markerCullMargin = Swift.max(
+            totalCandleWidth * 6,
+            MarkerVisualSpec.baseCanvasDiameter * Swift.max(selectedMarkerScale, 1.0) + MarkerPositionCalculator.hitRadius
+        )
 
         var renderQueue: [RenderedMarker] = []
         renderQueue.reserveCapacity(allVisibleMarkers.count)
@@ -2203,7 +2297,7 @@ struct ChartMarkerSystem {
             
             let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
             
-            if x < -totalCandleWidth * 2 || x > chartSize.width + totalCandleWidth * 2 {
+            if x < -markerCullMargin || x > chartSize.width + markerCullMargin {
                 continue
             }
             

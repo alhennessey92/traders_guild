@@ -307,7 +307,11 @@ struct LeftDrawerMainView: View {
                             endPoint: .bottomTrailing
                         )
                     }
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    // Background interaction stays disabled so taps during the dismiss
+                    // animation can't fall through to the drawer (e.g. tapping outside the
+                    // profile sheet at .fraction(0.6) was landing on TopMarkersView's
+                    // marker rows mid-animation, triggering an unwanted navigation).
+                    .presentationBackgroundInteraction(.disabled)
                     .presentationCornerRadius(33)
             }
             .onChange(of: bottomSheetContent) { oldValue, newValue in
@@ -468,9 +472,11 @@ struct MainDrawerView: View {
     let presentBetaFeedback: () -> Void
     
     @EnvironmentObject var rlAppState: RLAppState
-    
+
     @EnvironmentObject var leftDrawerViewModel: LeftDrawerViewModel
-    
+
+    @State private var showInviteHub = false
+
     /// Member count: from loaded guild members when available, else guild DTO.
     private var memberCount: Int {
         if leftDrawerViewModel.guildMembersTotalCount > 0 { return leftDrawerViewModel.guildMembersTotalCount }
@@ -535,8 +541,64 @@ struct MainDrawerView: View {
 //        ("person.2.fill", "User List", .userList),
 //        ("chart.bar.fill", "Statistics", .statistics)
 //    ]
-    
-    
+
+    /// Owner/admin promo encouraging guild growth. Opens the invite hub.
+    /// Styled to match the "Refer Friends" button in the user list.
+    private var inviteGuildPromoButton: some View {
+        Button {
+            showInviteHub = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.onAccentForeground.opacity(0.16))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(AppColors.onAccentForeground)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Invite to your guild")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.onAccentForeground)
+                    Text("Grow your community — share on X, Discord & more.")
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(AppColors.onAccentForeground.opacity(0.82))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppColors.onAccentForeground)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppColors.friendAccent.opacity(0.96),
+                                AppColors.statusPositive70.opacity(0.82),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(AppColors.onAccentForeground.opacity(0.18), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+
     var body: some View {
         if let rlUser = rlAppState.currentUser,
            let rlGuild = rlAppState.currentGuild,
@@ -625,6 +687,10 @@ struct MainDrawerView: View {
                         .padding(.top, 1)
                         .padding(.leading, 3)
                         .padding(.trailing, 3)
+                    Image(systemName: "target")
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.drawerHeaderPrimaryForeground)
                     Text(guildAccuracyDisplay)
                         .font(.caption)
                         .fontWeight(.bold)
@@ -704,26 +770,37 @@ struct MainDrawerView: View {
             
             // Footer
             VStack(spacing: 16) {
-                
-                
-                
-                
-                
+
+                // Owner/admin invite promo — sits below the Admin Panel menu
+                // item and above the user profile row.
+                if rlAppState.canModerate {
+                    inviteGuildPromoButton
+                }
+
                 Divider()
                     .padding(.top, 2)
                     .padding(.bottom, 2)
-                
-                
+
+
                 UserRowView(user: rlUser, membership: rlMembership, onTap: {  // ✅ No unwrapping!
                     presentProfile()
                 })
-                
-                
+
+
             }
             .padding(.top, 20)
             .padding(.bottom, 40)
             .padding(.leading, 25)
             .padding(.trailing, 25)
+        }
+        .sheet(isPresented: $showInviteHub) {
+            GuildInviteHubView(
+                headline: "Grow \(rlAppState.currentGuild?.name ?? "your guild")",
+                subheadline: "Invite traders from X, Discord, and your contacts to join your guild.",
+                primaryButtonTitle: "Done",
+                shareMode: .guildVanity
+            )
+            .environmentObject(rlAppState)
         }
         } else {
             // Optional: Show error state if user/guild missing

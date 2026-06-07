@@ -93,22 +93,39 @@ struct GuildCrestView: View {
         self.size = size
     }
 
-    var body: some View {
-        if let imageUrl, !imageUrl.isEmpty, let url = URL(string: imageUrl) {
-            // Uploaded guild image — circular, like a user avatar.
-            CachedAvatarImage(url: url, size: size, initials: String(fallbackInitial))
-        } else {
-            // Symbol crest — a tinted shield glyph in a matching circle, so it
-            // sits consistently alongside circular uploaded-image emblems.
-            let tint = GuildCrestCatalog.color(for: crestColor)
-            ZStack {
-                Circle().fill(tint.opacity(0.20))
-                Image(systemName: GuildCrestCatalog.sfSymbol(for: crestSymbol))
-                    .font(.system(size: size * 0.55, weight: .semibold))
-                    .foregroundColor(tint)
-            }
-            .frame(width: size, height: size)
+    private var uploadedImageURL: URL? {
+        guard let urlString = imageUrl,
+              !urlString.isEmpty else {
+            return nil
         }
+        return URL(string: urlString)
+    }
+
+    var body: some View {
+        ZStack {
+            crestContent
+        }
+        .frame(width: size, height: size)
+    }
+
+    @ViewBuilder
+    private var crestContent: some View {
+        if let url = uploadedImageURL {
+            CachedAvatarImage(url: url, size: size, initials: String(fallbackInitial))
+                .transition(.identity)
+        } else {
+            symbolCrest
+                .transition(.identity)
+        }
+    }
+
+    private var symbolCrest: some View {
+        let tint = GuildCrestCatalog.color(for: crestColor)
+        return Image(systemName: GuildCrestCatalog.sfSymbol(for: crestSymbol))
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundColor(tint)
+            .frame(width: size, height: size)
+            .background(Circle().fill(tint.opacity(0.20)))
     }
 }
 

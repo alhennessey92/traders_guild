@@ -24,7 +24,6 @@ struct RLRegisterRequestDTO: Codable {
     let username: String
     let displayName: String          // backend: display_name
     let password: String
-    let dateOfBirth: Date            // backend: date_of_birth
     let language: String?
     let location: String?
 }
@@ -290,10 +289,12 @@ struct RLUserDTO: Codable, Identifiable, Equatable {
 struct RLGuildDTO: Codable, Identifiable, Equatable {
     let id: UUID
     let name: String
+    let slug: String?                // backend: slug (vanity handle for share URLs)
     let description: String?
     let imageUrl: String?            // backend: image_url
     let ownerId: UUID                // backend: owner_id (UUID, not embedded!)
     let isOpen: Bool                 // backend: is_open
+    let isOnboardingSystemGuild: Bool?   // backend: is_onboarding_system_guild
     let reputation: Int
     let memberCount: Int             // backend: member_count
     let membersOnline: Int           // backend: members_online
@@ -336,6 +337,18 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
         status == "active"
     }
 
+    /// Whether this is a system/onboarding guild (new users start here).
+    var isSystemGuild: Bool {
+        isOnboardingSystemGuild == true
+    }
+
+    /// The guild's permanent public address (vanity handle), suitable for
+    /// sharing on X / Discord. Falls back to nil if no slug is set.
+    var shareURL: URL? {
+        guard let slug, !slug.isEmpty else { return nil }
+        return URL(string: "https://tradersguild.co/g/\(slug)")
+    }
+
     /// Create a copy with updated guild settings fields
     func withUpdatedSettings(
         name: String? = nil,
@@ -347,10 +360,12 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
         RLGuildDTO(
             id: id,
             name: name ?? self.name,
+            slug: slug,
             description: description ?? self.description,
             imageUrl: imageUrl,
             ownerId: ownerId,
             isOpen: isOpen ?? self.isOpen,
+            isOnboardingSystemGuild: isOnboardingSystemGuild,
             reputation: reputation,
             memberCount: memberCount,
             membersOnline: membersOnline,
@@ -371,10 +386,12 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
         RLGuildDTO(
             id: id,
             name: name,
+            slug: slug,
             description: description,
             imageUrl: imageUrl,
             ownerId: ownerId,
             isOpen: isOpen,
+            isOnboardingSystemGuild: isOnboardingSystemGuild,
             reputation: newReputation,
             memberCount: memberCount,
             membersOnline: membersOnline,
@@ -2369,10 +2386,6 @@ struct RLPasswordChangeRequest: Codable {
     let newPassword: String
 }
 
-struct RLDOBUpdateRequest: Codable {
-    let dateOfBirth: Date
-}
-
 struct RLDeleteAccountRequest: Codable {
     let password: String?
     let confirmation: String
@@ -2655,6 +2668,24 @@ enum RLAlertSeverity {
         case .success: return "checkmark.circle.fill"
         }
     }
+
+    /// Solid background colour for the full-width toast bar.
+    var toastBackground: Color {
+        switch self {
+        case .error: return AppColors.toastErrorRed
+        case .warning: return AppColors.toastWarningYellow
+        case .info: return AppColors.toastInfoBlue
+        case .success: return AppColors.toastSuccessGreen
+        }
+    }
+
+    /// Text/icon colour that stays legible on the toast bar background.
+    var toastForeground: Color {
+        switch self {
+        case .warning: return AppColors.toastOnYellow
+        default: return .white
+        }
+    }
 }
 
 
@@ -2725,17 +2756,6 @@ enum RLTradingInterestsCatalog {
 // ================================================================================================
 
 /// Form data collected during signup flow - NOT sent directly to API
-enum RLSignupValidationError: LocalizedError {
-    case missingDateOfBirth
-
-    var errorDescription: String? {
-        switch self {
-        case .missingDateOfBirth:
-            return "Date of birth is required."
-        }
-    }
-}
-
 struct RLSignupData {
     var email: String = ""
     var username: String = ""
@@ -2755,7 +2775,6 @@ struct RLSignupData {
 
     /// True when this signup was initiated via Apple Sign In (skips password, pre-fills Apple data)
     var isAppleSignUp: Bool = false
-    var dateOfBirth: Date? = nil
 
     static func defaultLanguage() -> String {
         LocaleOptionCatalog.defaultLanguageCode()
@@ -2764,20 +2783,16 @@ struct RLSignupData {
     static func defaultLocation() -> String {
         LocaleOptionCatalog.defaultCountryCode()
     }
-    
+
     /// Convert to API request format
-    func toRequest() throws -> RLRegisterRequestDTO {
+    func toRequest() -> RLRegisterRequestDTO {
         let normalizedLanguage = RLAuthValidator.trimmed(language)
         let normalizedLocation = RLAuthValidator.trimmed(location)
-        guard let dateOfBirth else {
-            throw RLSignupValidationError.missingDateOfBirth
-        }
         return RLRegisterRequestDTO(
             email: email,
             username: username,
             displayName: name,
             password: password,
-            dateOfBirth: dateOfBirth,
             language: normalizedLanguage.isEmpty ? nil : normalizedLanguage,
             location: normalizedLocation.isEmpty ? nil : normalizedLocation
         )
@@ -2785,8 +2800,6 @@ struct RLSignupData {
 }
 
 enum RLAuthValidator {
-    static let minimumSignupAgeYears = 13
-
     private static let emailRegex = #"^[A-Z0-9a-z._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,64}$"#
     private static let usernameRegex = #"^[A-Za-z0-9_.-]{3,50}$"#
 
@@ -2837,24 +2850,6 @@ enum RLAuthValidator {
 
     static func doPasswordsMatch(_ first: String, _ second: String) -> Bool {
         !first.isEmpty && first == second
-    }
-
-    static func maximumAllowedDateOfBirth(
-        referenceDate: Date = Date(),
-        calendar: Calendar = .current
-    ) -> Date {
-        calendar.date(byAdding: .year, value: -minimumSignupAgeYears, to: referenceDate) ?? referenceDate
-    }
-
-    static func isAtLeastMinimumSignupAge(
-        _ dateOfBirth: Date,
-        referenceDate: Date = Date(),
-        calendar: Calendar = .current
-    ) -> Bool {
-        let dob = calendar.startOfDay(for: dateOfBirth)
-        let reference = calendar.startOfDay(for: referenceDate)
-        let components = calendar.dateComponents([.year], from: dob, to: reference)
-        return (components.year ?? 0) >= minimumSignupAgeYears
     }
 }
 

@@ -1255,11 +1255,6 @@ struct MarkerInfoContent: View {
         }
     }
 
-    private func formatPrice(_ price: Double?) -> String? {
-        guard let price else { return nil }
-        return String(format: "%.5f", price)
-    }
-
     private var newsURL: String? {
         for component in marker.components where component.componentTypeEnum == .linkURL {
             guard case let .link(payload) = component.payload else { continue }
@@ -1277,7 +1272,12 @@ struct MarkerInfoContent: View {
         case .setup:
             VStack(spacing: 16) {
                 if let outcome = MarkerPredictionProgress.outcomeDescription(for: marker.marker) {
-                    setupOutcomeSection(outcome)
+                    SetupOutcomeCard(
+                        outcome: outcome,
+                        size: .detail,
+                        riskRewardText: setupRiskRewardText,
+                        formatPrice: { String(format: "%.5f", $0) }
+                    )
                 }
 
                 // Live progress strip for active setups
@@ -1326,69 +1326,15 @@ struct MarkerInfoContent: View {
         }
     }
 
-    private func setupOutcomeSection(_ outcome: SetupOutcome) -> some View {
-        infoCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: outcome.displayIcon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(outcome.state.color)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Setup Outcome")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppColors.greyText)
-                        Text(outcome.displayLabel)
-                            .font(.headline.weight(.bold))
-                            .foregroundColor(AppColors.primaryForeground)
-                    }
-
-                    Spacer()
-
-                    if let pnl = outcome.pnl {
-                        Text(String(format: "%+.2f%%", pnl))
-                            .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                            .foregroundColor(pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color)
-                    }
-                }
-
-                if let repText = outcome.repChangeText {
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "shield.lefthalf.filled")
-                                .font(.caption)
-                                .foregroundColor(marker.intent.color.opacity(0.95))
-                            Text("Rep")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                        Spacer()
-                        Text(repText)
-                            .font(.system(size: 14, weight: .heavy, design: .monospaced))
-                            .foregroundColor(
-                                (outcome.guildRepDelta ?? 0) >= 0
-                                    ? outcome.state.color
-                                    : RLComponentType.levelSl.color
-                            )
-                    }
-                }
-
-                // Merged trigger price + resolved time into a single compact row
-                let triggerText = outcome.triggerPrice.map { formatPrice($0) ?? "" }
-                let resolvedText = outcome.triggeredAtFormatted
-                let mergedParts = [triggerText.map { "Hit \($0)" }, resolvedText].compactMap { $0 }
-                if !mergedParts.isEmpty {
-                    HStack(spacing: 5) {
-                        Image(systemName: "scope")
-                            .font(.system(size: 10))
-                            .foregroundColor(AppColors.greyText)
-                        Text(mergedParts.joined(separator: " · "))
-                            .font(.caption)
-                            .foregroundColor(AppColors.listCardSecondaryText)
-                    }
-                }
-            }
-        }
+    /// Risk:reward string for the resolved-outcome card (the live progress strip
+    /// computes its own when a setup is still running).
+    private var setupRiskRewardText: String? {
+        let entry = marker.entryPrice ?? marker.horizontalLinePrice ?? marker.price
+        guard let tp = marker.targetPrice, let sl = marker.stopLossPrice else { return nil }
+        let reward = abs(tp - entry)
+        let risk = abs(entry - sl)
+        guard risk > 0.000_000_1, reward > 0 else { return nil }
+        return String(format: "R:R %.2f", reward / risk)
     }
 
     @ViewBuilder

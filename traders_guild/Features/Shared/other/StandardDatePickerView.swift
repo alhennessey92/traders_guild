@@ -91,5 +91,5 @@ struct StandardDatePickerView: View {
 }
 
 #Preview {
-    StandardDatePickerView(title: "Date of Birth", date: .constant(Date()))
+    StandardDatePickerView(title: "Schedule Date", date: .constant(Date()))
 }

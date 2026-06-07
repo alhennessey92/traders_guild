@@ -473,6 +473,18 @@ enum AppColors {
     static var statusInfo: Color { themeAwareInfoBlue }
     static var statusWarning: Color { themeAwareOrange }
 
+    // Full-width toast bar: a solid true yellow for warnings with a legible
+    // near-black text/icon colour. Fixed (not theme-aware) so the yellow reads
+    // identically in light and dark.
+    static let toastWarningYellow = Color(red: 245.0 / 255, green: 197.0 / 255, blue: 24.0 / 255)
+    static let toastOnYellow = Color(red: 26.0 / 255, green: 20.0 / 255, blue: 8.0 / 255)
+    // Deeper, fixed toast palette — the theme-aware system red/green/blue read
+    // too bright as full-width bars. These sit at a consistent medium-deep tone
+    // (white text on all three; yellow keeps dark text).
+    static let toastSuccessGreen = Color(red: 32.0 / 255, green: 140.0 / 255, blue: 70.0 / 255)
+    static let toastErrorRed = Color(red: 197.0 / 255, green: 54.0 / 255, blue: 46.0 / 255)
+    static let toastInfoBlue = Color(red: 42.0 / 255, green: 102.0 / 255, blue: 194.0 / 255)
+
     static var statusNegative08: Color { themeAwareRed.opacity(0.08) }
     static var statusNegative10: Color { themeAwareRed.opacity(0.1) }
     static var statusNegative12: Color { themeAwareRed.opacity(0.12) }

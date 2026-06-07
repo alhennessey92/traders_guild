@@ -8,76 +8,64 @@
 
 import SwiftUI
 
+/// Full-width toast bar pinned to the very bottom of the screen. The solid
+/// severity colour bleeds edge-to-edge and into the bottom safe area (so it
+/// reaches the device's rounded bottom corners); `bottomInset` keeps the text
+/// above the home indicator. Hosted (and animated in/out) by `ToastWindowManager`.
 struct ErrorToastView: View {
     let alert: RLAppAlert
+    /// Bottom safe-area inset (home indicator) supplied by the host window.
+    var bottomInset: CGFloat = 0
     let onDismiss: () -> Void
-    
-    @State private var opacity: Double = 0
-    @State private var offset: CGFloat = 20
-    
+
+    private var foreground: Color { alert.severity.toastForeground }
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: alert.severity.icon)
-                .font(.title3)
-                .foregroundColor(alert.severity.color)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(alert.title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(foreground)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                if !alert.title.isEmpty {
+                    Text(alert.title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(foreground)
+                }
                 Text(alert.message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(4)
+                    .font(.footnote)
+                    .foregroundColor(foreground.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(5)
             }
-            
-            Spacer()
-            
-            // Dismiss button
+
+            Spacer(minLength: 8)
+
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(foreground.opacity(0.85))
+                    .padding(6)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 20)  // ✅ Increased horizontal padding for capsule
-        .padding(.vertical, 14)     // ✅ Adjusted vertical padding
-        .background(
-            Capsule()  // ✅ Changed from RoundedRectangle to Capsule
-                .fill(AppColors.gradientBackgroundDark)
-                .shadow(color: AppColors.surfaceBlack10, radius: 10, x: 0, y: 5)
-        )
-        .overlay(
-            Capsule()  // ✅ Changed from RoundedRectangle to Capsule
-                .stroke(alert.severity.color.opacity(0.3), lineWidth: 1)
-        )
-        .padding(.horizontal)
-        .opacity(opacity)
-        .offset(y: offset)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        // Sit just above the home indicator. On devices with no indicator, 16pt.
+        .padding(.bottom, bottomInset > 0 ? max(bottomInset - 12, 14) : 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(alert.severity.toastBackground)
+        // The hosting controller would otherwise add the bottom safe-area inset
+        // on top of our own bottom padding (double spacing → text floats high).
+        // We handle the home-indicator clearance ourselves via `bottomInset`.
+        .ignoresSafeArea(.container, edges: .bottom)
         .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                opacity = 1
-                offset = 0
-            }
-            
-            // Auto-dismiss after 4 seconds
+            // Auto-dismiss after 4 seconds (the window animates the slide-out).
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                dismissToast()
+                onDismiss()
             }
-        }
-    }
-    
-    private func dismissToast() {
-        withAnimation(.easeIn(duration: 0.3)) {
-            opacity = 0
-            offset = 20
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            onDismiss()
         }
     }
 }

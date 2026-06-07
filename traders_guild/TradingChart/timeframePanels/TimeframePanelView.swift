@@ -68,6 +68,169 @@ struct TimeframePanelPriceViewport {
     }
 }
 
+struct TimeframePanelLockedViewportResolution: Equatable {
+    let candleWidthScale: CGFloat
+    let panOffsetWidth: CGFloat
+    let centerIndex: Double
+}
+
+enum TimeframePanelLockedViewport {
+    static func visibleCenterDate(
+        mainChartVisibleStart: Date?,
+        mainChartVisibleEnd: Date?
+    ) -> Date? {
+        guard let mainChartVisibleStart,
+              let mainChartVisibleEnd,
+              mainChartVisibleEnd > mainChartVisibleStart else {
+            return nil
+        }
+
+        return Date(
+            timeIntervalSince1970: (
+                mainChartVisibleStart.timeIntervalSince1970
+                    + mainChartVisibleEnd.timeIntervalSince1970
+            ) / 2
+        )
+    }
+
+    static func needsOlderCandlesToCenter(
+        targetTime: Date,
+        candles: [RLCandleDTO],
+        hasMoreHistoricalCandles: Bool
+    ) -> Bool {
+        guard hasMoreHistoricalCandles,
+              let firstTimestamp = candles.first?.timestamp else {
+            return false
+        }
+
+        return targetTime < firstTimestamp
+    }
+
+    static func canLockToMainChart(
+        panelTimeframeSeconds: TimeInterval,
+        mainChartTimeframeSeconds: TimeInterval
+    ) -> Bool {
+        mainChartTimeframeSeconds <= 0 || panelTimeframeSeconds >= mainChartTimeframeSeconds
+    }
+
+    static func resolution(
+        candles: [RLCandleDTO],
+        timeframeSeconds: TimeInterval,
+        mainChartVisibleStart: Date?,
+        mainChartVisibleEnd: Date?,
+        plotWidth: CGFloat,
+        historicalRenderIndexOffset: Int,
+        candleWidthScale: CGFloat,
+        baseCandleWidth: CGFloat,
+        candleSpacing: CGFloat,
+        minScale: CGFloat,
+        maxScale: CGFloat
+    ) -> TimeframePanelLockedViewportResolution? {
+        guard candles.count >= 2,
+              timeframeSeconds > 0,
+              plotWidth > 0,
+              baseCandleWidth > 0,
+              let mainChartVisibleStart,
+              let mainChartVisibleEnd,
+              mainChartVisibleEnd > mainChartVisibleStart else {
+            return nil
+        }
+
+        let visibleCenterTime = (mainChartVisibleStart.timeIntervalSince1970 + mainChartVisibleEnd.timeIntervalSince1970) / 2
+        let rawCenterIndex = fractionalIndex(
+            for: Date(timeIntervalSince1970: visibleCenterTime),
+            in: candles,
+            timeframeSeconds: timeframeSeconds
+        )
+        let centerIndex = min(Double(candles.count - 1), max(0, rawCenterIndex))
+        let scale = min(maxScale, max(minScale, candleWidthScale))
+        let totalCandleWidth = baseCandleWidth * scale + candleSpacing
+        let actualCandleWidth = baseCandleWidth * scale
+        let offset = plotWidth / 2
+            - CGFloat(centerIndex - Double(historicalRenderIndexOffset)) * totalCandleWidth
+            - actualCandleWidth / 2
+
+        guard scale.isFinite, offset.isFinite else { return nil }
+        return TimeframePanelLockedViewportResolution(
+            candleWidthScale: scale,
+            panOffsetWidth: offset,
+            centerIndex: centerIndex
+        )
+    }
+
+    static func fractionalIndex(
+        for date: Date,
+        in candles: [RLCandleDTO],
+        timeframeSeconds: TimeInterval
+    ) -> Double {
+        guard let first = candles.first, let last = candles.last else { return 0 }
+        let targetTime = date.timeIntervalSince1970
+        let safeFrame = max(timeframeSeconds, 1)
+
+        if targetTime <= first.timestamp.timeIntervalSince1970 {
+            return (targetTime - first.timestamp.timeIntervalSince1970) / safeFrame
+        }
+
+        if targetTime >= last.timestamp.timeIntervalSince1970 {
+            return Double(candles.count - 1) + (targetTime - last.timestamp.timeIntervalSince1970) / safeFrame
+        }
+
+        var low = 0
+        var high = candles.count - 1
+        while low < high - 1 {
+            let mid = (low + high) / 2
+            if candles[mid].timestamp.timeIntervalSince1970 <= targetTime {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+
+        let lowTime = candles[low].timestamp.timeIntervalSince1970
+        let highTime = candles[high].timestamp.timeIntervalSince1970
+        guard highTime > lowTime else { return Double(low) }
+        return Double(low) + (targetTime - lowTime) / (highTime - lowTime)
+    }
+
+    static func centeredPriceRange(
+        candles: [RLCandleDTO],
+        centerIndex: Double,
+        plotWidth: CGFloat,
+        candleWidthScale: CGFloat,
+        baseCandleWidth: CGFloat,
+        candleSpacing: CGFloat
+    ) -> (min: Double, max: Double)? {
+        guard !candles.isEmpty,
+              plotWidth > 0,
+              baseCandleWidth > 0,
+              candleWidthScale > 0 else {
+            return nil
+        }
+
+        let totalWidth = baseCandleWidth * candleWidthScale + candleSpacing
+        guard totalWidth > 0 else { return nil }
+
+        let visibleCandleCount = max(8, Int(ceil(plotWidth / totalWidth)))
+        let halfWindow = max(4, visibleCandleCount / 2)
+        let roundedCenter = Int(round(centerIndex))
+        let clampedCenter = min(candles.count - 1, max(0, roundedCenter))
+        let startIndex = max(0, clampedCenter - halfWindow)
+        let endIndex = min(candles.count, clampedCenter + halfWindow + 1)
+        guard startIndex < endIndex else { return nil }
+
+        let visibleCandles = candles[startIndex..<endIndex].filter { !$0.isGapFill }
+        guard let minPrice = visibleCandles.map(\.low).min(),
+              let maxPrice = visibleCandles.map(\.high).max() else {
+            return nil
+        }
+
+        let rawRange = maxPrice - minPrice
+        let fallbackPadding = max(abs(maxPrice) * 0.01, 0.01)
+        let padding = rawRange > 0 ? rawRange * 0.08 : fallbackPadding
+        return (minPrice - padding, maxPrice + padding)
+    }
+}
+
 struct TimeframePanelView: View {
     // MARK: - Properties
 
@@ -107,6 +270,9 @@ struct TimeframePanelView: View {
     @State private var hasCenteredOnMarker = false
     @State private var lastKnownChartWidth: CGFloat = UIScreen.main.bounds.width
     @State private var lockedRawPriceRange: (min: Double, max: Double)?
+    @State private var isCenteringToMainChartTime = false
+    @State private var isLoadingCandlesForMarkerCenter = false
+    @State private var centerOperationID = UUID()
 
     private let livePriceBadgeWidth: CGFloat = 60
     private let livePriceBadgeHeight: CGFloat = 20
@@ -123,6 +289,7 @@ struct TimeframePanelView: View {
     private let minVerticalScale: CGFloat = 0.5
     private let maxHorizontalScale: CGFloat = 3.0
     private let minHorizontalScale: CGFloat = 0.15
+    private let lockedHorizontalFollowScale: CGFloat = 1.0
 
     // MARK: - Computed
 
@@ -132,6 +299,21 @@ struct TimeframePanelView: View {
 
     private var isCollapsed: Bool {
         entry.isCollapsed
+    }
+
+    private var isLockedToMainChart: Bool {
+        entry.isLockedToMainChart
+    }
+
+    private var canLockToMainChart: Bool {
+        TimeframePanelLockedViewport.canLockToMainChart(
+            panelTimeframeSeconds: dataManager.timeframe.seconds,
+            mainChartTimeframeSeconds: mainChartTimeframeSeconds
+        )
+    }
+
+    private var canCenterToMainChart: Bool {
+        mainChartVisibleStart != nil && mainChartVisibleEnd != nil && dataManager.candles.count >= 2
     }
 
     private var actualCandleWidth: CGFloat {
@@ -256,10 +438,13 @@ struct TimeframePanelView: View {
         .onAppear {
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: maxPanelHeight)
             lockInitialPriceRangeIfNeeded()
+            enforceLockAvailability()
+            applyLockedMainChartViewportIfNeeded()
         }
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
             lockInitialPriceRangeIfNeeded()
+            applyLockedMainChartViewportIfNeeded()
             requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
         .onChange(of: dataManager.dataRevision) { _, _ in
@@ -267,7 +452,7 @@ struct TimeframePanelView: View {
             hasCenteredOnMarker = false
             centerOnMarkerIfNeeded()
             lockInitialPriceRangeIfNeeded()
-            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+            applyLockedMainChartViewportIfNeeded()
         }
         .onChange(of: maxPanelHeight) { _, newValue in
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: newValue)
@@ -275,20 +460,228 @@ struct TimeframePanelView: View {
         .onChange(of: gestureState.panOffset.width) { _, _ in
             requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
-        .onChange(of: gestureState.candleWidthScale) { _, _ in
-            requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+        .onChange(of: entry.isLockedToMainChart) { _, isLocked in
+            handleLockStateChanged(isLocked: isLocked)
+        }
+        .onChange(of: mainChartVisibleStart) { _, _ in
+            applyLockedMainChartViewportIfNeeded()
+        }
+        .onChange(of: mainChartVisibleEnd) { _, _ in
+            applyLockedMainChartViewportIfNeeded()
+        }
+        .onChange(of: mainChartTimeframeSeconds) { _, _ in
+            enforceLockAvailability()
         }
     }
 
     // MARK: - Center on Marker
 
     private func centerOnMarkerIfNeeded() {
-        guard !hasCenteredOnMarker, let index = markerCandleIndex else { return }
+        guard !isLockedToMainChart,
+              !hasCenteredOnMarker,
+              !isCenteringToMainChartTime else {
+            return
+        }
+        if TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: markerTimestamp,
+            candles: dataManager.candles,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        ) {
+            loadOlderCandlesThenCenterOnMarkerIfNeeded()
+            return
+        }
+
+        applyMarkerCenterIfPossible()
+    }
+
+    private func applyMarkerCenterIfPossible() {
+        guard let index = markerCandleIndex else { return }
         hasCenteredOnMarker = true
         gestureState.centerOn(
             candleIndex: index,
             totalCandleWidth: totalCandleWidth,
-            chartWidth: plotWidth
+            chartWidth: plotWidth,
+            historicalRenderIndexOffset: dataManager.historicalRenderIndexOffset
+        )
+    }
+
+    private func applyLockedMainChartViewportIfNeeded() {
+        guard isLockedToMainChart,
+              canLockToMainChart,
+              let resolution = TimeframePanelLockedViewport.resolution(
+                candles: dataManager.candles,
+                timeframeSeconds: dataManager.timeframe.seconds,
+                mainChartVisibleStart: mainChartVisibleStart,
+                mainChartVisibleEnd: mainChartVisibleEnd,
+                plotWidth: plotWidth,
+                historicalRenderIndexOffset: dataManager.historicalRenderIndexOffset,
+                candleWidthScale: gestureState.candleWidthScale,
+                baseCandleWidth: baseCandleWidth,
+                candleSpacing: candleSpacing,
+                minScale: minHorizontalScale,
+                maxScale: maxHorizontalScale
+              ) else {
+            return
+        }
+
+        if abs(gestureState.candleWidthScale - resolution.candleWidthScale) > 0.0001 {
+            gestureState.candleWidthScale = resolution.candleWidthScale
+        }
+        if abs(gestureState.panOffset.width - resolution.panOffsetWidth) > 0.5 {
+            gestureState.panOffset.width = resolution.panOffsetWidth
+        }
+        if let centeredRange = centeredPriceRange(for: resolution) {
+            lockedRawPriceRange = centeredRange
+            if abs(gestureState.verticalPanOffset) > 0.5 {
+                gestureState.recenterVertical(resetScale: false)
+            }
+        }
+    }
+
+    private func handleLockStateChanged(isLocked: Bool) {
+        if isLocked {
+            guard canLockToMainChart else {
+                entry.isLockedToMainChart = false
+                return
+            }
+            gestureState.candleWidthScale = lockedHorizontalFollowScale
+            gestureState.recenterVertical(resetScale: false)
+            applyLockedMainChartViewportIfNeeded()
+        } else {
+            lockedRawPriceRange = nil
+            lockInitialPriceRangeIfNeeded()
+        }
+    }
+
+    private func enforceLockAvailability() {
+        guard entry.isLockedToMainChart, !canLockToMainChart else { return }
+        entry.isLockedToMainChart = false
+        lockedRawPriceRange = nil
+        lockInitialPriceRangeIfNeeded()
+    }
+
+    private func recenterToMainChartTime() {
+        guard !isCenteringToMainChartTime else { return }
+        guard let centerTime = TimeframePanelLockedViewport.visibleCenterDate(
+            mainChartVisibleStart: mainChartVisibleStart,
+            mainChartVisibleEnd: mainChartVisibleEnd
+        ) else {
+            return
+        }
+
+        let operationID = startCenterOperation()
+        if TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: centerTime,
+            candles: dataManager.candles,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        ) {
+            isCenteringToMainChartTime = true
+            Task { @MainActor in
+                await loadOlderCandlesUntilTimestampIsLoaded(centerTime)
+                guard centerOperationID == operationID else { return }
+                if !TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+                    targetTime: centerTime,
+                    candles: dataManager.candles,
+                    hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+                ) {
+                    applyMainChartTimeCenterIfPossible()
+                }
+                isCenteringToMainChartTime = false
+            }
+            return
+        }
+
+        applyMainChartTimeCenterIfPossible()
+    }
+
+    private func applyMainChartTimeCenterIfPossible() {
+        guard let resolution = TimeframePanelLockedViewport.resolution(
+            candles: dataManager.candles,
+            timeframeSeconds: dataManager.timeframe.seconds,
+            mainChartVisibleStart: mainChartVisibleStart,
+            mainChartVisibleEnd: mainChartVisibleEnd,
+            plotWidth: plotWidth,
+            historicalRenderIndexOffset: dataManager.historicalRenderIndexOffset,
+            candleWidthScale: gestureState.candleWidthScale,
+            baseCandleWidth: baseCandleWidth,
+            candleSpacing: candleSpacing,
+            minScale: minHorizontalScale,
+            maxScale: maxHorizontalScale
+        ) else {
+            return
+        }
+
+        gestureState.panOffset.width = resolution.panOffsetWidth
+        if let centeredRange = centeredPriceRange(for: resolution) {
+            lockedRawPriceRange = centeredRange
+            gestureState.recenterVertical(resetScale: true)
+        }
+    }
+
+    private func loadOlderCandlesThenCenterOnMarkerIfNeeded() {
+        guard !isLoadingCandlesForMarkerCenter else { return }
+        let operationID = startCenterOperation()
+        Task { @MainActor in
+            isLoadingCandlesForMarkerCenter = true
+            await loadOlderCandlesUntilTimestampIsLoaded(markerTimestamp)
+            isLoadingCandlesForMarkerCenter = false
+            guard centerOperationID == operationID else { return }
+            guard !TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+                targetTime: markerTimestamp,
+                candles: dataManager.candles,
+                hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+            ) else {
+                return
+            }
+            applyMarkerCenterIfPossible()
+        }
+    }
+
+    private func loadOlderCandlesUntilTimestampIsLoaded(_ timestamp: Date) async {
+        if TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: timestamp,
+            candles: dataManager.candles,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        ), !dataManager.isLoading, !dataManager.isLoadingOlderCandles {
+            _ = await dataManager.loadCandlesAround(timestamp)
+        }
+
+        var attempts = 0
+        let maxAttempts = 4
+
+        while TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: timestamp,
+            candles: dataManager.candles,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        ), attempts < maxAttempts {
+            attempts += 1
+
+            if dataManager.isLoading || dataManager.isLoadingOlderCandles {
+                try? await Task.sleep(nanoseconds: 90_000_000)
+                continue
+            }
+
+            let prependedCount = await dataManager.loadOlderCandles()
+            guard prependedCount > 0 else { break }
+        }
+    }
+
+    private func startCenterOperation() -> UUID {
+        let operationID = UUID()
+        centerOperationID = operationID
+        return operationID
+    }
+
+    private func centeredPriceRange(
+        for resolution: TimeframePanelLockedViewportResolution
+    ) -> (min: Double, max: Double)? {
+        TimeframePanelLockedViewport.centeredPriceRange(
+            candles: dataManager.candles,
+            centerIndex: resolution.centerIndex,
+            plotWidth: plotWidth,
+            candleWidthScale: resolution.candleWidthScale,
+            baseCandleWidth: baseCandleWidth,
+            candleSpacing: candleSpacing
         )
     }
 
@@ -298,23 +691,39 @@ struct TimeframePanelView: View {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
                 guard !isYAxisGestureActive, !isBodyPinchActive else { return }
+                let incrementalX = value.translation.width - lastDragTranslation.width
+                let incrementalY = value.translation.height - lastDragTranslation.height
+
+                if isLockedToMainChart {
+                    gestureState.applyVerticalPan(
+                        deltaY: incrementalY,
+                        panelHeight: panelHeight
+                    )
+                    lastDragTranslation = value.translation
+                    return
+                }
+
                 if lastDragTranslation == .zero {
                     gestureState.beginDrag()
                 }
-                let incrementalX = value.translation.width - lastDragTranslation.width
-                let incrementalY = value.translation.height - lastDragTranslation.height
                 gestureState.applyBodyPan(
                     translationX: incrementalX,
                     translationY: incrementalY,
                     chartWidth: plotWidth,
                     candleCount: dataManager.candles.count,
                     candleWidth: totalCandleWidth,
-                    panelHeight: panelHeight
+                    panelHeight: panelHeight,
+                    olderEdgeGuardCandleCount: olderEdgeGuardCandleCount(chartWidth: plotWidth),
+                    historicalRenderIndexOffset: dataManager.historicalRenderIndexOffset
                 )
+                requestOlderCandlesIfNeeded(chartWidth: plotWidth)
                 lastDragTranslation = value.translation
             }
             .onEnded { _ in
-                gestureState.endDrag()
+                if !isLockedToMainChart {
+                    requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+                    gestureState.endDrag()
+                }
                 lastDragTranslation = .zero
             }
     }
@@ -322,7 +731,7 @@ struct TimeframePanelView: View {
     private var pinchGesture: some Gesture {
         MagnificationGesture()
             .onChanged { scale in
-                guard !isYAxisGestureActive else { return }
+                guard !isYAxisGestureActive, !isLockedToMainChart else { return }
                 if !isBodyPinchActive {
                     isBodyPinchActive = true
                     initialCandleWidthScale = gestureState.candleWidthScale
@@ -486,18 +895,18 @@ struct TimeframePanelView: View {
                 }
 
                 yAxisLabelsOverlay
-                miniInfoOverlay
+                panelHeaderControlsOverlay
                 livePriceBadgeOverlay
             }
             .clipped()
             .onAppear {
                 lastKnownChartWidth = max(geometry.size.width, 1)
                 lockInitialPriceRangeIfNeeded()
-                requestOlderCandlesIfNeeded(chartWidth: plotWidth)
+                applyLockedMainChartViewportIfNeeded()
             }
             .onChange(of: geometry.size.width) { _, newValue in
                 lastKnownChartWidth = max(newValue, 1)
-                requestOlderCandlesIfNeeded(chartWidth: max(newValue - yAxisOverlayWidth, 1))
+                applyLockedMainChartViewportIfNeeded()
             }
         }
     }
@@ -587,7 +996,9 @@ struct TimeframePanelView: View {
                 context: context,
                 size: size,
                 style: settings.viewportWindowStyle,
-                opacity: opacity
+                opacity: opacity,
+                leftX: leftX,
+                rightX: rightX
             )
             return
         }
@@ -654,12 +1065,38 @@ struct TimeframePanelView: View {
         context: GraphicsContext,
         size: CGSize,
         style: ViewportWindowStyle,
-        opacity: Double
+        opacity: Double,
+        leftX: CGFloat,
+        rightX: CGFloat
     ) {
-        guard style == .dimmed else { return }
+        if style == .dimmed {
+            context.fill(
+                Path(CGRect(origin: .zero, size: size)),
+                with: .color(AppColors.viewportDim.opacity(opacity))
+            )
+        }
+
+        let viewportMidX = (leftX + rightX) / 2
+        let isOffscreenLeft = viewportMidX < size.width / 2
+        let stripeWidth: CGFloat = 5
+        let stripeX = isOffscreenLeft ? 0 : max(0, size.width - stripeWidth)
+        let stripeRect = CGRect(x: stripeX, y: 0, width: stripeWidth, height: size.height)
         context.fill(
-            Path(CGRect(origin: .zero, size: size)),
-            with: .color(AppColors.viewportDim.opacity(opacity))
+            Path(stripeRect),
+            with: .color(AppColors.statusInfo40.opacity(max(opacity, 0.45)))
+        )
+
+        let lineX = isOffscreenLeft
+            ? stripeWidth + 0.5
+            : max(0.5, size.width - stripeWidth - 0.5)
+        let edgeLine = Path { path in
+            path.move(to: CGPoint(x: lineX, y: 0))
+            path.addLine(to: CGPoint(x: lineX, y: size.height))
+        }
+        context.stroke(
+            edgeLine,
+            with: .color(AppColors.surfaceWhite40.opacity(0.65)),
+            style: StrokeStyle(lineWidth: 1)
         )
     }
 
@@ -671,12 +1108,12 @@ struct TimeframePanelView: View {
         // Before first candle
         if targetTime <= candles.first!.timestamp.timeIntervalSince1970 {
             let fraction = (targetTime - candles.first!.timestamp.timeIntervalSince1970) / dataManager.timeframe.seconds
-            return CGFloat(fraction) * totalCandleWidth + totalOffset
+            return CGFloat(fraction - Double(dataManager.historicalRenderIndexOffset)) * totalCandleWidth + totalOffset
         }
 
         // After last candle — cap extrapolation to 1 candle beyond the last
         if targetTime >= candles.last!.timestamp.timeIntervalSince1970 {
-            let lastIdx = CGFloat(candles.count - 1)
+            let lastIdx = CGFloat(candles.count - 1 - dataManager.historicalRenderIndexOffset)
             let fraction = (targetTime - candles.last!.timestamp.timeIntervalSince1970) / dataManager.timeframe.seconds
             let cappedFraction = min(CGFloat(fraction), 1.0)
             return (lastIdx + cappedFraction) * totalCandleWidth + totalOffset + actualCandleWidth / 2
@@ -703,7 +1140,7 @@ struct TimeframePanelView: View {
             fraction = 0
         }
 
-        let interpolatedIndex = CGFloat(lo) + fraction
+        let interpolatedIndex = CGFloat(lo - dataManager.historicalRenderIndexOffset) + fraction
         return interpolatedIndex * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
 
@@ -713,7 +1150,10 @@ struct TimeframePanelView: View {
         candles: [RLCandleDTO],
         viewport: TimeframePanelPriceViewport
     ) {
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 1)
+        let visibleStartIndex = max(
+            0,
+            Int(-totalOffset / totalCandleWidth) + dataManager.historicalRenderIndexOffset - 1
+        )
         let visibleEndIndex = min(
             candles.count,
             max(visibleStartIndex, visibleStartIndex + Int(size.width / totalCandleWidth) + 3)
@@ -729,7 +1169,7 @@ struct TimeframePanelView: View {
             let candle = candles[i]
             guard !candle.isGapFill else { continue }
 
-            let x = CGFloat(i) * totalCandleWidth + totalOffset
+            let x = CGFloat(i - dataManager.historicalRenderIndexOffset) * totalCandleWidth + totalOffset
             guard x >= -totalCandleWidth && x <= lineEndX + totalCandleWidth else { continue }
 
             let isBullish = candle.close >= candle.open
@@ -776,7 +1216,7 @@ struct TimeframePanelView: View {
         guard showMarkerLine else { return }
         guard let markerIndex = markerCandleIndex else { return }
 
-        let x = CGFloat(markerIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        let x = CGFloat(markerIndex - dataManager.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + actualCandleWidth / 2
         guard x >= 0 && x <= size.width else { return }
 
         // Dashed vertical line in marker intent color
@@ -819,28 +1259,106 @@ struct TimeframePanelView: View {
 
     // MARK: - Panel Header
 
-    private var miniInfoOverlay: some View {
-        Group {
-            if let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close {
-                PanelMiniInfoOverlay(
-                    leadingBadge: PanelMiniInfoBadge(
-                        text: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
-                        color: intentColor.opacity(0.88)
-                    ),
-                    tokens: [
-                        PanelMiniInfoToken(
-                            label: nil,
-                            value: formatPrice(latestPrice),
-                            valueColor: AppColors.panelMiniInfoOverlayPrimaryText
-                        ),
-                    ]
-                )
+    private var panelHeaderControlsOverlay: some View {
+        HStack(spacing: 6) {
+            miniInfoHeaderContent
+                .allowsHitTesting(false)
+
+            lockControlButton
+
+            panelHeaderControlButton(
+                title: isCenteringToMainChartTime ? "Loading" : "Center",
+                icon: "scope",
+                isActive: false,
+                isEnabled: canCenterToMainChart && !isCenteringToMainChartTime
+            ) {
+                recenterToMainChartTime()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.top, 6)
+        .padding(.top, 5)
         .padding(.leading, 8)
-        .allowsHitTesting(false)
+        .padding(.trailing, yAxisOverlayWidth + 8)
+    }
+
+    @ViewBuilder
+    private var miniInfoHeaderContent: some View {
+        if let latestPrice = dataManager.livePrice ?? dataManager.candles.last?.close {
+            PanelMiniInfoOverlay(
+                leadingBadge: PanelMiniInfoBadge(
+                    text: dataManager.livePrice != nil ? "LIVE" : "SNAPSHOT",
+                    color: intentColor.opacity(0.88)
+                ),
+                tokens: [
+                    PanelMiniInfoToken(
+                        label: nil,
+                        value: formatPrice(latestPrice),
+                        valueColor: AppColors.panelMiniInfoOverlayPrimaryText
+                    ),
+                ]
+            )
+        }
+    }
+
+    private var lockControlButton: some View {
+        let title: String = canLockToMainChart
+            ? (entry.isLockedToMainChart ? "Locked" : "Lock")
+            : "N/A"
+        let icon = canLockToMainChart
+            ? (entry.isLockedToMainChart ? "lock.fill" : "lock.open")
+            : "lock.slash"
+
+        return panelHeaderControlButton(
+            title: title,
+            icon: icon,
+            isActive: entry.isLockedToMainChart && canLockToMainChart,
+            isEnabled: canLockToMainChart
+        ) {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                entry.isLockedToMainChart.toggle()
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        .accessibilityLabel(entry.isLockedToMainChart ? "Unlock timeframe from main chart" : "Lock timeframe to main chart")
+    }
+
+    private func panelHeaderControlButton(
+        title: String,
+        icon: String,
+        isActive: Bool,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(panelHeaderControlForeground(isActive: isActive, isEnabled: isEnabled))
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(isActive && isEnabled ? ChartBottomControlButton.activeBackground : ChartBottomControlButton.inactiveBackground)
+            .cornerRadius(ChartBottomControlButton.cornerRadius)
+            .overlay(
+                RoundedRectangle(cornerRadius: ChartBottomControlButton.cornerRadius)
+                    .stroke(
+                        isActive && isEnabled ? ChartBottomControlButton.activeBorder : ChartBottomControlButton.inactiveBorder,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1.0 : 0.66)
+    }
+
+    private func panelHeaderControlForeground(isActive: Bool, isEnabled: Bool) -> Color {
+        guard isEnabled else { return AppColors.greyText }
+        return isActive ? AppColors.gradientBackgroundDark : AppColors.chartBottomControlForeground
     }
 
     private var livePriceBadgeOverlay: some View {
@@ -899,6 +1417,7 @@ struct TimeframePanelView: View {
                             totalOffset: totalOffset,
                             totalCandleWidth: totalCandleWidth,
                             actualCandleWidth: actualCandleWidth,
+                            historicalRenderIndexOffset: dataManager.historicalRenderIndexOffset,
                             width: size.width,
                             timeZone: .current,
                             locale: Locale(identifier: "en_US_POSIX"),
@@ -964,7 +1483,10 @@ struct TimeframePanelView: View {
         guard !candles.isEmpty else { return (0, 1) }
 
         // Only calculate range for visible candles
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let visibleStartIndex = max(
+            0,
+            Int(-totalOffset / totalCandleWidth) + dataManager.historicalRenderIndexOffset - 5
+        )
         let visibleEndIndex = min(candles.count, visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 10)
 
         guard visibleStartIndex < visibleEndIndex else {
@@ -1097,26 +1619,43 @@ struct TimeframePanelView: View {
         guard chartWidth > 0,
               !dataManager.candles.isEmpty,
               totalCandleWidth > 0,
+              (gestureState.isUserDrivenPanActive || isLockedToMainChart),
               dataManager.hasMoreHistoricalCandles,
               !dataManager.isLoadingOlderCandles,
               !dataManager.isLoading else {
             return
         }
 
-        let visibleStartIndex = max(0, Int(floor(-gestureState.panOffset.width / totalCandleWidth)))
+        let visibleStartIndex = visibleStartIndexForCurrentOffset()
         let visibleCandleCount = max(1, Int(ceil(chartWidth / totalCandleWidth)))
-        let preloadThreshold = max(24, visibleCandleCount)
-        guard visibleStartIndex <= preloadThreshold else { return }
+        guard HistoricalPreloadPolicy.shouldPreload(
+            visibleStartIndex: visibleStartIndex,
+            visibleCandleCount: visibleCandleCount,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        ) else { return }
 
         Task { @MainActor in
-            let prependedCount = await dataManager.loadOlderCandlesIfNeeded(
+            await dataManager.loadOlderCandlesIfNeeded(
                 visibleStartIndex: visibleStartIndex,
-                preloadThreshold: preloadThreshold
+                visibleCandleCount: visibleCandleCount,
+                beforePublishingPrepend: { prependedCount in
+                    gestureState.shiftForPrependedCandles(
+                        count: prependedCount,
+                        totalCandleWidth: totalCandleWidth
+                    )
+                }
             )
-            if prependedCount > 0 {
-                gestureState.shiftForPrependedCandles(count: prependedCount, totalCandleWidth: totalCandleWidth)
-            }
         }
+    }
+
+    private func olderEdgeGuardCandleCount(chartWidth: CGFloat) -> Int {
+        guard chartWidth > 0, totalCandleWidth > 0 else { return 0 }
+        let visibleCandleCount = max(1, Int(ceil(chartWidth / totalCandleWidth)))
+        return HistoricalPreloadPolicy.edgeGuardCandleCount(
+            visibleCandleCount: visibleCandleCount,
+            candleCount: dataManager.candles.count,
+            hasMoreHistoricalCandles: dataManager.hasMoreHistoricalCandles
+        )
     }
 
     private func clampedHorizontalPanOffset(
@@ -1125,15 +1664,24 @@ struct TimeframePanelView: View {
         candleWidthScale: CGFloat
     ) -> CGFloat {
         let totalWidth = baseCandleWidth * candleWidthScale + candleSpacing
-        let totalContentWidth = CGFloat(dataManager.candles.count) * totalWidth
-        let maxOffset = chartWidth * 0.5
+        let renderOffset = max(0, min(dataManager.historicalRenderIndexOffset, dataManager.candles.count))
+        let totalContentWidth = CGFloat(max(0, dataManager.candles.count - renderOffset)) * totalWidth
+        let maxOffset = CGFloat(renderOffset) * totalWidth + chartWidth * 0.5
         let minOffset = -(totalContentWidth - chartWidth * 0.5)
         return min(maxOffset, max(minOffset, proposedOffset))
     }
 
     private func xPosition(forTimestamp timestamp: Date) -> CGFloat? {
         guard let candleIndex = dataManager.markerCandleIndex(for: timestamp) else { return nil }
-        let rawX = CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        let rawX = CGFloat(candleIndex - dataManager.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + actualCandleWidth / 2
         return rawX.isFinite ? rawX : nil
+    }
+
+    private func visibleStartIndexForCurrentOffset() -> Int {
+        guard totalCandleWidth > 0 else {
+            return min(dataManager.historicalRenderIndexOffset, max(0, dataManager.candles.count - 1))
+        }
+        let visualIndex = Int(floor(-gestureState.panOffset.width / totalCandleWidth))
+        return max(0, min(dataManager.candles.count - 1, visualIndex + dataManager.historicalRenderIndexOffset))
     }
 }

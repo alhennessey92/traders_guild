@@ -65,6 +65,7 @@ enum ChartXAxisLabelEngine {
         private let totalOffsetBits: UInt64
         private let totalCandleWidthBits: UInt64
         private let actualCandleWidthBits: UInt64
+        private let historicalRenderIndexOffset: Int
         private let widthBits: UInt64
         private let minSpacingBits: UInt64
         private let timeZoneIdentifier: String
@@ -79,6 +80,7 @@ enum ChartXAxisLabelEngine {
             self.totalOffsetBits = Double(input.totalOffset).bitPattern
             self.totalCandleWidthBits = Double(input.totalCandleWidth).bitPattern
             self.actualCandleWidthBits = Double(input.actualCandleWidth).bitPattern
+            self.historicalRenderIndexOffset = input.historicalRenderIndexOffset
             self.widthBits = Double(input.width).bitPattern
             self.minSpacingBits = Double(input.minSpacing).bitPattern
             self.timeZoneIdentifier = input.timeZone.identifier
@@ -98,6 +100,7 @@ enum ChartXAxisLabelEngine {
             hasher.combine(totalOffsetBits)
             hasher.combine(totalCandleWidthBits)
             hasher.combine(actualCandleWidthBits)
+            hasher.combine(historicalRenderIndexOffset)
             hasher.combine(widthBits)
             hasher.combine(minSpacingBits)
             hasher.combine(timeZoneIdentifier)
@@ -115,6 +118,7 @@ enum ChartXAxisLabelEngine {
                 totalOffsetBits == other.totalOffsetBits &&
                 totalCandleWidthBits == other.totalCandleWidthBits &&
                 actualCandleWidthBits == other.actualCandleWidthBits &&
+                historicalRenderIndexOffset == other.historicalRenderIndexOffset &&
                 widthBits == other.widthBits &&
                 minSpacingBits == other.minSpacingBits &&
                 timeZoneIdentifier == other.timeZoneIdentifier &&
@@ -142,6 +146,7 @@ enum ChartXAxisLabelEngine {
         let totalOffset: CGFloat
         let totalCandleWidth: CGFloat
         let actualCandleWidth: CGFloat
+        var historicalRenderIndexOffset: Int = 0
         let width: CGFloat
         var timeZone: TimeZone = .current
         var locale: Locale = Locale(identifier: "en_US_POSIX")
@@ -214,7 +219,10 @@ enum ChartXAxisLabelEngine {
             return cached.labels
         }
 
-        let visibleStartIndex = max(0, Int(-input.totalOffset / input.totalCandleWidth) - 2)
+        let visibleStartIndex = max(
+            0,
+            Int(-input.totalOffset / input.totalCandleWidth) + input.historicalRenderIndexOffset - 2
+        )
         let visibleEndIndex = min(
             input.candles.count - 1,
             max(visibleStartIndex, visibleStartIndex + Int(input.width / input.totalCandleWidth) + 4)
@@ -455,7 +463,7 @@ enum ChartXAxisLabelEngine {
     }
 
     private static func xPosition(for candleIndex: Int, input: Input) -> CGFloat {
-        CGFloat(candleIndex) * input.totalCandleWidth + input.totalOffset + input.actualCandleWidth / 2
+        CGFloat(candleIndex - input.historicalRenderIndexOffset) * input.totalCandleWidth + input.totalOffset + input.actualCandleWidth / 2
     }
 
     private static func bucketKey(for timestamp: Date, stepSeconds: TimeInterval) -> Int64 {
@@ -588,7 +596,13 @@ enum ChartXAxisLabelEngine {
     static func visibleDayLabel(input: Input) -> String {
         guard !input.candles.isEmpty, input.totalCandleWidth > 0 else { return "" }
 
-        let leftmostIndex = max(0, Int(floor(-input.totalOffset / input.totalCandleWidth)))
+        let leftmostIndex = max(
+            0,
+            min(
+                input.candles.count - 1,
+                Int(floor(-input.totalOffset / input.totalCandleWidth)) + input.historicalRenderIndexOffset
+            )
+        )
         let visibleCandleCount = max(1, Int(ceil(input.width / input.totalCandleWidth)))
         let rightmostIndex = min(
             input.candles.count - 1,
@@ -596,8 +610,7 @@ enum ChartXAxisLabelEngine {
         )
         guard rightmostIndex < input.candles.count else { return "" }
 
-        // Use the most-recent visible candle day, not the oldest visible candle.
-        let timestamp = input.candles[rightmostIndex].timestamp
+        let timestamp = input.candles[leftmostIndex].timestamp
         var calendar = Calendar.current
         calendar.timeZone = input.timeZone
 
@@ -610,9 +623,10 @@ enum ChartXAxisLabelEngine {
         }
 
         let now = input.now
-        if calendar.isDateInToday(timestamp) {
+        if calendar.isDate(timestamp, inSameDayAs: now) {
             return "Today"
-        } else if calendar.isDateInYesterday(timestamp) {
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+                  calendar.isDate(timestamp, inSameDayAs: yesterday) {
             return "Yesterday"
         } else {
             let daysAgo = calendar.dateComponents([.day], from: timestamp, to: now).day ?? 999

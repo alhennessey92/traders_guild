@@ -136,7 +136,8 @@ struct MainView: View {
         let candles = chartViewModel.dataManager.candles
         guard candles.count >= 2 else { return candles.first?.timestamp }
         let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
-        let fractionalStart = max(0, -chartGestureState.panOffset.width / mainTotalCandleWidth)
+        let renderOffset = CGFloat(chartViewModel.dataManager.historicalRenderIndexOffset)
+        let fractionalStart = max(0, renderOffset - chartGestureState.panOffset.width / mainTotalCandleWidth)
         return interpolatedTimestamp(at: fractionalStart, in: candles)
     }
 
@@ -144,7 +145,8 @@ struct MainView: View {
         let candles = chartViewModel.dataManager.candles
         guard candles.count >= 2 else { return candles.last?.timestamp }
         let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
-        let fractionalStart = max(0, -chartGestureState.panOffset.width / mainTotalCandleWidth)
+        let renderOffset = CGFloat(chartViewModel.dataManager.historicalRenderIndexOffset)
+        let fractionalStart = max(0, renderOffset - chartGestureState.panOffset.width / mainTotalCandleWidth)
         let screenWidth = UIScreen.main.bounds.width
         let fractionalEnd = fractionalStart + screenWidth / mainTotalCandleWidth
         return interpolatedTimestamp(at: fractionalEnd, in: candles)
@@ -544,7 +546,6 @@ struct MainView: View {
             }
             .ignoresSafeArea()
             .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
-            .rlGlobalMessaging()        // NEW: Chatroom/DM sheets
             
             .observeMarkerNavigation(
                 leftDrawerViewModel: leftDrawerViewModel,
@@ -811,7 +812,7 @@ struct MainView: View {
                 case .inactive:
                     break
                 case .background:
-                    rlAppState.disconnectRealTimeService()
+                    break
                 @unknown default:
                     break
                 }

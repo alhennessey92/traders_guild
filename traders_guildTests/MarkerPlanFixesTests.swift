@@ -562,6 +562,21 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func timeframePanelGestureStateRecentersVerticalPanAndZoom() {
+        let state = TimeframePanelGestureState()
+        state.applyVerticalPan(deltaY: 48, panelHeight: 180)
+        state.applyPricePinch(scale: 1.8, panelHeight: 180)
+
+        #expect(state.verticalPanOffset != 0)
+        #expect(state.priceScale > 1)
+
+        state.recenterVertical(resetScale: true)
+
+        #expect(state.verticalPanOffset == 0)
+        #expect(state.priceScale == 1)
+    }
+
+    @Test
     func annotationBubbleMetricsPreserveExplicitNewlinesAndWrapLongText() {
         let multiline = "line 1\nline 2"
         #expect(ChartAnnotationBubbleMetrics.visibleLineCount(for: multiline, plotWidth: 220) == 2)
@@ -736,6 +751,190 @@ struct MarkerPlanFixesTests {
         let fallback = TimeframeLegendTextParts.split("RSI(14)")
         #expect(fallback.prefix.isEmpty)
         #expect(fallback.token == "RSI(14)")
+    }
+
+    @Test
+    func timeframePanelLockStatePersistsForReusedEntryButResetsForReplacement() {
+        let manager = TimeframePanelManager()
+
+        manager.replacePanels(
+            for: .chartDefaults,
+            backendValues: ["1h"],
+            symbolId: nil,
+            guildId: nil
+        )
+
+        guard let originalPanel = manager.panels(for: .chartDefaults).first else {
+            Issue.record("Expected chart-default timeframe panel")
+            return
+        }
+
+        originalPanel.isLockedToMainChart = true
+        originalPanel.collapse()
+
+        manager.replacePanels(
+            for: .chartDefaults,
+            backendValues: ["1h"],
+            symbolId: nil,
+            guildId: nil,
+            resetPresentationState: true
+        )
+
+        let reusedPanel = manager.panels(for: .chartDefaults).first
+        #expect(reusedPanel?.id == originalPanel.id)
+        #expect(reusedPanel?.isLockedToMainChart == true)
+        #expect(reusedPanel?.isCollapsed == false)
+
+        manager.replacePanels(
+            for: .chartDefaults,
+            backendValues: [],
+            symbolId: nil,
+            guildId: nil
+        )
+        manager.replacePanels(
+            for: .chartDefaults,
+            backendValues: ["1h"],
+            symbolId: nil,
+            guildId: nil
+        )
+
+        let replacementPanel = manager.panels(for: .chartDefaults).first
+        #expect(replacementPanel?.id != originalPanel.id)
+        #expect(replacementPanel?.isLockedToMainChart == false)
+    }
+
+    @Test
+    func lockedTimeframeViewportCentersVisibleDateRangeAndClampsToLoadedData() {
+        let timeframeSeconds: TimeInterval = 3_600
+        let firstTimestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = (0..<10).map { index in
+            makeTestCandle(
+                timestamp: firstTimestamp.addingTimeInterval(Double(index) * timeframeSeconds),
+                close: 100 + Double(index)
+            )
+        }
+
+        let visibleStart = firstTimestamp.addingTimeInterval(2 * timeframeSeconds)
+        let visibleEnd = firstTimestamp.addingTimeInterval(6 * timeframeSeconds)
+        let resolution = TimeframePanelLockedViewport.resolution(
+            candles: candles,
+            timeframeSeconds: timeframeSeconds,
+            mainChartVisibleStart: visibleStart,
+            mainChartVisibleEnd: visibleEnd,
+            plotWidth: 80,
+            historicalRenderIndexOffset: 0,
+            candleWidthScale: 1,
+            baseCandleWidth: 12,
+            candleSpacing: 4,
+            minScale: 0.15,
+            maxScale: 3
+        )
+
+        #expect(abs((resolution?.candleWidthScale ?? 0) - 1.0) < 0.0001)
+        #expect(abs((resolution?.panOffsetWidth ?? 0) - (-30)) < 0.0001)
+        #expect(abs((resolution?.centerIndex ?? 0) - 4.0) < 0.0001)
+
+        let halfStepIndex = TimeframePanelLockedViewport.fractionalIndex(
+            for: firstTimestamp.addingTimeInterval(2.5 * timeframeSeconds),
+            in: candles,
+            timeframeSeconds: timeframeSeconds
+        )
+        #expect(abs(halfStepIndex - 2.5) < 0.0001)
+
+        let outOfRangeResolution = TimeframePanelLockedViewport.resolution(
+            candles: candles,
+            timeframeSeconds: timeframeSeconds,
+            mainChartVisibleStart: firstTimestamp.addingTimeInterval(-20 * timeframeSeconds),
+            mainChartVisibleEnd: firstTimestamp.addingTimeInterval(-16 * timeframeSeconds),
+            plotWidth: 80,
+            historicalRenderIndexOffset: 0,
+            candleWidthScale: 1,
+            baseCandleWidth: 12,
+            candleSpacing: 4,
+            minScale: 0.15,
+            maxScale: 3
+        )
+        #expect(outOfRangeResolution?.centerIndex == 0)
+        #expect(abs((outOfRangeResolution?.panOffsetWidth ?? 0) - 34) < 0.0001)
+    }
+
+    @Test
+    func timeframeLockIsUnavailableForPanelsLowerThanMainChartTimeframe() {
+        #expect(TimeframePanelLockedViewport.canLockToMainChart(panelTimeframeSeconds: 60, mainChartTimeframeSeconds: 300) == false)
+        #expect(TimeframePanelLockedViewport.canLockToMainChart(panelTimeframeSeconds: 300, mainChartTimeframeSeconds: 300) == true)
+        #expect(TimeframePanelLockedViewport.canLockToMainChart(panelTimeframeSeconds: 900, mainChartTimeframeSeconds: 300) == true)
+    }
+
+    @Test
+    func centeredTimeframePriceRangeUsesCandlesAroundResolvedMainChartCenter() {
+        let timeframeSeconds: TimeInterval = 3_600
+        let firstTimestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = (0..<10).map { index in
+            makeTestCandle(
+                timestamp: firstTimestamp.addingTimeInterval(Double(index) * timeframeSeconds),
+                close: 100 + Double(index)
+            )
+        }
+
+        let range = TimeframePanelLockedViewport.centeredPriceRange(
+            candles: candles,
+            centerIndex: 4,
+            plotWidth: 80,
+            candleWidthScale: 1,
+            baseCandleWidth: 12,
+            candleSpacing: 4
+        )
+
+        #expect(abs((range?.min ?? 0) - 97.12) < 0.0001)
+        #expect(abs((range?.max ?? 0) - 109.88) < 0.0001)
+    }
+
+    @Test
+    func timeframeCenterWaitsForOlderCandlesWhenTargetTimeIsBeforeLoadedWindow() {
+        let timeframeSeconds: TimeInterval = 60
+        let firstTimestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = (0..<10).map { index in
+            makeTestCandle(
+                timestamp: firstTimestamp.addingTimeInterval(Double(index) * timeframeSeconds),
+                close: 100 + Double(index)
+            )
+        }
+
+        let visibleStart = firstTimestamp.addingTimeInterval(-10 * timeframeSeconds)
+        let visibleEnd = firstTimestamp.addingTimeInterval(-6 * timeframeSeconds)
+        let centerTime = TimeframePanelLockedViewport.visibleCenterDate(
+            mainChartVisibleStart: visibleStart,
+            mainChartVisibleEnd: visibleEnd
+        )
+
+        #expect(centerTime == firstTimestamp.addingTimeInterval(-8 * timeframeSeconds))
+        #expect(TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: centerTime!,
+            candles: candles,
+            hasMoreHistoricalCandles: true
+        ) == true)
+        #expect(TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: centerTime!,
+            candles: candles,
+            hasMoreHistoricalCandles: false
+        ) == false)
+        #expect(TimeframePanelLockedViewport.needsOlderCandlesToCenter(
+            targetTime: firstTimestamp.addingTimeInterval(4 * timeframeSeconds),
+            candles: candles,
+            hasMoreHistoricalCandles: true
+        ) == false)
+    }
+
+    @Test
+    func timeframeHistoricalWindowEndTimeCentersTargetTimestampInFetchedPage() {
+        let target = Date(timeIntervalSince1970: 1_700_000_000)
+        let endTime = TimeframePanelHistoricalWindow.centeredEndTime(
+            for: target,
+            timeframeSeconds: 60,
+            candleLimit: 1_000
+        )
+
+        #expect(endTime == target.addingTimeInterval(500 * 60))
     }
 
     @Test
@@ -1654,6 +1853,83 @@ struct MarkerPlanFixesTests {
         #expect(ChartAxisMetrics.setupCorePriceChipWidth == ChartAxisMetrics.secondaryPriceChipWidth)
         #expect(ChartAxisMetrics.setupCorePriceChipHeight == ChartAxisMetrics.secondaryPriceChipHeight)
     }
+
+    @Test
+    func priceLineMaskRespectsTopExclusionHeight() {
+        #expect(
+            ChartAxisMetrics.priceLineVisibleMaskHeight(
+                totalHeight: 300,
+                xAxisReservedHeight: 62,
+                topExclusionHeight: 84
+            ) == 154
+        )
+        #expect(
+            ChartAxisMetrics.priceLineVisibleMaskHeight(
+                totalHeight: 90,
+                xAxisReservedHeight: 62,
+                topExclusionHeight: 84
+            ) == 0
+        )
+    }
+
+    @Test
+    func horizontalPriceChipCenterRespectsHeaderExclusion() {
+        let topClamped = ChartAxisMetrics.clampedPriceChipCenterY(
+            centerY: 18,
+            totalHeight: 300,
+            chipHeight: ChartAxisMetrics.secondaryPriceChipHeight,
+            topExclusionHeight: 84
+        )
+        #expect(abs(topClamped - 99) < 0.0001)
+
+        let inline = ChartAxisMetrics.clampedPriceChipCenterY(
+            centerY: 150,
+            totalHeight: 300,
+            chipHeight: ChartAxisMetrics.secondaryPriceChipHeight,
+            topExclusionHeight: 84
+        )
+        #expect(abs(inline - 150) < 0.0001)
+
+        let bottomClamped = ChartAxisMetrics.clampedPriceChipCenterY(
+            centerY: 290,
+            totalHeight: 300,
+            chipHeight: ChartAxisMetrics.secondaryPriceChipHeight,
+            topExclusionHeight: 84,
+            bottomExclusionHeight: 62
+        )
+        #expect(abs(bottomClamped - 223) < 0.0001)
+    }
+
+    @Test
+    func rightDrawerDisclosureExpansionStatePersistsUntilCacheIsCleared() {
+        let viewModel = RLRightDrawerViewModel()
+
+        #expect(viewModel.isDisclosureExpanded(.friends) == true)
+        viewModel.setDisclosureExpanded(.friends, isExpanded: false)
+        viewModel.lastRefresh = Date()
+        #expect(viewModel.isDisclosureExpanded(.friends) == false)
+
+        let onlineBinding = viewModel.disclosureBinding(for: .online)
+        onlineBinding.wrappedValue = false
+        #expect(viewModel.isDisclosureExpanded(.online) == false)
+
+        viewModel.clearCache()
+        #expect(viewModel.isDisclosureExpanded(.friends) == true)
+        #expect(viewModel.isDisclosureExpanded(.online) == true)
+    }
+}
+
+private func makeTestCandle(timestamp: Date, close: Double) -> RLCandleDTO {
+    RLCandleDTO(
+        timestamp: timestamp,
+        timestampFormatted: nil,
+        open: close - 1,
+        high: close + 1,
+        low: close - 2,
+        close: close,
+        volume: 1_000,
+        volumeFormatted: nil
+    )
 }
 
 private final class MarkerPlacementUpdateFakeAPI: MarkerAPIClient {

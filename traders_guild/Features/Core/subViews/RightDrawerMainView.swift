@@ -214,6 +214,7 @@ struct RLRightDrawerMainView: View {
                             if !filteredChatrooms.isEmpty {
                                 RLChatroomDisclosureGroup(
                                     chatrooms: filteredChatrooms,
+                                    isExpanded: rightDrawerViewModel.disclosureBinding(for: .chatrooms),
                                     onChatroomTap: { chatroom in
                                         messagingManager.openChatroom(chatroom)
                                     }
@@ -225,6 +226,7 @@ struct RLRightDrawerMainView: View {
                                 count: friendsCount,
                                 icon: "person.crop.circle",
                                 iconColor: AppColors.friendAccent,
+                                isExpanded: rightDrawerViewModel.disclosureBinding(for: .friends),
                                 threads: filteredFriends,
                                 members: filteredMemberFriendsWithoutThread,
                                 onThreadTap: { thread in
@@ -240,6 +242,7 @@ struct RLRightDrawerMainView: View {
                                 count: onlineCount,
                                 icon: "circle.fill",
                                 iconColor: AppColors.statusPositive,
+                                isExpanded: rightDrawerViewModel.disclosureBinding(for: .online),
                                 threads: filteredOnlineNonFriends,
                                 members: filteredMemberOnlineWithoutThread,
                                 onThreadTap: { thread in
@@ -255,6 +258,7 @@ struct RLRightDrawerMainView: View {
                                 count: offlineCount,
                                 icon: "circle.fill",
                                 iconColor: AppColors.systemGray,
+                                isExpanded: rightDrawerViewModel.disclosureBinding(for: .offline),
                                 threads: filteredOfflineNonFriends,
                                 members: filteredMemberOfflineWithoutThread,
                                 onThreadTap: { thread in
@@ -399,6 +403,7 @@ struct RLRightDrawerMainView: View {
 /// Collapsible section listing chatrooms; tapping opens a chatroom sheet.
 struct RLChatroomDisclosureGroup: View {
     let chatrooms: [RLGuildChatroomDTO]
+    let isExpanded: Binding<Bool>
     let onChatroomTap: (RLGuildChatroomDTO) -> Void
     
     private var unreadCount: Int {
@@ -411,7 +416,7 @@ struct RLChatroomDisclosureGroup: View {
             count: chatrooms.count,
             icon: "shield.pattern.checkered",
             iconColor: AppColors.guildReputationAccent,
-            isExpandedByDefault: true
+            isExpanded: isExpanded
         ) {
             VStack(spacing: 6) {
                 ForEach(chatrooms) { chatroom in
@@ -430,6 +435,7 @@ struct RLDMDisclosureGroup: View {
     let count: Int
     let icon: String
     let iconColor: Color
+    let isExpanded: Binding<Bool>
     let threads: [RLDMThreadDTO]
     let members: [RLGuildMemberDTO]
     let onThreadTap: (RLDMThreadDTO) -> Void
@@ -441,7 +447,7 @@ struct RLDMDisclosureGroup: View {
             count: count,
             icon: icon,
             iconColor: iconColor,
-            isExpandedByDefault: true
+            isExpanded: isExpanded
         ) {
             VStack(spacing: 6) {
                 ForEach(threads) { thread in

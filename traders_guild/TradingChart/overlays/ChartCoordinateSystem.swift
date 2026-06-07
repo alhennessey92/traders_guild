@@ -40,7 +40,7 @@ class ChartCoordinateSystem {
         let scaledWidth = baseCandleWidth * gestureState.candleWidthScale * pinchScale
         let totalWidth = scaledWidth + candleSpacing
         let totalOffset = gestureState.panOffset.width + dragState.width
-        let baseX = CGFloat(index) * totalWidth
+        let baseX = CGFloat(index - chartData.historicalRenderIndexOffset) * totalWidth
         return baseX + totalOffset
     }
     
@@ -72,7 +72,7 @@ class ChartCoordinateSystem {
         let scaledWidth = baseCandleWidth * gestureState.candleWidthScale * pinchScale
         let totalWidth = scaledWidth + candleSpacing
         guard totalWidth > 0 else { return nil }
-        let index = Int(floor(adjustedX / totalWidth))
+        let index = Int(floor(adjustedX / totalWidth)) + chartData.historicalRenderIndexOffset
         guard index >= 0 && index < chartData.candles.count else { return nil }
         return index
     }

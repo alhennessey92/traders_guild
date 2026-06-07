@@ -278,10 +278,6 @@ struct MarkerPlacementGeneralTab: View {
         switch placementState.intent {
         case .setup:
             VStack(spacing: 10) {
-                Text("Set take profit and stop loss for this setup. Enable tracking if you want entry, SL, and TP transitions monitored automatically.")
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 levelInputRow(
                     title: "Take Profit",
                     componentType: .levelTp,
@@ -299,7 +295,7 @@ struct MarkerPlacementGeneralTab: View {
                         Text("Tracked Setup")
                             .foregroundColor(AppColors.primaryForeground)
                             .font(.subheadline)
-                        Text("Monitor entry, SL, and TP transitions")
+                        Text("Auto-monitor entry, SL & TP transitions")
                             .foregroundColor(AppColors.greyText)
                             .font(.caption)
                     }
@@ -307,8 +303,7 @@ struct MarkerPlacementGeneralTab: View {
                 .tint(placementState.trackingEnabled ? RLComponentType.levelEntry.color : placementState.intent.color)
 
                 if placementState.trackingEnabled {
-                    trackedSetupBanner
-                    trackedSetupRepChips
+                    trackedSetupCard
                 }
             }
 
@@ -540,46 +535,46 @@ struct MarkerPlacementGeneralTab: View {
         }
     }
 
-    private var trackedSetupBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "scope")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(RLComponentType.levelEntry.color)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Tracking Mode Active")
+    /// One tidy card for tracking mode: a slim header line + the estimated
+    /// reputation impact chips (replaces the old banner + separate chip row).
+    private var trackedSetupCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "scope")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(RLComponentType.levelEntry.color)
+                Text("Tracking active")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.primaryForeground)
-                Text("Estimated reputation impact now shown")
-                    .font(.caption2)
-                    .foregroundColor(RLComponentType.levelEntry.color.opacity(0.78))
+                Spacer(minLength: 0)
+                Text("Est. reputation")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(AppColors.greyText)
             }
-            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                trackedRepChip(
+                    title: "If TP hits",
+                    value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
+                    tint: RLComponentType.levelTp.color
+                )
+                trackedRepChip(
+                    title: "If SL hits",
+                    value: placementState.estimatedTrackingRepLoss.map { "-\($0)" } ?? "—",
+                    tint: RLComponentType.levelSl.color
+                )
+            }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(RLComponentType.levelEntry.color.opacity(0.14))
+                .fill(RLComponentType.levelEntry.color.opacity(0.10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(RLComponentType.levelEntry.color.opacity(0.38), lineWidth: 1)
+                        .stroke(RLComponentType.levelEntry.color.opacity(0.30), lineWidth: 1)
                 )
         )
-    }
-
-    private var trackedSetupRepChips: some View {
-        HStack(spacing: 8) {
-            trackedRepChip(
-                title: "Rep + (est)",
-                value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
-                tint: RLComponentType.levelEntry.color
-            )
-            trackedRepChip(
-                title: "Rep - (est)",
-                value: placementState.estimatedTrackingRepLoss.map { "-\($0)" } ?? "—",
-                tint: RLComponentType.levelSl.color
-            )
-        }
     }
 
     private func trackedRepChip(title: String, value: String, tint: Color) -> some View {

@@ -41,7 +41,13 @@ struct ContentView: View {
                         EmailVerificationView(
                             userEmail: data.email,
                             onContinue: {
-                                RLAppState.completeOnboardingAndEnterApp()
+                                // Now verified: join the guild picked during signup
+                                // (deferred because the backend gates joins on
+                                // verification), then enter the app.
+                                Task {
+                                    await RLAppState.completeDeferredOnboardingGuildJoinIfNeeded()
+                                    RLAppState.completeOnboardingAndEnterApp()
+                                }
                             }
                         )
                     }

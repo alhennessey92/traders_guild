@@ -23,8 +23,9 @@ struct UnifiedDisclosureGroup<Content: View>: View {
     let iconColor: Color
     var isExpandedByDefault: Bool = true
     @ViewBuilder let content: () -> Content
-    
-    @State private var isExpanded: Bool = true
+
+    private let externalIsExpanded: Binding<Bool>?
+    @State private var localIsExpanded: Bool = true
     
     init(
         title: String,
@@ -40,7 +41,38 @@ struct UnifiedDisclosureGroup<Content: View>: View {
         self.iconColor = iconColor
         self.isExpandedByDefault = isExpandedByDefault
         self.content = content
-        self._isExpanded = State(initialValue: isExpandedByDefault)
+        self.externalIsExpanded = nil
+        self._localIsExpanded = State(initialValue: isExpandedByDefault)
+    }
+
+    init(
+        title: String,
+        count: Int,
+        icon: String,
+        iconColor: Color,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.count = count
+        self.icon = icon
+        self.iconColor = iconColor
+        self.isExpandedByDefault = isExpanded.wrappedValue
+        self.content = content
+        self.externalIsExpanded = isExpanded
+        self._localIsExpanded = State(initialValue: isExpanded.wrappedValue)
+    }
+
+    private var resolvedIsExpanded: Bool {
+        externalIsExpanded?.wrappedValue ?? localIsExpanded
+    }
+
+    private func setResolvedIsExpanded(_ value: Bool) {
+        if let externalIsExpanded {
+            externalIsExpanded.wrappedValue = value
+        } else {
+            localIsExpanded = value
+        }
     }
     
     var body: some View {
@@ -48,7 +80,7 @@ struct UnifiedDisclosureGroup<Content: View>: View {
             // Header
             Button(action: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
+                    setResolvedIsExpanded(!resolvedIsExpanded)
                 }
             }) {
                 HStack(spacing: 10) {
@@ -71,7 +103,7 @@ struct UnifiedDisclosureGroup<Content: View>: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(AppColors.disclosureChevronForeground)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .rotationEffect(.degrees(resolvedIsExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
@@ -88,7 +120,7 @@ struct UnifiedDisclosureGroup<Content: View>: View {
             .buttonStyle(PlainButtonStyle())
             
             // Content
-            if isExpanded {
+            if resolvedIsExpanded {
                 content()
             }
         }
@@ -1040,7 +1072,7 @@ struct UnifiedAuthorFooter: View {
             
             // Reputation
             HStack(spacing: 2) {
-                Image(systemName: "shield.fill")
+                Image(systemName: "star.hexagon.fill")
                     .font(.system(size: 8))
                 Text("\(reputation)")
                     .font(.system(size: 10, weight: .semibold))
@@ -1136,7 +1168,7 @@ struct UnifiedAuthorFooterFromMember: View {
             
             // Reputation
             HStack(spacing: 2) {
-                Image(systemName: "shield.fill")
+                Image(systemName: "star.hexagon.fill")
                     .font(.system(size: 8))
             Text("\(author.reputation)")
                     .font(.system(size: 10, weight: .semibold))

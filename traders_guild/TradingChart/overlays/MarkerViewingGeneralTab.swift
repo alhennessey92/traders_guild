@@ -145,24 +145,18 @@ struct MarkerViewingGeneralTab: View {
         switch liveMarker.intent {
         case .setup:
             VStack(spacing: 10) {
-                setupStatusBanner
-                liveProgressSection
-                readOnlyValueRow(
-                    title: "Entry",
-                    value: formattedPrice(setupEntryPrice),
-                    color: RLComponentType.levelEntry.color
-                )
-                readOnlyValueRow(
-                    title: "Take Profit",
-                    value: formattedPrice(setupTpPrice),
-                    color: RLComponentType.levelTp.color
-                )
-                readOnlyValueRow(
-                    title: "Stop Loss",
-                    value: formattedPrice(setupSlPrice),
-                    color: RLComponentType.levelSl.color
-                )
-                outcomeResultCard
+                if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
+                    SetupOutcomeCard(
+                        outcome: outcome,
+                        size: .standard,
+                        riskRewardText: setupRiskRewardText,
+                        formatPrice: { formattedPrice($0) }
+                    )
+                } else {
+                    setupStateHeader
+                    liveProgressSection
+                }
+                setupLevelsRow
             }
 
         case .analysis:
@@ -455,26 +449,11 @@ struct MarkerViewingGeneralTab: View {
         .buttonStyle(.plain)
     }
 
-    private var setupStatusBanner: some View {
+    private var setupStateHeader: some View {
         let state = liveMarker.trackingState ?? .draft
-        let stateColor = state.color
-
-        return HStack(spacing: 10) {
-            Image(systemName: state.icon)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(stateColor)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(state.displayName.uppercased())
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text(setupStatusSubtitle(for: state))
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            }
-
+        return HStack(spacing: 8) {
+            TrackingStatePill(state: state, size: .standard)
             Spacer(minLength: 0)
-
             Text(liveMarker.timeframe.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(AppColors.primaryForeground)
@@ -482,42 +461,56 @@ struct MarkerViewingGeneralTab: View {
                 .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(AppColors.whiteText.opacity(0.12))
+                        .fill(AppColors.whiteText.opacity(0.10))
                         .overlay(
                             Capsule()
-                                .stroke(AppColors.whiteText.opacity(0.20), lineWidth: 1)
+                                .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
                         )
                 )
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            stateColor.opacity(0.25),
-                            stateColor.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(stateColor.opacity(0.35), lineWidth: 1)
-                )
-        )
     }
 
-    private func setupStatusSubtitle(for state: RLTrackingState) -> String {
-        switch state {
-        case .draft: return "Setup is in draft"
-        case .armed: return "Tracking for entry trigger"
-        case .active: return "Trade is live"
-        case .tpHit: return "Target price was hit"
-        case .slHit: return "Stop loss was hit"
-        case .expired: return "Setup expired without trigger"
+    private var setupRiskRewardText: String? {
+        guard let entry = setupEntryPrice,
+              let tp = setupTpPrice,
+              let sl = setupSlPrice else { return nil }
+        let reward = abs(tp - entry)
+        let risk = abs(entry - sl)
+        guard risk > 0.000_000_1, reward > 0 else { return nil }
+        return String(format: "R:R %.2f", reward / risk)
+    }
+
+    private var setupLevelsRow: some View {
+        HStack(spacing: 8) {
+            setupLevelCell(title: "Entry", value: formattedPrice(setupEntryPrice), color: RLComponentType.levelEntry.color)
+            setupLevelCell(title: "TP", value: formattedPrice(setupTpPrice), color: RLComponentType.levelTp.color)
+            setupLevelCell(title: "SL", value: formattedPrice(setupSlPrice), color: RLComponentType.levelSl.color)
         }
+    }
+
+    private func setupLevelCell(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .heavy))
+                .foregroundColor(color)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                .foregroundColor(AppColors.primaryForeground)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(color.opacity(0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(color.opacity(0.22), lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder
@@ -539,159 +532,6 @@ struct MarkerViewingGeneralTab: View {
                 size: .detail,
                 formatPrice: { formattedPrice($0) }
             )
-        }
-    }
-
-    private var trackingBadge: some View {
-        let stateLabel = liveMarker.trackingState?.displayName
-            ?? (liveMarker.trackingEnabled ? "Tracking" : "Not Tracked")
-        let stateColor = liveMarker.trackingState?.color
-            ?? (liveMarker.trackingEnabled ? liveMarker.intent.color : AppColors.greyText)
-
-        return HStack(spacing: 8) {
-            Text("Tracked")
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-            Text(stateLabel.uppercased())
-                .font(.caption2.weight(.bold))
-                .foregroundColor(AppColors.onAccentForeground)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(stateColor.opacity(0.38))
-                        .overlay(
-                            Capsule()
-                                .stroke(stateColor.opacity(0.62), lineWidth: 1)
-                        )
-                )
-        }
-    }
-
-    @ViewBuilder
-    private var outcomeResultCard: some View {
-        if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
-            VStack(spacing: 12) {
-                // Outcome header — large icon + heading
-                HStack(spacing: 10) {
-                    Image(systemName: outcome.displayIcon)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(outcome.state.color)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(outcome.displayLabel.uppercased())
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(AppColors.primaryForeground)
-                        if let triggeredAt = outcome.triggeredAtFormatted {
-                            Text(triggeredAt)
-                                .font(.caption2)
-                                .foregroundColor(AppColors.greyText)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                // P&L centerpiece
-                if let pnl = outcome.pnl {
-                    Text(pnl >= 0 ? "+\(formattedPrice(pnl))" : formattedPrice(pnl))
-                        .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                        .foregroundColor(pnl >= 0 ? outcome.state.color : RLComponentType.levelSl.color)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
-                }
-
-                // Rep change
-                if let repText = outcome.repChangeText {
-                    HStack(spacing: 8) {
-                        Text("Rep Change")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                        Spacer(minLength: 0)
-                        HStack(spacing: 4) {
-                            Image(systemName: "shield.lefthalf.filled")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text(repText)
-                                .font(.system(size: 13, weight: .heavy, design: .monospaced))
-                        }
-                        .foregroundColor(
-                            (outcome.guildRepDelta ?? 0) >= 0
-                                ? outcome.state.color
-                                : RLComponentType.levelSl.color
-                        )
-                    }
-                }
-
-                // Trigger price detail
-                if let triggerPrice = outcome.triggerPrice {
-                    HStack(spacing: 8) {
-                        Text("Trigger Price")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-                        Spacer(minLength: 0)
-                        Text(formattedPrice(triggerPrice))
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(AppColors.primaryForeground)
-                    }
-                }
-
-                // Tracking impact note
-                if let impactNote = outcome.impactNote {
-                    HStack(spacing: 6) {
-                        Image(systemName: outcome.affectsPerformance ? "chart.line.uptrend.xyaxis" : "clock.badge.xmark")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(impactNote)
-                            .font(.caption2)
-                    }
-                    .foregroundColor(
-                        outcome.affectsPerformance
-                            ? (outcome.isWin ? outcome.state.color : RLComponentType.levelSl.color)
-                            : AppColors.greyText
-                    )
-                }
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                outcome.state.color.opacity(0.22),
-                                outcome.state.color.opacity(0.08),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(outcome.state.color.opacity(0.35), lineWidth: 1)
-                    )
-            )
-        }
-    }
-
-    private func readOnlyValueRow(title: String, value: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(color)
-
-            Spacer(minLength: 0)
-
-            Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundColor(AppColors.primaryForeground)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.whiteText.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                        )
-                )
         }
     }
 
@@ -781,55 +621,6 @@ struct MarkerViewingGeneralTab: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(AppColors.whiteText.opacity(0.08), lineWidth: 1)
-                )
-        )
-    }
-
-    private func sectionHeader(
-        title: String,
-        subtitle: String,
-        icon: String,
-        tint: Color
-    ) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(tint.opacity(0.22))
-                .frame(width: 34, height: 34)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(tint)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            tint.opacity(0.22),
-                            tint.opacity(0.12),
-                            AppColors.componentsScaffoldHeaderNeutralEndpoint,
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(tint.opacity(0.34), lineWidth: 1)
                 )
         )
     }

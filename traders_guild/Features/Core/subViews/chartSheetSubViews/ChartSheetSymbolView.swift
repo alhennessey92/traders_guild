@@ -59,7 +59,7 @@ struct ChartSheetSymbolView: View {
     // Guild request alert state
     @State private var showGuildRequestAlert: Bool = false
     @State private var symbolToRequest: RLTradingSymbolDTO? = nil
-    @State private var isSymbolDetailsExpanded: Bool = true
+    @State private var isSymbolDetailsExpanded: Bool = false
     @State private var keyboardInset: CGFloat = 0
     
     // Helper to get current symbol as DTO
@@ -139,6 +139,11 @@ struct ChartSheetSymbolView: View {
         .onAppear {
             Task {
                 await reloadGuildRequestState()
+            }
+        }
+        .task(id: currentSymbolDTO?.id) {
+            if let id = currentSymbolDTO?.id {
+                await chartViewModel.loadSymbolPreview(for: id)
             }
         }
         .onChange(of: rlAppState.currentGuild?.id) {
@@ -297,6 +302,8 @@ struct ChartSheetSymbolView: View {
 
                     if isSymbolDetailsExpanded {
                         VStack(alignment: .leading, spacing: 10) {
+                            symbolPriceLineBlock(for: symbol)
+
                             if let description = symbol.description?.trimmingCharacters(in: .whitespacesAndNewlines),
                                !description.isEmpty {
                                 SymbolInfoBlock(
@@ -306,21 +313,13 @@ struct ChartSheetSymbolView: View {
                                 )
                             }
 
-                            SymbolDetailRow(
-                                title: "Provider",
-                                value: symbol.providerDisplayLabel
-                            )
-                            SymbolDetailRow(
-                                title: "Status",
-                                value: symbol.effectiveIsMarketOpen ? "Open" : "Closed"
-                            )
+                            VStack(alignment: .leading, spacing: 6) {
+                                MarketSessionTimeline(symbol: symbol)
+                                Text(runningHoursText(for: symbol))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(AppColors.secondaryForeground)
+                            }
 
-                            MarketSessionTimeline(symbol: symbol)
-
-                            SymbolDetailRow(
-                                title: "Running Hours",
-                                value: runningHoursText(for: symbol)
-                            )
                             SymbolDetailRow(
                                 title: "Day High / Low",
                                 value: dayHighLowText(for: symbol)
@@ -344,11 +343,174 @@ struct ChartSheetSymbolView: View {
                                 )
                         )
                         .transition(.opacity)
+                    } else {
+                        symbolDetailsCompactSummary(for: symbol)
+                            .transition(.opacity)
                     }
                 }
                 .clipped()
             }
         }
+    }
+
+    /// Collapsed summary: a short "sample window" into the full details — two
+    /// prominent, tappable tiles for the data Provider (brand-coloured) and 24h
+    /// Sentiment. Kept to roughly half the detailed height; tapping expands
+    /// everything (including the 24h price line).
+    private func symbolDetailsCompactSummary(for symbol: RLTradingSymbolDTO) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isSymbolDetailsExpanded = true
+            }
+            HapticFeedback.light.trigger()
+        } label: {
+            HStack(spacing: 10) {
+                providerTile(for: symbol)
+                sentimentTile(for: symbol)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func providerTile(for symbol: RLTradingSymbolDTO) -> some View {
+        let brand = ProviderBrand.resolve(symbol.providerDisplayLabel)
+        return compactTile(title: "Provider", accent: brand.color) {
+            HStack(spacing: 9) {
+                brandLogo(brand, size: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(symbol.providerDisplayLabel)
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("Market data")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppColors.secondaryForeground)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func sentimentTile(for symbol: RLTradingSymbolDTO) -> some View {
+        let descriptor = sentimentDescriptor(for: symbol)
+        return compactTile(title: "Sentiment", accent: descriptor.color) {
+            HStack(spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(descriptor.color.opacity(0.18))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: descriptor.icon)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(descriptor.color)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(descriptor.label)
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundColor(descriptor.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text("\(symbol.changeFormatted ?? "--") · 24h")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(AppColors.secondaryForeground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// Shared chrome for the two collapsed tiles: a labelled, accent-tinted card.
+    private func compactTile<Content: View>(
+        title: String,
+        accent: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 8.5, weight: .heavy))
+                .foregroundColor(AppColors.secondaryForeground)
+                .tracking(0.4)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(accent.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(accent.opacity(0.30), lineWidth: 1)
+                )
+        )
+    }
+
+    /// Brand "logo" tile — a brand-coloured rounded square with the provider's
+    /// monogram (falls back to a coloured dot for unknown providers).
+    private func brandLogo(_ brand: ProviderBrand, size: CGFloat) -> some View {
+        Group {
+            if brand.monogram.isEmpty {
+                Circle()
+                    .fill(brand.color)
+                    .frame(width: size * 0.5, height: size * 0.5)
+                    .frame(width: size, height: size)
+            } else {
+                Text(brand.monogram)
+                    .font(.system(size: size * 0.5, weight: .heavy, design: .rounded))
+                    .foregroundColor(brand.onColor)
+                    .frame(width: size, height: size)
+                    .background(
+                        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                            .fill(brand.color)
+                    )
+            }
+        }
+    }
+
+    /// 24h price line for the expanded detail view. Uses MiniLineChart, which
+    /// scales to the series' own min/max so real peaks and troughs are visible.
+    @ViewBuilder
+    private func symbolPriceLineBlock(for symbol: RLTradingSymbolDTO) -> some View {
+        let preview = chartViewModel.currentSymbolPreview
+        let closes = (preview?.symbolId == symbol.id) ? (preview?.closes ?? []) : []
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Last 24h")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.secondaryForeground)
+                Spacer(minLength: 0)
+                Text(symbol.changeFormatted ?? "--")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(symbol.changeColor)
+            }
+            if closes.count >= 2 {
+                MiniLineChart(values: closes, tint: symbol.changeColor, height: 92)
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppColors.surfaceWhite10)
+                    .frame(height: 92)
+                    .overlay(
+                        Text("Loading 24h…")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(AppColors.secondaryForeground)
+                    )
+            }
+        }
+    }
+
+    private func sentimentDescriptor(
+        for symbol: RLTradingSymbolDTO
+    ) -> (label: String, icon: String, color: Color) {
+        let change = symbol.changePercent24h ?? 0
+        if change > 0.15 {
+            return ("Bullish", "chart.line.uptrend.xyaxis", AppColors.priceChangePositive)
+        }
+        if change < -0.15 {
+            return ("Bearish", "chart.line.downtrend.xyaxis", AppColors.priceChangeNegative)
+        }
+        return ("Neutral", "arrow.left.and.right", AppColors.secondaryForeground)
     }
     
     // MARK: - Watchlist Buttons
@@ -965,18 +1127,31 @@ struct ChartSheetSymbolView: View {
     }
 
     private func dayHighLowText(for symbol: RLTradingSymbolDTO) -> String {
-        guard let high = symbol.high24h, let low = symbol.low24h else { return "Unavailable" }
-        return "\(symbol.formatPrice(high)) / \(symbol.formatPrice(low))"
+        if let high = symbol.high24h, let low = symbol.low24h {
+            return "\(symbol.formatPrice(low)) – \(symbol.formatPrice(high))"
+        }
+        // Crypto / providers without a 24h snapshot: derive the range from candles.
+        if let range = recentRange(hours: 24) {
+            return "\(symbol.formatPrice(range.low)) – \(symbol.formatPrice(range.high))"
+        }
+        return "Unavailable"
     }
 
     private func weekHighLowText(for symbol: RLTradingSymbolDTO) -> String {
-        let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
-        let weekCandles = chartViewModel.dataManager.candles.filter { $0.timestamp >= weekAgo }
-        guard let maxHigh = weekCandles.map(\.high).max(),
-              let minLow = weekCandles.map(\.low).min() else {
-            return "Unavailable"
-        }
-        return "\(symbol.formatPrice(maxHigh)) / \(symbol.formatPrice(minLow))"
+        guard let range = recentRange(hours: 24 * 7) else { return "Unavailable" }
+        return "\(symbol.formatPrice(range.low)) – \(symbol.formatPrice(range.high))"
+    }
+
+    /// High/low derived from candles within the last `hours`, falling back to the
+    /// most recent loaded candles when that window has too few points.
+    private func recentRange(hours: Int) -> (low: Double, high: Double)? {
+        let candles = chartViewModel.dataManager.candles
+        guard !candles.isEmpty else { return nil }
+        let cutoff = Date().addingTimeInterval(-Double(hours) * 3600)
+        let windowed = candles.filter { $0.timestamp >= cutoff }
+        let pool = windowed.count >= 2 ? windowed : Array(candles.suffix(48))
+        guard let low = pool.map(\.low).min(), let high = pool.map(\.high).max() else { return nil }
+        return (low, high)
     }
 
     private func bullishBearishSummary(for symbol: RLTradingSymbolDTO) -> String {
@@ -1431,24 +1606,50 @@ struct SymbolProviderBadge: View {
     let provider: String
     var isCompact: Bool = false
 
+    private var brand: ProviderBrand { ProviderBrand.resolve(provider) }
+
     var body: some View {
-        Group {
-            if isCompact {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 10, weight: .bold))
-            } else {
+        HStack(spacing: 4) {
+            brandMark
+            if !isCompact {
                 Text(provider)
                     .font(.system(size: 9, weight: .semibold))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
             }
         }
-        .foregroundColor(AppColors.surfaceDetailPrimaryForeground)
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(AppColors.statusInfo25)
-        .clipShape(Capsule())
+        .background(
+            Capsule()
+                .fill(brand.color.opacity(0.16))
+                .overlay(
+                    Capsule()
+                        .stroke(brand.color.opacity(0.34), lineWidth: 1)
+                )
+        )
         .accessibilityLabel(provider)
+    }
+
+    /// Mini brand "logo": a brand-colored monogram tile, or a colored dot for
+    /// providers we don't have a monogram for.
+    @ViewBuilder
+    private var brandMark: some View {
+        if brand.monogram.isEmpty {
+            Circle()
+                .fill(brand.color)
+                .frame(width: 6, height: 6)
+        } else {
+            Text(brand.monogram)
+                .font(.system(size: 7.5, weight: .heavy, design: .rounded))
+                .foregroundColor(brand.onColor)
+                .frame(width: 12, height: 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(brand.color)
+                )
+        }
     }
 }
 

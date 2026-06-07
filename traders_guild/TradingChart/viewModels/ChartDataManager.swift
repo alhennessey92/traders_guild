@@ -40,6 +40,15 @@ import SwiftUI
 import Combine
 import Foundation
 
+struct HistoricalMergeResult: Equatable {
+    let prependedCount: Int
+    let insertedCount: Int
+    let duplicateCount: Int
+    let deferredPriceRangeUpdate: Bool
+
+    var didMutate: Bool { prependedCount > 0 || insertedCount > 0 }
+}
+
 class ChartDataManager: ObservableObject {
     // MARK: - Published Properties
     
@@ -47,6 +56,16 @@ class ChartDataManager: ObservableObject {
     @Published var currentPrice: Double = 0
     @Published var priceRange: (min: Double, max: Double) = (0, 0)
     @Published private(set) var lastPrependedCandleCount: Int = 0
+    @Published private(set) var hasDeferredHistoricalPriceRangeUpdate = false
+
+    /// Number of historical candles inserted before the original visual index origin.
+    ///
+    /// This is intentionally not `@Published`: it is updated immediately before `candles` is
+    /// published so a single view invalidation sees both the new array and the corrected visual
+    /// index origin. That keeps prepends from moving the visible chart during a pan.
+    private(set) var historicalRenderIndexOffset: Int = 0
+
+    private var focusedHistoricalPriceRangeWindow: Range<Int>?
     
     // MARK: - Symbol & Timeframe Context
     
@@ -195,34 +214,26 @@ class ChartDataManager: ObservableObject {
     
     // MARK: - Price Range
     
-    func updatePriceRange() {
+    func updatePriceRange(includeDeferredHistorical: Bool = false) {
+        if includeDeferredHistorical {
+            hasDeferredHistoricalPriceRangeUpdate = false
+            focusedHistoricalPriceRangeWindow = nil
+        }
+
         guard !candles.isEmpty else {
             priceRange = (0, 100)
             return
         }
-        
-        let rangeSource = candles.contains(where: { !$0.isGapFill })
-            ? candles.filter { !$0.isGapFill }
-            : candles
-        let allLows = rangeSource.map { $0.low }
-        let allHighs = rangeSource.map { $0.high }
-        
-        guard let minPrice = allLows.min(),
-              let maxPrice = allHighs.max() else {
+
+        guard let calculatedRange = Self.calculatedPriceRange(
+            from: eligibleCandlesForPriceRange(includeDeferredHistorical: includeDeferredHistorical),
+            currentPrice: currentPrice
+        ) else {
             priceRange = (0, 100)
             return
         }
-        
-        let span = maxPrice - minPrice
-        guard span > 0 else {
-            let center = maxPrice > 0 ? maxPrice : max(currentPrice, 1)
-            let padding = max(abs(center) * 0.001, 0.0001)
-            priceRange = (center - padding, center + padding)
-            return
-        }
 
-        let padding = span * 0.1
-        priceRange = (minPrice - padding, maxPrice + padding)
+        priceRange = calculatedRange
     }
     
     // MARK: - Price Formatting (Symbol-Aware)
@@ -328,6 +339,9 @@ class ChartDataManager: ObservableObject {
         pendingTickCandles = nil
         pendingTickPrice = nil
         lastPrependedCandleCount = 0
+        hasDeferredHistoricalPriceRangeUpdate = false
+        historicalRenderIndexOffset = 0
+        focusedHistoricalPriceRangeWindow = nil
         candles = Self.sortedUniqueCandles(data)
         updatePriceRange()
         
@@ -339,35 +353,181 @@ class ChartDataManager: ObservableObject {
 
     @discardableResult
     func mergeHistoricalMarketData(_ data: [RLCandleDTO]) -> Int {
+        mergeHistoricalMarketData(data, preservePriceRangeForPurePrepend: false).prependedCount
+    }
+
+    @discardableResult
+    func mergeHistoricalMarketData(
+        _ data: [RLCandleDTO],
+        preservePriceRangeForPurePrepend: Bool,
+        beforePublishingPrepend: ((Int) -> Void)? = nil
+    ) -> HistoricalMergeResult {
         guard !data.isEmpty else {
             lastPrependedCandleCount = 0
-            return 0
+            return HistoricalMergeResult(
+                prependedCount: 0,
+                insertedCount: 0,
+                duplicateCount: 0,
+                deferredPriceRangeUpdate: false
+            )
         }
 
         flushPendingTick()
-        let oldFirstTimestamp = candles.first?.timestamp
-        let existingTimestamps = Set(candles.map(\.timestamp))
-        let insertedBeforeFirst = data.filter { candle in
-            guard let oldFirstTimestamp else { return false }
-            return candle.timestamp < oldFirstTimestamp && !existingTimestamps.contains(candle.timestamp)
-        }.count
+        guard let oldFirstTimestamp = candles.first?.timestamp else {
+            historicalRenderIndexOffset = 0
+            candles = Self.sortedUniqueCandles(data)
+            lastPrependedCandleCount = 0
+            updatePriceRange()
 
-        lastPrependedCandleCount = insertedBeforeFirst
-        candles = Self.sortedUniqueCandles(data + candles)
-        updatePriceRange()
+            if let lastCandle = candles.last {
+                currentPrice = lastCandle.close
+                basePrice = lastCandle.close
+            }
+
+            return HistoricalMergeResult(
+                prependedCount: 0,
+                insertedCount: candles.count,
+                duplicateCount: max(0, data.count - candles.count),
+                deferredPriceRangeUpdate: false
+            )
+        }
+
+        let existingTimestamps = Set(candles.map(\.timestamp))
+        var uniqueIncoming: [RLCandleDTO] = []
+        uniqueIncoming.reserveCapacity(data.count)
+        var seenIncoming = Set<Date>()
+        var duplicateCount = 0
+
+        for candle in data {
+            if existingTimestamps.contains(candle.timestamp) || seenIncoming.contains(candle.timestamp) {
+                duplicateCount += 1
+                continue
+            }
+            seenIncoming.insert(candle.timestamp)
+            uniqueIncoming.append(candle)
+        }
+
+        guard !uniqueIncoming.isEmpty else {
+            lastPrependedCandleCount = 0
+            return HistoricalMergeResult(
+                prependedCount: 0,
+                insertedCount: 0,
+                duplicateCount: duplicateCount,
+                deferredPriceRangeUpdate: false
+            )
+        }
+
+        let isPurePrepend = uniqueIncoming.allSatisfy { $0.timestamp < oldFirstTimestamp }
+        let prependedCount = uniqueIncoming.filter { $0.timestamp < oldFirstTimestamp }.count
+
+        if isPurePrepend {
+            let oldPriceRange = priceRange
+            if prependedCount > 0 {
+                historicalRenderIndexOffset += prependedCount
+                shiftFocusedHistoricalPriceRangeWindow(by: prependedCount)
+                beforePublishingPrepend?(prependedCount)
+            }
+            candles = uniqueIncoming.sorted { $0.timestamp < $1.timestamp } + candles
+            lastPrependedCandleCount = prependedCount
+
+            if preservePriceRangeForPurePrepend {
+                priceRange = oldPriceRange
+                hasDeferredHistoricalPriceRangeUpdate = true
+            } else {
+                updatePriceRange()
+            }
+        } else {
+            lastPrependedCandleCount = prependedCount
+            if prependedCount > 0 {
+                historicalRenderIndexOffset += prependedCount
+                shiftFocusedHistoricalPriceRangeWindow(by: prependedCount)
+                beforePublishingPrepend?(prependedCount)
+            }
+            candles = Self.sortedUniqueCandles(data + candles)
+            updatePriceRange()
+        }
 
         if let lastCandle = candles.last {
             currentPrice = lastCandle.close
             basePrice = lastCandle.close
         }
 
-        return insertedBeforeFirst
+        return HistoricalMergeResult(
+            prependedCount: prependedCount,
+            insertedCount: uniqueIncoming.count,
+            duplicateCount: duplicateCount,
+            deferredPriceRangeUpdate: isPurePrepend && preservePriceRangeForPurePrepend
+        )
     }
 
     func consumeLastPrependedCandleCount() -> Int {
         let count = lastPrependedCandleCount
         lastPrependedCandleCount = 0
         return count
+    }
+
+    func refreshDeferredHistoricalPriceRangeIfNeeded(forCandleIndex candleIndex: Int? = nil) {
+        guard hasDeferredHistoricalPriceRangeUpdate else { return }
+        if let candleIndex,
+           candleIndex >= historicalRenderIndexOffset {
+            return
+        }
+        updatePriceRange(includeDeferredHistorical: true)
+    }
+
+    @discardableResult
+    func focusDeferredHistoricalPriceRangeIfNeeded(forCandleIndex candleIndex: Int, visibleCandleCount: Int) -> Bool {
+        guard hasDeferredHistoricalPriceRangeUpdate,
+              candleIndex >= 0,
+              candleIndex < historicalRenderIndexOffset,
+              candleIndex < candles.count else {
+            return false
+        }
+
+        if let focusedHistoricalPriceRangeWindow,
+           focusedHistoricalPriceRangeWindow.contains(candleIndex) {
+            return false
+        }
+
+        let radius = max(visibleCandleCount * 4, 48)
+        let lowerBound = max(0, candleIndex - radius)
+        let upperBound = min(candles.count, candleIndex + radius + 1)
+        guard lowerBound < upperBound else { return false }
+
+        return setFocusedHistoricalPriceRangeWindow(lowerBound..<upperBound)
+    }
+
+    @discardableResult
+    func focusVisibleHistoricalPriceRangeIfNeeded(visibleStartIndex: Int, visibleCandleCount: Int) -> Bool {
+        guard hasDeferredHistoricalPriceRangeUpdate,
+              historicalRenderIndexOffset > 0,
+              !candles.isEmpty else {
+            return false
+        }
+
+        let visibleCount = max(1, visibleCandleCount)
+        let boundedStart = max(0, min(candles.count - 1, visibleStartIndex))
+        guard boundedStart < historicalRenderIndexOffset else {
+            return clearFocusedHistoricalPriceRangeIfNeeded()
+        }
+
+        let visibleEnd = min(candles.count, boundedStart + visibleCount)
+        let centerIndex = max(0, min(historicalRenderIndexOffset - 1, boundedStart + visibleCount / 2))
+        let radius = max(visibleCount * 4, 48)
+        let lowerBound = max(0, min(boundedStart, centerIndex - radius))
+        let upperBound = min(candles.count, max(visibleEnd, centerIndex + radius + 1))
+        guard lowerBound < upperBound else { return false }
+
+        return setFocusedHistoricalPriceRangeWindow(lowerBound..<upperBound)
+    }
+
+    @discardableResult
+    func clearFocusedHistoricalPriceRangeIfNeeded() -> Bool {
+        guard focusedHistoricalPriceRangeWindow != nil else { return false }
+        focusedHistoricalPriceRangeWindow = nil
+        let oldRange = priceRange
+        updatePriceRange()
+        return oldRange.min != priceRange.min || oldRange.max != priceRange.max
     }
     
     func addRealtimeCandle(_ candle: RLCandleDTO) {
@@ -462,5 +622,69 @@ class ChartDataManager: ObservableObject {
             byTimestamp[candle.timestamp] = candle
         }
         return byTimestamp.values.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func eligibleCandlesForPriceRange(includeDeferredHistorical: Bool) -> [RLCandleDTO] {
+        if !includeDeferredHistorical,
+           hasDeferredHistoricalPriceRangeUpdate {
+            if let focusedHistoricalPriceRangeWindow {
+                let lowerBound = max(0, min(candles.count, focusedHistoricalPriceRangeWindow.lowerBound))
+                let upperBound = max(lowerBound, min(candles.count, focusedHistoricalPriceRangeWindow.upperBound))
+                if lowerBound < upperBound {
+                    return Array(candles[lowerBound..<upperBound])
+                }
+            }
+
+            if historicalRenderIndexOffset > 0,
+               historicalRenderIndexOffset < candles.count {
+                return Array(candles[historicalRenderIndexOffset...])
+            }
+        }
+
+        return candles
+    }
+
+    private func shiftFocusedHistoricalPriceRangeWindow(by count: Int) {
+        guard count > 0,
+              let window = focusedHistoricalPriceRangeWindow else {
+            return
+        }
+
+        focusedHistoricalPriceRangeWindow = (window.lowerBound + count)..<(window.upperBound + count)
+    }
+
+    private func setFocusedHistoricalPriceRangeWindow(_ window: Range<Int>) -> Bool {
+        focusedHistoricalPriceRangeWindow = window
+        let oldRange = priceRange
+        updatePriceRange()
+        return oldRange.min != priceRange.min || oldRange.max != priceRange.max
+    }
+
+    private static func calculatedPriceRange(
+        from candles: [RLCandleDTO],
+        currentPrice: Double
+    ) -> (min: Double, max: Double)? {
+        guard !candles.isEmpty else { return nil }
+
+        let rangeSource = candles.contains(where: { !$0.isGapFill })
+            ? candles.filter { !$0.isGapFill }
+            : candles
+        let allLows = rangeSource.map { $0.low }
+        let allHighs = rangeSource.map { $0.high }
+
+        guard let minPrice = allLows.min(),
+              let maxPrice = allHighs.max() else {
+            return nil
+        }
+
+        let span = maxPrice - minPrice
+        guard span > 0 else {
+            let center = maxPrice > 0 ? maxPrice : max(currentPrice, 1)
+            let padding = max(abs(center) * 0.001, 0.0001)
+            return (center - padding, center + padding)
+        }
+
+        let padding = span * 0.1
+        return (minPrice - padding, maxPrice + padding)
     }
 }

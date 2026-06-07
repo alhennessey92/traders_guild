@@ -130,17 +130,6 @@ struct WelcomeView: View {
                     .simultaneousGesture(TapGesture().onEnded {
                         RLAppState.clearAlert()
                     })
-
-                    Button {
-                        RLAppState.showInfo("Google sign-in will be enabled in an upcoming release.")
-                    } label: {
-                        LoginButton(
-                            title: "Sign in with Google",
-                            iconName: "g.circle.fill",
-                            backgroundColor: AppColors.whiteText.opacity(0.8),
-                            foregroundColor: AppColors.gradientBackgroundDark
-                        )
-                    }
                 }
 
                 Divider()

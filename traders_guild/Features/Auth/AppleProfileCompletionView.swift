@@ -2,7 +2,7 @@
 //  AppleProfileCompletionView.swift
 //  traders_guild
 //
-//  Collects required profile fields (display name, date of birth) for new
+//  Collects required profile fields (display name) for new
 //  Apple Sign In users before continuing into the shared onboarding pipeline.
 //
 
@@ -14,17 +14,13 @@ struct AppleProfileCompletionView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     @State private var name: String = ""
-    @State private var dateOfBirth: Date = RLAuthValidator.maximumAllowedDateOfBirth()
-    @State private var hasSetDOB: Bool = false
 
     private var normalizedName: String {
         RLAuthValidator.trimmed(name)
     }
 
     private var isFormValid: Bool {
-        RLAuthValidator.isValidDisplayName(normalizedName) &&
-        hasSetDOB &&
-        RLAuthValidator.isAtLeastMinimumSignupAge(dateOfBirth)
+        RLAuthValidator.isValidDisplayName(normalizedName)
     }
 
     var body: some View {
@@ -66,35 +62,6 @@ struct AppleProfileCompletionView: View {
                     StandardTextFieldView(title: "Your Full Name", text: $name)
                         .padding(.bottom, 16)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Date of Birth")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                            .padding(.horizontal, 24)
-
-                        DatePicker(
-                            "Date of Birth",
-                            selection: $dateOfBirth,
-                            in: ...RLAuthValidator.maximumAllowedDateOfBirth(),
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .colorScheme(ThemeManager.shared.currentTheme.colorScheme)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 20)
-                        .onChange(of: dateOfBirth) { _, _ in
-                            hasSetDOB = true
-                            dismissKeyboard()
-                        }
-                        .simultaneousGesture(
-                            TapGesture().onEnded {
-                                dismissKeyboard()
-                            }
-                        )
-                    }
-                    .padding(.bottom, 16)
-
                     Spacer(minLength: 120)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
@@ -104,10 +71,6 @@ struct AppleProfileCompletionView: View {
             .onAppear {
                 if name.isEmpty {
                     name = data.name
-                }
-                if let dob = data.dateOfBirth {
-                    dateOfBirth = dob
-                    hasSetDOB = true
                 }
             }
             .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
@@ -133,7 +96,6 @@ struct AppleProfileCompletionView: View {
                     foregroundColor: AppColors.gradientBackgroundDark
                 ) {
                     data.name = normalizedName
-                    data.dateOfBirth = dateOfBirth
                     path.append(.username)
                 }
                 .disabled(!isFormValid)

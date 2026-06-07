@@ -96,10 +96,6 @@ struct UserSettingsSheetView: View {
             ChangePasswordView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
             
-        case .dateOfBirth:
-            DateOfBirthView(onBack: { currentDestination = nil })
-                .environmentObject(rlAppState)
-            
         case .tradingInterests:
             TradingInterestsView(onBack: { currentDestination = nil })
                 .environmentObject(rlAppState)
@@ -194,7 +190,10 @@ struct UserSettingsSheetView: View {
     
     private var mainSettingsView: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            // LazyVStack so sections off-screen don't render until needed —
+            // the settings page is tall and the non-lazy VStack was the most
+            // likely cause of scroll lag.
+            LazyVStack(spacing: 0) {
                 // Header with Back Button
                 HStack {
                     Button(action: onBack) {
@@ -354,17 +353,6 @@ struct UserSettingsSheetView: View {
                 ) {
                     withAnimation {
                         currentDestination = .changePassword
-                    }
-                }
-
-                SettingsButtonRow(
-                    icon: "calendar",
-                    title: "Date of Birth",
-                    subtitle: "Update your date of birth",
-                    iconColor: .purple
-                ) {
-                    withAnimation {
-                        currentDestination = .dateOfBirth
                     }
                 }
 

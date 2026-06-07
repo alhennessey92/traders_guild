@@ -119,7 +119,7 @@ enum LocaleOptionCatalog {
         let normalized = countryCode(from: code)
         guard !normalized.isEmpty else { return "Not specified" }
         if normalized == allPreferenceCode {
-            return "All locations"
+            return "Global"
         }
         return countries.first(where: { $0.code.caseInsensitiveCompare(normalized) == .orderedSame })?.label ?? normalized
     }
@@ -128,6 +128,9 @@ enum LocaleOptionCatalog {
         let normalized = countryCode(from: code)
         guard !normalized.isEmpty else { return "Not specified" }
         let label = countryLabel(for: normalized)
+        if normalized == allPreferenceCode {
+            return "🌐 \(label)"
+        }
         if let flag = flagEmoji(forCountryCode: normalized) {
             return "\(flag) \(label)"
         }

@@ -295,11 +295,13 @@ struct UserGlobalSheetView: View {
                     tint: AppColors.moderationOrange
                 )
 
-                StatKPITile(
-                    label: "Awards Earned",
-                    value: "\(globalStats?.totalAwardsEarned ?? 0)",
-                    tint: AppColors.statusHighlight80
-                )
+                if rlAppState.runtimeFlags.awardsEnabled {
+                    StatKPITile(
+                        label: "Awards Earned",
+                        value: "\(globalStats?.totalAwardsEarned ?? 0)",
+                        tint: AppColors.statusHighlight80
+                    )
+                }
             }
             .padding(.horizontal, 25)
             .padding(.top, 16)

@@ -314,7 +314,7 @@ struct MACDPanelView: View {
     // MARK: - Coordinate Helpers
     
     private func xPosition(for candleIndex: Int) -> CGFloat {
-        CGFloat(candleIndex) * totalCandleWidth + totalOffset + actualCandleWidth / 2
+        CGFloat(candleIndex - chartData.historicalRenderIndexOffset) * totalCandleWidth + totalOffset + actualCandleWidth / 2
     }
 
     private func transformedViewport(size: CGSize) -> IndicatorPanelViewport {
@@ -340,7 +340,7 @@ struct MACDPanelView: View {
         guard !dataPoints.isEmpty else { return [] }
 
         let plotWidth = plotEndX(totalWidth: totalWidth)
-        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) - 5)
+        let visibleStartIndex = max(0, Int(-totalOffset / totalCandleWidth) + chartData.historicalRenderIndexOffset - 5)
         let visibleEndIndex = min(chartData.candles.count, visibleStartIndex + Int(plotWidth / totalCandleWidth) + 10)
         return dataPoints.filter { $0.candleIndex >= visibleStartIndex && $0.candleIndex <= visibleEndIndex }
     }

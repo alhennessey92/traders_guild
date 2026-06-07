@@ -25,6 +25,7 @@ class LeftDrawerViewModel: ObservableObject {
 
     private static let topMarkersCacheTTL: TimeInterval = 300
     private static let notificationRealtimeInsertWindow: TimeInterval = 1.5
+    private static let guildMembersRealtimeRefreshDebounceNanoseconds: UInt64 = 500_000_000
     
     
     private weak var rlAppState: RLAppState?
@@ -78,8 +79,11 @@ class LeftDrawerViewModel: ObservableObject {
     @Published var lastRefresh: Date?
     
     private var currentGuildId: UUID?
+    private var guildMembersLastRefresh: Date?
+    private var guildMembersRefreshTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private weak var rlAppStateRef: RLAppState?
+    private var configuredAppStateIdentifier: ObjectIdentifier?
 
     
     // ================================================================================================
@@ -127,7 +131,8 @@ class LeftDrawerViewModel: ObservableObject {
     
     /// Request navigation to a specific marker
     /// Parent views observe `pendingMarkerNavigation` and handle the actual navigation
-    func requestNavigationToMarker(_ marker: RLTopMarkerDTO) {
+    func requestNavigationToMarker(_ marker: RLTopMarkerDTO, source: String = #function, file: String = #fileID, line: Int = #line) {
+        print("🧭 requestNavigationToMarker(\(marker.symbolTicker), id=\(marker.id)) from \(file):\(line) [\(source)]")
         pendingMarkerNavigation = marker
     }
     
@@ -137,6 +142,13 @@ class LeftDrawerViewModel: ObservableObject {
     }
 
     func configure(with rlAppState: RLAppState) {
+        let appStateIdentifier = ObjectIdentifier(rlAppState)
+        guard configuredAppStateIdentifier != appStateIdentifier else {
+            applyPresenceUpdates(rlAppState.presenceByUserId)
+            return
+        }
+
+        configuredAppStateIdentifier = appStateIdentifier
         rlAppStateRef = rlAppState
         rlAppState.$presenceByUserId
             .receive(on: DispatchQueue.main)
@@ -161,6 +173,15 @@ class LeftDrawerViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func applyGuildMembersResponse(_ response: RLGuildMembersListDTO, presenceMap: [UUID: Bool]) {
+        guildMembers = response.members
+        guildMembersTotalCount = response.totalCount
+        guildMembersOnlineCount = response.onlineCount
+        guildMembersLastRefresh = Date()
+        AvatarImageCache.shared.prefetch(urlStrings: response.members.compactMap(\.avatarUrl))
+        applyPresenceUpdates(presenceMap)
     }
     
     // ================================================================================================
@@ -379,10 +400,7 @@ class LeftDrawerViewModel: ObservableObject {
                 do {
                     let response = try await rlAppState.fetchGuildMembers(guildId: guildId)
                     await MainActor.run {
-                        self.guildMembers = response.members
-                        self.guildMembersTotalCount = response.totalCount
-                        self.guildMembersOnlineCount = response.onlineCount
-                        self.applyPresenceUpdates(rlAppState.presenceByUserId)
+                        self.applyGuildMembersResponse(response, presenceMap: rlAppState.presenceByUserId)
                     }
                 } catch is CancellationError {
                     // Silent
@@ -584,10 +602,7 @@ class LeftDrawerViewModel: ObservableObject {
         do {
             let response = try await rlAppState.fetchGuildMembers(guildId: guildId, search: search)
             await MainActor.run {
-                self.guildMembers = response.members
-                self.guildMembersTotalCount = response.totalCount
-                self.guildMembersOnlineCount = response.onlineCount
-                self.applyPresenceUpdates(rlAppState.presenceByUserId)
+                self.applyGuildMembersResponse(response, presenceMap: rlAppState.presenceByUserId)
             }
         } catch is CancellationError {
             print("📋 refreshGuildMembers: Cancelled")
@@ -600,6 +615,28 @@ class LeftDrawerViewModel: ObservableObject {
         } catch {
             print("⚠️ Failed to refresh guild members: \(error)")
         }
+    }
+
+    func refreshGuildMembersIfStale(
+        guildId: UUID,
+        rlAppState: RLAppState,
+        maxAge: TimeInterval = 30
+    ) async {
+        let isStale: Bool
+        if currentGuildId != guildId || guildMembers.isEmpty {
+            isStale = true
+        } else if let guildMembersLastRefresh {
+            isStale = Date().timeIntervalSince(guildMembersLastRefresh) > maxAge
+        } else {
+            isStale = true
+        }
+
+        guard isStale else {
+            applyPresenceUpdates(rlAppState.presenceByUserId)
+            return
+        }
+
+        await refreshGuildMembers(guildId: guildId, rlAppState: rlAppState)
     }
     
     /// Refresh friend requests (incoming + outgoing) from real API
@@ -755,6 +792,7 @@ class LeftDrawerViewModel: ObservableObject {
            await MainActor.run {
                self.userNotifications = result.notifications
                self.applyNotificationStats(stats)
+               self.scheduleGuildMembersRefreshIfNeeded(from: result.notifications, reason: "notification_sync")
                self.markNotificationListSynced()
            }
        } catch is CancellationError {
@@ -790,6 +828,8 @@ class LeftDrawerViewModel: ObservableObject {
         rlAppStateRef?.notificationStats = nil
         notificationResyncTask?.cancel()
         notificationResyncTask = nil
+        guildMembersRefreshTask?.cancel()
+        guildMembersRefreshTask = nil
         lastNotificationSyncAt = nil
         lastNotificationStatsUpdateAt = nil
         lastNotificationForegroundSyncAt = nil
@@ -801,6 +841,7 @@ class LeftDrawerViewModel: ObservableObject {
         guildMembers = []
         guildMembersTotalCount = 0
         guildMembersOnlineCount = 0
+        guildMembersLastRefresh = nil
         isLoadingGuildMembers = false
         pendingFriendRequestsIncoming = []
         pendingFriendRequestsOutgoing = []
@@ -1090,7 +1131,63 @@ class LeftDrawerViewModel: ObservableObject {
         lastRealtimeNotificationInsertAt = Date()
         markNotificationListSynced(at: lastRealtimeNotificationInsertAt ?? Date())
         refreshFriendRelationshipCachesIfNeeded(for: notification)
+        scheduleGuildMembersRefreshIfNeeded(for: notification, reason: "realtime_notification")
         print("🔔 Real-time notification updated: \(notification.displayTitle)")
+    }
+
+    private func scheduleGuildMembersRefreshIfNeeded(from notifications: [RLNotificationDTO], reason: String) {
+        guard let newestMembershipNotification = notifications
+            .filter({ shouldRefreshGuildMembers(for: $0) })
+            .sorted(by: { $0.createdAt > $1.createdAt })
+            .first else {
+            return
+        }
+
+        if let guildMembersLastRefresh,
+           newestMembershipNotification.createdAt <= guildMembersLastRefresh {
+            return
+        }
+
+        scheduleGuildMembersRefreshIfNeeded(for: newestMembershipNotification, reason: reason)
+    }
+
+    private func scheduleGuildMembersRefreshIfNeeded(for notification: RLNotificationDTO, reason: String) {
+        guard shouldRefreshGuildMembers(for: notification),
+              let rlAppState = rlAppStateRef,
+              let guildId = notification.destination?.guildId ?? rlAppState.currentGuild?.id,
+              guildId == rlAppState.currentGuild?.id else {
+            return
+        }
+
+        scheduleGuildMembersRefresh(guildId: guildId, rlAppState: rlAppState, reason: reason)
+    }
+
+    private func shouldRefreshGuildMembers(for notification: RLNotificationDTO) -> Bool {
+        switch notification.type {
+        case .memberJoined,
+             .memberKicked,
+             .memberBanned,
+             .memberUnbanned,
+             .roleChanged,
+             .memberMuted,
+             .memberUnmuted,
+             .memberSuspended,
+             .memberUnsuspended,
+             .membershipRequestDecision:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func scheduleGuildMembersRefresh(guildId: UUID, rlAppState: RLAppState, reason: String) {
+        guildMembersRefreshTask?.cancel()
+        guildMembersRefreshTask = Task { [weak self, weak rlAppState] in
+            try? await Task.sleep(nanoseconds: Self.guildMembersRealtimeRefreshDebounceNanoseconds)
+            guard let self, let rlAppState, !Task.isCancelled else { return }
+            print("👥 [LeftDrawer] Refreshing guild members (\(reason))")
+            await self.refreshGuildMembers(guildId: guildId, rlAppState: rlAppState)
+        }
     }
 
     private func refreshFriendRelationshipCachesIfNeeded(for notification: RLNotificationDTO) {

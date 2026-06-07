@@ -71,7 +71,7 @@ struct StatisticsView: View {
             )
             StatKPITile(
                 label: "Total Rep",
-                value: MetricFormat.compactInt(guildReputationTotal),
+                value: MetricFormat.exactInt(guildReputationTotal),
                 tint: AppColors.accentColor,
                 compact: true
             )

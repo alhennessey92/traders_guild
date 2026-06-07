@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ChartSettingsView: View {
     @ObservedObject var settings: ChartSettings
+    var onResetToLatest: (() -> Void)? = nil
     @ObservedObject private var markerLayoutSettings = MarkerDisplaySettings.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -30,6 +31,7 @@ struct ChartSettingsView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
+                        chartPositionCard
                         gridLinesCard
                         candleColorsCard
                         timeframeViewportCard
@@ -48,6 +50,21 @@ struct ChartSettingsView: View {
         .background(AdminSheetBackground())
         .presentationDetents([.fraction(0.72), .large])
         .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var chartPositionCard: some View {
+        if let onResetToLatest {
+            AdminSectionCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionTitle("Chart Position", subtitle: "Return the chart to the latest candle and default zoom.")
+
+                    secondaryActionButton(title: "Reset to Latest") {
+                        onResetToLatest()
+                    }
+                }
+            }
+        }
     }
 
     private var gridLinesCard: some View {

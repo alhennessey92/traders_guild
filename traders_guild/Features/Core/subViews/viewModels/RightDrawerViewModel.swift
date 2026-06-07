@@ -10,6 +10,13 @@ import Foundation
 import SwiftUI
 import Combine
 
+enum RightDrawerDisclosureSection: String, CaseIterable, Hashable {
+    case chatrooms
+    case friends
+    case online
+    case offline
+}
+
 @MainActor
 class RLRightDrawerViewModel: ObservableObject {
     
@@ -25,6 +32,7 @@ class RLRightDrawerViewModel: ObservableObject {
     
     @Published var isLoading: Bool = false
     @Published var lastRefresh: Date?
+    @Published private var disclosureExpansionState: [RightDrawerDisclosureSection: Bool] = [:]
     
     private var currentGuildId: UUID?
     private var cancellables = Set<AnyCancellable>()
@@ -110,6 +118,35 @@ class RLRightDrawerViewModel: ObservableObject {
     var memberOfflineNonFriends: [RLGuildMemberDTO] {
         guildMembers.filter { !$0.isFriend && !effectiveOnlineStatus(for: $0) }
     }
+
+    func disclosureBinding(
+        for section: RightDrawerDisclosureSection,
+        default defaultValue: Bool = true
+    ) -> Binding<Bool> {
+        Binding(
+            get: { [weak self] in
+                self?.isDisclosureExpanded(section, default: defaultValue) ?? defaultValue
+            },
+            set: { [weak self] isExpanded in
+                self?.setDisclosureExpanded(section, isExpanded: isExpanded)
+            }
+        )
+    }
+
+    func isDisclosureExpanded(
+        _ section: RightDrawerDisclosureSection,
+        default defaultValue: Bool = true
+    ) -> Bool {
+        disclosureExpansionState[section] ?? defaultValue
+    }
+
+    func setDisclosureExpanded(_ section: RightDrawerDisclosureSection, isExpanded: Bool) {
+        disclosureExpansionState[section] = isExpanded
+    }
+
+    func resetDisclosureExpansionState() {
+        disclosureExpansionState = [:]
+    }
     
     // ================================================================================================
     // MARK: - Cache Update Methods
@@ -148,6 +185,10 @@ class RLRightDrawerViewModel: ObservableObject {
     // ================================================================================================
     
     func preloadData(for guildId: UUID, appState: RLAppState) async {
+        if let currentGuildId, currentGuildId != guildId {
+            resetDisclosureExpansionState()
+        }
+
         guard shouldRefresh(for: guildId) else {
             // Even if not refreshing API data, ensure we are subscribed to channels
             subscribeToAllChannels(guildId: guildId)
@@ -266,6 +307,7 @@ class RLRightDrawerViewModel: ObservableObject {
         guildMembers = []
         lastRefresh = nil
         currentGuildId = nil
+        resetDisclosureExpansionState()
     }
 
     private func preloadMembersFallback(for guildId: UUID, appState: RLAppState) async {

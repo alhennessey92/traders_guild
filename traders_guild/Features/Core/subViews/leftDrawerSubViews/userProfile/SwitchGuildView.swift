@@ -82,10 +82,10 @@ struct LocalePreferenceChips: View {
     }
 
     private var locationIconName: String? {
-        if normalizedLocation == LocaleOptionCatalog.allPreferenceCode || normalizedLocation.isEmpty {
-            return "globe"
-        }
-        return nil
+        // For "all" the 🌐 emoji is already in `countryDisplay`'s text; for a
+        // specific country the flag emoji is in the text. Only legacy empty
+        // location falls back to a globe SF Symbol.
+        normalizedLocation.isEmpty ? "globe" : nil
     }
 }
 
@@ -173,7 +173,14 @@ struct SwitchGuildView: View {
     @State private var isLoading: Bool = false
     @State private var showJoinGuild = false
     @State private var showCreateGuild = false
-    
+
+    /// User's guilds with their System Guild(s) pinned to the top.
+    private var sortedUserGuilds: [RLGuildWithMembership] {
+        let system = rlAppState.userGuilds.filter { $0.guild.isSystemGuild }
+        let others = rlAppState.userGuilds.filter { !$0.guild.isSystemGuild }
+        return system + others
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
@@ -257,7 +264,7 @@ struct SwitchGuildView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(rlAppState.userGuilds) { item in
+                        ForEach(sortedUserGuilds) { item in
                             GuildSwitchRow(
                                 item: item,
                                 isCurrentGuild: item.guild.id == rlAppState.currentGuild?.id,
@@ -381,6 +388,15 @@ struct GuildSwitchRow: View {
                             .fontWeight(.bold)
                             .foregroundColor(AppColors.whiteText)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if item.guild.isSystemGuild {
+                            Text("System")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(AppColors.guildReputationAccent.opacity(0.16)))
+                        }
 
                         Spacer(minLength: 6)
 
@@ -1071,15 +1087,25 @@ struct JoinGuildRow: View {
 
                     // Access badge + joined pill
                     HStack(spacing: 8) {
-                        Text(guild.isOpen ? "Open" : "Private")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(guild.isOpen ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.7))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule().fill(guild.isOpen ? AppColors.guildReputationAccent.opacity(0.18) : AppColors.whiteText.opacity(0.08))
-                            )
+                        if guild.isSystemGuild {
+                            Text("System")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(AppColors.guildReputationAccent.opacity(0.16)))
+                        } else {
+                            Text(guild.isOpen ? "Open" : "Private")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(guild.isOpen ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.7))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(guild.isOpen ? AppColors.guildReputationAccent.opacity(0.18) : AppColors.whiteText.opacity(0.08))
+                                )
+                        }
 
                         if isJoined {
                             Text("Joined")
@@ -1729,6 +1755,7 @@ struct CreateGuildView: View {
     @State private var selectedCrestColor: String = GuildCrestCatalog.defaultColorKey
     @State private var pickedCrestImage: UIImage?
     @State private var showCrestImagePicker = false
+    @State private var showInviteHubAfterCreate = false
 
     private var normalizedJoinQuestions: [RLGuildJoinQuestionInputDTO] {
         joinQuestions
@@ -1747,15 +1774,17 @@ struct CreateGuildView: View {
         return !name.isEmpty
             && !announcementTitle.isEmpty
             && !announcementContent.isEmpty
+            && !selectedLanguageCode.isEmpty
+            && !selectedCountryCode.isEmpty
             && (isOpen || !normalizedJoinQuestions.isEmpty)
     }
 
     private var selectedLanguageLabel: String {
-        selectedLanguageCode.isEmpty ? "Use profile language" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode)
+        selectedLanguageCode.isEmpty ? "Select language" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode)
     }
 
     private var selectedCountryLabel: String {
-        selectedCountryCode.isEmpty ? "Use profile country" : LocaleOptionCatalog.countryDisplay(for: selectedCountryCode)
+        selectedCountryCode.isEmpty ? "Select location" : LocaleOptionCatalog.countryDisplay(for: selectedCountryCode)
     }
 
     private var selectedLanguageValue: String? {
@@ -2050,13 +2079,11 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Language")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Language")
 
                             Menu {
-                                Button("Use profile language") {
-                                    selectedLanguageCode = ""
+                                Button("All languages") {
+                                    selectedLanguageCode = LocaleOptionCatalog.allPreferenceCode
                                 }
                                 Divider()
                                 ForEach(LocaleOptionCatalog.languages) { option in
@@ -2070,13 +2097,11 @@ struct CreateGuildView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Country")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
+                            requiredFieldLabel("Location")
 
                             Menu {
-                                Button("Use profile country") {
-                                    selectedCountryCode = ""
+                                Button("🌐 Global") {
+                                    selectedCountryCode = LocaleOptionCatalog.allPreferenceCode
                                 }
                                 Divider()
                                 ForEach(LocaleOptionCatalog.countries) { option in
@@ -2114,6 +2139,24 @@ struct CreateGuildView: View {
 
                             Toggle("", isOn: $isOpen)
                                 .tint(AppColors.guildReputationAccent)
+                        }
+
+                        if isOpen {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.statusWarning90)
+                                Text("Heads up: anyone can find and join an open guild instantly — no approval needed. Choose Private if you want to approve members or run an invite-only community.")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.statusWarning90)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(AppColors.statusWarning14)
+                            )
                         }
 
                         if !isOpen {
@@ -2267,6 +2310,19 @@ struct CreateGuildView: View {
                 pickedCrestImage = image
             }
         }
+        .fullScreenCover(isPresented: $showInviteHubAfterCreate) {
+            GuildInviteHubView(
+                headline: "Your guild is live 🎉",
+                subheadline: "Now bring your community in. Share your guild on X, Discord, or with your contacts to get your first members.",
+                primaryButtonTitle: "Done",
+                onPrimaryAction: {
+                    showInviteHubAfterCreate = false
+                    onComplete()
+                },
+                shareMode: .guildVanity
+            )
+            .environmentObject(rlAppState)
+        }
         .toolbar(.hidden, for: .navigationBar)
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
@@ -2346,7 +2402,9 @@ struct CreateGuildView: View {
                let data = image.jpegData(compressionQuality: 0.85) {
                 _ = try? await rlAppState.uploadGuildAvatar(imageData: data)
             }
-            onComplete()
+            // Present the invite hub so the owner can immediately bring their
+            // community in. "Done" then completes (dismisses) the create flow.
+            showInviteHubAfterCreate = true
         } catch is CancellationError {
             return
         } catch {

@@ -7,6 +7,8 @@ struct MarkerComponentOverlayLayer: View {
     let width: CGFloat
     let xForTime: ((Date) -> CGFloat?)?
     var formatPrice: ((Double) -> String)?
+    var chartHeight: CGFloat = 0
+    var topExclusionHeight: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -288,7 +290,15 @@ struct MarkerComponentOverlayLayer: View {
     }
 
     private func priceLabelView(label: String, price: Double, color: Color, y: CGFloat) -> some View {
-        HStack(spacing: 3) {
+        let displayY = chartHeight > 0
+            ? ChartAxisMetrics.clampedPriceChipCenterY(
+                centerY: y,
+                totalHeight: chartHeight,
+                chipHeight: ChartAxisMetrics.secondaryPriceChipHeight,
+                topExclusionHeight: topExclusionHeight
+            )
+            : y
+        return HStack(spacing: 3) {
             Text(label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -309,7 +319,7 @@ struct MarkerComponentOverlayLayer: View {
                 totalWidth: width,
                 width: ChartAxisMetrics.secondaryPriceChipWidth
             ),
-            y: y
+            y: displayY
         )
         .allowsHitTesting(false)
     }
