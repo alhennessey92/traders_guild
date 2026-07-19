@@ -101,7 +101,7 @@ struct RLUserDMRowView: View {
                     
                     // Last message preview
                     if let lastMessage = thread.lastMessage {
-                        Text(lastMessage.content)
+                        Text(MarkerShareCodec.displayPreview(for: lastMessage.content))
                             .font(.caption)
                             .foregroundColor(AppColors.listRowSecondaryForeground)
                             .lineLimit(1)

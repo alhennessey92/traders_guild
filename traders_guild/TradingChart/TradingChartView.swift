@@ -1029,6 +1029,14 @@ struct TradingChartView: View {
             .onChange(of: chartData.candles.last?.timestamp) { _, _ in
                 initializeLatestPositionIfNeeded()
             }
+            .onChange(of: rlAppState.isNetworkReachable) { wasReachable, isReachable in
+                // Connectivity returned while stuck with no candles → recover now
+                // rather than waiting for the backoff timer.
+                guard isReachable, !wasReachable else { return }
+                if chartViewModel.currentSymbol != nil, chartData.candles.isEmpty {
+                    Task { await chartViewModel.retryChartDataLoad(reason: "network_restored") }
+                }
+            }
     }
 
     private func withNotificationHandlers<Content: View>(_ content: Content) -> some View {
@@ -1956,10 +1964,37 @@ struct TradingChartView: View {
                     .multilineTextAlignment(.center)
                     .foregroundColor(AppColors.secondaryForeground)
                     .frame(maxWidth: 260)
+
+                if chartViewModel.isRetryingChartLoad {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: AppColors.accentColor))
+                            .scaleEffect(0.8)
+                        Text(chartViewModel.chartRetryAttempt > 0
+                             ? "Reconnecting… (attempt \(chartViewModel.chartRetryAttempt))"
+                             : "Reconnecting…")
+                            .font(.caption)
+                            .foregroundColor(AppColors.secondaryForeground)
+                    }
+                    .padding(.top, 2)
+                }
+
+                Button {
+                    Task { await chartViewModel.retryChartDataLoad(reason: "manual") }
+                } label: {
+                    Text("Try Again")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(AppColors.accentColor))
+                }
+                .padding(.top, 6)
             }
             .padding(24)
         }
         .transition(.opacity.animation(.easeOut(duration: 0.3)))
+        .animation(.easeInOut(duration: 0.2), value: chartViewModel.isRetryingChartLoad)
     }
 
     private var noDataSubtitle: String {
@@ -2219,6 +2254,11 @@ struct TradingChartView: View {
     @ViewBuilder
     private func placeMarkerButton(coordinateSystem: ChartCoordinateSystem) -> some View {
         let actionLabel = placementState.isEditingExistingMarker ? "Save Changes" : "Place Marker"
+        let activeColor = placementActionColor
+        let hasSelectedAlertSeverity = placementState.intent == .alert && placementPreviewAlertSeverity != nil
+        let showsMarkerColor = placementState.isValid || hasSelectedAlertSeverity
+        let activeOpacity: Double = placementState.isValid ? 0.96 : 0.58
+        let secondaryOpacity: Double = placementState.isValid ? 0.74 : 0.36
         Button(action: { handlePlaceMarkerPress(coordinateSystem: coordinateSystem) }) {
             HStack(spacing: 6) {
                 if isSubmittingPlacement {
@@ -2234,14 +2274,14 @@ struct TradingChartView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundColor(placementState.isValid ? AppColors.onAccentForeground : AppColors.whiteText.opacity(0.55))
+            .foregroundColor(showsMarkerColor ? AppColors.onAccentForeground : AppColors.whiteText.opacity(0.55))
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(minWidth: 122)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
                         .fill(
-                            placementState.isValid
+                            showsMarkerColor
                                 ? AnyShapeStyle(
                                     LinearGradient(
                                         colors: placementState.isEditingExistingMarker
@@ -2250,8 +2290,8 @@ struct TradingChartView: View {
                                                 AppColors.statusPositive70.opacity(0.74),
                                               ]
                                             : [
-                                                placementState.intent.color.opacity(0.96),
-                                                placementState.intent.color.opacity(0.74),
+                                                activeColor.opacity(activeOpacity),
+                                                activeColor.opacity(secondaryOpacity),
                                               ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -2263,17 +2303,18 @@ struct TradingChartView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(
-                            placementState.isValid
+                            showsMarkerColor
                                 ? (placementState.isEditingExistingMarker
                                     ? AppColors.statusPositive70.opacity(0.72)
-                                    : placementState.intent.color.opacity(0.72))
+                                    : activeColor.opacity(placementState.isValid ? 0.72 : 0.48))
                                 : AppColors.whiteText.opacity(0.16),
                             lineWidth: 1
                         )
                 )
         }
+        .buttonStyle(.plain)
         .disabled(!placementState.isValid || isSubmittingPlacement)
-        .opacity(placementState.isValid ? 1.0 : 0.5)
+        .opacity(placementState.isValid || hasSelectedAlertSeverity ? 1.0 : 0.5)
     }
     
     // MARK: - Marker Placement Overlay
@@ -2286,6 +2327,8 @@ struct TradingChartView: View {
         )
         let plotWidth = max(0, geometry.size.width - yAxisWidth)
         let plotHeight = max(0, geometry.size.height - xAxisReservedHeight)
+        let maskWidth = markerDragPosition == nil ? plotWidth : geometry.size.width
+        let maskHeight = markerDragPosition == nil ? plotHeight : geometry.size.height
 
         ZStack {
             if !placementState.isEditingExistingMarker,
@@ -2295,7 +2338,7 @@ struct TradingChartView: View {
         }
         .mask(alignment: .topLeading) {
             Rectangle()
-                .frame(width: plotWidth, height: plotHeight)
+                .frame(width: maskWidth, height: maskHeight)
         }
         .onAppear {
             updatePlacementGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
@@ -2322,15 +2365,15 @@ struct TradingChartView: View {
     @ViewBuilder
     private func previewMarkerView(geometry: GeometryProxy, coordinateSystem: ChartCoordinateSystem) -> some View {
         let snapPosition = previewMarkerSnapPosition(coordinateSystem: coordinateSystem)
-        let markerX = markerDragPosition?.x ?? snapPosition?.x
-        let markerY = markerDragPosition?.y ?? snapPosition?.y
+        let displayPosition = markerDragPosition ?? snapPosition
+        let markerX = displayPosition?.x
+        let markerY = displayPosition?.y
 
         if let markerX,
            let markerY,
            markerX.isFinite,
            markerY.isFinite,
-           markerX >= -50,
-           markerX <= geometry.size.width + 50 {
+           markerDragPosition != nil || (markerX >= -50 && markerX <= geometry.size.width + 50) {
             previewMarkerContent(x: markerX, y: markerY, coordinateSystem: coordinateSystem)
         }
     }
@@ -2345,6 +2388,10 @@ struct TradingChartView: View {
         let snapX = coordinateSystem.xCenterPosition(forCandleIndex: effectiveCandleIndex)
         let candleHighY = coordinateSystem.yPosition(forPrice: candle.high)
         let candleLowY = coordinateSystem.yPosition(forPrice: candle.low)
+        let viewportHeight = max(0, chartSize.height - xAxisReservedBandHeight(
+            chartHeight: chartSize.height,
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
+        ))
 
         let (snapPosition, _) = MarkerPositionCalculator.calculatePreviewPosition(
             candleIndex: effectiveCandleIndex,
@@ -2353,7 +2400,8 @@ struct TradingChartView: View {
             candleHighY: candleHighY,
             candleLowY: candleLowY,
             centerX: snapX,
-            priceScale: gestureState.priceScale
+            priceScale: gestureState.priceScale,
+            viewportHeight: viewportHeight
         )
 
         guard snapPosition.x.isFinite, snapPosition.y.isFinite else { return nil }
@@ -2430,6 +2478,13 @@ struct TradingChartView: View {
             }
         }
         return "🎯"
+    }
+
+    private var placementActionColor: Color {
+        guard placementState.intent == .alert else {
+            return placementState.intent.color
+        }
+        return placementPreviewAlertSeverity?.color ?? placementState.intent.color
     }
 
     /// Compute a placement-guide x from a candle index using the live pan
@@ -2562,7 +2617,7 @@ struct TradingChartView: View {
     }
 
     private func previewMarkerDragGesture(coordinateSystem: ChartCoordinateSystem) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
                 guard !placementState.isEditingExistingMarker else { return }
                 guard effectiveMarkerIntent != .setup else { return }
@@ -2582,11 +2637,13 @@ struct TradingChartView: View {
                     y: dragStart.y + value.translation.height
                 )
                 markerDragPosition = chartLocation
+                let boundedChartLocation = boundedPreviewDragLocation(chartLocation)
 
                 let resolvedPreviewIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
                     isEditingExistingMarker: placementState.isEditingExistingMarker,
                     currentIndex: previewCandleIndex,
-                    candidateIndex: nearestMarkerCandleIndex(atXPosition: chartLocation.x)
+                    candidateIndex: nearestMarkerCandleIndex(atXPosition: boundedChartLocation.x),
+                    candleCount: chartData.candles.count
                 )
                 if resolvedPreviewIndex != previewCandleIndex {
                     previewCandleIndex = resolvedPreviewIndex
@@ -2603,7 +2660,10 @@ struct TradingChartView: View {
                         )
                     }
                 if let dragEnd {
-                    persistPreviewMarkerDragIfNeeded(location: dragEnd, coordinateSystem: coordinateSystem)
+                    persistPreviewMarkerDragIfNeeded(
+                        location: boundedPreviewDragLocation(dragEnd),
+                        coordinateSystem: coordinateSystem
+                    )
                 }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     markerDragPosition = nil
@@ -2723,11 +2783,24 @@ struct TradingChartView: View {
             isSubmittingPlacement = false
 
             switch result {
-            case .success:
+            case .success(let created):
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     controlViewModel.cancelMarkerPlacement()
                 }
                 impactFeedback.impactOccurred()
+                if let created, created.visibility == "guild" {
+                    // Presented by MainView (above the persistent chart bottom sheet);
+                    // a sheet from here would contend with that one and flood the log.
+                    let shareContext = MarkerShareContext(
+                        marker: created,
+                        symbolTicker: chartViewModel.currentSymbol?.ticker
+                    )
+                    NotificationCenter.default.post(
+                        name: .presentMarkerSharePrompt,
+                        object: nil,
+                        userInfo: [MarkerSharePromptNotification.contextKey: shareContext]
+                    )
+                }
             case .failure(let failure):
                 presentPlacementFailure(failure)
             }
@@ -3608,6 +3681,26 @@ struct TradingChartView: View {
         let roundedIndex = Int(round(centeredX / totalWidth)) + chartData.historicalRenderIndexOffset
         let clampedIndex = max(0, min(chartData.candles.count - 1, roundedIndex))
         return snappedMarkerCandleIndex(from: clampedIndex)
+    }
+
+    private var previewDragPlotSize: CGSize {
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        let effectiveHeight = chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55
+        let xAxisReservedHeight = xAxisReservedBandHeight(
+            chartHeight: effectiveHeight,
+            includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
+        )
+        return CGSize(
+            width: max(1, effectiveWidth - yAxisWidth),
+            height: max(1, effectiveHeight - xAxisReservedHeight)
+        )
+    }
+
+    private func boundedPreviewDragLocation(_ location: CGPoint) -> CGPoint {
+        MarkerPlacementPreviewDragResolver.clampedDragLocation(
+            location,
+            plotSize: previewDragPlotSize
+        )
     }
 
     private func persistPreviewMarkerDragIfNeeded(

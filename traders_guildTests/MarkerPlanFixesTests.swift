@@ -148,6 +148,24 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func markerAnalysisNoteDoesNotSynthesizeTextDrawingComponent() {
+        let state = MarkerPlacementState()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        state.reset(to: .analysis, anchorTime: now, anchorPrice: 100)
+        state.note = "Breakout retest is holding above prior resistance."
+        state.upsertComponent(
+            .levelSupport,
+            payload: .levelSupport(LevelPayload(price: 99.5, label: "Support"))
+        )
+
+        let request = state.buildCreateRequest(symbolId: UUID(), timeframe: "5m")
+
+        #expect(request.note == "Breakout retest is holding above prior resistance.")
+        #expect(request.components.contains { $0.componentType == RLComponentType.textNote.rawValue } == false)
+        #expect(request.components.contains { $0.componentType == RLComponentType.levelSupport.rawValue })
+    }
+
+    @Test
     func editSessionLocksAnchorButAllowsIndicatorsAndDrawings() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let anchor = RLMarkerComponentDTO(
@@ -938,6 +956,49 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func timeframeVisiblePriceRangeTracksPannedCandleWindow() {
+        let firstTimestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = [
+            makeTestCandle(timestamp: firstTimestamp, close: 100),
+            makeTestCandle(timestamp: firstTimestamp.addingTimeInterval(60), close: 102),
+            makeTestCandle(timestamp: firstTimestamp.addingTimeInterval(120), close: 1_000),
+            makeTestCandle(timestamp: firstTimestamp.addingTimeInterval(180), close: 1_010),
+        ]
+
+        let firstWindow = TimeframePanelLockedViewport.visiblePriceRange(
+            candles: candles,
+            visibleStartIndex: 0,
+            visibleCandleCount: 2
+        )
+        let pannedWindow = TimeframePanelLockedViewport.visiblePriceRange(
+            candles: candles,
+            visibleStartIndex: 2,
+            visibleCandleCount: 2
+        )
+
+        #expect((firstWindow?.max ?? 0) < 110)
+        #expect((pannedWindow?.min ?? 0) > 900)
+    }
+
+    @Test
+    func timeframeMarkerLabelHugsBottomAndStaysReadableAtEdges() {
+        let panelSize = CGSize(width: 180, height: 120)
+        let centered = TimeframePanelMarkerLabelLayout.bottomLabelRect(
+            centerX: 90,
+            panelSize: panelSize
+        )
+        #expect(centered.minY > 90)
+        #expect(centered.midX == 90)
+
+        let edge = TimeframePanelMarkerLabelLayout.bottomLabelRect(
+            centerX: 4,
+            panelSize: panelSize
+        )
+        #expect(edge.minX >= TimeframePanelMarkerLabelLayout.horizontalInset)
+        #expect(TimeframePanelMarkerLabelLayout.textPoint(for: edge).y == edge.midY)
+    }
+
+    @Test
     func multiSeriesLegendEntriesExposeAllExpectedSwatches() {
         var active = ActiveIndicators()
         active.macd = MACDConfig(showHistogram: true, showSignalLine: true)
@@ -1028,16 +1089,80 @@ struct MarkerPlanFixesTests {
         let lockedIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
             isEditingExistingMarker: true,
             currentIndex: 44,
-            candidateIndex: 88
+            candidateIndex: 88,
+            candleCount: 120
         )
         #expect(lockedIndex == 44)
 
         let movedIndex = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
             isEditingExistingMarker: false,
             currentIndex: 44,
-            candidateIndex: 88
+            candidateIndex: 88,
+            candleCount: 120
         )
         #expect(movedIndex == 88)
+    }
+
+    @Test
+    func placementPreviewDragResolverKeepsLastValidIndexForInvalidCandidates() {
+        let negativeCandidate = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
+            isEditingExistingMarker: false,
+            currentIndex: 44,
+            candidateIndex: -1,
+            candleCount: 120
+        )
+        #expect(negativeCandidate == 44)
+
+        let offEndCandidate = MarkerPlacementPreviewDragResolver.resolvedPreviewIndex(
+            isEditingExistingMarker: false,
+            currentIndex: 44,
+            candidateIndex: 120,
+            candleCount: 120
+        )
+        #expect(offEndCandidate == 44)
+    }
+
+    @Test
+    func placementPreviewDragLocationStaysInsideRenderablePlot() {
+        let lowerLeft = MarkerPlacementPreviewDragResolver.clampedDragLocation(
+            CGPoint(x: -500, y: 999),
+            plotSize: CGSize(width: 300, height: 220)
+        )
+        #expect(abs(lowerLeft.x - 46) < 0.0001)
+        #expect(abs(lowerLeft.y - 174) < 0.0001)
+
+        let upperRight = MarkerPlacementPreviewDragResolver.clampedDragLocation(
+            CGPoint(x: 500, y: -999),
+            plotSize: CGSize(width: 300, height: 220)
+        )
+        #expect(abs(upperRight.x - 254) < 0.0001)
+        #expect(abs(upperRight.y - 46) < 0.0001)
+
+        let tinyPlot = MarkerPlacementPreviewDragResolver.clampedDragLocation(
+            CGPoint(x: -20, y: 80),
+            plotSize: CGSize(width: 60, height: 40)
+        )
+        #expect(abs(tinyPlot.x - 30) < 0.0001)
+        #expect(abs(tinyPlot.y - 20) < 0.0001)
+    }
+
+    @Test
+    func placementPreviewPositionClampsInsideViewport() {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = [makeTestCandle(timestamp: timestamp, close: 100)]
+
+        let position = MarkerPositionCalculator.calculatePreviewPosition(
+            candleIndex: 0,
+            existingMarkers: [],
+            candles: candles,
+            candleHighY: 2,
+            candleLowY: 12,
+            centerX: 40,
+            priceScale: 1,
+            viewportHeight: 100
+        ).position
+
+        #expect(position.y >= MarkerVisualSpec.baseCanvasDiameter / 2)
     }
 
     @Test
@@ -1106,7 +1231,7 @@ struct MarkerPlanFixesTests {
         )
 
         let firstSuccess = await manager.updateMarkerFromPlacement(id: markerId, request: updateRequest)
-        #expect(firstSuccess == .success)
+        #expect(firstSuccess.isSuccess)
         #expect(api.updateCalls == 1)
         #expect(api.createCalls == 0)
         #expect(manager.markers.first?.title == "Updated")
@@ -1240,7 +1365,7 @@ struct MarkerPlanFixesTests {
         )
 
         let result = await manager.updateMarkerFromPlacement(id: markerId, request: request)
-        #expect(result == .success)
+        #expect(result.isSuccess)
         #expect(manager.markers.first?.selectedEmoji == "🔥")
     }
 
@@ -1407,7 +1532,7 @@ struct MarkerPlanFixesTests {
             candleIndex: 0,
             candles: candles
         )
-        #expect(success == .success)
+        #expect(success.isSuccess)
         #expect(api.createCalls == 1)
 
         guard let created = manager.markers.first else {

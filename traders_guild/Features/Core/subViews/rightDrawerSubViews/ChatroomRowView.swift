@@ -67,7 +67,7 @@ struct RLChatroomRowView: View {
                             Text(lastMessage.author.username)
                                 .fontWeight(.medium)
                             Text("·")
-                            Text(lastMessage.content)
+                            Text(MarkerShareCodec.displayPreview(for: lastMessage.content))
                         }
                         .font(.caption)
                         .foregroundColor(AppColors.listRowSecondaryForeground)

@@ -25,6 +25,12 @@ class ChartViewModel: ObservableObject {
     private var stalenessWatchdogTask: Task<Void, Never>?
     private var historicalPreloadTask: Task<Void, Never>?
     private var lastRealtimeMarketEventAt: Date = .distantPast
+
+    /// Drives automatic recovery from the empty / "Market Data Unavailable" state
+    /// (a failed initial candle load). Kept separate from the staleness watchdog
+    /// and reconnect resync, which only run once candles already exist.
+    private var chartRetryTask: Task<Void, Never>?
+    private var isPerformingChartRetry = false
     
     /// Current WebSocket channel subscriptions for real-time market data
     private var currentTickChannel: String?
@@ -78,6 +84,13 @@ class ChartViewModel: ObservableObject {
     @Published private(set) var isLoadingOlderCandles: Bool = false
     @Published private(set) var hasMoreHistoricalCandles: Bool = false
     @Published var errorMessage: String?
+
+    /// True while the chart is auto-recovering from an empty/failed candle load
+    /// (either mid-attempt or waiting between backoff attempts). Drives the
+    /// "Reconnecting…" state in the no-data overlay.
+    @Published private(set) var isRetryingChartLoad: Bool = false
+    /// Current auto-retry attempt number (0 when not auto-recovering).
+    @Published private(set) var chartRetryAttempt: Int = 0
 
     /// True while a marker-panel navigation is in flight (timeframe/symbol/scroll change driven by
     /// MarkerNavigationHelper). While set, TradingChartView suppresses competing pan-offset resets
@@ -345,6 +358,10 @@ class ChartViewModel: ObservableObject {
             hasMoreHistoricalCandles = false
             cancelHistoricalPreload()
         }
+
+        // Start/stop empty-state auto-recovery based on whether this load left
+        // us with candles. No-ops for the merge/resync paths (candles present).
+        updateChartRetryLoop()
     }
 
     private func handleUnsupportedSymbolFallback(
@@ -899,6 +916,9 @@ class ChartViewModel: ObservableObject {
     
     /// Handle symbol change - regenerate chart data with new symbol
     private func handleSymbolChange() {
+        // A deliberate symbol switch supersedes any in-flight auto-recovery;
+        // the load below restarts the loop if it ends up empty.
+        cancelChartRetryLoop()
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id else {
             // No guild selected - show error
@@ -939,6 +959,8 @@ class ChartViewModel: ObservableObject {
     
     /// Handle timeframe change - regenerate chart data with new timeframe
     private func handleTimeframeChange() {
+        // A deliberate timeframe switch supersedes any in-flight auto-recovery.
+        cancelChartRetryLoop()
         guard let symbol = currentSymbol,
               let guildId = appState.currentGuild?.id else {
             // No symbol/guild - show error
@@ -1183,6 +1205,13 @@ class ChartViewModel: ObservableObject {
     private func handleRealTimeConnectionStatus(_ status: RealTimeConnectionStatus) {
         switch status {
         case .connected:
+            // Recover the empty / "data unavailable" state too — the resync below
+            // only handles charts that already have candles.
+            if currentSymbol != nil, dataManager.candles.isEmpty {
+                Task { [weak self] in
+                    await self?.retryChartDataLoad(reason: "websocket_reconnected_empty")
+                }
+            }
             guard needsRealtimeResync else { return }
             Task { [weak self] in
                 await self?.resyncActiveChart(reason: "websocket_reconnected")
@@ -1197,6 +1226,9 @@ class ChartViewModel: ObservableObject {
     }
 
     func handleAppDidBecomeActive() async {
+        if currentSymbol != nil, dataManager.candles.isEmpty {
+            await retryChartDataLoad(reason: "app_became_active_empty")
+        }
         needsRealtimeResync = true
         await resyncActiveChart(reason: "app_became_active")
     }
@@ -1263,6 +1295,86 @@ class ChartViewModel: ObservableObject {
             )
         indicatorManager.recalculateIndicators(candles: dataManager.candles)
         needsRealtimeResync = false
+    }
+
+    // MARK: - Empty-state Auto-recovery
+    //
+    // The staleness watchdog and reconnect resync above only run once candles
+    // exist. A *failed initial load* leaves the chart empty behind the
+    // "Market Data Unavailable" overlay with no way back. These methods recover
+    // that: a public retry (manual button / reconnect / foreground / network
+    // restore) plus a self-cancelling exponential-backoff loop.
+
+    /// Re-attempt the initial candle load for the current symbol/timeframe.
+    /// Safe to call from the retry button, the backoff loop, websocket reconnect,
+    /// app-foreground and network-restore — concurrent calls are coalesced.
+    func retryChartDataLoad(reason: String) async {
+        guard let symbol = currentSymbol,
+              let guildId = appState.currentGuild?.id,
+              !isLoadingData,
+              !isPerformingChartRetry else { return }
+
+        isPerformingChartRetry = true
+        defer { isPerformingChartRetry = false }
+
+        isRetryingChartLoad = true
+        errorMessage = nil
+        print("🔄 [Chart] Retrying chart data load (\(reason))")
+        subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: currentTimeframe)
+        await loadChartData(
+            symbolId: symbol.id,
+            guildId: guildId,
+            timeframe: currentTimeframe,
+            skipSubscribe: true
+        )
+        scheduleIndicatorRecalc()
+        // loadChartData → updateChartRetryLoop() reconciles isRetryingChartLoad
+        // (cancels on recovery, (re)starts the loop if still empty).
+    }
+
+    /// Called at the end of every load: starts the backoff loop when we are
+    /// stuck with a symbol but no candles, otherwise tears it down.
+    private func updateChartRetryLoop() {
+        if currentSymbol != nil, dataManager.candles.isEmpty {
+            startChartRetryLoopIfNeeded()
+        } else {
+            cancelChartRetryLoop()
+        }
+    }
+
+    private func startChartRetryLoopIfNeeded() {
+        guard chartRetryTask == nil,
+              currentSymbol != nil,
+              dataManager.candles.isEmpty else { return }
+
+        isRetryingChartLoad = true
+        chartRetryTask = Task { [weak self] in
+            guard let self else { return }
+            var attempt = 0
+            while !Task.isCancelled {
+                guard self.currentSymbol != nil, self.dataManager.candles.isEmpty else { break }
+
+                attempt += 1
+                self.chartRetryAttempt = attempt
+                // Exponential backoff capped at 30s: 2, 4, 8, 16, 30, 30…
+                let delaySeconds = min(30.0, pow(2.0, Double(attempt)))
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                if Task.isCancelled { break }
+
+                await self.retryChartDataLoad(reason: "auto_retry_\(attempt)")
+                if !self.dataManager.candles.isEmpty { break }
+            }
+            self.chartRetryTask = nil
+            self.isRetryingChartLoad = false
+            self.chartRetryAttempt = 0
+        }
+    }
+
+    private func cancelChartRetryLoop() {
+        chartRetryTask?.cancel()
+        chartRetryTask = nil
+        isRetryingChartLoad = false
+        chartRetryAttempt = 0
     }
 
     private func reconcileCurrentCandleWithSymbolSnapshot(_ symbol: RLTradingSymbolDTO) {

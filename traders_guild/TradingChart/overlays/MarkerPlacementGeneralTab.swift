@@ -315,9 +315,6 @@ struct MarkerPlacementGeneralTab: View {
                 focus: .analysisNote
             )
                 .lineLimit(3...6)
-                .onChange(of: placementState.note) { _, newValue in
-                    syncNoteComponent(with: newValue)
-                }
 
         case .alert:
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -335,9 +332,6 @@ struct MarkerPlacementGeneralTab: View {
                     focus: .alertNote
                 )
                     .lineLimit(3...5)
-                    .onChange(of: placementState.note) { _, newValue in
-                        syncNoteComponent(with: newValue)
-                    }
                 }
 
         case .question:
@@ -348,9 +342,6 @@ struct MarkerPlacementGeneralTab: View {
                 focus: .questionNote
             )
                 .lineLimit(3...5)
-                .onChange(of: placementState.note) { _, newValue in
-                    syncNoteComponent(with: newValue)
-                }
 
         case .poll:
             pollFields
@@ -444,9 +435,6 @@ struct MarkerPlacementGeneralTab: View {
                     focus: .generalNote
                 )
                     .lineLimit(2...5)
-                    .onChange(of: placementState.note) { _, newValue in
-                        syncNoteComponent(with: newValue)
-                    }
             }
 
             statsRow
@@ -841,13 +829,6 @@ struct MarkerPlacementGeneralTab: View {
         return payload.emoji
     }
 
-    private var existingNotePayload: NotePayload? {
-        guard case let .note(payload)? = placementState.component(.textNote)?.payload else {
-            return nil
-        }
-        return payload
-    }
-
     private func syncNewsURLFromComponent() {
         guard placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard case let .link(payload)? = placementState.component(.linkURL)?.payload else { return }
@@ -899,15 +880,6 @@ struct MarkerPlacementGeneralTab: View {
         let baseWithoutSeverity = stripExistingSeverityPrefix(from: trimmed)
         let base = baseWithoutSeverity.isEmpty ? option.defaultMessage : baseWithoutSeverity
         placementState.note = "[\(option.label)] \(base)"
-        placementState.upsertComponent(
-            .textNote,
-            payload: .note(
-                placementState.anchoredNotePayload(
-                    text: placementState.note,
-                    preserving: existingNotePayload
-                )
-            )
-        )
     }
 
     private var showsGeneralNoteField: Bool {
@@ -917,26 +889,6 @@ struct MarkerPlacementGeneralTab: View {
         default:
             return true
         }
-    }
-
-    private func syncNoteComponent(with text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard allowedComponentTypes(for: placementState.intent).contains(.textNote) else { return }
-
-        guard !trimmed.isEmpty else {
-            placementState.removeComponent(.textNote)
-            return
-        }
-
-        placementState.upsertComponent(
-            .textNote,
-            payload: .note(
-                placementState.anchoredNotePayload(
-                    text: text,
-                    preserving: existingNotePayload
-                )
-            )
-        )
     }
 
     private func stripExistingSeverityPrefix(from text: String) -> String {

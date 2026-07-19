@@ -68,7 +68,7 @@ struct MarkerHorizontalLinePayloadTests {
         #expect((horizontal?.payload["price"]?.value as? Double) == 1.245)
         #expect((horizontal?.payload["color_hex"]?.value as? String) == "#8B5CF6")
         #expect((horizontal?.payload["line_style"]?.value as? String) == "solid")
-        #expect((horizontal?.payload["line_width"]?.value as? Double) == 3)
+        #expect((horizontal?.payload["line_width"]?.value as? Int) == 3)
     }
 
     @Test

@@ -68,6 +68,23 @@ struct TimeframePanelPriceViewport {
     }
 }
 
+struct TimeframePanelMarkerLabelLayout {
+    static let labelSize = CGSize(width: 40, height: 14)
+    static let horizontalInset: CGFloat = 2
+    static let bottomInset: CGFloat = 6
+
+    static func bottomLabelRect(centerX: CGFloat, panelSize: CGSize) -> CGRect {
+        let maxX = max(horizontalInset, panelSize.width - labelSize.width - horizontalInset)
+        let x = min(max(centerX - labelSize.width / 2, horizontalInset), maxX)
+        let y = max(horizontalInset, panelSize.height - labelSize.height - bottomInset)
+        return CGRect(x: x, y: y, width: labelSize.width, height: labelSize.height)
+    }
+
+    static func textPoint(for labelRect: CGRect) -> CGPoint {
+        CGPoint(x: labelRect.midX, y: labelRect.midY)
+    }
+}
+
 struct TimeframePanelLockedViewportResolution: Equatable {
     let candleWidthScale: CGFloat
     let panOffsetWidth: CGFloat
@@ -227,6 +244,28 @@ enum TimeframePanelLockedViewport {
         let rawRange = maxPrice - minPrice
         let fallbackPadding = max(abs(maxPrice) * 0.01, 0.01)
         let padding = rawRange > 0 ? rawRange * 0.08 : fallbackPadding
+        return (minPrice - padding, maxPrice + padding)
+    }
+
+    static func visiblePriceRange(
+        candles: [RLCandleDTO],
+        visibleStartIndex: Int,
+        visibleCandleCount: Int,
+        paddingFraction: Double = 0.05
+    ) -> (min: Double, max: Double)? {
+        guard !candles.isEmpty, visibleCandleCount > 0 else { return nil }
+
+        let boundedStart = min(max(0, visibleStartIndex), candles.count - 1)
+        let boundedEnd = min(candles.count, max(boundedStart + 1, boundedStart + visibleCandleCount))
+        let visibleCandles = candles[boundedStart..<boundedEnd].filter { !$0.isGapFill }
+        guard let minPrice = visibleCandles.map(\.low).min(),
+              let maxPrice = visibleCandles.map(\.high).max() else {
+            return nil
+        }
+
+        let rawRange = maxPrice - minPrice
+        let fallbackPadding = max(abs(maxPrice) * 0.01, 0.01)
+        let padding = rawRange > 0 ? rawRange * paddingFraction : fallbackPadding
         return (minPrice - padding, maxPrice + padding)
     }
 }
@@ -443,7 +482,7 @@ struct TimeframePanelView: View {
         }
         .onChange(of: dataManager.candles.count) { _, _ in
             centerOnMarkerIfNeeded()
-            lockInitialPriceRangeIfNeeded()
+            refreshUnlockedPriceRangeForCurrentViewport()
             applyLockedMainChartViewportIfNeeded()
             requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
@@ -458,6 +497,7 @@ struct TimeframePanelView: View {
             entry.clampPresentation(minHeight: minPanelHeight, maxHeight: newValue)
         }
         .onChange(of: gestureState.panOffset.width) { _, _ in
+            refreshUnlockedPriceRangeForCurrentViewport()
             requestOlderCandlesIfNeeded(chartWidth: plotWidth)
         }
         .onChange(of: entry.isLockedToMainChart) { _, isLocked in
@@ -549,7 +589,7 @@ struct TimeframePanelView: View {
             applyLockedMainChartViewportIfNeeded()
         } else {
             lockedRawPriceRange = nil
-            lockInitialPriceRangeIfNeeded()
+            refreshUnlockedPriceRangeForCurrentViewport()
         }
     }
 
@@ -557,7 +597,7 @@ struct TimeframePanelView: View {
         guard entry.isLockedToMainChart, !canLockToMainChart else { return }
         entry.isLockedToMainChart = false
         lockedRawPriceRange = nil
-        lockInitialPriceRangeIfNeeded()
+        refreshUnlockedPriceRangeForCurrentViewport()
     }
 
     private func recenterToMainChartTime() {
@@ -906,6 +946,7 @@ struct TimeframePanelView: View {
             }
             .onChange(of: geometry.size.width) { _, newValue in
                 lastKnownChartWidth = max(newValue, 1)
+                refreshUnlockedPriceRangeForCurrentViewport()
                 applyLockedMainChartViewportIfNeeded()
             }
         }
@@ -1230,15 +1271,18 @@ struct TimeframePanelView: View {
             style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])
         )
 
-        // Small label badge at top
-        let labelRect = CGRect(x: x - 20, y: 4, width: 40, height: 14)
+        // Keep the marker badge below the header controls so it stays readable.
+        let labelRect = TimeframePanelMarkerLabelLayout.bottomLabelRect(
+            centerX: x,
+            panelSize: size
+        )
         let roundedPath = Path(roundedRect: labelRect, cornerRadius: 3)
         context.fill(roundedPath, with: .color(intentColor.opacity(0.8)))
 
         let label = Text("MARKER")
             .font(.system(size: 7, weight: .bold))
             .foregroundColor(AppColors.onAccentForeground)
-        context.draw(label, at: CGPoint(x: x, y: 11))
+        context.draw(label, at: TimeframePanelMarkerLabelLayout.textPoint(for: labelRect))
     }
 
     // MARK: - Y-Axis Labels
@@ -1482,24 +1526,20 @@ struct TimeframePanelView: View {
     private func candlePriceRange(candles: [RLCandleDTO]) -> (min: Double, max: Double) {
         guard !candles.isEmpty else { return (0, 1) }
 
-        // Only calculate range for visible candles
         let visibleStartIndex = max(
             0,
             Int(-totalOffset / totalCandleWidth) + dataManager.historicalRenderIndexOffset - 5
         )
-        let visibleEndIndex = min(candles.count, visibleStartIndex + Int(UIScreen.main.bounds.width / totalCandleWidth) + 10)
-
-        guard visibleStartIndex < visibleEndIndex else {
-            return (candles.map(\.low).min() ?? 0, candles.map(\.high).max() ?? 1)
+        let visibleCandleCount = Int(ceil(plotWidth / totalCandleWidth)) + 10
+        if let range = TimeframePanelLockedViewport.visiblePriceRange(
+            candles: candles,
+            visibleStartIndex: visibleStartIndex,
+            visibleCandleCount: visibleCandleCount
+        ) {
+            return range
         }
 
-        let visibleCandles = Array(candles[visibleStartIndex..<visibleEndIndex])
-        let minPrice = visibleCandles.map(\.low).min() ?? 0
-        let maxPrice = visibleCandles.map(\.high).max() ?? 1
-
-        // Add 5% padding
-        let padding = (maxPrice - minPrice) * 0.05
-        return (minPrice - padding, maxPrice + padding)
+        return (candles.map(\.low).min() ?? 0, candles.map(\.high).max() ?? 1)
     }
 
     private func lockInitialPriceRangeIfNeeded() {
@@ -1508,6 +1548,11 @@ struct TimeframePanelView: View {
             return
         }
         guard lockedRawPriceRange == nil else { return }
+        lockedRawPriceRange = candlePriceRange(candles: dataManager.candles)
+    }
+
+    private func refreshUnlockedPriceRangeForCurrentViewport() {
+        guard !isLockedToMainChart, !dataManager.candles.isEmpty else { return }
         lockedRawPriceRange = candlePriceRange(candles: dataManager.candles)
     }
 

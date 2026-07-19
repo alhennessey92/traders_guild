@@ -223,6 +223,8 @@ class RLAppState: ObservableObject {
     @Published var pendingReferralInviteCode: String?
     /// Guild vanity handle captured from a /g/{slug} deep link.
     @Published var pendingGuildSlug: String?
+    /// Marker id captured from a /marker/{id} deep link, opened once authenticated.
+    @Published var pendingMarkerLinkId: UUID?
     /// Guild the user picked during signup but couldn't join yet because their
     /// email wasn't verified. Joined right after the email verification step.
     @Published var pendingOnboardingGuildId: UUID?
@@ -265,6 +267,9 @@ class RLAppState: ObservableObject {
     private let reachabilityMonitor = NWPathMonitor()
     private let reachabilityQueue = DispatchQueue(label: "traders_guild.reachability")
     private var lastReachabilitySatisfied: Bool?
+    /// Latest network reachability. Published so views (e.g. the chart) can kick
+    /// an immediate recovery when connectivity returns. Defaults to reachable.
+    @Published private(set) var isNetworkReachable: Bool = true
     private var hasShownOfflineToastForCurrentEpisode = false
     private var pendingBetaWelcomeUserId: UUID?
     private let reportedUserStore = ReportedUserStore()
@@ -363,6 +368,7 @@ class RLAppState: ObservableObject {
     private func handleReachabilityTransition(isSatisfied: Bool) {
         let previous = lastReachabilitySatisfied
         lastReachabilitySatisfied = isSatisfied
+        isNetworkReachable = isSatisfied
 
         if isSatisfied {
             hasShownOfflineToastForCurrentEpisode = false
@@ -1071,6 +1077,44 @@ class RLAppState: ObservableObject {
             return false
         } catch {
             return false
+        }
+    }
+
+    func setPendingMarkerLinkId(_ markerId: UUID) {
+        pendingMarkerLinkId = markerId
+    }
+
+    /// Resolve a shared marker deep link once authenticated: fetch the marker,
+    /// build the navigation payload, and post `.openSharedMarker` — the same
+    /// chain push-notification marker routing uses. Mirrors the guild-slug consume.
+    func consumePendingMarkerLinkIfPossible() async {
+        guard let markerId = pendingMarkerLinkId,
+              isAuthenticated,
+              currentUser != nil else { return }
+
+        do {
+            let marker = try await realApi.getMarker(markerId: markerId)
+            let payload = MarkerSharePayloadV1(
+                markerId: marker.id,
+                symbolId: marker.symbolId,
+                symbolTicker: nil,
+                timeframe: marker.timeframe,
+                candleTimestamp: marker.candleTimestamp,
+                intent: marker.intent,
+                alertSeverity: marker.alertSeverity
+            )
+            pendingMarkerLinkId = nil
+            NotificationCenter.default.post(
+                name: .openSharedMarker,
+                object: nil,
+                userInfo: payload.notificationUserInfo
+            )
+        } catch APIError.serverError(let statusCode, _) where statusCode == 404 {
+            pendingMarkerLinkId = nil
+            showInfo("That marker is no longer available.", title: "Marker Unavailable")
+        } catch {
+            // Leave it pending so a later auth/verify pass can retry.
+            print("⚠️ Failed to open shared marker \(markerId): \(error)")
         }
     }
 

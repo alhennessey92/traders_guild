@@ -327,12 +327,12 @@ struct MarkerManagerAuditTests {
         )
 
         let payload = AnyCodable([
-            "marker_id": AnyCodable(markerId.uuidString),
-            "old_state": AnyCodable(RLTrackingState.armed.rawValue),
-            "new_state": AnyCodable(RLTrackingState.active.rawValue),
-            "guild_id": AnyCodable(guildId.uuidString),
-            "symbol_id": AnyCodable(symbolId.uuidString),
-        ])
+            "marker_id": markerId.uuidString,
+            "old_state": RLTrackingState.armed.rawValue,
+            "new_state": RLTrackingState.active.rawValue,
+            "guild_id": guildId.uuidString,
+            "symbol_id": symbolId.uuidString,
+        ] as [String: Any])
         let channel = "guild:\(guildId.uuidString.lowercased()):markers"
         RealTimeService.shared.messageSubject.send(
             WSIncomingMessage(
@@ -467,14 +467,14 @@ struct IndicatorHeaderStateTests {
         #expect(RSICondition.overbought.label == "OVERBOUGHT")
         #expect(RSICondition.oversold.label == "OVERSOLD")
         #expect(RSICondition.neutral.label.isEmpty)
-        #expect(colorsApproximatelyEqual(UIColor(RSICondition.overbought.color), UIColor.red))
-        #expect(colorsApproximatelyEqual(UIColor(RSICondition.oversold.color), UIColor.green))
+        #expect(colorsApproximatelyEqual(UIColor(RSICondition.overbought.color), UIColor.systemRed))
+        #expect(colorsApproximatelyEqual(UIColor(RSICondition.oversold.color), UIColor.systemGreen))
 
         #expect(CCICondition.overbought.label == "OVERBOUGHT")
         #expect(CCICondition.oversold.label == "OVERSOLD")
         #expect(CCICondition.neutral.label.isEmpty)
-        #expect(colorsApproximatelyEqual(UIColor(CCICondition.overbought.color), UIColor.red))
-        #expect(colorsApproximatelyEqual(UIColor(CCICondition.oversold.color), UIColor.green))
+        #expect(colorsApproximatelyEqual(UIColor(CCICondition.overbought.color), UIColor.systemRed))
+        #expect(colorsApproximatelyEqual(UIColor(CCICondition.oversold.color), UIColor.systemGreen))
     }
 
     @Test

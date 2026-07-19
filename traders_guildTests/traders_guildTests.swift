@@ -54,8 +54,20 @@ struct traders_guildTests {
     }
 
     @Test func bullAndBearAssetValuesRemainStable() async throws {
-        #expect(colorDistance(AppColors.tgBull, Color(red: 0x4A / 255.0, green: 0x94 / 255.0, blue: 0x76 / 255.0)) < 0.0001)
-        #expect(colorDistance(AppColors.tgBear, Color(red: 0xA6 / 255.0, green: 0x2C / 255.0, blue: 0x2B / 255.0)) < 0.0001)
+        let expectedBull = Color(uiColor: UIColor(
+            displayP3Red: 0x4A / 255.0,
+            green: 0x94 / 255.0,
+            blue: 0x76 / 255.0,
+            alpha: 1
+        ))
+        let expectedBear = Color(uiColor: UIColor(
+            displayP3Red: 0xA6 / 255.0,
+            green: 0x2C / 255.0,
+            blue: 0x2B / 255.0,
+            alpha: 1
+        ))
+        #expect(colorDistance(AppColors.tgBull, expectedBull) < 0.0001)
+        #expect(colorDistance(AppColors.tgBear, expectedBear) < 0.0001)
     }
 
     @Test func sharedSurfaceOpacityTokensRemainStable() async throws {

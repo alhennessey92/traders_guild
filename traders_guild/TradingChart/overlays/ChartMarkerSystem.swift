@@ -93,8 +93,17 @@ enum MarkerPlacementFailure: Equatable {
 }
 
 enum MarkerPlacementSubmissionResult: Equatable {
-    case success
+    /// Carries the created/updated server marker when available (nil for the
+    /// offline / optimistic-only path), so callers can offer post-placement sharing.
+    case success(RLChartMarkerDTO?)
     case failure(MarkerPlacementFailure)
+
+    /// Case check that ignores the associated marker (handy for assertions/call
+    /// sites that only care that placement succeeded).
+    var isSuccess: Bool {
+        if case .success = self { return true }
+        return false
+    }
 }
 
 protocol MarkerAPIClient: AnyObject {
@@ -968,7 +977,7 @@ class MarkerManager: ObservableObject {
         markers.append(marker)
 
         guard let api else {
-            return .success
+            return .success(nil)
         }
 
         do {
@@ -990,7 +999,7 @@ class MarkerManager: ObservableObject {
                 markers[idx] = updated
             }
             NotificationCenter.default.post(name: .markerCreatedSuccessfully, object: nil)
-            return .success
+            return .success(created)
         } catch {
             markers.removeAll { $0.id == tempId }
             print("Failed to create marker v2: \(error)")
@@ -1412,7 +1421,7 @@ class MarkerManager: ObservableObject {
             )
             markers[latestIndex] = updated
             syncSelectedMarker(updated)
-            return .success
+            return .success(reconciled)
         } catch {
             guard let latestIndex = markerIndex(for: id) else {
                 return .failure(.genericUpdateFailure)
@@ -1933,7 +1942,8 @@ struct MarkerPositionCalculator {
         candleHighY: CGFloat,
         candleLowY: CGFloat,
         centerX: CGFloat,
-        priceScale: CGFloat = 1.0
+        priceScale: CGFloat = 1.0,
+        viewportHeight: CGFloat = 0
     ) -> (position: CGPoint, isBelow: Bool) {
         let markersAtCandle = existingMarkers.filter { $0.candleIndex == candleIndex }
         
@@ -1971,7 +1981,11 @@ struct MarkerPositionCalculator {
         }
         
         let stackOffsetValue = CGFloat(stackIndex) * scaledStackOffset * stackDirection
-        let markerY = baseY + stackOffsetValue
+        var markerY = baseY + stackOffsetValue
+        if viewportHeight > 0 {
+            let markerRadius = MarkerVisualSpec.baseCanvasDiameter / 2
+            markerY = Swift.max(markerRadius, Swift.min(markerY, viewportHeight - markerRadius))
+        }
         
         return (CGPoint(x: centerX, y: markerY), shouldBeBelow)
     }

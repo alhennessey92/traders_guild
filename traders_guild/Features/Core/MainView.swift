@@ -102,6 +102,8 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
+    /// Presented (above the persistent chart bottom sheet) after a guild-visible marker is placed.
+    @State private var markerSharePromptContext: MarkerShareContext?
 
     // MARK: - Tutorial Auto-Start Gate
     @State private var didScheduleTutorialAutoStart: Bool = false
@@ -869,6 +871,14 @@ struct MainView: View {
                 case .guildMember(let member):
                     GuildUserDetailViewRL(member: member)
                         .environmentObject(rlAppState)
+                }
+            }
+            .sheet(item: $markerSharePromptContext) { context in
+                MarkerSharePromptSheet(context: context, appState: rlAppState)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .presentMarkerSharePrompt)) { note in
+                if let context = note.userInfo?[MarkerSharePromptNotification.contextKey] as? MarkerShareContext {
+                    markerSharePromptContext = context
                 }
             }
         }
@@ -2735,6 +2745,17 @@ struct ChartBottomSheet: View {
         }
     }
 
+    private var placementBottomBarActionColor: Color {
+        guard placementState.intent == .alert else {
+            return placementState.intent.color
+        }
+        return placementState.alertSeverity?.color ?? placementState.intent.color
+    }
+
+    private var placementBottomBarShowsMarkerColor: Bool {
+        placementState.isValid || (placementState.intent == .alert && placementState.alertSeverity != nil)
+    }
+
     private var placementTabBar: some View {
         VStack(spacing: 0) {
             if isExpanded {
@@ -2774,19 +2795,23 @@ struct ChartBottomSheet: View {
                     Button {
                         onPlaceMarker?()
                     } label: {
+                        let actionColor = placementBottomBarActionColor
+                        let showsMarkerColor = placementBottomBarShowsMarkerColor
+                        let primaryOpacity: Double = placementState.isValid ? 0.96 : 0.58
+                        let secondaryOpacity: Double = placementState.isValid ? 0.74 : 0.36
                         Image(systemName: "target")
                             .font(.system(size: 26, weight: .bold))
-                            .foregroundColor(placementState.isValid ? .white : AppColors.whiteText.opacity(0.55))
+                            .foregroundColor(showsMarkerColor ? .white : AppColors.whiteText.opacity(0.55))
                             .frame(width: 54, height: 54)
                             .background(
                                 Circle()
                                     .fill(
-                                        placementState.isValid
+                                        showsMarkerColor
                                             ? AnyShapeStyle(
                                                 LinearGradient(
                                                     colors: [
-                                                        placementState.intent.color.opacity(0.96),
-                                                        placementState.intent.color.opacity(0.74),
+                                                        actionColor.opacity(primaryOpacity),
+                                                        actionColor.opacity(secondaryOpacity),
                                                     ],
                                                     startPoint: .topLeading,
                                                     endPoint: .bottomTrailing
@@ -2798,15 +2823,15 @@ struct ChartBottomSheet: View {
                             .overlay(
                                 Circle()
                                     .stroke(
-                                        placementState.isValid
-                                            ? placementState.intent.color.opacity(0.72)
+                                        showsMarkerColor
+                                            ? actionColor.opacity(placementState.isValid ? 0.72 : 0.48)
                                             : AppColors.whiteText.opacity(0.16),
                                         lineWidth: 1
                                     )
                             )
                             .shadow(
-                                color: placementState.isValid
-                                    ? placementState.intent.color.opacity(0.22)
+                                color: showsMarkerColor
+                                    ? actionColor.opacity(placementState.isValid ? 0.22 : 0.14)
                                     : .clear,
                                 radius: 6,
                                 x: 0,
@@ -2815,7 +2840,7 @@ struct ChartBottomSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!placementState.isValid)
-                    .opacity(placementState.isValid ? 1.0 : 0.55)
+                    .opacity(placementBottomBarShowsMarkerColor ? 1.0 : 0.55)
                 }
             }
             .padding(.horizontal, 20)

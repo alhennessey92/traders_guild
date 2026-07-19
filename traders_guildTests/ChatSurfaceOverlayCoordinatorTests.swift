@@ -89,7 +89,7 @@ struct ChatSurfaceOverlayCoordinatorTests {
             hardwareBottomInset: 34
         )
 
-        #expect(layout.footerBottomPadding == 26)
+        #expect(layout.footerBottomPadding == 6)
     }
 
     @Test
@@ -100,6 +100,6 @@ struct ChatSurfaceOverlayCoordinatorTests {
                 + ChatComposerLayoutMetrics.containerVerticalPadding
                 + ChatComposerLayoutMetrics.attachmentPanelGap
         )
-        #expect(ChatComposerLayoutMetrics.attachmentPanelBottomOffset == 66)
+        #expect(ChatComposerLayoutMetrics.attachmentPanelBottomOffset == 64)
     }
 }

@@ -541,6 +541,30 @@ enum MarkerShareCodec {
         return payloads.isEmpty ? nil : (payloads, visibleText)
     }
 
+    /// Human-readable preview for surfaces that render message text *outside* the
+    /// chat bubble (notification body, DM thread "last message"). Strips the
+    /// marker-share token; if only a marker was shared (no caption), describes it.
+    /// Also handles a *truncated* token — the backend caps notification previews
+    /// at 200 chars, which is shorter than the encoded marker, so the stored text
+    /// can be just the prefix with no closing `]]`.
+    static func displayPreview(for content: String) -> String {
+        if let extracted = extractAll(from: content) {
+            if !extracted.visibleText.isEmpty { return extracted.visibleText }
+            if let ticker = extracted.payloads.first?.symbolTicker,
+               !ticker.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "📈 Shared a \(ticker) marker"
+            }
+            return "📈 Shared a marker"
+        }
+        // Truncated/incomplete token: keep any leading caption, else describe it.
+        if let prefixRange = content.range(of: tokenPrefix) {
+            let lead = content[..<prefixRange.lowerBound]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return lead.isEmpty ? "📈 Shared a marker" : lead
+        }
+        return content
+    }
+
     private static func encodedToken(for payload: MarkerSharePayloadV1) -> String? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

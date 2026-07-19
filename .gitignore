@@ -5,6 +5,7 @@
 # Build artifacts
 DerivedData/
 build/
+.codex-derived-data/
 
 # macOS noise
 .DS_Store

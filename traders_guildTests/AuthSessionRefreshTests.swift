@@ -21,19 +21,26 @@ struct AuthSessionRefreshTests {
         let singleFlight = AsyncSingleFlight<Int>()
         let counter = RefreshInvocationCounter()
 
-        async let first: Int = singleFlight.run {
-            _ = await counter.increment()
-            try await Task.sleep(nanoseconds: 50_000_000)
-            return 42
+        let first = Task {
+            try await singleFlight.run {
+                _ = await counter.increment()
+                try await Task.sleep(nanoseconds: 100_000_000)
+                return 42
+            }
+        }
+        while await counter.value() == 0 {
+            await Task.yield()
         }
 
-        async let second: Int = singleFlight.run {
-            _ = await counter.increment()
-            return 99
+        let second = Task {
+            try await singleFlight.run {
+                _ = await counter.increment()
+                return 99
+            }
         }
 
-        let resolvedFirst = try await first
-        let resolvedSecond = try await second
+        let resolvedFirst = try await first.value
+        let resolvedSecond = try await second.value
 
         #expect(resolvedFirst == 42)
         #expect(resolvedSecond == 42)

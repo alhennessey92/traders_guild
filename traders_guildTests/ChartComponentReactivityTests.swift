@@ -26,6 +26,7 @@ struct ChartComponentReactivityTests {
             anchorTime: anchorTime,
             anchorPrice: 1.205
         )
+        try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(adapter.activeChartDrawings.map(\.id) == [drawingId])
         #expect(placementState.components.contains(where: { $0.id == drawingId }))
@@ -60,6 +61,7 @@ struct ChartComponentReactivityTests {
             anchorTime: anchorTime,
             anchorPrice: 1.205
         )
+        try await Task.sleep(nanoseconds: 50_000_000)
         #expect(adapter.activeChartDrawings.map(\.id).contains(activeId))
 
         placementState.beginEditingDrawing(activeId, tool: .horizontalLine)
@@ -102,6 +104,7 @@ struct ChartComponentReactivityTests {
             anchorTime: Date(timeIntervalSince1970: 1_700_000_000),
             anchorPrice: 1.205
         )
+        try await Task.sleep(nanoseconds: 50_000_000)
         #expect(adapter.currentChartTimeframe == .h1)
 
         #expect(

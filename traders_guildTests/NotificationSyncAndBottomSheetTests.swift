@@ -18,7 +18,10 @@ struct NotificationSyncAndBottomSheetTests {
         viewModel.applyNotificationStats(initialStats)
 
         viewModel.handleNotificationStatsUpdate(updatedStats)
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        let deadline = Date().addingTimeInterval(1)
+        while viewModel.pendingNotificationCatchUpRefresh, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
 
         #expect(refreshCount == 1)
         #expect(viewModel.notificationStats == updatedStats)

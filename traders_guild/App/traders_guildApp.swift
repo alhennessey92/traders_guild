@@ -9,6 +9,8 @@
 
 import SwiftUI
 
+extension RLAppState: AppDeepLinkDestinationHandling {}
+
 @main
 struct traders_guildApp: App {
     
@@ -152,19 +154,24 @@ struct traders_guildApp: App {
             .task(id: rlAppState.pendingGuildSlug) {
                 await rlAppState.consumePendingGuildSlugIfPossible()
             }
+            .task(id: rlAppState.pendingMarkerLinkId) {
+                await rlAppState.consumePendingMarkerLinkIfPossible()
+            }
             .task(id: rlAppState.isAuthenticated) {
                 await rlAppState.consumePendingReferralInviteCodeIfPossible()
                 await rlAppState.consumePendingGuildSlugIfPossible()
+                await rlAppState.consumePendingMarkerLinkIfPossible()
             }
             .task(id: rlAppState.currentUser?.isVerified) {
                 await rlAppState.consumePendingReferralInviteCodeIfPossible()
                 await rlAppState.consumePendingGuildSlugIfPossible()
+                await rlAppState.consumePendingMarkerLinkIfPossible()
             }
             // Custom scheme links (tradersguild://...)
             .onOpenURL { url in
                 handleIncomingURL(url)
             }
-            // Universal Links (https://tradersguild.co/invite/... and /g/...)
+            // Universal Links on tradersguild.co and open.tradersguild.co.
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 if let url = activity.webpageURL {
                     handleIncomingURL(url)
@@ -177,80 +184,7 @@ struct traders_guildApp: App {
     /// right pending-action handler. Invite/referral codes and guild handles
     /// are stored and consumed after auth + email verification.
     private func handleIncomingURL(_ url: URL) {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-        let path = components.path.lowercased()
-        let host = (components.host ?? "").lowercased()
-        let fullRoute = "\(host)\(path)"
-
-        if let inviteCode = referralInviteCode(from: components, fullRoute: fullRoute) {
-            rlAppState.setPendingReferralInviteCode(inviteCode)
-            return
-        }
-
-        if let slug = guildSlug(from: components, fullRoute: fullRoute) {
-            rlAppState.setPendingGuildSlug(slug)
-            return
-        }
-
-        // Handle password reset deep link
-        let matchesResetPath = fullRoute.contains("reset-password") || fullRoute.contains("password/reset")
-        if matchesResetPath {
-            if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
-               !token.isEmpty {
-                rlAppState.setPendingPasswordResetToken(token)
-            }
-            return
-        }
-
-        // Handle email verification deep link
-        let matchesVerifyPath = fullRoute.contains("verify-email") || fullRoute.contains("email/verify")
-        if matchesVerifyPath {
-            if let token = components.queryItems?.first(where: { $0.name.lowercased() == "token" })?.value,
-               !token.isEmpty {
-                rlAppState.setPendingEmailVerificationToken(token)
-            }
-        }
-    }
-
-    /// Extract a guild vanity handle from `tradersguild://g/<slug>` or
-    /// `https://tradersguild.co/g/<slug>`.
-    private func guildSlug(from components: URLComponents, fullRoute: String) -> String? {
-        let pathParts = components.path
-            .split(separator: "/")
-            .map(String.init)
-            .filter { !$0.isEmpty }
-        let host = (components.host ?? "").lowercased()
-
-        // Custom scheme: host is "g", first path part is the slug.
-        if host == "g", let first = pathParts.first, !first.isEmpty {
-            return first
-        }
-        // Universal/web link: find the "g" segment, slug is the next part.
-        if let gIndex = pathParts.firstIndex(where: { $0.lowercased() == "g" }),
-           gIndex + 1 < pathParts.count {
-            return pathParts[gIndex + 1]
-        }
-        return nil
-    }
-
-    private func referralInviteCode(from components: URLComponents, fullRoute: String) -> String? {
-        let queryItems = components.queryItems ?? []
-        for key in ["code", "ref", "invite", "invite_code"] {
-            if let value = queryItems.first(where: { $0.name.lowercased() == key })?.value,
-               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return value
-            }
-        }
-
-        guard fullRoute.contains("invite") else { return nil }
-        let pathParts = components.path
-            .split(separator: "/")
-            .map(String.init)
-            .filter { !$0.isEmpty }
-        if let last = pathParts.last, last.lowercased() != "invite" {
-            return last
-        }
-        return nil
+        AppDeepLinkRouter.route(url, to: rlAppState)
     }
     
     @ViewBuilder

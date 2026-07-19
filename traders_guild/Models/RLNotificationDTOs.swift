@@ -365,9 +365,10 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         title ?? "Notification"
     }
     
-    /// Display body/content
+    /// Display body/content. Strips any marker-share token so a shared marker
+    /// reads as a friendly summary instead of the raw `[[TG_MARKER_SHARE_V1:…]]`.
     var displayBody: String {
-        body ?? ""
+        MarkerShareCodec.displayPreview(for: body ?? "")
     }
     
     /// Navigation destination from embedded data

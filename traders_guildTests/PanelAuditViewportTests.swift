@@ -129,8 +129,8 @@ struct PanelAuditViewportTests {
 
     @Test
     func indicatorPanelsUseTimeframeYAxisSizing() {
-        #expect(ChartAxisMetrics.indicatorPanelYAxisLaneWidth == 48)
-        #expect(ChartAxisMetrics.indicatorPanelYAxisLabelWidth == 44)
+        #expect(ChartAxisMetrics.indicatorPanelYAxisLaneWidth == 44)
+        #expect(ChartAxisMetrics.indicatorPanelYAxisLabelWidth == 40)
     }
 
     @Test
