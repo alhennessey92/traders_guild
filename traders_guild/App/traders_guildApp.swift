@@ -157,6 +157,12 @@ struct traders_guildApp: App {
             .task(id: rlAppState.pendingMarkerLinkId) {
                 await rlAppState.consumePendingMarkerLinkIfPossible()
             }
+            .task(id: rlAppState.isSessionRestored) {
+                await rlAppState.consumePendingMarkerLinkIfPossible()
+            }
+            .task(id: rlAppState.currentGuild?.id) {
+                await rlAppState.consumePendingMarkerLinkIfPossible()
+            }
             .task(id: rlAppState.isAuthenticated) {
                 await rlAppState.consumePendingReferralInviteCodeIfPossible()
                 await rlAppState.consumePendingGuildSlugIfPossible()
