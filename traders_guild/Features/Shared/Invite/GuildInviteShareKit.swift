@@ -43,8 +43,11 @@ enum GuildInviteShare {
     /// composer pre-filled. Used first; falls back to `xComposeURL` (web).
     static func xAppURL(guildName: String, url: URL) -> URL? {
         let text = xComposeText(guildName: guildName, url: url)
-        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
-        return URL(string: "twitter://post?message=\(encoded)")
+        var components = URLComponents()
+        components.scheme = "twitter"
+        components.host = "post"
+        components.queryItems = [URLQueryItem(name: "message", value: text)]
+        return components.url
     }
 
     /// Web composer fallback for X when the app isn't installed.

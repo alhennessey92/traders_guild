@@ -2793,7 +2793,8 @@ struct TradingChartView: View {
                     // a sheet from here would contend with that one and flood the log.
                     let shareContext = MarkerShareContext(
                         marker: created,
-                        symbolTicker: chartViewModel.currentSymbol?.ticker
+                        symbolTicker: chartViewModel.currentSymbol?.ticker,
+                        isCurrentUserMarker: true
                     )
                     NotificationCenter.default.post(
                         name: .presentMarkerSharePrompt,

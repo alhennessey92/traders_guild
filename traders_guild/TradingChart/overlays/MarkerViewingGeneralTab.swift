@@ -13,6 +13,7 @@ struct MarkerViewingGeneralTab: View {
     var onAuthorTap: (() -> Void)? = nil
     var canEditMarker: Bool = false
     var onEditMarker: ((ChartMarkerUI) -> Void)? = nil
+    var onShareMarker: (() -> Void)? = nil
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -56,6 +57,9 @@ struct MarkerViewingGeneralTab: View {
                 generalDisclosure
                 symbolInfoDisclosure
                 authorDisclosure
+                if canShowShareAction {
+                    shareMarkerButton
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -853,6 +857,96 @@ struct MarkerViewingGeneralTab: View {
             .padding(12)
             .background(disclosureContentBackground())
         }
+    }
+
+    private var canShowShareAction: Bool {
+        onShareMarker != nil &&
+        MarkerShare.canShareWithinGuild(visibility: liveMarker.visibility)
+    }
+
+    private var isAuthoredByCurrentUser: Bool {
+        if liveMarker.isCurrentUserMarker {
+            return true
+        }
+        guard let currentUserId = rlAppState.currentUser?.id else { return false }
+        return liveMarker.author.userId == currentUserId
+    }
+
+    private var shareMarkerSubtitle: String {
+        if isAuthoredByCurrentUser {
+            return "Share with your guild or post to X, Discord & more."
+        }
+        return "Send this guild marker directly to another member."
+    }
+
+    private var shareMarkerButton: some View {
+        Button {
+            onShareMarker?()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.onAccentForeground.opacity(0.16))
+                        .frame(width: 42, height: 42)
+
+                    if liveMarker.intent == .reaction,
+                       let emoji = reactionEmoji,
+                       !emoji.isEmpty {
+                        Text(emoji)
+                            .font(.system(size: 20, weight: .semibold))
+                    } else {
+                        Image(
+                            systemName: MarkerVisualSpec.symbol(
+                                for: liveMarker.intent,
+                                severity: liveMarker.alertSeverity
+                            )
+                        )
+                        .font(.system(size: 20, weight: .semibold))
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundColor(AppColors.onAccentForeground)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Share Marker")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.onAccentForeground)
+
+                    Text(shareMarkerSubtitle)
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(AppColors.onAccentForeground.opacity(0.82))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppColors.onAccentForeground)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppColors.friendAccent.opacity(0.96),
+                                AppColors.statusPositive70.opacity(0.82),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(AppColors.onAccentForeground.opacity(0.18), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func disclosureContentBackground() -> some View {

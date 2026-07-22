@@ -11,6 +11,7 @@ struct AppDeepLinkTests {
         let links = [
             "tradersguild://marker/\(markerId.uuidString)",
             "https://tradersguild.co/marker/\(markerId.uuidString)",
+            "https://tradersguild.co/marker/\(markerId.uuidString)?share_token=\(String(repeating: "s", count: 43))",
             "https://open.tradersguild.co/marker/\(markerId.uuidString)",
         ]
 

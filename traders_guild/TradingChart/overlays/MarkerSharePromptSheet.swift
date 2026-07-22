@@ -29,9 +29,43 @@ struct MarkerShareContext: Identifiable {
     let id = UUID()
     let marker: RLChartMarkerDTO
     let symbolTicker: String?
+    let isNewPlacement: Bool
+    let isCurrentUserMarker: Bool
 
-    /// Private markers can't be viewed by others, so the guild-DM channel is hidden.
-    var isGuildVisible: Bool { marker.visibility == "guild" }
+    init(
+        marker: RLChartMarkerDTO,
+        symbolTicker: String?,
+        isNewPlacement: Bool = true,
+        isCurrentUserMarker: Bool? = nil
+    ) {
+        self.marker = marker
+        self.symbolTicker = symbolTicker
+        self.isNewPlacement = isNewPlacement
+        self.isCurrentUserMarker = isCurrentUserMarker ?? marker.isCurrentUserMarker
+    }
+
+    var canShareWithinGuild: Bool {
+        MarkerShare.canShareWithinGuild(visibility: marker.visibility)
+    }
+
+    var canShareExternally: Bool {
+        MarkerShare.canShareExternally(
+            isCurrentUserMarker: isCurrentUserMarker,
+            visibility: marker.visibility
+        )
+    }
+
+    var sheetTitle: String { isNewPlacement ? "Marker placed" : "Share marker" }
+
+    var sheetSubtitle: String {
+        if isNewPlacement {
+            return "Keep it in your guild or choose an external destination."
+        }
+        if canShareExternally {
+            return "Choose an in-app or external destination."
+        }
+        return "Send this guild marker to another guild member."
+    }
 }
 
 struct MarkerSharePromptSheet: View {
@@ -40,9 +74,14 @@ struct MarkerSharePromptSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showRecipientPicker = false
+    @State private var showDiscordDestination = false
     @State private var caption = ""
+    @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
+    @State private var selectedDiscordChannelId: UUID?
+    @State private var busyChannel: ChannelKind?
+    @State private var externalShareURL: URL?
 
-    private var shareURL: URL { MarkerShare.markerShareURL(markerId: context.marker.id) }
+    private enum ChannelKind { case guildDM, discord, x, copy, more }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,10 +92,10 @@ struct MarkerSharePromptSheet: View {
                 .padding(.bottom, 20)
 
             VStack(spacing: 6) {
-                Text("Marker placed")
+                Text(context.sheetTitle)
                     .font(.title3.weight(.bold))
                     .foregroundColor(AppColors.primaryForeground)
-                Text("Share it with your guild or the world.")
+                Text(context.sheetSubtitle)
                     .font(.subheadline)
                     .foregroundColor(AppColors.secondaryForeground)
                     .multilineTextAlignment(.center)
@@ -80,17 +119,20 @@ struct MarkerSharePromptSheet: View {
                     if newValue.count > 280 { caption = String(newValue.prefix(280)) }
                 }
 
-            HStack(alignment: .top, spacing: 12) {
-                if context.isGuildVisible {
-                    channel(label: "Guild DM", systemImage: "person.2.fill") {
-                        showRecipientPicker = true
-                    }
+            channelGrid
+                .padding(.horizontal, 18)
+
+            if context.canShareExternally {
+                Label {
+                    Text(MarkerShare.externalSharingDisclosure)
+                } icon: {
+                    Image(systemName: "globe")
                 }
-                channel(label: "Post to X", xGlyph: true) { shareToX() }
-                channel(label: "Copy link", systemImage: "link") { copyLink() }
-                channel(label: "More", systemImage: "square.and.arrow.up") { shareMore() }
+                .font(.caption2)
+                .foregroundColor(AppColors.secondaryForeground)
+                .padding(.horizontal, 24)
+                .padding(.top, 14)
             }
-            .padding(.horizontal, 18)
 
             Spacer(minLength: 12)
 
@@ -107,9 +149,12 @@ struct MarkerSharePromptSheet: View {
         }
         .frame(maxWidth: .infinity)
         .background(AppColors.sheetBackground.ignoresSafeArea())
-        .presentationDetents([.height(context.isGuildVisible ? 412 : 394)])
+        .presentationDetents([.height(context.canShareExternally ? 560 : 390)])
         .presentationDragIndicator(.hidden)
         .preferredColorScheme(.dark)
+        .task {
+            await loadDiscordState()
+        }
         .sheet(isPresented: $showRecipientPicker) {
             MarkerDMRecipientPicker(
                 marker: context.marker,
@@ -121,14 +166,85 @@ struct MarkerSharePromptSheet: View {
                 dismiss()
             }
         }
+        .sheet(isPresented: $showDiscordDestination) {
+            DiscordDestinationSheet(
+                title: "Share marker",
+                channels: discordChannels,
+                selectedChannelId: $selectedDiscordChannelId,
+                isPosting: busyChannel == .discord,
+                preview: {
+                    DiscordMarkerEmbedPreview(
+                        symbolTicker: context.symbolTicker,
+                        timeframe: context.marker.timeframe,
+                        timestamp: context.marker.candleTimestamp,
+                        intent: context.marker.intentEnum,
+                        alertSeverity: context.marker.alertSeverity.flatMap(MarkerAlertSeverity.fromBackendString),
+                        emoji: context.marker.selectedEmoji,
+                        caption: caption
+                    )
+                },
+                onPost: { Task { await postToSelectedDiscordChannel() } },
+                onCopyAndOpen: { Task { await copyForDiscordAndOpen() } }
+            )
+        }
     }
 
-    // MARK: - Channel button
+    // MARK: - Channels
+
+    @ViewBuilder
+    private var channelGrid: some View {
+        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        if context.canShareExternally {
+            LazyVGrid(columns: columns, spacing: 12) {
+                channel(kind: .guildDM, label: "Guild DM", systemImage: "person.2.fill") {
+                    showRecipientPicker = true
+                }
+                // Posting to Discord means posting to the *guild's* channel, so
+                // it only makes sense for markers the guild can see.
+                channel(
+                    kind: .discord,
+                    label: discordLabel,
+                    asset: "DiscordLogo",
+                    badge: discordChannels.contains(where: \.needsAttention)
+                        ? "exclamationmark.circle.fill"
+                        : nil
+                ) {
+                    Task { await prepareDiscordShare() }
+                }
+                channel(kind: .x, label: "X", xGlyph: true) {
+                    Task { await shareToX() }
+                }
+                channel(kind: .copy, label: "Copy link", systemImage: "link") {
+                    Task { await copyLink() }
+                }
+                channel(kind: .more, label: "More", systemImage: "square.and.arrow.up") {
+                    Task { await shareMore() }
+                }
+            }
+        } else if context.canShareWithinGuild {
+            HStack {
+                Spacer()
+                channel(kind: .guildDM, label: "Guild DM", systemImage: "person.2.fill") {
+                    showRecipientPicker = true
+                }
+                .frame(width: 104)
+                Spacer()
+            }
+        }
+    }
+
+    /// "Discord" once we know a webhook is connected; the generic label until then.
+    private var discordLabel: String {
+        discordChannels.contains(where: \.canPost) ? "Guild Discord" : "Discord"
+    }
 
     private func channel(
+        kind: ChannelKind,
         label: String,
         systemImage: String? = nil,
+        asset: String? = nil,
         xGlyph: Bool = false,
+        badge: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -137,42 +253,198 @@ struct MarkerSharePromptSheet: View {
                     Circle()
                         .fill(AppColors.surfaceWhite08)
                         .frame(width: 58, height: 58)
-                    if xGlyph {
+                    if busyChannel == kind {
+                        ProgressView().tint(AppColors.primaryForeground)
+                    } else if xGlyph {
                         Text("𝕏")
                             .font(.system(size: 26, weight: .bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                    } else if let asset {
+                        Image(asset)
+                            .resizable()
+                            .renderingMode(.template)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 26, height: 26)
                             .foregroundColor(AppColors.primaryForeground)
                     } else if let systemImage {
                         Image(systemName: systemImage)
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(AppColors.accentColor)
                     }
+
+                    if let badge, busyChannel != kind {
+                        Image(systemName: badge)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppColors.statusWarning)
+                            .background(Circle().fill(AppColors.sheetBackground))
+                            .offset(x: 20, y: -20)
+                    }
                 }
                 Text(label)
                     .font(.caption)
                     .foregroundColor(AppColors.secondaryForeground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(InvitePressStyle())
+        .disabled(busyChannel != nil)
     }
 
     // MARK: - Actions
 
-    private func shareToX() {
+    private func loadDiscordState() async {
+        guard context.canShareExternally, discordChannels.isEmpty else { return }
+        // Best-effort: a failure just leaves the copy-and-open fallback in place.
+        if let response = try? await appState.realApi.getGuildDiscordChannels(
+            guildId: context.marker.guildId
+        ) {
+            discordChannels = response.channels
+            selectedDiscordChannelId = response.preferredChannel?.id
+        }
+    }
+
+    private func loadExternalShareURL() async -> URL? {
+        guard context.canShareExternally else { return nil }
+        if let externalShareURL { return externalShareURL }
+        do {
+            let response = try await appState.realApi.createMarkerExternalShareLink(
+                guildId: context.marker.guildId,
+                markerId: context.marker.id
+            )
+            guard let url = MarkerShare.validatedServerShareURL(
+                response.shareUrl,
+                markerId: context.marker.id
+            ) else {
+                appState.showError(
+                    title: "Couldn't create share link",
+                    message: "The server returned an invalid marker link. Please try again.",
+                    style: .toast
+                )
+                return nil
+            }
+            externalShareURL = url
+            return url
+        } catch {
+            appState.showError(
+                title: "Couldn't create share link",
+                message: "Check your connection and try again.",
+                style: .toast
+            )
+            return nil
+        }
+    }
+
+    private func shareToX() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .x
+        defer { busyChannel = nil }
+        guard let shareURL = await loadExternalShareURL() else { return }
         GuildInviteShare.openAppOrWeb(
-            MarkerShare.xAppURL(symbolTicker: context.symbolTicker, caption: caption, url: shareURL),
-            fallback: MarkerShare.xComposeURL(symbolTicker: context.symbolTicker, caption: caption, url: shareURL)
+            MarkerShare.xAppURL(
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                url: shareURL,
+                intent: context.marker.intent,
+                price: context.marker.price
+            ),
+            fallback: MarkerShare.xComposeURL(
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                url: shareURL,
+                intent: context.marker.intent,
+                price: context.marker.price
+            )
         )
         dismiss()
     }
 
-    private func copyLink() {
+    private func prepareDiscordShare() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .discord
+        guard await loadExternalShareURL() != nil else {
+            busyChannel = nil
+            return
+        }
+        await loadDiscordState()
+        busyChannel = nil
+
+        let response = RLGuildDiscordChannelsListDTO(channels: discordChannels)
+        guard response.preferredChannel != nil else {
+            await copyForDiscordAndOpen()
+            return
+        }
+        if !discordChannels.contains(where: { $0.id == selectedDiscordChannelId && $0.canPost }) {
+            selectedDiscordChannelId = response.preferredChannel?.id
+        }
+        showDiscordDestination = true
+    }
+
+    private func postToSelectedDiscordChannel() async {
+        guard context.canShareExternally else { return }
+        guard let channel = discordChannels.first(where: {
+            $0.id == selectedDiscordChannelId && $0.canPost
+        }) else { return }
+        busyChannel = .discord
+        defer { busyChannel = nil }
+        do {
+            try await appState.realApi.shareMarkerToDiscord(
+                guildId: context.marker.guildId,
+                markerId: context.marker.id,
+                channelId: channel.id,
+                caption: caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? nil
+                    : caption
+            )
+            showDiscordDestination = false
+            appState.showSuccess("Posted to \(channel.displayLabel)")
+            dismiss()
+        } catch {
+            // The webhook may have been revoked in Discord since we last looked;
+            // don't dead-end the user — hand them the paste-it-yourself path.
+            appState.showError(
+                title: "Couldn't post to Discord",
+                message: "Your message was copied — paste it into your channel.",
+                style: .toast
+            )
+            await copyForDiscordAndOpen()
+        }
+    }
+
+    private func copyForDiscordAndOpen() async {
+        guard context.canShareExternally,
+              let shareURL = await loadExternalShareURL() else { return }
+        showDiscordDestination = false
+        UIPasteboard.general.string = MarkerShare.discordMessage(
+            symbolTicker: context.symbolTicker,
+            caption: caption,
+            url: shareURL,
+            intent: context.marker.intent,
+            price: context.marker.price
+        )
+        GuildInviteShare.openAppOrWeb(
+            MarkerShare.discordAppURL,
+            fallback: MarkerShare.discordWebURL
+        )
+        dismiss()
+    }
+
+    private func copyLink() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .copy
+        defer { busyChannel = nil }
+        guard let shareURL = await loadExternalShareURL() else { return }
         UIPasteboard.general.string = shareURL.absoluteString
         appState.showSuccess("Marker link copied")
         dismiss()
     }
 
-    private func shareMore() {
+    private func shareMore() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .more
+        defer { busyChannel = nil }
+        guard let shareURL = await loadExternalShareURL() else { return }
         // Presented via UIKit on top of this sheet (same approach as the invite
         // hub) — do NOT dismiss first, or the activity sheet is torn down with us.
         let item = MarkerShareItem(url: shareURL, symbolTicker: context.symbolTicker, caption: caption)

@@ -30,8 +30,17 @@ struct GuildInviteHubView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var inviteURL: URL?
+    /// Referral code behind `inviteURL`, needed to post the invite to Discord.
+    @State private var inviteCode: String?
+    /// Direct Discord posts always use a server-validated invite code. In
+    /// vanity mode the visible share link remains `/g/{slug}` while this is
+    /// prepared lazily only after the user chooses Discord.
+    @State private var discordInviteURL: URL?
     @State private var isLoadingLink = true
     @State private var showQRSheet = false
+    @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
+    @State private var selectedDiscordChannelId: UUID?
+    @State private var showDiscordDestination = false
     /// Channel whose action is being prepared (shows a spinner in its button).
     @State private var busyChannel: ChannelKind?
     /// Channel currently showing a tap pulse (action-driven press feedback).
@@ -62,8 +71,25 @@ struct GuildInviteHubView: View {
         }
         .background(AppColors.gradientBackgroundDark.opacity(0.96).ignoresSafeArea())
         .task(id: rlAppState.currentGuild?.id) { await ensureInviteLink() }
+        .task(id: rlAppState.currentGuild?.id) { await loadDiscordChannels() }
         .sheet(isPresented: $showQRSheet, onDismiss: { busyChannel = nil }) {
             qrSheet
+        }
+        .sheet(isPresented: $showDiscordDestination) {
+            DiscordDestinationSheet(
+                title: "Share guild invite",
+                channels: discordChannels,
+                selectedChannelId: $selectedDiscordChannelId,
+                isPosting: busyChannel == .discord,
+                preview: {
+                    DiscordInviteEmbedPreview(
+                        guild: guild,
+                        inviteURL: discordInviteURL ?? inviteURL
+                    )
+                },
+                onPost: { Task { await postInviteToDiscord() } },
+                onCopyAndOpen: { copyForDiscordAndOpen() }
+            )
         }
     }
 
@@ -196,7 +222,7 @@ struct GuildInviteHubView: View {
                 shareToX()
             }
             channelButton(kind: .discord, title: "Discord", icon: .asset("DiscordLogo"), tint: AppColors.whiteText) {
-                shareToDiscord()
+                Task { await prepareDiscordShare() }
             }
             channelButton(kind: .messages, title: "Messages", icon: .system("message.fill"), tint: AppColors.statusPositive70) {
                 shareViaMessages()
@@ -382,6 +408,9 @@ struct GuildInviteHubView: View {
             // every time the hub appears.
             let link = try await rlAppState.realApi.createGuildInviteLink(guildId: guild.id)
             inviteURL = URL(string: link.shareUrl)
+            discordInviteURL = inviteURL
+            // Kept so the invite can be posted to Discord by code.
+            inviteCode = link.code
         } catch {
             // Surface a single, quiet failure; channel buttons stay disabled.
             rlAppState.showInfo("Couldn't prepare your invite link. Pull to retry.")
@@ -422,16 +451,90 @@ struct GuildInviteHubView: View {
         )
     }
 
-    private func shareToDiscord() {
+    private func prepareDiscordShare() async {
+        busyChannel = .discord
+        await loadDiscordChannels()
+        busyChannel = nil
+
+        let response = RLGuildDiscordChannelsListDTO(channels: discordChannels)
+        guard response.preferredChannel != nil else {
+            copyForDiscordAndOpen()
+            return
+        }
+
+        if !discordChannels.contains(where: { $0.id == selectedDiscordChannelId && $0.canPost }) {
+            selectedDiscordChannelId = response.preferredChannel?.id
+        }
+
+        // The direct endpoint accepts an invite code, not a vanity slug. Avoid
+        // creating a referral link merely by opening the hub; prepare it only
+        // when the user explicitly asks for a direct Discord post.
+        if inviteCode == nil, let guild {
+            busyChannel = .discord
+            defer { busyChannel = nil }
+            do {
+                let link = try await rlAppState.realApi.createGuildInviteLink(guildId: guild.id)
+                inviteCode = link.code
+                discordInviteURL = URL(string: link.shareUrl)
+            } catch {
+                rlAppState.showError(error, title: "Couldn't prepare the Discord invite", style: .toast)
+                copyForDiscordAndOpen()
+                return
+            }
+        }
+
+        guard inviteCode != nil else {
+            copyForDiscordAndOpen()
+            return
+        }
+        showDiscordDestination = true
+    }
+
+    /// Copy a ready-made message and open Discord for the user to paste.
+    private func copyForDiscordAndOpen() {
         guard let url = inviteURL else { return }
-        // Discord has no pre-filled compose deep link, so copy a ready-made
-        // message and open the app for the user to paste into their server.
+        showDiscordDestination = false
         UIPasteboard.general.string = GuildInviteShare.discordMessage(guildName: guildName, url: url)
         rlAppState.showSuccess("Message copied — paste it into Discord")
         GuildInviteShare.openAppOrWeb(
             GuildInviteShare.discordAppURL,
             fallback: GuildInviteShare.discordWebURL
         )
+    }
+
+    /// Post the invite into the guild's connected Discord channel.
+    private func postInviteToDiscord() async {
+        guard let guildId = guild?.id,
+              let code = inviteCode,
+              let channel = discordChannels.first(where: {
+                  $0.id == selectedDiscordChannelId && $0.canPost
+              }) else { return }
+        busyChannel = .discord
+        defer { busyChannel = nil }
+        do {
+            try await rlAppState.realApi.shareInviteToDiscord(
+                guildId: guildId,
+                channelId: channel.id,
+                code: code
+            )
+            showDiscordDestination = false
+            rlAppState.showSuccess("Invite posted to \(channel.displayLabel)")
+        } catch {
+            rlAppState.showError(
+                title: "Couldn't post to Discord",
+                message: "Your message was copied — paste it into your channel.",
+                style: .toast
+            )
+            copyForDiscordAndOpen()
+        }
+    }
+
+    private func loadDiscordChannels() async {
+        guard let guildId = guild?.id, discordChannels.isEmpty else { return }
+        if let response = try? await rlAppState.realApi.getGuildDiscordChannels(guildId: guildId) {
+            discordChannels = response.channels
+            selectedDiscordChannelId = response.preferredChannel?.id
+        }
     }
 
     private func shareViaMessages() {

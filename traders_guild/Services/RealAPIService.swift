@@ -326,8 +326,8 @@ class RealAPIService {
         
         #if DEBUG
         print("🌐 [\(service)] \(method) \(endpoint)")
-        if let body = request.httpBody, let str = String(data: body, encoding: .utf8) {
-            print("📤 Request: \(str)")
+        if let body = request.httpBody {
+            print("📤 Request: \(APIRequestLogRedactor.redactedJSONString(from: body))")
         }
         #endif
         
@@ -351,9 +351,7 @@ class RealAPIService {
         
         #if DEBUG
         print("📥 Status: \(httpResponse.statusCode)")
-        if let str = String(data: data, encoding: .utf8)?.prefix(1000) {
-            print("📥 Response: \(str)")
-        }
+        print("📥 Response: \(APIRequestLogRedactor.redactedJSONString(from: data).prefix(1000))")
         #endif
         
         // Handle error responses
@@ -576,6 +574,49 @@ class RealAPIService {
 // MARK: - Helper Types
 
 private struct EmptyResponse: Decodable {}
+
+/// Keeps DEBUG API logging useful without printing bearer capabilities or
+/// credentials. Network payloads still contain the original values; only their
+/// log representation is transformed.
+enum APIRequestLogRedactor {
+    private static let replacement = "<redacted>"
+
+    static func redactedJSONString(from data: Data) -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              JSONSerialization.isValidJSONObject(object),
+              let redactedData = try? JSONSerialization.data(
+                withJSONObject: redact(object),
+                options: [.sortedKeys]
+              ),
+              let string = String(data: redactedData, encoding: .utf8) else {
+            return "<payload unavailable>"
+        }
+        return string
+    }
+
+    private static func redact(_ value: Any) -> Any {
+        if let dictionary = value as? [String: Any] {
+            return dictionary.reduce(into: [String: Any]()) { result, pair in
+                result[pair.key] = isSensitiveKey(pair.key) ? replacement : redact(pair.value)
+            }
+        }
+        if let array = value as? [Any] {
+            return array.map(redact)
+        }
+        return value
+    }
+
+    private static func isSensitiveKey(_ key: String) -> Bool {
+        let normalized = key
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+        return normalized.contains("webhookurl")
+            || normalized.contains("shareurl")
+            || normalized.contains("password")
+            || normalized.hasSuffix("token")
+            || normalized.contains("secret")
+    }
+}
 
 
 
@@ -1467,6 +1508,135 @@ extension RealAPIService {
             "/guilds/\(guildId.uuidString)/invite-links/\(inviteLinkId.uuidString)",
             service: .core,
             method: "DELETE",
+            auth: true
+        )
+    }
+
+    // MARK: - Discord channels
+
+    /// List the guild's named Discord destinations. Any active member may call
+    /// this so share sheets can require an explicit channel choice.
+    /// GET /guilds/{guild_id}/discord-channels
+    func getGuildDiscordChannels(guildId: UUID) async throws -> RLGuildDiscordChannelsListDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
+    /// Connect one Discord channel. The first channel becomes the default and
+    /// the server sends a test post before returning. Admins only.
+    /// POST /guilds/{guild_id}/discord-channels
+    func createGuildDiscordChannel(
+        guildId: UUID,
+        webhookUrl: String,
+        label: String
+    ) async throws -> RLGuildDiscordChannelDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels",
+            service: .core,
+            method: "POST",
+            body: RLGuildDiscordChannelCreateRequestDTO(webhookUrl: webhookUrl, label: label),
+            auth: true
+        )
+    }
+
+    /// Rename or set a default destination. `autoPostMarkers` remains optional
+    /// for compatibility with the round-two server contract; the current iOS
+    /// release does not expose or send an auto-post preference. Admins only.
+    /// PATCH /guilds/{guild_id}/discord-channels/{channel_id}
+    func updateGuildDiscordChannel(
+        guildId: UUID,
+        channelId: UUID,
+        label: String? = nil,
+        isDefault: Bool? = nil,
+        autoPostMarkers: Bool? = nil
+    ) async throws -> RLGuildDiscordChannelDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)",
+            service: .core,
+            method: "PATCH",
+            body: RLGuildDiscordChannelUpdateRequestDTO(
+                label: label,
+                isDefault: isDefault,
+                autoPostMarkers: autoPostMarkers
+            ),
+            auth: true
+        )
+    }
+
+    /// Send a test card to one destination. Admins only.
+    /// POST /guilds/{guild_id}/discord-channels/{channel_id}/test
+    func testGuildDiscordChannel(
+        guildId: UUID,
+        channelId: UUID
+    ) async throws -> RLGuildDiscordChannelDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)/test",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
+    /// Disconnect one destination and forget its bearer webhook. Admins only.
+    /// DELETE /guilds/{guild_id}/discord-channels/{channel_id}
+    func deleteGuildDiscordChannel(guildId: UUID, channelId: UUID) async throws {
+        let _: EmptyResponse = try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
+    /// Post an invite link into a selected Discord channel.
+    /// POST /guilds/{guild_id}/discord-channels/{channel_id}/share-invite
+    @discardableResult
+    func shareInviteToDiscord(
+        guildId: UUID,
+        channelId: UUID,
+        code: String
+    ) async throws -> RLDetailResponseDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)/share-invite",
+            service: .core,
+            method: "POST",
+            body: RLGuildDiscordShareInviteRequestDTO(code: code),
+            auth: true
+        )
+    }
+
+    /// Post a marker into the guild's Discord channel.
+    /// POST /chart/guilds/{guild_id}/markers/{marker_id}/share/discord
+    @discardableResult
+    func shareMarkerToDiscord(
+        guildId: UUID,
+        markerId: UUID,
+        channelId: UUID,
+        caption: String? = nil
+    ) async throws -> RLDetailResponseDTO {
+        try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/share/discord",
+            service: .chart,
+            method: "POST",
+            body: RLMarkerDiscordShareRequestDTO(channelId: channelId, caption: caption),
+            auth: true
+        )
+    }
+
+    /// Ask the chart service to authorize one deliberate external share.
+    /// POST /chart/guilds/{guild_id}/markers/{marker_id}/share-link
+    func createMarkerExternalShareLink(
+        guildId: UUID,
+        markerId: UUID
+    ) async throws -> RLMarkerExternalShareLinkDTO {
+        try await request(
+            "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)/share-link",
+            service: .chart,
+            method: "POST",
             auth: true
         )
     }

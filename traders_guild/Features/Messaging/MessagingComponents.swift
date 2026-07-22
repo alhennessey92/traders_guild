@@ -3711,12 +3711,12 @@ private struct MarkerShareCard: View {
     }
 }
 
-private enum LinkedMarkerRowStyle: Equatable {
+enum LinkedMarkerRowStyle: Equatable {
     case attachmentDraft
     case messageCard(isCurrentUserMessage: Bool)
 }
 
-private struct LinkedMarkerRow: View {
+struct LinkedMarkerRow: View {
     let intent: RLMarkerIntent
     let alertSeverity: MarkerAlertSeverity?
     let emoji: String?

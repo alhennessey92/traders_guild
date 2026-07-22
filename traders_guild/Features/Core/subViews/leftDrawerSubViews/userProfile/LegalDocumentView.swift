@@ -2,8 +2,9 @@
 //  LegalDocumentView.swift
 //  traders_guild
 //
-//  Reusable in-app viewer for bundled markdown legal documents
-//  (Terms of Service, Privacy Policy, Community Guidelines, Legal Information).
+//  Reusable in-app viewer for bundled supporting documents such as the
+//  Community Guidelines and Legal Information. Terms and Privacy use their
+//  canonical web URLs so App Review sees the current published documents.
 //
 //  Loads from Resources/support/<resourceName>.md and renders block-level
 //  markdown — headings, paragraphs, lists, dividers — as styled SwiftUI
@@ -11,6 +12,11 @@
 //
 
 import SwiftUI
+
+enum TradersGuildLegalURL {
+    static let terms = URL(string: "https://tradersguild.co/terms")!
+    static let privacy = URL(string: "https://tradersguild.co/privacy")!
+}
 
 struct LegalDocumentView: View {
     let title: String

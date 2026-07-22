@@ -25,6 +25,20 @@ struct GuildSettingsView: View {
     @State private var crestImageRemoved = false
     @State private var showCrestImagePicker = false
 
+    // Discord destinations act immediately rather than waiting for "Save
+    // Details". Webhook URLs remain write-only bearer secrets.
+    @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
+    @State private var discordLabelInput = ""
+    @State private var discordWebhookInput = ""
+    @State private var discordBusy = false
+    @State private var showDiscordAddForm = false
+    @State private var showDiscordHowTo = false
+    @State private var discordPendingRemoval: RLGuildDiscordChannelDTO?
+    @State private var showDiscordRemoveConfirm = false
+    @State private var discordPendingRename: RLGuildDiscordChannelDTO?
+    @State private var discordRenameInput = ""
+    @State private var showDiscordRenamePrompt = false
+
     private var isValid: Bool {
         !trimmedName.isEmpty && trimmedName.count >= 3
     }
@@ -312,6 +326,8 @@ struct GuildSettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+
+                        discordSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -360,6 +376,385 @@ struct GuildSettingsView: View {
                 pickedCrestImage = image
                 crestImageRemoved = false
             }
+        }
+    }
+
+    // MARK: - Discord channels
+
+    /// Manage the guild's named Discord webhook destinations. A webhook is
+    /// channel-bound in Discord, so connecting more channels means adding one
+    /// webhook per destination.
+    private var discordSection: some View {
+        AdminSectionCard {
+            HStack(spacing: 8) {
+                Image("DiscordLogo")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                    .foregroundColor(AppColors.whiteText)
+                Text("Discord")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.whiteText)
+                Spacer()
+                if !discordChannels.isEmpty {
+                    Text("\(discordChannels.count) connected")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(AppColors.guildReputationAccent)
+                }
+            }
+
+            Text("Let members choose where marker and invite posts are sent.")
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+
+            if !discordChannels.isEmpty {
+                VStack(spacing: 10) {
+                    ForEach(discordChannels) { channel in
+                        discordChannelRow(channel)
+                    }
+                }
+            }
+
+            if showDiscordAddForm || discordChannels.isEmpty {
+                AdminInputField(
+                    title: "Channel label",
+                    placeholder: "#signals",
+                    text: $discordLabelInput
+                )
+                AdminInputField(
+                    title: "Webhook URL",
+                    placeholder: "https://discord.com/api/webhooks/…",
+                    text: $discordWebhookInput
+                )
+
+                Button {
+                    Task { await addDiscordChannel() }
+                } label: {
+                    discordButtonLabel("Add channel", tint: AppColors.guildReputationAccent)
+                }
+                .buttonStyle(.plain)
+                .disabled(discordBusy || !canAddDiscordChannel)
+            } else {
+                Button {
+                    showDiscordAddForm = true
+                } label: {
+                    Label("Add channel", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppColors.guildReputationAccent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.guildReputationAccent.opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(discordBusy)
+            }
+
+            discordHowToConnect
+        }
+        .task(id: rlAppState.currentGuild?.id) { await loadDiscordChannels() }
+        .confirmationDialog(
+            "Remove this Discord channel?",
+            isPresented: $showDiscordRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove channel", role: .destructive) {
+                if let channel = discordPendingRemoval {
+                    Task { await removeDiscordChannel(channel) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The webhook is forgotten. If this is the default, another connected channel becomes default.")
+        }
+        .alert("Rename Discord channel", isPresented: $showDiscordRenamePrompt) {
+            TextField("#signals", text: $discordRenameInput)
+            Button("Rename") {
+                if let channel = discordPendingRename {
+                    Task { await renameDiscordChannel(channel) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Use the channel name members will recognise in share pickers.")
+        }
+    }
+
+    private var canAddDiscordChannel: Bool {
+        !discordLabelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !discordWebhookInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func discordChannelRow(_ channel: RLGuildDiscordChannelDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(channel.displayLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(AppColors.whiteText)
+                        if channel.isDefault {
+                            Text("Default")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(AppColors.guildReputationAccent.opacity(0.14)))
+                        }
+                    }
+                    discordStatusPill(for: channel)
+                }
+
+                Spacer()
+
+                Menu {
+                    Button("Send test post", systemImage: "paperplane") {
+                        Task { await sendDiscordTestPost(to: channel) }
+                    }
+                    if !channel.isDefault {
+                        Button("Make default", systemImage: "star") {
+                            Task { await makeDiscordDefault(channel) }
+                        }
+                    }
+                    Button("Rename", systemImage: "pencil") {
+                        discordPendingRename = channel
+                        discordRenameInput = channel.label
+                        showDiscordRenamePrompt = true
+                    }
+                    Button("Remove", systemImage: "trash", role: .destructive) {
+                        discordPendingRemoval = channel
+                        showDiscordRemoveConfirm = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundColor(AppColors.greyText)
+                }
+                .disabled(discordBusy)
+            }
+
+            if let masked = channel.webhookMasked {
+                Text(masked)
+                    .font(.caption2.monospaced())
+                    .foregroundColor(AppColors.greyText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            if let reason = channel.lastFailureReason, channel.needsAttention {
+                Text(reason)
+                    .font(.caption)
+                    .foregroundColor(AppColors.statusWarning)
+            }
+
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppColors.insetPanelBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                )
+        )
+    }
+
+    private var discordHowToConnect: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showDiscordHowTo.toggle()
+                }
+            } label: {
+                HStack {
+                    Label("How to connect a Discord channel", systemImage: "questionmark.circle")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Image(systemName: showDiscordHowTo ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundColor(AppColors.greyText)
+            }
+            .buttonStyle(.plain)
+
+            if showDiscordHowTo {
+                Text("1. In Discord, open the channel's Settings.\n2. Choose Integrations → Webhooks → New Webhook.\n3. Copy the Webhook URL and paste it above.\n4. Repeat with a new webhook for each channel you want to offer.")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func discordStatusPill(for channel: RLGuildDiscordChannelDTO) -> some View {
+        let (label, color): (String, Color) = {
+            switch channel.status {
+            case "invalid": return ("Needs reconnecting", AppColors.statusNegative)
+            case "failing": return ("Delivery failing", AppColors.statusWarning)
+            default: return ("Connected", AppColors.statusPositive)
+            }
+        }()
+        return Text(label)
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(color.opacity(0.15)))
+    }
+
+    private func discordButtonLabel(_ title: String, tint: Color) -> some View {
+        Group {
+            if discordBusy {
+                ProgressView().tint(tint)
+            } else {
+                Text(title).font(.subheadline)
+            }
+        }
+        .foregroundColor(tint)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(tint.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(tint.opacity(0.5), lineWidth: 1)
+                )
+        )
+    }
+
+    private func replaceDiscordChannel(_ updated: RLGuildDiscordChannelDTO) {
+        if let index = discordChannels.firstIndex(where: { $0.id == updated.id }) {
+            discordChannels[index] = updated
+        } else {
+            discordChannels.append(updated)
+        }
+    }
+
+    private func loadDiscordChannels() async {
+        guard let guildId = rlAppState.currentGuild?.id else { return }
+        if let response = try? await rlAppState.realApi.getGuildDiscordChannels(guildId: guildId) {
+            discordChannels = response.channels
+        }
+    }
+
+    private func addDiscordChannel() async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        let label = discordLabelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let webhookURL = discordWebhookInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty, !webhookURL.isEmpty else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        do {
+            let channel = try await rlAppState.realApi.createGuildDiscordChannel(
+                guildId: guildId,
+                webhookUrl: webhookURL,
+                label: label
+            )
+            replaceDiscordChannel(channel)
+            discordLabelInput = ""
+            discordWebhookInput = ""
+            showDiscordAddForm = false
+            showDiscordChannelCreationOutcome(channel)
+        } catch {
+            rlAppState.showError(error, title: "Couldn't add Discord channel", style: .toast)
+            await loadDiscordChannels()
+        }
+    }
+
+    /// The channel is persisted even when its automatic test delivery fails.
+    /// Keep it visible for recovery, but never tell the admin an invalid or
+    /// failing webhook connected successfully.
+    private func showDiscordChannelCreationOutcome(_ channel: RLGuildDiscordChannelDTO) {
+        switch channel.status {
+        case "invalid":
+            rlAppState.showError(
+                title: "Discord channel saved, but the webhook is invalid",
+                message: "Discord rejected the webhook for \(channel.displayLabel). Remove it and add a fresh Webhook URL.",
+                style: .toast
+            )
+        case "failing":
+            rlAppState.showInfo(
+                "\(channel.displayLabel) was saved, but its test post failed. Use Send test post to retry."
+            )
+        case "active":
+            rlAppState.showSuccess("\(channel.displayLabel) connected — check Discord for the test post")
+        default:
+            rlAppState.showInfo("\(channel.displayLabel) was saved. Send a test post to confirm delivery.")
+        }
+    }
+
+    private func sendDiscordTestPost(to channel: RLGuildDiscordChannelDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        do {
+            replaceDiscordChannel(try await rlAppState.realApi.testGuildDiscordChannel(
+                guildId: guildId,
+                channelId: channel.id
+            ))
+            rlAppState.showSuccess("Test post sent to \(channel.displayLabel)")
+        } catch {
+            rlAppState.showError(error, title: "Test post failed", style: .toast)
+            await loadDiscordChannels()
+        }
+    }
+
+    private func makeDiscordDefault(_ channel: RLGuildDiscordChannelDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        do {
+            _ = try await rlAppState.realApi.updateGuildDiscordChannel(
+                guildId: guildId,
+                channelId: channel.id,
+                isDefault: true
+            )
+            await loadDiscordChannels()
+            rlAppState.showSuccess("\(channel.displayLabel) is now the default")
+        } catch {
+            rlAppState.showError(error, title: "Couldn't change the default channel", style: .toast)
+            await loadDiscordChannels()
+        }
+    }
+
+    private func renameDiscordChannel(_ channel: RLGuildDiscordChannelDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        let label = discordRenameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        do {
+            replaceDiscordChannel(try await rlAppState.realApi.updateGuildDiscordChannel(
+                guildId: guildId,
+                channelId: channel.id,
+                label: label
+            ))
+            rlAppState.showSuccess("Discord channel renamed")
+        } catch {
+            rlAppState.showError(error, title: "Couldn't rename the channel", style: .toast)
+            await loadDiscordChannels()
+        }
+    }
+
+    private func removeDiscordChannel(_ channel: RLGuildDiscordChannelDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        do {
+            try await rlAppState.realApi.deleteGuildDiscordChannel(
+                guildId: guildId,
+                channelId: channel.id
+            )
+            discordChannels.removeAll { $0.id == channel.id }
+            await loadDiscordChannels()
+            rlAppState.showSuccess("\(channel.displayLabel) removed")
+        } catch {
+            rlAppState.showError(error, title: "Couldn't remove the Discord channel", style: .toast)
         }
     }
 

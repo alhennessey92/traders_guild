@@ -2084,6 +2084,100 @@ struct RLGuildInviteLinksListDTO: Codable {
     let inviteLinks: [RLGuildInviteLinkDTO]
 }
 
+/// Connect a named Discord destination. A webhook belongs to exactly one
+/// Discord channel, so guilds connect one webhook for each channel they want
+/// members to be able to target.
+struct RLGuildDiscordChannelCreateRequestDTO: Codable {
+    let webhookUrl: String
+    let label: String
+}
+
+/// Rename or update one Discord destination without ever returning its bearer
+/// webhook URL to the client. `autoPostMarkers` is retained for compatibility
+/// with servers that already understand the field; release UI leaves it nil.
+struct RLGuildDiscordChannelUpdateRequestDTO: Codable {
+    let label: String?
+    let isDefault: Bool?
+    let autoPostMarkers: Bool?
+
+    init(
+        label: String? = nil,
+        isDefault: Bool? = nil,
+        autoPostMarkers: Bool? = nil
+    ) {
+        self.label = label
+        self.isDefault = isDefault
+        self.autoPostMarkers = autoPostMarkers
+    }
+}
+
+/// Post an existing invite link into the guild's Discord channel.
+struct RLGuildDiscordShareInviteRequestDTO: Codable {
+    let code: String
+}
+
+/// Destination and optional note posted alongside a marker in Discord.
+struct RLMarkerDiscordShareRequestDTO: Codable {
+    let channelId: UUID
+    let caption: String?
+
+    init(channelId: UUID, caption: String? = nil) {
+        self.channelId = channelId
+        self.caption = caption
+    }
+}
+
+/// Server-issued capability URL. A bare marker UUID is never a public share.
+struct RLMarkerExternalShareLinkDTO: Codable, Equatable {
+    let shareUrl: String
+}
+
+/// One named Discord channel destination connected to a guild.
+///
+/// The webhook URL is a bearer capability, so the server only ever returns the
+/// masked form — there is no way to read back a usable URL from the client.
+struct RLGuildDiscordChannelDTO: Codable, Identifiable, Equatable {
+    let id: UUID
+    let guildId: UUID
+    let label: String
+    let webhookMasked: String?
+    let webhookId: String
+    let isDefault: Bool
+    let autoPostMarkers: Bool
+    /// `active` | `failing` | `invalid`.
+    let status: String
+    let consecutiveFailures: Int
+    let lastSuccessAt: Date?
+    let lastFailureReason: String?
+    let createdAt: Date
+
+    /// Whether a share attempt is worth making right now.
+    var canPost: Bool { status != "invalid" }
+
+    /// Discord is connected but recent deliveries have been failing.
+    var needsAttention: Bool { status == "failing" || status == "invalid" }
+
+    /// Admin labels are free-form; present them consistently as Discord
+    /// channels without storing duplicate `#` prefixes.
+    var displayLabel: String {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Discord channel" }
+        return trimmed.hasPrefix("#") ? trimmed : "#\(trimmed)"
+    }
+}
+
+/// List response used by settings and every share destination picker.
+struct RLGuildDiscordChannelsListDTO: Codable {
+    let channels: [RLGuildDiscordChannelDTO]
+
+    /// Default channel first, then the first-added usable destination. Keeping
+    /// this policy in one place makes every share surface agree.
+    var preferredChannel: RLGuildDiscordChannelDTO? {
+        channels.first(where: { $0.isDefault && $0.canPost })
+            ?? channels.first(where: \.canPost)
+    }
+}
+
 /// Preview response for a shareable guild invite/referral link
 struct RLGuildInviteLinkResolveDTO: Codable {
     let code: String

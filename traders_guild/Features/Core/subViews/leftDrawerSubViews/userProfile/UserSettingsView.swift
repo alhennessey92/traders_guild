@@ -136,20 +136,6 @@ struct UserSettingsSheetView: View {
                 onSelectDocument: { currentDestination = $0 }
             )
 
-        case .termsOfService:
-            LegalDocumentView(
-                title: "Terms of Service",
-                resourceName: "terms_of_service",
-                onBack: { currentDestination = .termsPrivacy }
-            )
-
-        case .privacyPolicy:
-            LegalDocumentView(
-                title: "Privacy Policy",
-                resourceName: "privacy_policy",
-                onBack: { currentDestination = .termsPrivacy }
-            )
-
         case .communityGuidelines:
             LegalDocumentView(
                 title: "Community Guidelines",
