@@ -42,43 +42,180 @@ struct MarkerShareItem: Identifiable {
 
 enum MarkerShare {
 
-    /// Universal/deep link that opens the specific marker in-app. The `https`
-    /// form opens the app via `applinks` (once the entitlement + AASA are live)
-    /// and is safe to paste anywhere; the `tradersguild://marker/<id>` custom
-    /// scheme opens it in all builds.
-    static func markerShareURL(markerId: UUID) -> URL {
-        URL(string: "https://tradersguild.co/marker/\(markerId.uuidString.lowercased())")!
+    /// Shown before an author chooses an external destination. Keep this copy
+    /// explicit: the durable link and preview leave the guild boundary and can
+    /// be retained by the receiving service or its users.
+    static let externalSharingDisclosure =
+        "X, Discord, Copy link and More make this marker card, your profile handle and guild name public outside Traders Guild. Other services may retain or reshare it."
+
+    /// Guild-visible markers can be forwarded to another member inside the app.
+    /// Private markers remain visible only to their author and must not expose a
+    /// share surface.
+    static func canShareWithinGuild(visibility: String) -> Bool {
+        visibility.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("guild") == .orderedSame
+    }
+
+    /// Public/external channels publish a durable marker link, so they require
+    /// both guild visibility and the marker author's consent.
+    static func canShareExternally(isCurrentUserMarker: Bool, visibility: String) -> Bool {
+        isCurrentUserMarker && canShareWithinGuild(visibility: visibility)
+    }
+
+    /// Accept only the capability URL issued by chart-service for this marker.
+    /// Constructing a URL from the UUID would bypass the author's server-side
+    /// consent boundary, so all external destinations go through this guard.
+    static func validatedServerShareURL(_ rawValue: String, markerId: UUID) -> URL? {
+        var allowedHosts: Set<String> = ["tradersguild.co"]
+        #if DEBUG
+        // Staging issues capabilities for its own public origin. Never admit an
+        // arbitrary API response host, even in a debug build.
+        allowedHosts.insert("api-dev.tradersguild.co")
+        #endif
+
+        guard let components = URLComponents(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+              components.scheme?.lowercased() == "https",
+              let host = components.host?.lowercased(),
+              allowedHosts.contains(host),
+              components.user == nil,
+              components.password == nil,
+              components.port == nil,
+              components.fragment == nil,
+              components.path.lowercased() == "/marker/\(markerId.uuidString.lowercased())",
+              let items = components.queryItems,
+              items.count == 1,
+              items[0].name == "share_token",
+              let token = items[0].value,
+              token.count == 43,
+              token.unicodeScalars.allSatisfy({
+                  CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_"
+              }) else {
+            return nil
+        }
+        return components.url
     }
 
     static func markerCustomSchemeURL(markerId: UUID) -> URL? {
         URL(string: "tradersguild://marker/\(markerId.uuidString.lowercased())")
     }
 
-    private static func xComposeText(symbolTicker: String?, caption: String?, url: URL) -> String {
+    /// Human-readable price, matching how the marker reads on the chart.
+    static func formattedPrice(_ price: Double?) -> String? {
+        guard let price, price.isFinite else { return nil }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        // Match the chart's precision bands so FX doesn't round to nothing.
+        formatter.maximumFractionDigits = abs(price) >= 1000 ? 2 : (abs(price) >= 1 ? 4 : 8)
+        return formatter.string(from: NSNumber(value: price))
+    }
+
+    /// The headline a marker leads with — "BTCUSD setup at 67,250.12".
+    /// Falls back gracefully as each piece of context goes missing.
+    static func shareHeadline(symbolTicker: String?, intent: String?, price: Double?) -> String {
+        let ticker = symbolTicker?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let intentWord = intent?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let priceText = formattedPrice(price)
+
+        var headline = ticker.isEmpty ? "my latest marker" : ticker
+        if !ticker.isEmpty, !intentWord.isEmpty, intentWord != "personal" {
+            headline += " \(intentWord)"
+        }
+        if !ticker.isEmpty, let priceText {
+            headline += " at \(priceText)"
+        }
+        return headline
+    }
+
+    private static func xComposeText(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> String {
         let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedCaption.isEmpty {
             return "\(trimmedCaption) \(url.absoluteString)"
         }
-        let subject = (symbolTicker.map { "my \($0) marker" }) ?? "my latest marker"
-        return "Just dropped \(subject) on Traders Guild — the social trading platform where guilds call the markets together. 📈 \(url.absoluteString)"
+        let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
+        return "Just dropped \(headline) on Traders Guild — the social trading platform where guilds call the markets together. 📈 \(url.absoluteString)"
     }
 
     /// Native X app composer scheme; falls back to `xComposeURL` (web).
     /// `caption` is the optional user-written message (further editable in X).
-    static func xAppURL(symbolTicker: String?, caption: String?, url: URL) -> URL? {
-        let text = xComposeText(symbolTicker: symbolTicker, caption: caption, url: url)
-        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
-        return URL(string: "twitter://post?message=\(encoded)")
+    static func xAppURL(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> URL? {
+        let text = xComposeText(
+            symbolTicker: symbolTicker,
+            caption: caption,
+            url: url,
+            intent: intent,
+            price: price
+        )
+        var components = URLComponents()
+        components.scheme = "twitter"
+        components.host = "post"
+        components.queryItems = [URLQueryItem(name: "message", value: text)]
+        return components.url
     }
 
     /// Web composer fallback for X when the app isn't installed.
-    static func xComposeURL(symbolTicker: String?, caption: String?, url: URL) -> URL? {
+    static func xComposeURL(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> URL? {
         var components = URLComponents(string: "https://x.com/intent/post")
         components?.queryItems = [
-            URLQueryItem(name: "text", value: xComposeText(symbolTicker: symbolTicker, caption: caption, url: url)),
+            URLQueryItem(
+                name: "text",
+                value: xComposeText(
+                    symbolTicker: symbolTicker,
+                    caption: caption,
+                    url: url,
+                    intent: intent,
+                    price: price
+                )
+            ),
         ]
         return components?.url
     }
+
+    /// A Discord-ready, formatted message to paste into a channel.
+    ///
+    /// Used when the guild hasn't connected a webhook — with one connected the
+    /// marker is posted directly instead (see `shareMarkerToDiscord`).
+    static func discordMessage(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> String {
+        let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
+        let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let lead = trimmedCaption.isEmpty
+            ? "Called it on Traders Guild — the social trading platform where guilds call the markets together."
+            : trimmedCaption
+        return """
+        **\(headline.prefix(1).uppercased() + headline.dropFirst()) on Traders Guild** 📈
+        \(lead)
+        \(url.absoluteString)
+        """
+    }
+
+    /// Native Discord app scheme, then the web fallback.
+    static var discordAppURL: URL? { GuildInviteShare.discordAppURL }
+    static var discordWebURL: URL? { GuildInviteShare.discordWebURL }
 
     /// Presents `UIActivityViewController` for a marker. Mirrors
     /// `GuildInviteShare.presentNativeShareSheet` — UIKit presentation avoids the
@@ -117,6 +254,30 @@ enum MarkerShare {
         }
 
         presenter.present(activityVC, animated: true) { onPresented?() }
+    }
+}
+
+// MARK: - Deep-link failure copy
+
+struct MarkerDeepLinkFailureCopy: Equatable {
+    let title: String
+    let message: String
+
+    static func terminalFailure(forHTTPStatus statusCode: Int) -> Self? {
+        switch statusCode {
+        case 403:
+            return Self(
+                title: "Marker Access Required",
+                message: "Join the marker’s guild to view it."
+            )
+        case 404:
+            return Self(
+                title: "Marker Unavailable",
+                message: "That marker is no longer available."
+            )
+        default:
+            return nil
+        }
     }
 }
 

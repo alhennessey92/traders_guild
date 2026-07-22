@@ -2977,7 +2977,8 @@ struct ChartBottomSheet: View {
                 canEditMarker: canEditSelectedMarker,
                 onEditMarker: { liveMarker in
                     beginEditingSelectedMarker(liveMarker)
-                }
+                },
+                onShareMarker: shareSelectedMarker
             )
             .environmentObject(rlAppState)
         case .chat:
@@ -3191,6 +3192,34 @@ struct ChartBottomSheet: View {
     private var canEditSelectedMarker: Bool {
         guard let marker = chartViewModel.selectedMarkerForSheet else { return false }
         return isMarkerEditableForCurrentUser(marker)
+    }
+
+    private func isMarkerAuthoredByCurrentUser(_ marker: ChartMarkerUI) -> Bool {
+        if marker.isCurrentUserMarker {
+            return true
+        }
+        guard let currentUserId = rlAppState.currentUser?.id else { return false }
+        return marker.author.userId == currentUserId
+    }
+
+    private func shareSelectedMarker() {
+        guard let marker = chartViewModel.selectedMarkerForSheet,
+              MarkerShare.canShareWithinGuild(visibility: marker.visibility) else {
+            return
+        }
+
+        HapticFeedback.medium.trigger()
+        let context = MarkerShareContext(
+            marker: marker.marker,
+            symbolTicker: chartViewModel.currentSymbol?.ticker,
+            isNewPlacement: false,
+            isCurrentUserMarker: isMarkerAuthoredByCurrentUser(marker)
+        )
+        NotificationCenter.default.post(
+            name: .presentMarkerSharePrompt,
+            object: nil,
+            userInfo: [MarkerSharePromptNotification.contextKey: context]
+        )
     }
 
     private func isMarkerEditableForCurrentUser(_ marker: ChartMarkerUI) -> Bool {

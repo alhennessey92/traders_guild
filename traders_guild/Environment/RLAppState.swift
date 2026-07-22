@@ -1109,9 +1109,16 @@ class RLAppState: ObservableObject {
                 object: nil,
                 userInfo: payload.notificationUserInfo
             )
-        } catch APIError.serverError(let statusCode, _) where statusCode == 404 {
-            pendingMarkerLinkId = nil
-            showInfo("That marker is no longer available.", title: "Marker Unavailable")
+        } catch APIError.serverError(let statusCode, _) {
+            if let copy = MarkerDeepLinkFailureCopy.terminalFailure(forHTTPStatus: statusCode) {
+                // Access-denied and removed markers are terminal for this link.
+                // Clear it so auth/state changes do not retry the same request forever.
+                pendingMarkerLinkId = nil
+                showInfo(copy.message, title: copy.title)
+            } else {
+                // Transient server errors stay pending for a later retry.
+                print("⚠️ Failed to open shared marker \(markerId): HTTP \(statusCode)")
+            }
         } catch {
             // Leave it pending so a later auth/verify pass can retry.
             print("⚠️ Failed to open shared marker \(markerId): \(error)")

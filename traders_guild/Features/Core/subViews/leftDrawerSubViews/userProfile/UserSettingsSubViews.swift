@@ -31,8 +31,6 @@ enum SettingsDestination: Hashable {
     case contactSupport
     case rateApp
     case termsPrivacy
-    case termsOfService
-    case privacyPolicy
     case communityGuidelines
     case legalInformation
     case about
@@ -2114,6 +2112,8 @@ struct SupportMessageEditorCard: View {
 // ================================================================================================
 
 struct TermsPrivacyView: View {
+    @Environment(\.openURL) private var openURL
+
     let onBack: () -> Void
     let onSelectDocument: (SettingsDestination) -> Void
 
@@ -2130,19 +2130,19 @@ struct TermsPrivacyView: View {
                         SettingsButtonRow(
                             icon: "doc.text.fill",
                             title: "Terms of Service",
-                            subtitle: "Review our terms and conditions",
+                            subtitle: "View the current terms on tradersguild.co",
                             iconColor: .blue
                         ) {
-                            onSelectDocument(.termsOfService)
+                            openURL(TradersGuildLegalURL.terms)
                         }
 
                         SettingsButtonRow(
                             icon: "hand.raised.fill",
                             title: "Privacy Policy",
-                            subtitle: "Learn how we protect your data",
+                            subtitle: "View the current policy on tradersguild.co",
                             iconColor: .purple
                         ) {
-                            onSelectDocument(.privacyPolicy)
+                            openURL(TradersGuildLegalURL.privacy)
                         }
 
                         SettingsButtonRow(

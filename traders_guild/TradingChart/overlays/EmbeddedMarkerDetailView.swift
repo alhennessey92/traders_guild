@@ -128,6 +128,7 @@ struct EmbeddedMarkerDetailView: View {
     }
 
     private func handleShare() {
+        guard MarkerShare.canShareWithinGuild(visibility: marker.visibility) else { return }
         HapticFeedback.medium.trigger()
         showShareSheet = true
     }
