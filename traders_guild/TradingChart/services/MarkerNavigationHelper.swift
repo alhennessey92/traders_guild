@@ -154,11 +154,12 @@ class MarkerNavigationHelper {
     ///   - marker: The marker to navigate to
     ///   - chartWidth: Current chart width (uses screen width if nil)
     ///   - completion: Called after navigation completes
+    @discardableResult
     func navigateToMarker(
         _ marker: RLTopMarkerDTO,
         chartWidth: CGFloat? = nil,
         completion: (() -> Void)? = nil
-    ) {
+    ) -> Bool {
         navigateToMarker(
             MarkerNavigationTarget(topMarker: marker),
             chartWidth: chartWidth,
@@ -167,25 +168,26 @@ class MarkerNavigationHelper {
         )
     }
 
+    @discardableResult
     func navigateToMarker(
         _ target: MarkerNavigationTarget,
         chartWidth: CGFloat? = nil,
         resolvedSymbol: RLTradingSymbolDTO? = nil,
         completion: (() -> Void)? = nil
-    ) {
+    ) -> Bool {
         print("🎯 === MARKER NAVIGATION START ===")
         print("🎯 Target: \(target.symbolTicker ?? target.symbolId.uuidString) | Timeframe: \(target.timeframeRaw) | Timestamp: \(target.candleTimestamp)")
         
         guard let chartViewModel = chartViewModel else {
             print("❌ MarkerNavigationHelper: chartViewModel is nil")
             completion?()
-            return
+            return false
         }
         
         guard let gestureState = gestureState else {
             print("❌ MarkerNavigationHelper: gestureState is nil")
             completion?()
-            return
+            return false
         }
         
         // Use provided width or fall back to screen width
@@ -208,7 +210,7 @@ class MarkerNavigationHelper {
                 phase: .failed("Symbol is not available")
             )
             completion?()
-            return
+            return false
         }
 
         let needsSymbolChange = chartViewModel.currentSymbol?.id != target.symbolId
@@ -368,6 +370,7 @@ class MarkerNavigationHelper {
             }
             completion?()
         }
+        return true
     }
 
     /// Compute target candle index from the marker timestamp against the CURRENT candle array

@@ -225,6 +225,8 @@ class RLAppState: ObservableObject {
     @Published var pendingGuildSlug: String?
     /// Marker id captured from a /marker/{id} deep link, opened once authenticated.
     @Published var pendingMarkerLinkId: UUID?
+    /// Resolved marker navigation retained until a ready MainView explicitly accepts it.
+    @Published private(set) var pendingMarkerNavigationRequest: MarkerDeepLinkNavigationRequest?
     /// Guild the user picked during signup but couldn't join yet because their
     /// email wasn't verified. Joined right after the email verification step.
     @Published var pendingOnboardingGuildId: UUID?
@@ -252,6 +254,10 @@ class RLAppState: ObservableObject {
     private static var pendingGuildSlugStorageKey: String {
         "pending_guild_slug.\(AppConfig.sessionStorageNamespace)"
     }
+    private static var pendingMarkerLinkIdStorageKey: String {
+        "pending_marker_link_id.\(AppConfig.sessionStorageNamespace)"
+    }
+    private var isConsumingPendingMarkerLink = false
     private static var pendingOnboardingGuildIdStorageKey: String {
         "pending_onboarding_guild_id.\(AppConfig.sessionStorageNamespace)"
     }
@@ -289,6 +295,9 @@ class RLAppState: ObservableObject {
         print("🌐 App environment: mode=\(AppConfig.apiRoutingMode.rawValue) sessionNamespace=\(AppConfig.sessionStorageNamespace)")
         pendingReferralInviteCode = UserDefaults.standard.string(forKey: Self.pendingReferralInviteCodeStorageKey)
         pendingGuildSlug = UserDefaults.standard.string(forKey: Self.pendingGuildSlugStorageKey)
+        if let storedMarkerId = UserDefaults.standard.string(forKey: Self.pendingMarkerLinkIdStorageKey) {
+            pendingMarkerLinkId = UUID(uuidString: storedMarkerId)
+        }
         if let storedOnboardingGuild = UserDefaults.standard.string(forKey: Self.pendingOnboardingGuildIdStorageKey) {
             pendingOnboardingGuildId = UUID(uuidString: storedOnboardingGuild)
         }
@@ -1082,18 +1091,63 @@ class RLAppState: ObservableObject {
 
     func setPendingMarkerLinkId(_ markerId: UUID) {
         pendingMarkerLinkId = markerId
+        pendingMarkerNavigationRequest = nil
+        UserDefaults.standard.set(markerId.uuidString, forKey: Self.pendingMarkerLinkIdStorageKey)
     }
 
-    /// Resolve a shared marker deep link once authenticated: fetch the marker,
-    /// build the navigation payload, and post `.openSharedMarker` — the same
-    /// chain push-notification marker routing uses. Mirrors the guild-slug consume.
+    /// Resolve a shared marker link only after cold-start restoration has selected a guild.
+    /// The resolved request remains durable in app state until MainView acknowledges it.
     func consumePendingMarkerLinkIfPossible() async {
         guard let markerId = pendingMarkerLinkId,
-              isAuthenticated,
-              currentUser != nil else { return }
+              pendingMarkerNavigationRequest == nil,
+              !isConsumingPendingMarkerLink,
+              MarkerDeepLinkRoutingPolicy.canResolve(
+                isSessionRestored: isSessionRestored,
+                isAuthenticated: isAuthenticated,
+                isCurrentUserVerified: currentUser?.isVerified == true,
+                hasCurrentGuild: currentGuild != nil
+              ) else { return }
+
+        isConsumingPendingMarkerLink = true
+        defer {
+            isConsumingPendingMarkerLink = false
+            if let replacementMarkerId = pendingMarkerLinkId,
+               replacementMarkerId != markerId {
+                Task { await consumePendingMarkerLinkIfPossible() }
+            }
+        }
 
         do {
             let marker = try await realApi.getMarker(markerId: markerId)
+
+            // A newer link may have arrived while this request was in flight. Never let the
+            // older response replace the newer pending destination.
+            guard pendingMarkerLinkId == markerId else {
+                Task { await consumePendingMarkerLinkIfPossible() }
+                return
+            }
+
+            var targetGuild = userGuilds.first(where: { $0.guild.id == marker.guildId })
+            if targetGuild == nil {
+                try await fetchUserGuilds()
+                targetGuild = userGuilds.first(where: { $0.guild.id == marker.guildId })
+            }
+
+            guard let targetGuild else {
+                clearPendingMarkerDeepLink()
+                showInfo(
+                    "This marker belongs to a guild that is no longer available to your account.",
+                    title: "Marker Unavailable"
+                )
+                return
+            }
+
+            if currentGuild?.id != marker.guildId {
+                // Prevent the request from being consumed against the previous guild's chart.
+                resetChartReadyState()
+                selectGuild(targetGuild, showTransition: false)
+            }
+
             let payload = MarkerSharePayloadV1(
                 markerId: marker.id,
                 symbolId: marker.symbolId,
@@ -1103,17 +1157,19 @@ class RLAppState: ObservableObject {
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity
             )
-            pendingMarkerLinkId = nil
-            NotificationCenter.default.post(
-                name: .openSharedMarker,
-                object: nil,
-                userInfo: payload.notificationUserInfo
+            stagePendingMarkerNavigation(
+                markerId: marker.id,
+                guildId: marker.guildId,
+                payload: payload
             )
+        } catch is CancellationError {
+            // SwiftUI may cancel an obsolete task when a newer link replaces it. The defer
+            // above schedules the replacement after releasing the single-consumer guard.
         } catch APIError.serverError(let statusCode, _) {
             if let copy = MarkerDeepLinkFailureCopy.terminalFailure(forHTTPStatus: statusCode) {
                 // Access-denied and removed markers are terminal for this link.
                 // Clear it so auth/state changes do not retry the same request forever.
-                pendingMarkerLinkId = nil
+                clearPendingMarkerDeepLink()
                 showInfo(copy.message, title: copy.title)
             } else {
                 // Transient server errors stay pending for a later retry.
@@ -1123,6 +1179,36 @@ class RLAppState: ObservableObject {
             // Leave it pending so a later auth/verify pass can retry.
             print("⚠️ Failed to open shared marker \(markerId): \(error)")
         }
+    }
+
+    /// Called by MainView only after the matching, guild-correct chart has accepted navigation.
+    func acknowledgePendingMarkerNavigation(requestId: UUID) {
+        guard pendingMarkerNavigationRequest?.id == requestId else { return }
+        clearPendingMarkerDeepLink()
+    }
+
+    /// Separated from network resolution so the retained handoff and acknowledgement semantics
+    /// can be regression-tested without contacting production services.
+    @discardableResult
+    func stagePendingMarkerNavigation(
+        markerId: UUID,
+        guildId: UUID,
+        payload: MarkerSharePayloadV1
+    ) -> MarkerDeepLinkNavigationRequest? {
+        guard pendingMarkerLinkId == markerId, payload.markerId == markerId else { return nil }
+        let request = MarkerDeepLinkNavigationRequest(
+            markerId: markerId,
+            guildId: guildId,
+            payload: payload
+        )
+        pendingMarkerNavigationRequest = request
+        return request
+    }
+
+    private func clearPendingMarkerDeepLink() {
+        pendingMarkerLinkId = nil
+        pendingMarkerNavigationRequest = nil
+        UserDefaults.standard.removeObject(forKey: Self.pendingMarkerLinkIdStorageKey)
     }
 
     func setPendingGuildSlug(_ slug: String?) {

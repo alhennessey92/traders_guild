@@ -147,6 +147,52 @@ enum AppDeepLinkRouter {
     }
 }
 
+/// Durable, in-memory handoff between resolving an authenticated marker link and the
+/// chart accepting it. Unlike a one-shot NotificationCenter post, this remains available
+/// while MainView mounts and its initial chart load completes.
+struct MarkerDeepLinkNavigationRequest: Identifiable, Equatable {
+    let id: UUID
+    let markerId: UUID
+    let guildId: UUID
+    let payload: MarkerSharePayloadV1
+
+    init(
+        id: UUID = UUID(),
+        markerId: UUID,
+        guildId: UUID,
+        payload: MarkerSharePayloadV1
+    ) {
+        self.id = id
+        self.markerId = markerId
+        self.guildId = guildId
+        self.payload = payload
+    }
+}
+
+enum MarkerDeepLinkRoutingPolicy {
+    static func canResolve(
+        isSessionRestored: Bool,
+        isAuthenticated: Bool,
+        isCurrentUserVerified: Bool,
+        hasCurrentGuild: Bool
+    ) -> Bool {
+        isSessionRestored && isAuthenticated && isCurrentUserVerified && hasCurrentGuild
+    }
+
+    static func canNavigate(
+        requestGuildId: UUID,
+        currentGuildId: UUID?,
+        isChartReady: Bool,
+        isTransitionVisible: Bool,
+        isInteractionUnlocked: Bool
+    ) -> Bool {
+        isChartReady
+            && !isTransitionVisible
+            && isInteractionUnlocked
+            && currentGuildId == requestGuildId
+    }
+}
+
 private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self

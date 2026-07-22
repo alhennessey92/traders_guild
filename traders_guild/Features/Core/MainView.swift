@@ -37,6 +37,14 @@ private enum MarkerAuthorProfileRoute: Identifiable {
     }
 }
 
+private struct PendingMarkerNavigationConsumptionKey: Equatable {
+    let requestId: UUID?
+    let currentGuildId: UUID?
+    let isChartReady: Bool
+    let isTransitionVisible: Bool
+    let isInteractionUnlocked: Bool
+}
+
 // MARK: - Main View
 struct MainView: View {
     // MARK: - Properties
@@ -122,6 +130,16 @@ struct MainView: View {
             return viewedMarker.marker.candleTimestamp
         }
         return placementState.anchorDraft?.payload.anchorTime ?? Date()
+    }
+
+    private var pendingMarkerNavigationConsumptionKey: PendingMarkerNavigationConsumptionKey {
+        PendingMarkerNavigationConsumptionKey(
+            requestId: rlAppState.pendingMarkerNavigationRequest?.id,
+            currentGuildId: rlAppState.currentGuild?.id,
+            isChartReady: rlAppState.isChartReady,
+            isTransitionVisible: rlAppState.showingTransition,
+            isInteractionUnlocked: !rlAppState.shouldPresentBiometricAppLock
+        )
     }
 
     /// Intent color for timeframe panels — uses viewed marker or placement intent
@@ -907,6 +925,9 @@ struct MainView: View {
                 await handleOpenSharedMarker(notification.userInfo)
             }
         }
+        .task(id: pendingMarkerNavigationConsumptionKey) {
+            await consumePendingMarkerNavigationIfPossible()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .pushNotificationTapped)) { notification in
             Task {
                 await handlePendingPushNotificationTapIfNeeded()
@@ -1587,8 +1608,34 @@ struct MainView: View {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
+    private func consumePendingMarkerNavigationIfPossible() async {
+        guard let request = rlAppState.pendingMarkerNavigationRequest,
+              MarkerDeepLinkRoutingPolicy.canNavigate(
+                requestGuildId: request.guildId,
+                currentGuildId: rlAppState.currentGuild?.id,
+                isChartReady: rlAppState.isChartReady,
+                isTransitionVisible: rlAppState.showingTransition,
+                isInteractionUnlocked: !rlAppState.shouldPresentBiometricAppLock
+              ) else { return }
+
+        let accepted = await openSharedMarker(
+            request.payload,
+            expectedRequestId: request.id
+        )
+        guard accepted else { return }
+        rlAppState.acknowledgePendingMarkerNavigation(requestId: request.id)
+    }
+
     private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
         guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
+        _ = await openSharedMarker(payload)
+    }
+
+    @discardableResult
+    private func openSharedMarker(
+        _ payload: MarkerSharePayloadV1,
+        expectedRequestId: UUID? = nil
+    ) async -> Bool {
 
         dismissKeyboard()
         withAnimation(AnimationConstants.standard) {
@@ -1608,7 +1655,7 @@ struct MainView: View {
                 resolvedSymbol = try await rlAppState.realApi.getSymbol(symbolId: payload.symbolId)
             } catch {
                 rlAppState.showError(error, title: "Unable to Open Marker", style: .toast)
-                return
+                return false
             }
         }
 
@@ -1616,7 +1663,11 @@ struct MainView: View {
             chartViewModel: chartViewModel,
             gestureState: chartGestureState
         )
-        helper.navigateToMarker(
+        if let expectedRequestId,
+           rlAppState.pendingMarkerNavigationRequest?.id != expectedRequestId {
+            return false
+        }
+        return helper.navigateToMarker(
             MarkerNavigationTarget(sharedPayload: payload),
             resolvedSymbol: resolvedSymbol
         )

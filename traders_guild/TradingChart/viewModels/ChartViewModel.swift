@@ -24,6 +24,7 @@ class ChartViewModel: ObservableObject {
     private var lastRealtimeResyncAt: Date = .distantPast
     private var stalenessWatchdogTask: Task<Void, Never>?
     private var historicalPreloadTask: Task<Void, Never>?
+    private var markerNavigationTimeoutTask: Task<Void, Never>?
     private var lastRealtimeMarketEventAt: Date = .distantPast
 
     /// Drives automatic recovery from the empty / "Market Data Unavailable" state
@@ -171,6 +172,7 @@ class ChartViewModel: ObservableObject {
     deinit {
         stalenessWatchdogTask?.cancel()
         historicalPreloadTask?.cancel()
+        markerNavigationTimeoutTask?.cancel()
     }
     
     // MARK: - Public Methods
@@ -446,9 +448,18 @@ class ChartViewModel: ObservableObject {
 
     @discardableResult
     func beginMarkerNavigation(_ target: MarkerNavigationTarget) -> UUID {
+        markerNavigationTimeoutTask?.cancel()
         let session = MarkerNavigationSession(target: target)
         markerNavigationSession = session
         isNavigatingToMarker = true
+        markerNavigationTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(20))
+            } catch {
+                return
+            }
+            self?.expireMarkerNavigationIfActive(sessionId: session.id)
+        }
         return session.id
     }
 
@@ -464,6 +475,8 @@ class ChartViewModel: ObservableObject {
 
     func finishMarkerNavigation(sessionId: UUID, phase: MarkerNavigationPhase) {
         guard var session = markerNavigationSession, session.id == sessionId else { return }
+        markerNavigationTimeoutTask?.cancel()
+        markerNavigationTimeoutTask = nil
         session.phase = phase
         markerNavigationSession = session
         isNavigatingToMarker = false
@@ -480,6 +493,16 @@ class ChartViewModel: ObservableObject {
             guard self?.markerNavigationSession?.id == sessionId else { return }
             self?.markerNavigationSession = nil
         }
+    }
+
+    /// Fail-safe for a suspended request or lifecycle race. The session-id guard ensures
+    /// an old watchdog can never terminate a newer marker navigation.
+    func expireMarkerNavigationIfActive(sessionId: UUID) {
+        guard isMarkerNavigationSessionActive(sessionId) else { return }
+        finishMarkerNavigation(
+            sessionId: sessionId,
+            phase: .failed("Marker loading timed out")
+        )
     }
 
     /// Change symbol and timeframe as a single marker-navigation operation. This avoids the
