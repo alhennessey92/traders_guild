@@ -115,6 +115,12 @@ struct SignupGuildView: View {
 
                                 GuildSelectionRow(guild: target, isSelected: true, isInteractive: false) {}
 
+                                if !targetRequiresApproval {
+                                    Text("We'll add you as soon as your email is verified — that's the next step.")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.greyText)
+                                }
+
                                 if targetRequiresApproval {
                                     Text("This guild approves members. We'll send your request once your email is verified — until then you're in the starter guild below.")
                                         .font(.caption)
@@ -294,6 +300,10 @@ struct SignupGuildView: View {
     private var actionTitle: String {
         if isContinuing { return "Continuing..." }
         if isRetryAssignmentState { return "Retry assignment" }
+        // A referred user is headed somewhere specific, and the join happens
+        // after email verification — so naming the starter guild here read as
+        // "Finish with System 1" directly under "You'll join Alpha Traders".
+        if targetGuild != nil { return "Continue" }
         if shouldShowAssignedFallback, let selectedGuild {
             return "Finish with \(selectedGuild.name)"
         }

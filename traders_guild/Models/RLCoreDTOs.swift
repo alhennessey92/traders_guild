@@ -2972,3 +2972,21 @@ enum RLOnboardingState: String, Codable, Equatable {
     case optionalDetailsCompleted = "optional_details_completed"
     case complete = "onboarding_complete"
 }
+
+/// A join request from the requester's own point of view.
+///
+/// Carries the guild inline so a "pending" row renders without a round-trip
+/// each. Backend: `GuildMyJoinRequestResponse`.
+struct RLGuildMyJoinRequestDTO: Codable, Identifiable, Equatable {
+    let id: UUID
+    let guild: RLGuildDTO
+    /// "pending" | "approved" | "declined"
+    let status: String
+    let note: String?
+    let createdAt: Date
+    let reviewedAt: Date?
+}
+
+struct RLGuildMyJoinRequestsListDTO: Codable, Equatable {
+    let requests: [RLGuildMyJoinRequestDTO]
+}

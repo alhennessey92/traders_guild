@@ -281,6 +281,50 @@ struct SwitchGuildView: View {
             
             Divider()
 
+            if !rlAppState.pendingJoinRequests.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Awaiting approval")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.greyText)
+                    // Not tappable: there is nothing to do but wait, and styling
+                    // these like the joined rows would invite a dead tap.
+                    ForEach(rlAppState.pendingJoinRequests) { request in
+                        HStack(spacing: 12) {
+                            GuildCrestView(guild: request.guild, size: 42)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(request.guild.name)
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.85))
+                                    .lineLimit(1)
+                                Text("An admin is reviewing your request")
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.greyText)
+                            }
+                            Spacer()
+                            Text("PENDING")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(AppColors.statusWarning)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(AppColors.statusWarning.opacity(0.16))
+                                )
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
+                                )
+                        )
+                    }
+                }
+                .padding(.horizontal, 25)
+                .padding(.bottom, 10)
+            }
+
             HStack(spacing: 8) {
                 DrawerActionButton(
                     title: "Join a Guild",
@@ -312,6 +356,7 @@ struct SwitchGuildView: View {
             .background(AppColors.sheetBackground)
         }
         .task {
+            await rlAppState.refreshMyJoinRequests()
             await loadUserGuilds()
         }
         .fullScreenCover(isPresented: $showJoinGuild) {
@@ -1716,6 +1761,11 @@ struct JoinGuildFormView: View {
                 note: message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message,
                 answers: answerPayload
             )
+            // Submitting used to dismiss silently, so it read as though nothing
+            // had happened. Refresh first, so the pending row is already there
+            // when the sheet closes.
+            await rlAppState.refreshMyJoinRequests()
+            rlAppState.showSuccess("Request sent to \(guild.name) — an admin will review it.")
             onComplete()
             dismiss()
         } catch is CancellationError {

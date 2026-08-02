@@ -228,6 +228,10 @@ class RLAppState: ObservableObject {
     /// so the app presents its application form rather than dead-ending with
     /// "ask for an invite link". Cleared once the flow is dismissed.
     @Published var pendingGuildRequestGuild: RLGuildDTO?
+
+    /// Guilds applied to and still awaiting a decision. Server-backed, so it
+    /// survives a relaunch rather than living only in the current session.
+    @Published var pendingJoinRequests: [RLGuildMyJoinRequestDTO] = []
     /// Marker id captured from a /marker/{id} deep link, opened once authenticated.
     @Published var pendingMarkerLinkId: UUID?
     /// Resolved marker navigation retained until a ready MainView explicitly accepts it.
@@ -1272,6 +1276,10 @@ class RLAppState: ObservableObject {
             if guild.isOpen {
                 _ = try await joinGuild(guildId: guild.id, showTransition: false)
                 clearPending()
+                // Closes the loop signup opens with "You'll join X". The join
+                // happens after email verification, so without this it lands
+                // invisibly and the promise looks unkept.
+                showSuccess("You've joined \(guild.name)")
                 return true
             }
 
@@ -2070,6 +2078,13 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Update Questions", style: .toast)
             throw error
         }
+    }
+
+    /// Refresh the caller's outstanding join requests. Best-effort: a failure
+    /// leaves the previous list rather than blanking the section.
+    func refreshMyJoinRequests() async {
+        guard let list = try? await realApi.fetchMyJoinRequests() else { return }
+        pendingJoinRequests = list.requests
     }
 
     func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {

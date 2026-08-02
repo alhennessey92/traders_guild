@@ -1020,6 +1020,19 @@ extension RealAPIService {
         )
     }
 
+    /// The caller's own join requests.
+    ///
+    /// `GET /guilds/me/join-requests`. The per-guild list is moderator-only, so
+    /// this is the only way an applicant can see a request is still open.
+    func fetchMyJoinRequests(status: String = "pending") async throws -> RLGuildMyJoinRequestsListDTO {
+        try await request(
+            "/guilds/me/join-requests?status=\(status)",
+            service: .core,
+            method: "GET",
+            auth: true
+        )
+    }
+
     func createGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
         let body = RLGuildJoinRequestCreateRequestDTO(note: note, answers: answers)
         return try await request(
