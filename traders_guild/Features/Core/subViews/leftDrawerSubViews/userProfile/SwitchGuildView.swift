@@ -1741,14 +1741,8 @@ struct CreateGuildView: View {
 
     @EnvironmentObject var rlAppState: RLAppState
     @State private var guildName: String = ""
-    @State private var guildDescription: String = ""
     @State private var isOpen: Bool = true
     @State private var isCreating: Bool = false
-    @State private var selectedLanguageCode: String = ""
-    @State private var selectedCountryCode: String = ""
-    @State private var initialAnnouncementTitle: String = ""
-    @State private var initialAnnouncementContent: String = ""
-    @State private var initialAnnouncementImportant: Bool = true
     @State private var joinQuestions: [String] = [""]
     @State private var visibleSections: Set<Int> = []
     @State private var selectedCrestSymbol: String = GuildCrestCatalog.defaultSymbolKey
@@ -1767,33 +1761,31 @@ struct CreateGuildView: View {
             }
     }
 
+    /// The name the server will actually see. The UI renders a trailing
+    /// " Guild" itself, so a typed one is stripped before submit — which means
+    /// validating the raw text would let "A Guild" through to a server
+    /// rejection it can't explain.
+    private var normalizedGuildName: String {
+        var trimmed = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.lowercased().hasSuffix(" guild") {
+            trimmed = String(trimmed.dropLast(" guild".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return trimmed
+    }
+
+    /// Creation asks for a name and an access choice. Description, locale and
+    /// the welcome post are offered afterwards by the invite hub's checklist.
     private var canCreateGuild: Bool {
-        let name = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let announcementTitle = initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let announcementContent = initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !name.isEmpty
-            && !announcementTitle.isEmpty
-            && !announcementContent.isEmpty
-            && !selectedLanguageCode.isEmpty
-            && !selectedCountryCode.isEmpty
+        // 3 is the backend's `GuildCreateRequest.name` minimum.
+        normalizedGuildName.count >= 3
+            && normalizedGuildName.count <= 50
             && (isOpen || !normalizedJoinQuestions.isEmpty)
     }
 
-    private var selectedLanguageLabel: String {
-        selectedLanguageCode.isEmpty ? "Select language" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode)
-    }
 
-    private var selectedCountryLabel: String {
-        selectedCountryCode.isEmpty ? "Select location" : LocaleOptionCatalog.countryDisplay(for: selectedCountryCode)
-    }
 
-    private var selectedLanguageValue: String? {
-        selectedLanguageCode.isEmpty ? nil : selectedLanguageCode
-    }
 
-    private var selectedCountryValue: String? {
-        selectedCountryCode.isEmpty ? nil : selectedCountryCode
-    }
 
 
     // Section card helper
@@ -2051,73 +2043,6 @@ struct CreateGuildView: View {
                     .offset(y: visibleSections.contains(1) ? 0 : 12)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
 
-                    // Details card
-                    sectionCard {
-                        Text("Details")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Description (optional)")
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-
-                            TextEditor(text: $guildDescription)
-                                .frame(minHeight: 80)
-                                .padding(8)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .scrollContentBackground(.hidden)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Language")
-
-                            Menu {
-                                Button("All languages") {
-                                    selectedLanguageCode = LocaleOptionCatalog.allPreferenceCode
-                                }
-                                Divider()
-                                ForEach(LocaleOptionCatalog.languages) { option in
-                                    Button(option.label) {
-                                        selectedLanguageCode = option.code
-                                    }
-                                }
-                            } label: {
-                                dropdownFieldLabel(selectedLanguageLabel)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Location")
-
-                            Menu {
-                                Button("🌐 Global") {
-                                    selectedCountryCode = LocaleOptionCatalog.allPreferenceCode
-                                }
-                                Divider()
-                                ForEach(LocaleOptionCatalog.countries) { option in
-                                    Button(LocaleOptionCatalog.countryDisplay(for: option.code)) {
-                                        selectedCountryCode = option.code
-                                    }
-                                }
-                            } label: {
-                                dropdownFieldLabel(selectedCountryLabel)
-                            }
-                        }
-                    }
-                    .opacity(visibleSections.contains(2) ? 1 : 0)
-                    .offset(y: visibleSections.contains(2) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
-
                     // Access & Moderation card
                     sectionCard {
                         Text("Access & Moderation")
@@ -2222,79 +2147,21 @@ struct CreateGuildView: View {
                     .offset(y: visibleSections.contains(3) ? 0 : 12)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
 
-                    // Initial announcement card
-                    sectionCard {
-                        Text("Initial Announcement")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-
-                        Text("This announcement is required and will be posted immediately after guild creation.")
-                            .font(.caption)
-                            .foregroundColor(AppColors.greyText)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Title")
-
-                            TextField("Welcome to the guild", text: $initialAnnouncementTitle)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.sentences)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            requiredFieldLabel("Content")
-
-                            TextEditor(text: $initialAnnouncementContent)
-                                .frame(minHeight: 90)
-                                .padding(8)
-                                .font(.body)
-                                .foregroundColor(AppColors.whiteText)
-                                .scrollContentBackground(.hidden)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.unhighlightedTextBoxBackground.opacity(0.88))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
-                                        )
-                                )
-                        }
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Mark as important")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(AppColors.whiteText)
-                                Text("Highlights this post for new members.")
-                                    .font(.caption)
-                                    .foregroundColor(AppColors.greyText)
-                            }
-                            Spacer()
-                            Toggle("", isOn: $initialAnnouncementImportant)
-                                .tint(AppColors.guildReputationAccent)
-                        }
-                    }
-                    .opacity(visibleSections.contains(4) ? 1 : 0)
-                    .offset(y: visibleSections.contains(4) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: visibleSections.contains(4))
+                    // Sets expectations for the checklist that appears straight
+                    // after, so dropping the old required fields doesn't read as
+                    // losing them.
+                    Text("You can add a crest, description and welcome message right after — we'll walk you through it.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                        .padding(.horizontal, 4)
+                        .opacity(visibleSections.contains(3) ? 1 : 0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 200)
                     .onAppear {
-                        for i in 0...4 {
+                        for i in 0...3 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                                 visibleSections.insert(i)
                             }
@@ -2363,14 +2230,7 @@ struct CreateGuildView: View {
         isCreating = true
         defer { isCreating = false }
 
-        // Defensive: strip a trailing " Guild" the user may have typed manually so
-        // the backend doesn't end up with "MyName Guild Guild" once display code
-        // appends the suffix again.
-        var trimmedName = guildName.trimmingCharacters(in: .whitespacesAndNewlines)
-        while trimmedName.lowercased().hasSuffix(" guild") {
-            trimmedName = String(trimmedName.dropLast(" guild".count))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        let trimmedName = normalizedGuildName
         guard !trimmedName.isEmpty else {
             rlAppState.showError(
                 title: "Guild Name Required",
@@ -2383,15 +2243,14 @@ struct CreateGuildView: View {
         do {
             let _ = try await rlAppState.createGuild(
                 name: trimmedName,
-                description: guildDescription.isEmpty ? nil : guildDescription,
+                // Everything below comes later, via the checklist. Locale is
+                // omitted entirely: the backend falls back to the owner's
+                // profile, then to defaults.
+                description: nil,
                 isOpen: isOpen,
-                language: selectedLanguageValue,
-                location: selectedCountryValue,
+                language: nil,
+                location: nil,
                 joinQuestions: isOpen ? [] : normalizedJoinQuestions,
-                initialAnnouncementTitle: initialAnnouncementTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-                initialAnnouncementContent: initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines),
-                initialAnnouncementPreview: String(initialAnnouncementContent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(180)),
-                initialAnnouncementIsImportant: initialAnnouncementImportant,
                 crestSymbol: selectedCrestSymbol,
                 crestColor: selectedCrestColor
             )

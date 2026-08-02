@@ -1270,9 +1270,15 @@ class RLAppState: ObservableObject {
                 return true
             }
 
-            // Private guild — can't open-join from a public handle.
+            // Private guild — a handle can't open-join one. Cleared because
+            // retrying would only re-show this on every launch.
+            //
+            // TODO(1.1.x): route to the application form instead. The form lives
+            // inside SwitchGuildView's JoinGuildFlowView with no app-level entry
+            // point, so it needs a presentation signal Android didn't (its
+            // equivalent is a top-level route). Android already does this.
             clearPending()
-            showInfo("\(guild.name) is invite-only. Ask the guild for an invite link to join.")
+            showInfo("\(guild.name) needs approval to join. Open Switch Guild › Join a Guild, search for it, and send a request.")
             return false
         } catch APIError.unauthorized {
             return false
@@ -1903,8 +1909,8 @@ class RLAppState: ObservableObject {
         language: String? = nil,
         location: String? = nil,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
-        initialAnnouncementTitle: String,
-        initialAnnouncementContent: String,
+        initialAnnouncementTitle: String? = nil,
+        initialAnnouncementContent: String? = nil,
         initialAnnouncementPreview: String? = nil,
         initialAnnouncementIsImportant: Bool = true,
         crestSymbol: String? = nil,
@@ -2604,6 +2610,12 @@ class RLAppState: ObservableObject {
     }
 
     /// Resolve a shareable guild invite/referral code
+    /// Resolve a guild by its vanity handle. Used by the signup step to show
+    /// which guild a link or typed handle points at before the join happens.
+    func resolveGuildBySlug(slug: String) async throws -> RLGuildDTO {
+        try await realApi.resolveGuildBySlug(slug: slug)
+    }
+
     func resolveGuildInviteLink(code: String) async throws -> RLGuildInviteLinkResolveDTO {
         do {
             return try await realApi.resolveGuildInviteLink(code: code)

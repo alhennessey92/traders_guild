@@ -671,8 +671,11 @@ struct RLCreateGuildRequestDTO: Codable {
     let language: String?
     let location: String?
     let joinQuestions: [RLGuildJoinQuestionInputDTO]
-    let initialAnnouncementTitle: String
-    let initialAnnouncementContent: String
+    // Optional: creation asks for a name only, and the welcome post is
+    // offered afterwards via the invite hub's setup checklist. The backend
+    // accepts the pair as absent but rejects half of one.
+    let initialAnnouncementTitle: String?
+    let initialAnnouncementContent: String?
     let initialAnnouncementPreview: String?
     let initialAnnouncementIsImportant: Bool
     let crestSymbol: String?         // backend: crest_symbol (neutral key)

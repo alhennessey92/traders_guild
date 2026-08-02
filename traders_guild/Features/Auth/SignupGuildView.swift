@@ -26,6 +26,14 @@ struct SignupGuildView: View {
     @State private var hasLoadedGuilds: Bool = false
     @State private var guildMode: SignupGuildMode = .openSelectionMode
     @State private var assignmentErrorMessage: String?
+    /// A guild a link, or a handle the user typed, pointed them at.
+    @State private var targetGuild: RLGuildDTO?
+    /// True when [targetGuild] is invite-only, so this is a request an admin
+    /// must approve rather than a join.
+    @State private var targetRequiresApproval = false
+    @State private var handleInput: String = ""
+    @State private var isResolvingHandle = false
+    @State private var handleErrorMessage: String?
 
     var body: some View {
         ZStack {
@@ -95,6 +103,44 @@ struct SignupGuildView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.top, 60)
+                        } else if let target = targetGuild {
+                            // Someone shared this guild — lead with it, so the
+                            // first thing they see is the community they were
+                            // actually invited to.
+                            VStack(spacing: 14) {
+                                Text(targetRequiresApproval ? "You'll request to join:" : "You'll join:")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(AppColors.greyText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                GuildSelectionRow(guild: target, isSelected: true, isInteractive: false) {}
+
+                                if targetRequiresApproval {
+                                    Text("This guild approves members. We'll send your request once your email is verified — until then you're in the starter guild below.")
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.greyText)
+
+                                    if let assignedGuild = selectedGuild {
+                                        GuildSelectionRow(
+                                            guild: assignedGuild,
+                                            isSelected: false,
+                                            isInteractive: false
+                                        ) {}
+                                    }
+                                }
+
+                                Button("Choose a different guild") {
+                                    rlAppState.setPendingGuildSlug(nil)
+                                    rlAppState.setPendingReferralInviteCode(nil)
+                                    targetGuild = nil
+                                    targetRequiresApproval = false
+                                    Task { await prepareAssignedFallbackGuild() }
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.guildReputationAccent)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 30)
                         } else if shouldShowAssignedFallback {
                             VStack(spacing: 14) {
                                 if let assignedGuild = selectedGuild {
@@ -110,6 +156,8 @@ struct SignupGuildView: View {
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 20)
+
+                                handleEntry
                             }
                             .padding(.horizontal, 20)
                             .padding(.top, 30)
@@ -263,6 +311,62 @@ struct SignupGuildView: View {
         availableGuilds.isEmpty && guildMode == .assignedFallbackMode && selectedGuild != nil
     }
 
+    /// "Been given a guild to join?" — accepts a handle, an invite code, or any
+    /// link form.
+    ///
+    /// On Android a tapped link usually arrives on its own, via the deep link or
+    /// the Play install referrer. iOS has no referrer equivalent, so this is the
+    /// only route for someone who installed from the App Store after seeing a
+    /// handle rather than by tapping the link.
+    private var handleEntry: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Been given a guild to join?")
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(AppColors.greyText)
+
+            HStack(spacing: 8) {
+                TextField("Guild handle or invite code", text: $handleInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(AppColors.whiteText.opacity(0.05))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
+                            )
+                    )
+                    .foregroundColor(AppColors.whiteText)
+                    .onSubmit { Task { await applyHandleInput() } }
+
+                Button {
+                    Task { await applyHandleInput() }
+                } label: {
+                    if isResolvingHandle {
+                        ProgressView().tint(AppColors.onAccentForeground)
+                    } else {
+                        Text("Find guild").font(.subheadline.weight(.semibold))
+                    }
+                }
+                .disabled(handleInput.trimmingCharacters(in: .whitespaces).isEmpty || isResolvingHandle)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 12).fill(AppColors.guildReputationAccent))
+                .foregroundColor(AppColors.onAccentForeground)
+            }
+
+            if let handleErrorMessage {
+                Text(handleErrorMessage)
+                    .font(.caption)
+                    .foregroundColor(AppColors.statusNegative)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
     private var isRetryAssignmentState: Bool {
         availableGuilds.isEmpty && assignmentErrorMessage != nil
     }
@@ -275,11 +379,83 @@ struct SignupGuildView: View {
         isLoadingGuilds = true
         defer { isLoadingGuilds = false }
 
-        // New users always start in a system (onboarding) guild — a stable home
-        // with the tutorial. They browse/join real guilds from inside the app
-        // afterwards (most public guilds are invite/approval-only anyway).
         availableGuilds = []
+
+        // Someone shared a guild with them — lead with that rather than the
+        // anonymous starter guild.
+        if await resolvePendingDestination() {
+            // Skip the starter guild only when membership will be immediate.
+            // A request needs somewhere to wait: approval can take hours.
+            if !targetRequiresApproval { return }
+        }
+
+        // Otherwise: new users start in a system (onboarding) guild — a stable
+        // home with the tutorial. They browse/join real guilds from inside the
+        // app afterwards.
         await prepareAssignedFallbackGuild()
+    }
+
+    /// Look up whatever guild the user is already headed for.
+    ///
+    /// Resolves only — the join itself happens after email verification, since
+    /// the backend gates membership on it. `RLAppState` keeps the pending value
+    /// and drains it then.
+    @discardableResult
+    private func resolvePendingDestination() async -> Bool {
+        let slug = rlAppState.pendingGuildSlug
+        let code = rlAppState.pendingReferralInviteCode
+        guard slug != nil || code != nil else { return false }
+
+        do {
+            try await ensureRegisteredIfNeeded()
+            if let code, !code.isEmpty {
+                // An invite code admits directly whatever the guild's access setting.
+                let resolved = try await rlAppState.resolveGuildInviteLink(code: code)
+                targetGuild = resolved.guild
+                targetRequiresApproval = false
+                return true
+            }
+            if let slug, !slug.isEmpty {
+                let guild = try await rlAppState.resolveGuildBySlug(slug: slug)
+                targetGuild = guild
+                // A handle only admits directly when the guild is open.
+                targetRequiresApproval = !guild.isOpen
+                return true
+            }
+        } catch {
+            // A dead handle or expired code shouldn't strand the user without a
+            // guild — drop it and fall through to the starter guild.
+            rlAppState.setPendingGuildSlug(nil)
+            rlAppState.setPendingReferralInviteCode(nil)
+        }
+        return false
+    }
+
+    /// Resolve a handle or invite code the user typed.
+    ///
+    /// iOS has no install-referrer equivalent, so this is the only path for
+    /// someone who installed from the App Store after seeing a handle rather
+    /// than by tapping the link.
+    private func applyHandleInput() async {
+        let parsed = handleInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !parsed.isEmpty else { return }
+        isResolvingHandle = true
+        handleErrorMessage = nil
+        defer { isResolvingHandle = false }
+
+        if let destination = GuildDestinationInput.parse(parsed) {
+            switch destination {
+            case .slug(let slug): rlAppState.setPendingGuildSlug(slug)
+            case .invite(let code): rlAppState.setPendingReferralInviteCode(code)
+            }
+            if await resolvePendingDestination() {
+                handleInput = ""
+                return
+            }
+            handleErrorMessage = "We couldn't find that guild. Check the handle and try again."
+        } else {
+            handleErrorMessage = "That doesn't look like a guild handle or invite code."
+        }
     }
 
     private func prepareAssignedFallbackGuild() async {

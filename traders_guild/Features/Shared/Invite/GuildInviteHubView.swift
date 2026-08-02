@@ -3,9 +3,9 @@
 //  traders_guild
 //
 //  The single, reusable "bring your community in" hub. Used after guild
-//  creation, from the owner drawer promo, in the signup invite step, and from
-//  the User List "Refer Friends" button. Generates the guild's invite link and
-//  offers channel-specific sharing (X, Discord, Messages, Copy, QR, More).
+//  creation, from the owner drawer promo, and from the User List "Refer
+//  Friends" button. Generates the guild's invite link and offers
+//  channel-specific sharing (X, Discord, Messages, Copy, QR, More).
 //
 
 import SwiftUI
@@ -28,6 +28,9 @@ struct GuildInviteHubView: View {
 
     @EnvironmentObject var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
+    /// Sharing leaves no server-side trace, so this tracks it for the session
+    /// only. Resetting on reopen is the honest default: we don't know they did.
+    @State private var hasShared = false
 
     @State private var inviteURL: URL?
     /// Referral code behind `inviteURL`, needed to post the invite to Discord.
@@ -60,6 +63,11 @@ struct GuildInviteHubView: View {
                     // row would be redundant; only show it for referral sharing.
                     if shareMode == .referral, let handle = guild?.shareURL {
                         guildAddressRow(handle)
+                    }
+                    // Owner-facing only: creation now asks for a name alone, so
+                    // this is the path to everything it stopped asking for.
+                    if shareMode == .guildVanity {
+                        setupChecklist
                     }
                 }
                 .padding(.horizontal, 20)
@@ -326,6 +334,72 @@ struct GuildInviteHubView: View {
 
     // MARK: - Primary button
 
+    /// What a newly created guild still needs.
+    ///
+    /// Creation dropped to a single field, which is only an improvement if
+    /// there's an obvious path to the rest — otherwise the result is a nameless
+    /// shell, worse than the long form it replaced. Completion is derived from
+    /// guild state rather than stored, so it stays honest wherever the owner
+    /// does the work.
+    @ViewBuilder
+    private var setupChecklist: some View {
+        let steps: [(title: String, subtitle: String, done: Bool)] = [
+            ("Share your guild", "Post the link in your Discord or on X", hasShared),
+            ("Add a crest", "Gives your guild a face in shares and unfurls",
+             !(guild?.imageUrl?.isEmpty ?? true)),
+            ("Post a welcome message", "The first thing new members read", false),
+            ("Add a description", "Shown on your guild's public page",
+             !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty)),
+        ]
+        let remaining = steps.filter { !$0.done }.count
+
+        if remaining > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Finish setting up")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.whiteText)
+                    Spacer()
+                    Text("\(steps.count - remaining)/\(steps.count)")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+                ForEach(steps.indices, id: \.self) { index in
+                    let step = steps[index]
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(step.done
+                                      ? AppColors.bullCandleGreen
+                                      : AppColors.whiteText.opacity(0.10))
+                                .frame(width: 22, height: 22)
+                            if step.done {
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundColor(AppColors.onAccentForeground)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(step.done ? AppColors.greyText : AppColors.whiteText)
+                            Text(step.subtitle)
+                                .font(.caption2)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppColors.whiteText.opacity(0.05))
+                    )
+                }
+            }
+        }
+    }
+
     private var primaryButton: some View {
         Button {
             if let onPrimaryAction {
@@ -426,6 +500,7 @@ struct GuildInviteHubView: View {
         // The slow channels (QR/More build + present a sheet) get their spinner
         // immediately, so the wait is obvious from the instant of the tap.
         if kind == .qr || kind == .more {
+            hasShared = true
             busyChannel = kind
         }
         // Run the action a beat later so the press-in is actually visible before
