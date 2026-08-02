@@ -128,6 +128,12 @@ struct traders_guildApp: App {
                     .environmentObject(rlAppState)
                     .environmentObject(rlMessagingManager)
             }
+            // A /g/{slug} link to an invite-only guild opens its application
+            // form here, rather than telling the user to go find it.
+            .fullScreenCover(item: $rlAppState.pendingGuildRequestGuild) { guild in
+                JoinGuildFlowView(initialGuild: guild)
+                    .environmentObject(rlAppState)
+            }
             // Biometric enrollment sheet
             .sheet(isPresented: $rlAppState.showBiometricEnrollment) {
                 BiometricEnrollmentView()

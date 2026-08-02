@@ -148,6 +148,40 @@ struct GuildSettingsView: View {
                                 placeholder: "Guild name",
                                 text: $name
                             )
+                            // The guild's permanent public address. Read-only in
+                            // 1.1.7 — it is server-generated and unique, and
+                            // renaming it would break links already shared.
+                            if let handle = rlAppState.currentGuild?.shareURL {
+                                Button {
+                                    UIPasteboard.general.string = handle.absoluteString
+                                    rlAppState.showSuccess("Guild handle copied")
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Guild handle")
+                                                .font(.caption2)
+                                                .foregroundColor(AppColors.greyText)
+                                            Text(handle.absoluteString
+                                                .replacingOccurrences(of: "https://", with: ""))
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundColor(AppColors.whiteText)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "doc.on.doc")
+                                            .font(.subheadline)
+                                            .foregroundColor(AppColors.guildReputationAccent)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(AppColors.whiteText.opacity(0.05))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                             AdminInputTextEditor(
                                 title: "Description (Optional)",
                                 placeholder: "Tell members what this guild is about",

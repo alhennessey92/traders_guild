@@ -479,6 +479,11 @@ struct GuildSwitchRow: View {
 // MARK: - Join Guild Full Screen Flow
 
 struct JoinGuildFlowView: View {
+    /// Skip the search list and open straight onto this guild's detail — used
+    /// when a `/g/{slug}` link resolved to an invite-only guild, so the user
+    /// lands on the application form rather than having to find it.
+    var initialGuild: RLGuildDTO? = nil
+
     @Environment(\.dismiss) private var dismiss
 
     @EnvironmentObject var rlAppState: RLAppState
@@ -504,6 +509,11 @@ struct JoinGuildFlowView: View {
                     .environmentObject(rlAppState)
                 }
             }
+        }
+        .onAppear {
+            guard let initialGuild, selectedGuild == nil else { return }
+            selectedGuild = initialGuild
+            showGuildDetail = true
         }
     }
 }

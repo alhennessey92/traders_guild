@@ -223,6 +223,11 @@ class RLAppState: ObservableObject {
     @Published var pendingReferralInviteCode: String?
     /// Guild vanity handle captured from a /g/{slug} deep link.
     @Published var pendingGuildSlug: String?
+
+    /// An invite-only guild reached by its handle. A handle can't open-join one,
+    /// so the app presents its application form rather than dead-ending with
+    /// "ask for an invite link". Cleared once the flow is dismissed.
+    @Published var pendingGuildRequestGuild: RLGuildDTO?
     /// Marker id captured from a /marker/{id} deep link, opened once authenticated.
     @Published var pendingMarkerLinkId: UUID?
     /// Resolved marker navigation retained until a ready MainView explicitly accepts it.
@@ -1270,16 +1275,13 @@ class RLAppState: ObservableObject {
                 return true
             }
 
-            // Private guild — a handle can't open-join one. Cleared because
-            // retrying would only re-show this on every launch.
-            //
-            // TODO(1.1.x): route to the application form instead. The form lives
-            // inside SwitchGuildView's JoinGuildFlowView with no app-level entry
-            // point, so it needs a presentation signal Android didn't (its
-            // equivalent is a top-level route). Android already does this.
+            // Private guild — a handle can't open-join one, so hand the user
+            // the application form. Matches Android, where the accept screen is
+            // a top-level route; here it needs a published signal the root view
+            // presents on.
             clearPending()
-            showInfo("\(guild.name) needs approval to join. Open Switch Guild › Join a Guild, search for it, and send a request.")
-            return false
+            pendingGuildRequestGuild = guild
+            return true
         } catch APIError.unauthorized {
             return false
         } catch APIError.serverError(let status, _) where status == 403 {
