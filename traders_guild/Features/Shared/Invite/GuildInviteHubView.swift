@@ -31,6 +31,7 @@ struct GuildInviteHubView: View {
     /// Sharing leaves no server-side trace, so this tracks it for the session
     /// only. Resetting on reopen is the honest default: we don't know they did.
     @State private var hasShared = false
+    @State private var showGuildSettings = false
 
     @State private var inviteURL: URL?
     /// Referral code behind `inviteURL`, needed to post the invite to Discord.
@@ -343,13 +344,17 @@ struct GuildInviteHubView: View {
     /// does the work.
     @ViewBuilder
     private var setupChecklist: some View {
-        let steps: [(title: String, subtitle: String, done: Bool)] = [
-            ("Share your guild", "Post the link in your Discord or on X", hasShared),
+        // Every row navigates. A checklist you can't act on is a nag list, so a
+        // step only earns its place here if tapping it does something.
+        let steps: [(title: String, subtitle: String, done: Bool, action: () -> Void)] = [
+            ("Share your guild", "Post the link in your Discord or on X", hasShared,
+             { hasShared = true; shareMore() }),
             ("Add a crest", "Gives your guild a face in shares and unfurls",
-             !(guild?.imageUrl?.isEmpty ?? true)),
-            ("Post a welcome message", "The first thing new members read", false),
+             !(guild?.imageUrl?.isEmpty ?? true),
+             { showGuildSettings = true }),
             ("Add a description", "Shown on your guild's public page",
-             !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty)),
+             !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty),
+             { showGuildSettings = true }),
         ]
         let remaining = steps.filter { !$0.done }.count
 
@@ -366,6 +371,7 @@ struct GuildInviteHubView: View {
                 }
                 ForEach(steps.indices, id: \.self) { index in
                     let step = steps[index]
+                    Button(action: step.action) {
                     HStack(spacing: 12) {
                         ZStack {
                             Circle()
@@ -395,10 +401,17 @@ struct GuildInviteHubView: View {
                         RoundedRectangle(cornerRadius: 14)
                             .fill(AppColors.whiteText.opacity(0.05))
                     )
+                    }
+                    .buttonStyle(InvitePressStyle())
                 }
+            }
+            .sheet(isPresented: $showGuildSettings) {
+                GuildSettingsView()
+                    .environmentObject(rlAppState)
             }
         }
     }
+
 
     private var primaryButton: some View {
         Button {
