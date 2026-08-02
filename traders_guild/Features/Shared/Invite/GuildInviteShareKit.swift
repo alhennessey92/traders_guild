@@ -162,8 +162,15 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         super.init()
     }
 
+    /// A String, not a URL.
+    ///
+    /// Returning a URL makes UIKit build a rich link preview, which fetches and
+    /// renders the remote OG card itself — and that render is what crashed with
+    /// "Need an imageRef". The shared payload below still contains the link, so
+    /// Discord and X unfurl it exactly as before; only the in-sheet preview
+    /// changes, and it is cosmetic.
     func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
-        item.url
+        item.message
     }
 
     func activityViewController(
@@ -183,8 +190,10 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
     func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
         let metadata = LPLinkMetadata()
         metadata.title = item.previewTitle
-        metadata.originalURL = item.url
-        metadata.url = item.url
+        // No `url`/`originalURL`. Either one hands LinkPresentation the remote
+        // page to fetch and render a preview from, which is the crash path —
+        // the OG card itself is a valid 1200x630 PNG, so the failure is inside
+        // that render, not in what we serve.
 
         // Register PNG *data*, not a UIImage. The previous guard checked
         // `cgImage != nil` but still handed UIImage to NSItemProvider, which
