@@ -10,6 +10,7 @@
 import SwiftUI
 import UIKit
 import LinkPresentation
+import UniformTypeIdentifiers
 import CoreImage
 
 // MARK: - Share Item
@@ -185,12 +186,17 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         metadata.originalURL = item.url
         metadata.url = item.url
 
-        // Only attach the preview image if it is bitmap-backed; otherwise
-        // LinkPresentation crashes serialising it ("Need an imageRef").
-        if let icon = Self.appIconImage(), icon.cgImage != nil {
-            let provider = NSItemProvider(object: icon)
-            metadata.iconProvider = provider
-            metadata.imageProvider = provider
+        // Register PNG *data*, not a UIImage. The previous guard checked
+        // `cgImage != nil` but still handed UIImage to NSItemProvider, which
+        // re-serialises it on the share sheet's own terms — and still crashed
+        // with "Need an imageRef". Data has no backing-image to lose.
+        if let icon = Self.appIconImage(), let png = icon.pngData() {
+            metadata.iconProvider = NSItemProvider(
+                item: png as NSData,
+                typeIdentifier: UTType.png.identifier,
+            )
+            // Deliberately no imageProvider: the large preview adds nothing for
+            // an invite link and doubles the surface that can fail to render.
         }
 
         return metadata

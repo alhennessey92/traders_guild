@@ -347,13 +347,17 @@ struct GuildInviteHubView: View {
         // Every row navigates. A checklist you can't act on is a nag list, so a
         // step only earns its place here if tapping it does something.
         let steps: [(title: String, subtitle: String, done: Bool, action: () -> Void)] = [
+            // Share goes through fireChannel, the same path the More button
+            // uses. Calling shareMore() directly was a second, subtly different
+            // route into UIKit presentation — no press delay, no busy state —
+            // and it crashed on tap.
             ("Share your guild", "Post the link in your Discord or on X", hasShared,
-             { hasShared = true; shareMore() }),
-            ("Add a crest", "Gives your guild a face in shares and unfurls",
-             !(guild?.imageUrl?.isEmpty ?? true),
-             { showGuildSettings = true }),
-            ("Add a description", "Shown on your guild's public page",
-             !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty),
+             { fireChannel(.more) { shareMore() } }),
+            // One row, one destination. Two rows into the same sheet reads as a
+            // mistake, which is exactly how it looked.
+            ("Add a crest and description", "How your guild looks in shares and link previews",
+             !(guild?.imageUrl?.isEmpty ?? true)
+                && !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty),
              { showGuildSettings = true }),
         ]
         let remaining = steps.filter { !$0.done }.count
