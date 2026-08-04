@@ -1254,6 +1254,13 @@ struct ProfileInfoCard<Content: View>: View {
                         .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
                 )
         )
+        // Same elevation as the guild cards, so the profile sheet's sections and
+        // its guild list read as one family rather than flat panels beside raised ones.
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.guildCardBase)
+                .shadow(color: AppColors.guildCardShadow, radius: 10, x: 0, y: 3)
+        )
     }
 }
 
