@@ -364,7 +364,7 @@ struct UserGlobalSheetView: View {
                     title: "Global Reputation Breakdown",
                     subtitle: "Tier, weekly delta, guild contributions",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
-                    icon: "star.hexagon.fill",
+                    icon: ReputationGlyph.symbolName,
                     iconColor: AppColors.guildReputationAccent,
                     action: { showGlobalReputationBreakdown = true }
                 )

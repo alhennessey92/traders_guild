@@ -35,7 +35,7 @@ private enum GuildLeaderboardMode: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .reputation: return "star.hexagon.fill"
+        case .reputation: return ReputationGlyph.symbolName
         case .accuracy: return "target"
         }
     }
@@ -63,7 +63,7 @@ private enum GlobalLeaderboardMode: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
-        case .reputation: return "star.hexagon.fill"
+        case .reputation: return ReputationGlyph.symbolName
         case .accuracy: return "target"
         }
     }
@@ -1235,9 +1235,7 @@ private struct LeaderboardMemberRow: View {
                 Spacer()
 
                 HStack(spacing: 2) {
-                    Image(systemName: "star.hexagon.fill")
-                        .font(.caption2)
-                        .fontWeight(.bold)
+                    ReputationGlyph(size: 11)
                     Text("\(reputation)")
                         .font(.system(size: 13, weight: .bold))
                 }

@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - ================================================================================================
 // MARK: - UNIFIED DISCLOSURE GROUP
@@ -1135,6 +1136,13 @@ struct UnifiedAuthorFooter: View {
 /// one appearance everywhere, rather than branching by OS and shipping two looks.
 struct ReputationGlyph: View {
     var size: CGFloat
+
+    /// For the handful of APIs that take an SF Symbol *name* rather than a view.
+    /// Resolves once at launch: the real symbol where it exists, and a star cut
+    /// out of a circle where it doesn't — same idea, and visible, which the raw
+    /// name is not on iOS 17/18.
+    static let symbolName: String =
+        UIImage(systemName: "star.hexagon.fill") != nil ? "star.hexagon.fill" : "star.circle.fill"
 
     var body: some View {
         ZStack {

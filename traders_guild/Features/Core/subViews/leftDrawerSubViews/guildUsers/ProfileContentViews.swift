@@ -223,7 +223,7 @@ struct OverviewTabContent: View {
                     title: "Guild Reputation Breakdown",
                     subtitle: "Tier, weekly delta, contribution sources",
                     value: guildReputationProfile.map { "\($0.reputation)" } ?? "--",
-                    icon: "star.hexagon.fill",
+                    icon: ReputationGlyph.symbolName,
                     iconColor: AppColors.guildReputationAccent,
                     action: onOpenGuildReputationBreakdown
                 )
@@ -730,7 +730,7 @@ extension RLActivityItem {
     var activityIcon: String {
         switch type {
         case "marker": return "mappin.circle.fill"
-        case "reputation": return "star.hexagon.fill"
+        case "reputation": return ReputationGlyph.symbolName
         case "achievement": return "medal.fill"
         case "guild": return "person.3.fill"
         case "event": return "calendar.badge.clock"

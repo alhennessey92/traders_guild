@@ -183,7 +183,13 @@ struct SwitchGuildView: View {
             )
             
             // Guild list
-            if isLoading {
+            //
+            // The spinner is gated on having nothing to show. This view opens with
+            // `userGuilds` already populated (the drawer needs them), then `.task`
+            // refreshes — so an unconditional `isLoading` swapped the drawn list
+            // for a full-screen spinner and back, which is the "cards flicker /
+            // double load" the owner reported.
+            if isLoading && rlAppState.userGuilds.isEmpty {
                 VStack {
                     ProgressView()
                         .scaleEffect(1.2)
@@ -217,7 +223,7 @@ struct SwitchGuildView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(sortedUserGuilds) { item in
+                        ForEach(Array(sortedUserGuilds.enumerated()), id: \.element.id) { index, item in
                             let isCurrent = item.guild.id == rlAppState.currentGuild?.id
                             GuildCardView(
                                 guild: item.guild,
@@ -226,6 +232,7 @@ struct SwitchGuildView: View {
                                 isCurrent: isCurrent,
                                 onTap: isCurrent ? nil : { selectGuild(item) }
                             )
+                            .staggeredAppear(index: index)
                         }
                     }
                 }
@@ -242,9 +249,10 @@ struct SwitchGuildView: View {
                         .foregroundColor(AppColors.greyText)
                     // Not tappable: there is nothing to do but wait, and styling
                     // these like the joined rows would invite a dead tap.
-                    ForEach(rlAppState.pendingJoinRequests) { request in
+                    ForEach(Array(rlAppState.pendingJoinRequests.enumerated()), id: \.element.id) { index, request in
                         // `onTap: nil` is what makes this non-interactive.
                         GuildCardView(guild: request.guild, style: .pending)
+                            .staggeredAppear(index: index)
                     }
                 }
                 .padding(.horizontal, 25)
@@ -522,7 +530,11 @@ struct JoinGuildView: View {
                 .padding(.bottom, 12)
 
                 // Guild search results
-                if isLoading {
+                //
+                // Gated the same way as the switch list: discover reloads on every
+                // search and filter change, so an unconditional spinner blanked the
+                // results on each keystroke and on every return from guild detail.
+                if isLoading && filteredGuilds.isEmpty {
                     VStack {
                         ProgressView()
                             .scaleEffect(1.2)
@@ -558,7 +570,7 @@ struct JoinGuildView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 14) {
-                            ForEach(filteredGuilds) { guild in
+                            ForEach(Array(filteredGuilds.enumerated()), id: \.element.id) { index, guild in
                                 GuildCardView(
                                     guild: guild.guild,
                                     style: .discover,
@@ -569,6 +581,7 @@ struct JoinGuildView: View {
                                         onSelectGuild(guild.guild)
                                     }
                                 )
+                                .staggeredAppear(index: index)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -881,7 +894,9 @@ private struct GuildFlowTitleHeader: View {
     let onBack: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // 14/20 rather than 10/12: the back row, title and divider sat tight
+        // enough against the top edge to read as cramped.
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Button(action: onBack) {
                     HStack(spacing: 6) {
@@ -914,8 +929,8 @@ private struct GuildFlowTitleHeader: View {
             Divider().opacity(0.8)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
         .background(
             LinearGradient(
                 colors: [
@@ -1099,7 +1114,8 @@ struct GuildDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 140)
+                // The pinned-footer modifier already insets by the footer height.
+                .padding(.bottom, 24)
                 .onAppear {
                     for i in 0...1 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
@@ -1372,7 +1388,8 @@ struct JoinGuildFormView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
-                        .padding(.bottom, 140)
+                        // The pinned-footer modifier already insets by the footer height.
+                        .padding(.bottom, 24)
                     }
                 }
             }
@@ -1591,7 +1608,6 @@ struct CreateGuildView: View {
 
                     // Guild Identity card
                     GuildSectionCard(title: "Guild Identity") {
-
                         // Guild preview
                         VStack(spacing: 10) {
                             crestPreview(size: 64)
@@ -1856,7 +1872,8 @@ struct CreateGuildView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 200)
+                    // The pinned-footer modifier already insets by the footer height.
+                    .padding(.bottom, 24)
                     .onAppear {
                         for i in 0...1 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {

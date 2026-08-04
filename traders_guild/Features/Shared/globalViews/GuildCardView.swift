@@ -305,6 +305,48 @@ struct GuildCardView: View {
     }
 }
 
+// MARK: - Staggered appearance
+
+/// Fades and lifts a list row in, offset by its position.
+///
+/// Guild lists used to snap in as a block while guild detail and create-guild
+/// staggered their sections, so the two halves of the same flow felt unrelated.
+///
+/// State lives per row, and `ForEach` keys rows by guild id, so a background
+/// refresh that returns the same guilds leaves already-revealed rows alone
+/// instead of replaying the animation over them.
+private struct StaggeredAppear: ViewModifier {
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    /// Capped so a long guild list doesn't spend a second and a half revealing.
+    private var delay: Double { Double(min(index, 6)) * 0.05 }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .onAppear {
+                guard !shown else { return }
+                if reduceMotion {
+                    shown = true
+                } else {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.85).delay(delay)) {
+                        shown = true
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    /// See `StaggeredAppear`. Apply to rows inside a `ForEach`, passing the offset.
+    func staggeredAppear(index: Int) -> some View {
+        modifier(StaggeredAppear(index: index))
+    }
+}
+
 // MARK: - Section card
 
 /// Panel container for guild-flow screens (detail, create), matching
