@@ -305,6 +305,49 @@ struct GuildCardView: View {
     }
 }
 
+// MARK: - Section card
+
+/// Panel container for guild-flow screens (detail, create), matching
+/// `GuildCardView`'s surface so a screen of cards reads as one family.
+///
+/// Replaces two byte-identical `private func sectionCard` helpers that sat in
+/// the same file and could not see each other, plus one section that had been
+/// hand-inlined with a different stroke colour than its three siblings.
+struct GuildSectionCard<Content: View>: View {
+    var title: String? = nil
+    var spacing: CGFloat = 10
+    @ViewBuilder let content: () -> Content
+
+    private static var cornerRadius: CGFloat { 14 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            if let title {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.whiteText)
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Self.cornerRadius)
+                .fill(AppColors.contentCardFill(isUnread: false, isPressed: false))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.cornerRadius)
+                        .strokeBorder(AppColors.markerListCapsuleStroke, lineWidth: 1)
+                )
+        )
+        .background(
+            RoundedRectangle(cornerRadius: Self.cornerRadius)
+                .fill(AppColors.guildCardBase)
+                .shadow(color: AppColors.guildCardShadow, radius: 10, x: 0, y: 3)
+        )
+    }
+}
+
 // MARK: - Pill
 
 /// Small capsule used inside guild cards. Tint drives both text and fill, so a

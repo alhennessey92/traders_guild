@@ -979,22 +979,13 @@ struct GuildDetailView: View {
         guild.dateCreated.formatted(date: .abbreviated, time: .omitted)
     }
 
-    // Section card helper
-    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            content()
+    private var ctaTitle: String {
+        if isAlreadyJoined {
+            return isCurrentGuild ? "Current Guild" : "Switch to Guild"
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                )
-        )
+        return guild.isOpen ? "Join Guild" : "Request to Join"
     }
+
 
     var body: some View {
         ZStack {
@@ -1010,112 +1001,107 @@ struct GuildDetailView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                    // Guild header card
-                    sectionCard {
-                        HStack(alignment: .top, spacing: 12) {
-                            GuildCrestView(guild: guild, size: 48)
+                    // Identity, then the guild's own numbers in the same
+                    // footer strip the cards use. This absorbs what used to be a
+                    // separate "Guild Snapshot" card holding four StatBoxes —
+                    // a card nested inside a card, with different constants.
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 12) {
+                                GuildCrestView(guild: guild, size: 48)
 
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(guild.name)
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(AppColors.whiteText)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(guild.name)
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(AppColors.whiteText)
 
-                                HStack(spacing: 8) {
-                                    Text(accessLabel)
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(AppColors.guildReputationAccent.opacity(0.18))
-                                        .foregroundColor(AppColors.guildReputationAccent)
-                                        .clipShape(Capsule())
+                                    HStack(spacing: 8) {
+                                        Text(accessLabel)
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(AppColors.guildReputationAccent.opacity(0.18))
+                                            .foregroundColor(AppColors.guildReputationAccent)
+                                            .clipShape(Capsule())
 
-                                    Text("Created \(createdDateText)")
-                                        .font(.caption)
-                                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                        Text("Created \(createdDateText)")
+                                            .font(.caption)
+                                            .foregroundColor(AppColors.whiteText.opacity(0.7))
+                                    }
+
+                                    // Full chips here, unlike the cards: detail
+                                    // has the width for them.
+                                    LocalePreferenceChips(
+                                        language: guild.language,
+                                        location: guild.location,
+                                        compact: true
+                                    )
                                 }
+                            }
 
-                                LocalePreferenceChips(
-                                    language: guild.language,
-                                    location: guild.location,
-                                    compact: true
-                                )
+                            if let description = guild.description, !description.isEmpty {
+                                Text(description)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.whiteText.opacity(0.85))
                             }
                         }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                        if let description = guild.description, !description.isEmpty {
-                            Text(description)
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.whiteText.opacity(0.85))
-                        }
+                        GuildMetaFooter(
+                            memberCount: guild.memberCount,
+                            membersOnline: guild.membersOnline,
+                            reputationDisplay: guild.reputationDisplay
+                        )
                     }
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppColors.contentCardFill(isUnread: false, isPressed: false))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(AppColors.markerListCapsuleStroke, lineWidth: 1)
+                            )
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppColors.guildCardBase)
+                            .shadow(color: AppColors.guildCardShadow, radius: 10, x: 0, y: 3)
+                    )
                     .opacity(visibleSections.contains(0) ? 1 : 0)
                     .offset(y: visibleSections.contains(0) ? 0 : 12)
                     .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
 
-                    // Guild Snapshot card
-                    sectionCard {
-                        Text("Guild Snapshot")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-
-                        HStack(spacing: 10) {
-                            StatBox(label: "Members", value: "\(guild.memberCount)")
-                            StatBox(label: "Online", value: "\(guild.membersOnline)")
-                        }
-                        HStack(spacing: 10) {
-                            StatBox(label: "Reputation", value: guild.reputationDisplay)
-                            StatBox(label: "Type", value: guild.isOpen ? "Open" : "Private")
-                        }
-                    }
-                    .opacity(visibleSections.contains(1) ? 1 : 0)
-                    .offset(y: visibleSections.contains(1) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
-
-                    // Guild Information card
-                    sectionCard {
-                        Text("Guild Information")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
-
+                    // Facts, then entry requirements. Previously two cards, the
+                    // second of which used an accent stroke its siblings didn't.
+                    GuildSectionCard(title: "Guild Information") {
                         GuildInfoRow(icon: "person.crop.circle", title: "Owner", value: ownerName)
                         GuildInfoRow(icon: "globe", title: "Language", value: LocaleOptionCatalog.languageLabel(for: guild.language))
                         GuildInfoRow(icon: "mappin.and.ellipse", title: "Location", value: LocaleOptionCatalog.countryDisplay(for: guild.location))
-                    }
-                    .opacity(visibleSections.contains(2) ? 1 : 0)
-                    .offset(y: visibleSections.contains(2) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: visibleSections.contains(2))
 
-                    // Join Requirements card
-                    VStack(alignment: .leading, spacing: 8) {
+                        Divider()
+                            .background(AppColors.whiteText.opacity(0.1))
+                            .padding(.vertical, 2)
+
                         Text("Join Requirements")
-                            .font(.headline)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                             .foregroundColor(AppColors.whiteText)
 
                         Text(joinRequirementText)
                             .font(.subheadline)
                             .foregroundColor(AppColors.whiteText.opacity(0.82))
                     }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(AppColors.gradientBackgroundDark.opacity(0.42))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(AppColors.guildReputationAccent.opacity(0.32), lineWidth: 1)
-                            )
-                    )
-                    .opacity(visibleSections.contains(3) ? 1 : 0)
-                    .offset(y: visibleSections.contains(3) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
+                    .opacity(visibleSections.contains(1) ? 1 : 0)
+                    .offset(y: visibleSections.contains(1) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 140)
                 .onAppear {
-                    for i in 0...3 {
+                    for i in 0...1 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                             visibleSections.insert(i)
                         }
@@ -1128,34 +1114,27 @@ struct GuildDetailView: View {
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
-                if isJoining {
-                    ProgressView()
-                        .scaleEffect(1.1)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                } else if isAlreadyJoined {
-                    StandardActionButtonFullWidth(
-                        title: isCurrentGuild ? "Current Guild" : "Switch to Guild",
-                        backgroundColor: AppColors.whiteText,
-                        foregroundColor: AppColors.systemBlack,
-                        action: switchToGuild
-                    )
-                    .disabled(isCurrentGuild)
-                    .opacity(isCurrentGuild ? 0.55 : 1.0)
-                } else {
-                    StandardActionButtonFullWidth(
-                        title: guild.isOpen ? "Join Guild" : "Request to Join",
-                        backgroundColor: AppColors.whiteText,
-                        foregroundColor: AppColors.systemBlack,
-                        action: {
-                            if guild.isOpen {
-                                Task { await joinGuild() }
-                            } else {
-                                showJoinForm = true
-                            }
+                // One button for every state. The joining state used to drop
+                // the button entirely for a bare centred ProgressView, so the
+                // footer changed shape and height mid-tap.
+                StandardActionButtonFullWidth(
+                    title: ctaTitle,
+                    backgroundColor: AppColors.whiteText,
+                    foregroundColor: AppColors.systemBlack,
+                    isLoading: isJoining,
+                    action: {
+                        guard !isJoining else { return }
+                        if isAlreadyJoined {
+                            switchToGuild()
+                        } else if guild.isOpen {
+                            Task { await joinGuild() }
+                        } else {
+                            showJoinForm = true
                         }
-                    )
-                }
+                    }
+                )
+                .disabled(isJoining || (isAlreadyJoined && isCurrentGuild))
+                .opacity((isAlreadyJoined && isCurrentGuild) ? 0.55 : 1.0)
             }
             .background(AppColors.sheetBackground)
         }
@@ -1229,35 +1208,6 @@ private struct GuildMetaChip: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.34))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                )
-        )
-    }
-}
-
-// MARK: - Stat Box
-
-struct StatBox: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.guildReputationAccent)
-            Text(label)
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(AppColors.gradientBackgroundDark.opacity(0.34))
@@ -1557,22 +1507,6 @@ struct CreateGuildView: View {
 
 
 
-    // Section card helper
-    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            content()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                )
-        )
-    }
 
     private func requiredFieldLabel(_ title: String) -> some View {
         HStack(spacing: 4) {
@@ -1656,10 +1590,7 @@ struct CreateGuildView: View {
                         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.0), value: visibleSections.contains(0))
 
                     // Guild Identity card
-                    sectionCard {
-                        Text("Guild Identity")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
+                    GuildSectionCard(title: "Guild Identity") {
 
                         // Guild preview
                         VStack(spacing: 10) {
@@ -1813,10 +1744,7 @@ struct CreateGuildView: View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.05), value: visibleSections.contains(1))
 
                     // Access & Moderation card
-                    sectionCard {
-                        Text("Access & Moderation")
-                            .font(.headline)
-                            .foregroundColor(AppColors.whiteText)
+                    GuildSectionCard(title: "Access & Moderation") {
 
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
@@ -1930,7 +1858,7 @@ struct CreateGuildView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 200)
                     .onAppear {
-                        for i in 0...3 {
+                        for i in 0...1 {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                                 visibleSections.insert(i)
                             }

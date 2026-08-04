@@ -1075,8 +1075,7 @@ struct UnifiedAuthorFooter: View {
             
             // Reputation
             HStack(spacing: 2) {
-                Image(systemName: "star.hexagon.fill")
-                    .font(.system(size: 8))
+                ReputationGlyph(size: 8)
                 Text("\(reputation)")
                     .font(.system(size: 10, weight: .semibold))
             }
@@ -1117,6 +1116,35 @@ struct UnifiedAuthorFooter: View {
             )
             .fill(AppColors.surfaceWhite06)
         )
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - REPUTATION GLYPH
+// MARK: - ================================================================================================
+
+/// The reputation emblem: a star cut out of a hexagon.
+///
+/// This exists because `star.hexagon.fill` is **not** an SF Symbol on the app's
+/// iOS 17 deployment target — it arrives with SF Symbols 6. `Image(systemName:)`
+/// fails silently, so on iOS 17/18 every reputation figure in the app has been
+/// rendering with an invisible icon and a stray gap where it should be. Verified
+/// on an iOS 18.2 simulator: `UIImage(systemName: "star.hexagon.fill")` is nil.
+///
+/// Composing it from two symbols that do exist on every supported version keeps
+/// one appearance everywhere, rather than branching by OS and shipping two looks.
+struct ReputationGlyph: View {
+    var size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "hexagon.fill")
+                .font(.system(size: size))
+            Image(systemName: "star.fill")
+                .font(.system(size: size * 0.52))
+                .blendMode(.destinationOut)
+        }
+        .compositingGroup()
     }
 }
 
@@ -1189,9 +1217,8 @@ struct GuildMetaFooter: View {
 
             UnifiedSeparatorDot()
 
-            HStack(spacing: 2) {
-                Image(systemName: "star.hexagon.fill")
-                    .font(.system(size: 8))
+            HStack(spacing: 3) {
+                ReputationGlyph(size: 9)
                 Text(reputationDisplay)
                     .font(.system(size: 10, weight: .semibold))
             }
@@ -1285,8 +1312,7 @@ struct UnifiedAuthorFooterFromMember: View {
             
             // Reputation
             HStack(spacing: 2) {
-                Image(systemName: "star.hexagon.fill")
-                    .font(.system(size: 8))
+                ReputationGlyph(size: 8)
             Text("\(author.reputation)")
                     .font(.system(size: 10, weight: .semibold))
             }
@@ -1361,8 +1387,7 @@ struct UnifiedAuthorRow: View {
             UnifiedSeparatorDot()
             
             // Reputation
-            Image(systemName: "star.hexagon.fill")
-                .font(.system(size: 9))
+            ReputationGlyph(size: 9)
                 .fontWeight(.bold)
                 .foregroundColor(AppColors.guildReputationAccent)
             
@@ -1437,8 +1462,7 @@ struct UnifiedAuthorRowFromMember: View {
             UnifiedSeparatorDot()
             
             // Reputation
-            Image(systemName: "star.hexagon.fill")
-                .font(.caption2)
+            ReputationGlyph(size: 11)
                 .fontWeight(.bold)
                 .foregroundColor(AppColors.guildReputationAccent)
             
@@ -1518,8 +1542,7 @@ struct UnifiedRoleBadge: View {
             if showReputation {
                 UnifiedSeparatorDot(size: 4, opacity: 0.7)
 
-                Image(systemName: "star.hexagon.fill")
-                    .font(iconSize)
+                ReputationGlyph(size: 11)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.guildReputationAccent)
 
@@ -2193,8 +2216,7 @@ struct UnifiedLeaderboardRow: View {
                 
                 // Reputation (prominent on right)
                 HStack(spacing: 2) {
-                    Image(systemName: "star.hexagon.fill")
-                        .font(.caption2)
+                    ReputationGlyph(size: 11)
                         .fontWeight(.bold)
                     Text("\(user.reputation)")
                         .font(.system(size: 13, weight: .bold))
