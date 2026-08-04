@@ -795,15 +795,16 @@ private extension LeaderboardListView {
                     refreshHintBanner(globalGuildsRefreshHint)
                     LazyVStack(spacing: 8) {
                         ForEach(Array(globalGuildsByReputation.enumerated()), id: \.element.id) { index, guild in
-                            GlobalGuildLeaderboardRow(
+                            GuildCardView(
                                 guild: guild.guild,
-                                guildName: guild.name,
-                                memberCount: guild.memberCount,
-                                membersOnline: guild.membersOnline,
-                                reputation: guild.reputationFormatted,
-                                accuracyText: guild.averageAccuracy.map { String(format: "%.1f%%", $0 * 100) },
+                                style: .compact,
                                 rank: index + 1,
-                                mode: .reputation
+                                stats: GuildCardStats(
+                                    members: guild.memberCount,
+                                    online: guild.membersOnline,
+                                    reputation: guild.reputationFormatted
+                                ),
+                                trailingMetric: guild.reputationFormatted
                             )
                         }
                     }
@@ -835,15 +836,17 @@ private extension LeaderboardListView {
                     refreshHintBanner(globalGuildsRefreshHint)
                     LazyVStack(spacing: 8) {
                         ForEach(Array(globalGuildsByAccuracy.enumerated()), id: \.element.id) { index, guild in
-                            GlobalGuildLeaderboardRow(
+                            GuildCardView(
                                 guild: guild.guild,
-                                guildName: guild.name,
-                                memberCount: guild.memberCount,
-                                membersOnline: guild.membersOnline,
-                                reputation: guild.reputationFormatted,
-                                accuracyText: guild.accuracyFormatted,
+                                style: .compact,
                                 rank: index + 1,
-                                mode: .accuracy
+                                stats: GuildCardStats(
+                                    members: guild.memberCount,
+                                    online: guild.membersOnline,
+                                    reputation: guild.reputationFormatted
+                                ),
+                                trailingMetric: guild.accuracyFormatted,
+                                trailingMetricColor: AppColors.statusPositive
                             )
                         }
                     }
@@ -920,97 +923,6 @@ private extension LeaderboardListView {
 private enum GlobalGuildRowMode {
     case reputation
     case accuracy
-}
-
-private struct GlobalGuildLeaderboardRow: View {
-    let guild: RLGuildDTO
-    let guildName: String
-    let memberCount: Int
-    let membersOnline: Int
-    let reputation: String
-    let accuracyText: String?
-    let rank: Int
-    let mode: GlobalGuildRowMode
-
-    @State private var isPressed: Bool = false
-
-    private var rankColor: Color {
-        switch rank {
-        case 1: return AppColors.markerViewingTintPrimaryStar
-        case 2: return AppColors.surfaceGray80
-        case 3: return AppColors.statusWarning80
-        default: return AppColors.whiteText.opacity(0.5)
-        }
-    }
-
-    private var rightValueColor: Color {
-        switch mode {
-        case .reputation:
-            return AppColors.accentColor
-        case .accuracy:
-            return AppColors.onlineStatusGreen
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text("\(rank)")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundColor(rankColor)
-                .frame(width: 24)
-
-            GuildCrestView(guild: guild, size: 40)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(guildName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(AppColors.whiteText)
-
-                HStack(spacing: 6) {
-                    Text("\(memberCount) members")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                    Text("•")
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText.opacity(0.6))
-                    Text("\(membersOnline) online")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                }
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                HStack(spacing: 2) {
-                    Image(systemName: mode == .reputation ? "star.hexagon.fill" : "target")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                    Text(mode == .reputation ? reputation : (accuracyText ?? "N/A"))
-                        .font(.system(size: 13, weight: .bold))
-                }
-                .foregroundColor(rightValueColor)
-
-                if let accuracyText, mode == .reputation {
-                    Text("Acc \(accuracyText)")
-                        .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(isPressed ? AppColors.messagingListRowFillPressed : AppColors.messagingListRowFill)
-        )
-        .onLongPressGesture(minimumDuration: 0.0, maximumDistance: .infinity, pressing: { pressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        }, perform: {})
-    }
 }
 
 private struct GlobalUserAccuracyRow: View {

@@ -113,7 +113,7 @@ struct SignupGuildView: View {
                                     .foregroundColor(AppColors.greyText)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                GuildSelectionRow(guild: target, isSelected: true, isInteractive: false) {}
+                                GuildCardView(guild: target, style: .selection, isSelected: true)
 
                                 if !targetRequiresApproval {
                                     Text("We'll add you as soon as your email is verified — that's the next step.")
@@ -127,11 +127,11 @@ struct SignupGuildView: View {
                                         .foregroundColor(AppColors.greyText)
 
                                     if let assignedGuild = selectedGuild {
-                                        GuildSelectionRow(
+                                        GuildCardView(
                                             guild: assignedGuild,
-                                            isSelected: false,
-                                            isInteractive: false
-                                        ) {}
+                                            style: .selection,
+                                            isSelected: false
+                                        )
                                     }
                                 }
 
@@ -150,11 +150,11 @@ struct SignupGuildView: View {
                         } else if shouldShowAssignedFallback {
                             VStack(spacing: 14) {
                                 if let assignedGuild = selectedGuild {
-                                    GuildSelectionRow(
+                                    GuildCardView(
                                         guild: assignedGuild,
-                                        isSelected: true,
-                                        isInteractive: false
-                                    ) {}
+                                        style: .selection,
+                                        isSelected: true
+                                    )
                                 }
 
                                 Text("You'll start here in your System Guild — try the tutorial and explore. You can join or create a guild anytime from the menu.")
@@ -216,12 +216,12 @@ struct SignupGuildView: View {
                         } else {
                             LazyVStack(spacing: 12) {
                                 ForEach(availableGuilds) { guild in
-                                    GuildSelectionRow(
+                                    GuildCardView(
                                         guild: guild,
-                                        isSelected: selectedGuild?.id == guild.id
-                                    ) {
-                                        selectedGuild = guild
-                                    }
+                                        style: .selection,
+                                        isSelected: selectedGuild?.id == guild.id,
+                                        onTap: { selectedGuild = guild }
+                                    )
                                 }
                             }
                             .padding(.horizontal, 20)
@@ -1106,113 +1106,3 @@ struct SignupProfileSetupView: View {
     }
 }
 
-// MARK: - Guild Selection Row Component
-struct GuildSelectionRow: View {
-    let guild: RLGuildDTO
-    let isSelected: Bool
-    let isInteractive: Bool
-    let onTap: () -> Void
-
-    init(
-        guild: RLGuildDTO,
-        isSelected: Bool,
-        isInteractive: Bool = true,
-        onTap: @escaping () -> Void
-    ) {
-        self.guild = guild
-        self.isSelected = isSelected
-        self.isInteractive = isInteractive
-        self.onTap = onTap
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        GuildCrestView(guild: guild, size: 26)
-
-                        Text(guild.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        + Text(" Guild")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.accentColor)
-                    }
-
-                    Text("\(guild.memberCount) Members - \(guild.statusText)")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText)
-                        .padding(.leading, 15)
-
-                    HStack(spacing: 3) {
-                        Text(guild.ownerDisplayName ?? guild.ownerUsername ?? "Unknown Owner")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
-                            .lineLimit(1)
-
-                        Text("-")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText)
-
-                        Text("@\(guild.ownerUsername ?? "owner")")
-                            .font(.caption)
-                            .foregroundColor(AppColors.accentColor)
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, 15)
-
-                    HStack(spacing: 3) {
-                        Circle()
-                            .fill(AppColors.statusPositive)
-                            .frame(width: 6, height: 6)
-                        Text("\(guild.membersOnline) online")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.8))
-                    }
-                    .padding(.leading, 15)
-
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.hexagon.fill")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text(guild.reputationDisplay)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.accentColor)
-                        Text(" Guild Reputation")
-                            .font(.caption)
-                            .foregroundColor(AppColors.whiteText.opacity(0.6))
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, 15)
-                }
-
-                Spacer()
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? AppColors.whiteText : AppColors.greyText.opacity(0.6))
-                    .font(.system(size: 20))
-            }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? AppColors.whiteText.opacity(0.1) : AppColors.gradientBackgroundDark.opacity(0.42))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                isSelected ? AppColors.whiteText.opacity(0.36) : AppColors.whiteText.opacity(0.28),
-                                lineWidth: isSelected ? 1.2 : 1.15
-                            )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(!isInteractive)
-        .opacity(1.0)
-    }
-}

@@ -115,53 +115,6 @@ private struct LocalePreferenceChip: View {
     }
 }
 
-// MARK: - Shared Guild Components
-
-/// Compact single-line `members · online · reputation` strip shared by the
-/// switch row and the discover row.
-private struct GuildStatStrip: View {
-    let memberCount: Int
-    let membersOnline: Int
-    let reputationDisplay: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text("\(memberCount) members")
-                .font(.caption)
-                .foregroundColor(AppColors.whiteText.opacity(0.7))
-
-            separator
-
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(AppColors.statusPositive)
-                    .frame(width: 6, height: 6)
-                Text("\(membersOnline) online")
-                    .font(.caption)
-                    .foregroundColor(AppColors.whiteText.opacity(0.7))
-            }
-
-            separator
-
-            HStack(spacing: 2) {
-                Image(systemName: "star.hexagon.fill")
-                    .font(.caption2)
-                    .foregroundColor(AppColors.guildReputationAccent)
-                Text(reputationDisplay)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(AppColors.guildReputationAccent)
-            }
-        }
-    }
-
-    private var separator: some View {
-        Circle()
-            .fill(AppColors.whiteText.opacity(0.3))
-            .frame(width: 3, height: 3)
-    }
-}
-
 // MARK: - Switch Guild Main View
 struct SwitchGuildView: View {
     let onBack: () -> Void
@@ -265,12 +218,13 @@ struct SwitchGuildView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(sortedUserGuilds) { item in
-                            GuildSwitchRow(
-                                item: item,
-                                isCurrentGuild: item.guild.id == rlAppState.currentGuild?.id,
-                                onSelect: {
-                                    selectGuild(item)
-                                }
+                            let isCurrent = item.guild.id == rlAppState.currentGuild?.id
+                            GuildCardView(
+                                guild: item.guild,
+                                style: .switchRow,
+                                role: item.role,
+                                isCurrent: isCurrent,
+                                onTap: isCurrent ? nil : { selectGuild(item) }
                             )
                         }
                     }
@@ -289,36 +243,8 @@ struct SwitchGuildView: View {
                     // Not tappable: there is nothing to do but wait, and styling
                     // these like the joined rows would invite a dead tap.
                     ForEach(rlAppState.pendingJoinRequests) { request in
-                        HStack(spacing: 12) {
-                            GuildCrestView(guild: request.guild, size: 42)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(request.guild.name)
-                                    .font(.headline)
-                                    .foregroundColor(AppColors.whiteText.opacity(0.85))
-                                    .lineLimit(1)
-                                Text("An admin is reviewing your request")
-                                    .font(.caption2)
-                                    .foregroundColor(AppColors.greyText)
-                            }
-                            Spacer()
-                            Text("PENDING")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(AppColors.statusWarning)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(AppColors.statusWarning.opacity(0.16))
-                                )
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.gradientBackgroundDark.opacity(0.42))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                                )
-                        )
+                        // `onTap: nil` is what makes this non-interactive.
+                        GuildCardView(guild: request.guild, style: .pending)
                     }
                 }
                 .padding(.horizontal, 25)
@@ -401,123 +327,6 @@ struct SwitchGuildView: View {
         
         // Clear drawer cache to force refresh for new guild
         leftDrawerViewModel.clearCache()
-    }
-}
-
-// MARK: - Guild Switch Row (Updated for RLGuildWithMembership)
-
-struct GuildSwitchRow: View {
-    let item: RLGuildWithMembership
-    let isCurrentGuild: Bool
-    let onSelect: () -> Void
-
-    private var ownerName: String {
-        item.guild.ownerDisplayName ?? item.guild.ownerUsername ?? "Unknown owner"
-    }
-
-    var body: some View {
-        Button(action: {
-            // Only execute action if not current guild
-            if !isCurrentGuild {
-                onSelect()
-            }
-        }) {
-            HStack(alignment: .top, spacing: 14) {
-                GuildCrestView(guild: item.guild, size: 42)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    // Guild name (always shown in full) + selection state
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(item.guild.name)
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.whiteText)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if item.guild.isSystemGuild {
-                            Text("System")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(AppColors.guildReputationAccent)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(AppColors.guildReputationAccent.opacity(0.16)))
-                        }
-
-                        Spacer(minLength: 6)
-
-                        if isCurrentGuild {
-                            HStack(spacing: 3) {
-                                Image(systemName: "checkmark")
-                                    .font(.caption2.weight(.bold))
-                                Text("Current")
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            .foregroundColor(AppColors.guildReputationAccent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(AppColors.guildReputationAccent.opacity(0.18))
-                            )
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(AppColors.greyText.opacity(0.7))
-                                .padding(.top, 3)
-                        }
-                    }
-
-                    // Owner
-                    Text("Owned by \(ownerName)")
-                        .font(.caption)
-                        .foregroundColor(AppColors.whiteText.opacity(0.7))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // Your role in this guild
-                    UnifiedRoleBadge(
-                        roleName: item.role.displayName,
-                        roleColor: item.role.color,
-                        reputation: item.membership.reputation,
-                        accuracy: item.membership.accuracyFormatted,
-                        showReputation: true,
-                        fontSize: .caption,
-                        iconSize: .caption2
-                    )
-
-                    // Guild stats
-                    GuildStatStrip(
-                        memberCount: item.guild.memberCount,
-                        membersOnline: item.guild.membersOnline,
-                        reputationDisplay: item.guild.reputationDisplay
-                    )
-
-                    // Language / location
-                    LocalePreferenceChips(
-                        language: item.guild.language,
-                        location: item.guild.location,
-                        compact: true
-                    )
-                }
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        isCurrentGuild
-                            ? AppColors.guildReputationAccent.opacity(CGFloat(AppColors.guildSwitchRowSelectedFillOpacity))
-                            : AppColors.gradientBackgroundDark.opacity(0.42)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                isCurrentGuild
-                                    ? AppColors.guildReputationAccent.opacity(CGFloat(AppColors.guildSwitchRowSelectedStrokeOpacity))
-                                    : AppColors.whiteText.opacity(0.16),
-                                lineWidth: 1
-                            )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -750,8 +559,9 @@ struct JoinGuildView: View {
                     ScrollView {
                         LazyVStack(spacing: 14) {
                             ForEach(filteredGuilds) { guild in
-                                JoinGuildRow(
+                                GuildCardView(
                                     guild: guild.guild,
+                                    style: .discover,
                                     isJoined: guild.isJoined,
                                     preferredLanguage: preferredLanguage,
                                     preferredLocation: preferredLocation,
@@ -1116,107 +926,6 @@ private struct GuildFlowTitleHeader: View {
                 endPoint: .bottom
             )
         )
-    }
-}
-
-// MARK: - Join Guild Row
-
-struct JoinGuildRow: View {
-    let guild: RLGuildDTO
-    let isJoined: Bool
-    let preferredLanguage: String
-    let preferredLocation: String
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .top, spacing: 14) {
-                GuildCrestView(guild: guild, size: 42)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    // Guild name (always shown in full)
-                    Text(guild.name)
-                        .font(.headline)
-                        .foregroundColor(AppColors.whiteText)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // Access badge + joined pill
-                    HStack(spacing: 8) {
-                        if guild.isSystemGuild {
-                            Text("System")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.guildReputationAccent)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(AppColors.guildReputationAccent.opacity(0.16)))
-                        } else {
-                            Text(guild.isOpen ? "Open" : "Private")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(guild.isOpen ? AppColors.guildReputationAccent : AppColors.whiteText.opacity(0.7))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule().fill(guild.isOpen ? AppColors.guildReputationAccent.opacity(0.18) : AppColors.whiteText.opacity(0.08))
-                                )
-                        }
-
-                        if isJoined {
-                            Text("Joined")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.bullCandleGreen)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule().fill(AppColors.bullCandleGreen.opacity(0.16))
-                                )
-                        }
-                    }
-
-                    // Language / location
-                    LocalePreferenceChips(
-                        language: guild.language,
-                        location: guild.location,
-                        preferredLanguage: preferredLanguage,
-                        preferredLocation: preferredLocation,
-                        compact: true
-                    )
-
-                    // Description
-                    if let description = guild.description, !description.isEmpty {
-                        Text(description)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                            .lineLimit(2)
-                    }
-
-                    GuildStatStrip(
-                        memberCount: guild.memberCount,
-                        membersOnline: guild.membersOnline,
-                        reputationDisplay: guild.reputationDisplay
-                    )
-                }
-
-                Spacer(minLength: 6)
-
-                Image(systemName: "chevron.right")
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.whiteText.opacity(0.4))
-                    .padding(.top, 3)
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.gradientBackgroundDark.opacity(0.42))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 

@@ -888,6 +888,9 @@ struct UnifiedContentCard<Content: View>: View {
     var isUnread: Bool = false
     var semanticBorderColor: Color? = nil
     var cornerRadius: CGFloat = 12
+    /// Replaces the standard `contentCardFill` wash. Used by selected/current
+    /// guild cards, which tint the whole surface rather than just the border.
+    var fillOverride: Color? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var isPressed: Bool = false
@@ -907,7 +910,7 @@ struct UnifiedContentCard<Content: View>: View {
             content()
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(AppColors.contentCardFill(isUnread: isUnread, isPressed: isPressed))
+                        .fill(fillOverride ?? AppColors.contentCardFill(isUnread: isUnread, isPressed: isPressed))
                         .overlay(
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .strokeBorder(borderColor, lineWidth: 1)
@@ -1099,6 +1102,120 @@ struct UnifiedAuthorFooter: View {
                 Text(time)
                     .font(.system(size: 10))
                     .foregroundColor(AppColors.whiteText.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: 0,
+                    bottomLeading: cornerRadius,
+                    bottomTrailing: cornerRadius,
+                    topTrailing: 0
+                )
+            )
+            .fill(AppColors.surfaceWhite06)
+        )
+    }
+}
+
+// MARK: - ================================================================================================
+// MARK: - GUILD META FOOTER
+// MARK: - ================================================================================================
+
+/// Guild-shaped sibling of `UnifiedAuthorFooter`, sharing its exact recipe —
+/// bottom-only rounded `surfaceWhite06` band, 10–11pt type, separator dots.
+///
+/// This replaces the loose stack of `role` / `members · online · reputation` /
+/// `language + location chips` lines that guild rows used to spread over three
+/// full-width rows. Locale is reduced to a language code and a flag here; the
+/// full chips still render on guild detail, where there is room for them.
+struct GuildMetaFooter: View {
+    var roleName: String? = nil
+    var roleColor: Color? = nil
+    let memberCount: Int
+    let membersOnline: Int
+    let reputationDisplay: String
+    var language: String? = nil
+    var location: String? = nil
+    var isLocaleMatch: Bool = false
+    var cornerRadius: CGFloat = 14
+
+    /// "1 member", not "1 members" — the old `memberCountDisplay` never
+    /// singularised and it was visible on every one-member guild.
+    private var memberText: String {
+        if memberCount >= 1000 { return "\(memberCount / 1000)k members" }
+        return memberCount == 1 ? "1 member" : "\(memberCount) members"
+    }
+
+    private var languageCode: String {
+        let code = LocaleOptionCatalog.languageCode(from: language)
+        return code == LocaleOptionCatalog.allPreferenceCode ? "" : code.uppercased()
+    }
+
+    private var locationFlag: String? {
+        let code = LocaleOptionCatalog.countryCode(from: location)
+        guard code != LocaleOptionCatalog.allPreferenceCode else { return nil }
+        return LocaleOptionCatalog.flagEmoji(forCountryCode: code)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let roleName, let roleColor {
+                Text(roleName.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(roleColor.opacity(0.9))
+
+                UnifiedSeparatorDot()
+            }
+
+            Text(memberText)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.whiteText.opacity(0.7))
+
+            if membersOnline > 0 {
+                UnifiedSeparatorDot()
+
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(AppColors.statusPositive)
+                        .frame(width: 5, height: 5)
+                    Text("\(membersOnline)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppColors.whiteText.opacity(0.7))
+                }
+            }
+
+            UnifiedSeparatorDot()
+
+            HStack(spacing: 2) {
+                Image(systemName: "star.hexagon.fill")
+                    .font(.system(size: 8))
+                Text(reputationDisplay)
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundColor(AppColors.guildReputationAccent.opacity(0.9))
+
+            Spacer(minLength: 6)
+
+            // Locale, demoted to glyphs. "All languages / Global" simply reads
+            // as absence here rather than as two full-width pills.
+            HStack(spacing: 5) {
+                if isLocaleMatch {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(AppColors.guildReputationAccent)
+                }
+                if !languageCode.isEmpty {
+                    Text(languageCode)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(AppColors.whiteText.opacity(0.45))
+                }
+                if let locationFlag {
+                    Text(locationFlag)
+                        .font(.system(size: 10))
+                }
             }
         }
         .padding(.horizontal, 12)
