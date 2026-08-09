@@ -1069,7 +1069,13 @@ class RLAppState: ObservableObject {
 
         do {
             let guildWithMembership = try await realApi.acceptGuildInviteLink(code: code)
-            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id }) {
+            // Were we already in this guild? Tapping your own share link is the
+            // common way to land here, and claiming "Referral accepted" when no
+            // referral was credited is a lie the user can see through — they were
+            // already a member.
+            let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id })
+            let wasAlreadyMember = existingIndex != nil
+            if let existingIndex {
                 userGuilds[existingIndex] = guildWithMembership
             } else {
                 userGuilds.append(guildWithMembership)
@@ -1077,7 +1083,11 @@ class RLAppState: ObservableObject {
             selectGuild(guildWithMembership, showTransition: false)
             pendingReferralInviteCode = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingReferralInviteCodeStorageKey)
-            showSuccess(RLUserFacingCopy.text(.successReferralAccepted))
+            if wasAlreadyMember {
+                showInfo(RLUserFacingCopy.text(.infoAlreadyGuildMember))
+            } else {
+                showSuccess(RLUserFacingCopy.text(.successReferralAccepted))
+            }
             return true
         } catch APIError.unauthorized {
             return false
