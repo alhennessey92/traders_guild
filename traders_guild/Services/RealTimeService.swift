@@ -147,7 +147,15 @@ class RealTimeService: ObservableObject {
         
         startPingTimer()
         
-        print("🌐 [WS] Connecting to \(url.absoluteString)...")
+        // The URL carries the access token as a query parameter, so it must never be logged whole.
+        // This line was ungated, which put a live JWT into the device log of every release build.
+        #if DEBUG
+        var redacted = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        redacted?.queryItems = redacted?.queryItems?.map { item in
+            item.name == "token" ? URLQueryItem(name: item.name, value: "<redacted>") : item
+        }
+        print("🌐 [WS] Connecting to \(redacted?.string ?? url.path)")
+        #endif
     }
     
     /// Disconnect cleanly
