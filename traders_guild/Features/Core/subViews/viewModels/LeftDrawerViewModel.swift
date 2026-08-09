@@ -175,7 +175,24 @@ class LeftDrawerViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func applyGuildMembersResponse(_ response: RLGuildMembersListDTO, presenceMap: [UUID: Bool]) {
+    /// Apply a members response, unless the user has since switched guild.
+    ///
+    /// Both callers await a fetch for a specific guild and then assign the result. Switching guild
+    /// while one is in flight let the *previous* guild's members land on the new guild's screen —
+    /// a two-member guild showing thirty-two people offline, because the 34-member guild it was
+    /// opened from answered a moment later. Guild switching fires a whole preload, so there is
+    /// always something in flight to lose this race.
+    ///
+    /// [requestedGuildId] is the guild the response was asked for; anything else is stale.
+    private func applyGuildMembersResponse(
+        _ response: RLGuildMembersListDTO,
+        presenceMap: [UUID: Bool],
+        requestedGuildId: UUID?,
+        currentGuildId: UUID?
+    ) {
+        if let requestedGuildId, let currentGuildId, requestedGuildId != currentGuildId {
+            return
+        }
         guildMembers = response.members
         guildMembersTotalCount = response.totalCount
         guildMembersOnlineCount = response.onlineCount
@@ -400,7 +417,12 @@ class LeftDrawerViewModel: ObservableObject {
                 do {
                     let response = try await rlAppState.fetchGuildMembers(guildId: guildId)
                     await MainActor.run {
-                        self.applyGuildMembersResponse(response, presenceMap: rlAppState.presenceByUserId)
+                        self.applyGuildMembersResponse(
+                            response,
+                            presenceMap: rlAppState.presenceByUserId,
+                            requestedGuildId: guildId,
+                            currentGuildId: rlAppState.currentGuild?.id
+                        )
                     }
                 } catch is CancellationError {
                     // Silent
@@ -602,7 +624,12 @@ class LeftDrawerViewModel: ObservableObject {
         do {
             let response = try await rlAppState.fetchGuildMembers(guildId: guildId, search: search)
             await MainActor.run {
-                self.applyGuildMembersResponse(response, presenceMap: rlAppState.presenceByUserId)
+                self.applyGuildMembersResponse(
+                    response,
+                    presenceMap: rlAppState.presenceByUserId,
+                    requestedGuildId: guildId,
+                    currentGuildId: rlAppState.currentGuild?.id
+                )
             }
         } catch is CancellationError {
             print("📋 refreshGuildMembers: Cancelled")
