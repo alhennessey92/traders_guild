@@ -367,6 +367,7 @@ struct GuildSettingsView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 32)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 AdminFooterActions(
                     primaryTitle: "Save Details",

@@ -76,6 +76,7 @@ struct ManageRolesView: View {
                             }
                         }
                     }
+                    .scrollDismissesKeyboard(.interactively)
                 }
             }
 
