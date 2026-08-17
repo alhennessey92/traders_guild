@@ -412,7 +412,9 @@ struct MarkerViewingGeneralTab: View {
             }
             HStack(spacing: 8) {
                 if let confidence = liveMarker.confidence {
-                    statBadge(title: "Confidence", value: "\(confidence)%")
+                    // Confidence is a 1-5 rating, not a percentage — a % sign made maximum
+                    // conviction read as "5%". Matches Android's MarkerDetailSheet.
+                    statBadge(title: "Confidence", value: "\(confidence)/5")
                 }
                 let tfCount = componentMetrics.timeframeComponents.count
                 if tfCount > 0 {
@@ -732,7 +734,7 @@ struct MarkerViewingGeneralTab: View {
                         icon: "tag"
                     )
                     if let confidence = liveMarker.confidence {
-                        metaChip(label: "\(confidence)%", icon: "gauge.with.needle")
+                        metaChip(label: "\(confidence)/5", icon: "gauge.with.needle")
                     }
                 }
 
