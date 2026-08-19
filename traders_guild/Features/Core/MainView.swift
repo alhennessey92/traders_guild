@@ -62,11 +62,15 @@ struct MainView: View {
     @StateObject private var chartControlVM = ChartControlViewModel()
     @StateObject private var chartDataManager = ChartDataManager()
     @StateObject private var chartViewModel: ChartViewModel
-    @StateObject private var chartGestureState = ChartGestureState()
+    /// Held, not observed — see [ChartStateOwner]. Reading `chartGestureState` here is fine; what
+    /// must not happen is MainView subscribing to it, because pan publishes at frame rate.
+    @StateObject private var chartStateOwner = ChartStateOwner()
     @StateObject private var indicatorPanelViewportStore = IndicatorPanelViewportStore()
     @StateObject private var placementState = MarkerPlacementState()
     @StateObject private var markerOverlayState = MarkerOverlayState()
-    
+
+    private var chartGestureState: ChartGestureState { chartStateOwner.gestureState }
+
     @State private var fadeIn: Bool = false
 
     // MARK: - Tutorial State
@@ -150,51 +154,9 @@ struct MainView: View {
         return placementState.intent.color
     }
 
-    // MARK: - Main Chart Viewport (for timeframe panel window overlay)
-
-    private var mainChartVisibleStartDate: Date? {
-        let candles = chartViewModel.dataManager.candles
-        guard candles.count >= 2 else { return candles.first?.timestamp }
-        let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
-        let renderOffset = CGFloat(chartViewModel.dataManager.historicalRenderIndexOffset)
-        let fractionalStart = max(0, renderOffset - chartGestureState.panOffset.width / mainTotalCandleWidth)
-        return interpolatedTimestamp(at: fractionalStart, in: candles)
-    }
-
-    private var mainChartVisibleEndDate: Date? {
-        let candles = chartViewModel.dataManager.candles
-        guard candles.count >= 2 else { return candles.last?.timestamp }
-        let mainTotalCandleWidth = 12.0 * chartGestureState.candleWidthScale + 4.0
-        let renderOffset = CGFloat(chartViewModel.dataManager.historicalRenderIndexOffset)
-        let fractionalStart = max(0, renderOffset - chartGestureState.panOffset.width / mainTotalCandleWidth)
-        let screenWidth = UIScreen.main.bounds.width
-        let fractionalEnd = fractionalStart + screenWidth / mainTotalCandleWidth
-        return interpolatedTimestamp(at: fractionalEnd, in: candles)
-    }
-
-    /// Interpolates a timestamp for a fractional candle index (e.g. 5.3 = 30% between candle 5 and 6)
-    private func interpolatedTimestamp(at fractionalIndex: CGFloat, in candles: [RLCandleDTO]) -> Date {
-        let idx = Int(fractionalIndex)
-        let frac = fractionalIndex - CGFloat(idx)
-
-        if idx < 0 {
-            // Extrapolate before first candle
-            let interval = chartViewModel.currentTimeframe.seconds
-            return candles[0].timestamp.addingTimeInterval(-Double(-fractionalIndex) * interval)
-        }
-        if idx >= candles.count - 1 {
-            // Extrapolate after last candle
-            let interval = chartViewModel.currentTimeframe.seconds
-            let overshoot = fractionalIndex - CGFloat(candles.count - 1)
-            return candles[candles.count - 1].timestamp.addingTimeInterval(Double(overshoot) * interval)
-        }
-
-        // Interpolate between candle[idx] and candle[idx+1]
-        let t0 = candles[idx].timestamp.timeIntervalSince1970
-        let t1 = candles[idx + 1].timestamp.timeIntervalSince1970
-        let interpolated = t0 + Double(frac) * (t1 - t0)
-        return Date(timeIntervalSince1970: interpolated)
-    }
+    // Main-chart viewport + bottom-axis crosshair derivation used to live here. Both now sit in
+    // TimeframePanelContainer, their only consumer — computing them here forced MainView to observe
+    // ChartGestureState, and so to re-evaluate the whole app shell on every frame of a chart pan.
 
     private var indicatorPanelHeights: [CGFloat] {
         chartViewModel.indicatorManager.activeIndicators.activePanelTypes.map(indicatorPanelHeight(for:))
@@ -235,20 +197,6 @@ struct MainView: View {
     private var bottomTimeframeAxisPanelIndex: Int? {
         guard case .timeframe(let index) = chartPanelLayout.bottomBoundaryOwner else { return nil }
         return index
-    }
-
-    private var bottomAxisOverlayTimestamp: Date? {
-        if chartGestureState.crosshairActive {
-            return chartGestureState.crosshairTimestamp
-        }
-        if chartGestureState.markerPlacementGuide.isActive {
-            return chartGestureState.markerPlacementGuide.timestamp
-        }
-        return nil
-    }
-
-    private var bottomAxisOverlayStyle: CrosshairTimeLabelStyle {
-        chartGestureState.crosshairActive ? .standard : .markerPlacement
     }
 
     private var activeTimeframePanelSource: TimeframePanelSource {
@@ -463,18 +411,16 @@ struct MainView: View {
                         // Timeframe panels (above indicator panels)
                         TimeframePanelContainer(
                             timeframePanelManager: timeframePanelManager,
+                            gestureState: chartGestureState,
+                            chartData: chartViewModel.dataManager,
                             markerTimestamp: activeMarkerTimestamp,
                             intentColor: activeMarkerIntentColor,
                             baseCandleWidth: 12,
                             candleSpacing: 4,
-                            mainChartVisibleStart: mainChartVisibleStartDate,
-                            mainChartVisibleEnd: mainChartVisibleEndDate,
                             mainChartTimeframeSeconds: chartViewModel.currentTimeframe.seconds,
                             showMarkerLine: chartViewModel.selectedMarkerForSheet != nil || placementState.anchorDraft != nil,
                             indicatorPanelCount: chartViewModel.indicatorManager.activeIndicators.activePanelTypes.count,
                             bottomAxisPanelIndex: bottomTimeframeAxisPanelIndex,
-                            bottomAxisOverlayTimestamp: bottomAxisOverlayTimestamp,
-                            bottomAxisOverlayStyle: bottomAxisOverlayStyle,
                             formatPrice: { chartViewModel.dataManager.formatPrice($0) }
                         )
 

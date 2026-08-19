@@ -1086,61 +1086,61 @@ struct RLMarketDataProviderStatusDTO: Codable {
 
 /// Single OHLCV candle
 /// Backend: CandleResponse
+/// Every stored property is a trivial value type, and that is load-bearing rather than incidental.
+///
+/// The backend also sends `timestamp_formatted` and `volume_formatted`, and this struct used to
+/// carry both. Nothing ever read them — the chart formats its own axis and volume labels — but they
+/// made the struct non-trivial, so every copy of the candle array had to retain and release two
+/// Strings per element. `RealtimeCandleStreamReducer.processTick` copies the whole array on each
+/// tick, ticks arrive at 50–100 Hz, and the array grows without bound as history pages in: that is
+/// hundreds of thousands of atomic ARC operations per second, purely to carry two dead strings.
+///
+/// Keep it POD. If a formatted string is ever genuinely needed, derive it at the point of display.
 struct RLCandleDTO: Codable, Equatable {
     let timestamp: Date
-    let timestampFormatted: String?
     let open: Double
     let high: Double
     let low: Double
     let close: Double
     let volume: Double?
-    let volumeFormatted: String?
     var isGapFill: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case timestamp
-        case timestampFormatted
         case open
         case high
         case low
         case close
         case volume
-        case volumeFormatted
         case isGapFill
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
-        timestampFormatted = try container.decodeIfPresent(String.self, forKey: .timestampFormatted)
         open = try container.decode(Double.self, forKey: .open)
         high = try container.decode(Double.self, forKey: .high)
         low = try container.decode(Double.self, forKey: .low)
         close = try container.decode(Double.self, forKey: .close)
         volume = try container.decodeIfPresent(Double.self, forKey: .volume)
-        volumeFormatted = try container.decodeIfPresent(String.self, forKey: .volumeFormatted)
         isGapFill = try container.decodeIfPresent(Bool.self, forKey: .isGapFill) ?? false
     }
 
     init(
         timestamp: Date,
-        timestampFormatted: String?,
         open: Double,
         high: Double,
         low: Double,
         close: Double,
         volume: Double?,
-        volumeFormatted: String?,
         isGapFill: Bool = false
     ) {
         self.timestamp = timestamp
-        self.timestampFormatted = timestampFormatted
         self.open = open
         self.high = high
         self.low = low
         self.close = close
         self.volume = volume
-        self.volumeFormatted = volumeFormatted
         self.isGapFill = isGapFill
     }
     

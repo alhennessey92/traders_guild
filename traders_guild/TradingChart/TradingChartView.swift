@@ -166,6 +166,16 @@ private struct DrawingTextEditorContext: Identifiable {
     let kind: Kind
 }
 
+/// Clips to a fixed rect in the view's own coordinate space.
+///
+/// Exists so chart layers that only ever needed a rectangular cut-out can use `.clipShape` instead
+/// of `.mask`. `.mask` renders its content to an offscreen buffer and alpha-composites every frame;
+/// for an opaque rectangle that work buys nothing.
+private struct FixedRectClip: Shape {
+    let rect: CGRect
+    func path(in _: CGRect) -> Path { Path(rect) }
+}
+
 private struct HorizontalAxisPriceLabelItem: Identifiable {
     let id: String
     let text: String
@@ -1367,19 +1377,25 @@ struct TradingChartView: View {
 
             if !shouldHideCurrentPriceIndicator {
                 priceIndicatorView(geometry: geometry)
-                    .mask(priceIndicatorMask(geometry: geometry))
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipShape(FixedRectClip(rect: priceIndicatorClipRect(geometry: geometry)))
             }
 
             // Drawn after the live price chip so Entry / TP / SL labels stay visible when prices align.
+            //
+            // Grouped under a single clip rather than clipped four times: these four were previously
+            // masked individually with the *same* rectangle, costing four offscreen passes a frame
+            // for one shared cut-out. Document order inside the stack is unchanged, so layering is
+            // identical.
             if !isInteractiveDrawingSessionActive {
-                markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(priceLinesFullWidthMask(geometry: geometry))
-                draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(priceLinesFullWidthMask(geometry: geometry))
-                draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
-                    .mask(priceLinesFullWidthMask(geometry: geometry))
-                targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
-                    .mask(priceLinesFullWidthMask(geometry: geometry))
+                ZStack {
+                    markerPriceLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    draggableMarkerLineOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    draggablePredictionLinesOverlay(geometry: geometry, coordinateSystem: coordinateSystem)
+                    targetLineOverlays(coordinateSystem: coordinateSystem, geometry: geometry)
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipShape(FixedRectClip(rect: priceLinesFullWidthClipRect(geometry: geometry)))
             }
 
             markerTopPriorityOverlay()
@@ -1414,7 +1430,7 @@ struct TradingChartView: View {
                     topExclusionHeight: priceIndicatorTopExclusionHeight(geometry: geometry)
                 )
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
-                .mask(priceLinesFullWidthMask(geometry: geometry))
+                .clipShape(FixedRectClip(rect: priceLinesFullWidthClipRect(geometry: geometry)))
                 .zIndex(40)
             }
 
@@ -6541,24 +6557,21 @@ struct TradingChartView: View {
             }
     }
 
-    private func priceIndicatorMask(geometry: GeometryProxy) -> some View {
+    /// Band the live-price chip is allowed to occupy: below the toolbar, above the controls.
+    ///
+    /// A `.clipShape`, not a `.mask`. Both were opaque rectangles — no gradient, no partial alpha —
+    /// but `.mask()` forces a full-size offscreen render pass every frame regardless, which a
+    /// rectangular clip does not. Free on a Mac GPU, not free on a phone at 1290×2796.
+    private func priceIndicatorClipRect(geometry: GeometryProxy) -> CGRect {
         let topExclusion = priceIndicatorTopExclusionHeight(geometry: geometry)
         let bottomExclusion = priceIndicatorBottomExclusionHeight(geometry: geometry)
         let visibleHeight = max(0, geometry.size.height - topExclusion - bottomExclusion)
-
-        return Color.clear
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(AppColors.chartMaskFade)
-                    .frame(width: geometry.size.width, height: visibleHeight)
-                    .offset(y: topExclusion)
-            }
+        return CGRect(x: 0, y: topExclusion, width: geometry.size.width, height: visibleHeight)
     }
 
     /// Mask for price lines (TP/SL) — full width (spans y-axis), clipped below the
     /// toolbar exclusion and above the x-axis band so chips cannot overlap chrome.
-    private func priceLinesFullWidthMask(geometry: GeometryProxy) -> some View {
+    private func priceLinesFullWidthClipRect(geometry: GeometryProxy) -> CGRect {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: geometry.size.height,
             includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
@@ -6569,15 +6582,7 @@ struct TradingChartView: View {
             xAxisReservedHeight: xAxisReservedHeight,
             topExclusionHeight: topExclusion
         )
-
-        return Color.clear
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(AppColors.chartMaskFade)
-                    .frame(width: geometry.size.width, height: visibleHeight)
-                    .offset(y: topExclusion)
-            }
+        return CGRect(x: 0, y: topExclusion, width: geometry.size.width, height: visibleHeight)
     }
 
     // MARK: - Y-Axis Overlay

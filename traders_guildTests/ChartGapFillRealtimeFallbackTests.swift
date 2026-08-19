@@ -622,13 +622,11 @@ struct ChartGapFillRealtimeFallbackTests {
     private func makeCandle(timestamp: Date, close: Double, isGapFill: Bool = false) -> RLCandleDTO {
         return RLCandleDTO(
             timestamp: timestamp,
-            timestampFormatted: nil,
             open: close,
             high: close,
             low: close,
             close: close,
             volume: 1,
-            volumeFormatted: "1",
             isGapFill: isGapFill
         )
     }

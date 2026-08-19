@@ -1517,13 +1517,11 @@ struct MarkerPlanFixesTests {
         let candles = [
             RLCandleDTO(
                 timestamp: timestamp,
-                timestampFormatted: nil,
                 open: 99,
                 high: 101,
                 low: 98,
                 close: 100,
-                volume: 1_000,
-                volumeFormatted: nil
+                volume: 1_000
             ),
         ]
 
@@ -1912,13 +1910,11 @@ struct MarkerPlanFixesTests {
         let candles = [
             RLCandleDTO(
                 timestamp: timestamp,
-                timestampFormatted: nil,
                 open: 99,
                 high: 101,
                 low: 98,
                 close: 100,
-                volume: 1_000,
-                volumeFormatted: nil
+                volume: 1_000
             ),
         ]
 
@@ -2047,13 +2043,11 @@ struct MarkerPlanFixesTests {
 private func makeTestCandle(timestamp: Date, close: Double) -> RLCandleDTO {
     RLCandleDTO(
         timestamp: timestamp,
-        timestampFormatted: nil,
         open: close - 1,
         high: close + 1,
         low: close - 2,
         close: close,
-        volume: 1_000,
-        volumeFormatted: nil
+        volume: 1_000
     )
 }
 

@@ -44,13 +44,11 @@ enum RealtimeCandleStreamReducer {
 
                 let newCandle = RLCandleDTO(
                     timestamp: bucketTimestamp,
-                    timestampFormatted: nil,
                     open: price,
                     high: price,
                     low: price,
                     close: price,
                     volume: volume,
-                    volumeFormatted: formatVolume(volume),
                     isGapFill: false
                 )
                 nextCandles.append(newCandle)
@@ -69,13 +67,11 @@ enum RealtimeCandleStreamReducer {
                       nextCandles[existingIndex].isGapFill {
                 nextCandles[existingIndex] = RLCandleDTO(
                     timestamp: bucketTimestamp,
-                    timestampFormatted: nextCandles[existingIndex].timestampFormatted,
                     open: price,
                     high: price,
                     low: price,
                     close: price,
                     volume: volume,
-                    volumeFormatted: formatVolume(volume),
                     isGapFill: false
                 )
             }
@@ -188,13 +184,11 @@ enum RealtimeCandleStreamReducer {
         let newVolume = (candle.volume ?? 0) + tickVolume
         return RLCandleDTO(
             timestamp: candle.timestamp,
-            timestampFormatted: candle.timestampFormatted,
             open: candle.open,
             high: max(candle.high, tickPrice),
             low: min(candle.low, tickPrice),
             close: tickPrice,
             volume: newVolume,
-            volumeFormatted: formatVolume(newVolume),
             isGapFill: false
         )
     }
@@ -214,13 +208,11 @@ enum RealtimeCandleStreamReducer {
             generated.append(
                 RLCandleDTO(
                     timestamp: nextTimestamp,
-                    timestampFormatted: nil,
                     open: close,
                     high: close,
                     low: close,
                     close: close,
                     volume: 0,
-                    volumeFormatted: formatVolume(0),
                     isGapFill: true
                 )
             )

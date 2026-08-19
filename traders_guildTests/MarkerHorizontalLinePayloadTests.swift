@@ -75,13 +75,11 @@ struct MarkerHorizontalLinePayloadTests {
     func renderedGlyphFocusPriceUsesStackedMarkerLayoutNotCandleClose() {
         let candle = RLCandleDTO(
             timestamp: Date(timeIntervalSince1970: 1_700_000_000),
-            timestampFormatted: nil,
             open: 100,
             high: 110,
             low: 90,
             close: 101,
-            volume: nil,
-            volumeFormatted: nil
+            volume: nil
         )
 
         var marker = ChartMarkerUI(marker: makeMarkerDTO(timestamp: candle.timestamp), candleIndex: 0)

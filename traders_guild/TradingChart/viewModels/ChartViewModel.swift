@@ -748,6 +748,13 @@ class ChartViewModel: ObservableObject {
 
         do {
             let previousFirstTimestamp = dataManager.candles.first?.timestamp
+            #if DEBUG
+            // A history page is the one piece of work that lands mid-gesture and is big enough to
+            // drop frames: a ~200 KB fetch, then a prepend + republish of the whole candle array on
+            // the main actor. If panning stutters periodically, check whether the hitches line up
+            // with these lines — `merge` is the part that blocks the UI; `fetch` does not.
+            let fetchStartedAt = CFAbsoluteTimeGetCurrent()
+            #endif
             let candlesResponse = try await api.getCandles(
                 symbolId: symbol.id,
                 timeframe: currentTimeframe.toBackendString(),
@@ -755,6 +762,9 @@ class ChartViewModel: ObservableObject {
                 endTime: endTime,
                 continuousTime: true
             )
+            #if DEBUG
+            let mergeStartedAt = CFAbsoluteTimeGetCurrent()
+            #endif
 
             let mergeResult = dataManager.mergeHistoricalMarketData(
                 candlesResponse.candles,
@@ -767,6 +777,17 @@ class ChartViewModel: ObservableObject {
                     )
                 }
             )
+
+            #if DEBUG
+            let now = CFAbsoluteTimeGetCurrent()
+            print(String(
+                format: "📄 [Chart] history page: +%d candles (total %d) fetch=%.0fms merge=%.1fms",
+                mergeResult.prependedCount,
+                dataManager.candles.count,
+                (mergeStartedAt - fetchStartedAt) * 1000,
+                (now - mergeStartedAt) * 1000
+            ))
+            #endif
 
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp ?? candlesResponse.earliestTimestamp
             hasMoreHistoricalCandles = candlesResponse.hasMore && mergeResult.prependedCount > 0
@@ -1462,13 +1483,11 @@ class ChartViewModel: ObservableObject {
             guard candlePayload.timeframe == currentTimeframe.toBackendString() else { return }
             let candle = RLCandleDTO(
                 timestamp: candlePayload.candle.timestamp,
-                timestampFormatted: nil,
                 open: candlePayload.candle.open,
                 high: candlePayload.candle.high,
                 low: candlePayload.candle.low,
                 close: candlePayload.candle.close,
-                volume: candlePayload.candle.volume,
-                volumeFormatted: nil
+                volume: candlePayload.candle.volume
             )
             let firstTimestampBefore = dataManager.candles.first?.timestamp
             let trimmedCount = dataManager.processRealCandle(candle)

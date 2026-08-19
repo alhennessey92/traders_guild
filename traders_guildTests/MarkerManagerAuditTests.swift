@@ -307,13 +307,11 @@ struct MarkerManagerAuditTests {
         dataManager.candles = [
             RLCandleDTO(
                 timestamp: timestamp,
-                timestampFormatted: nil,
                 open: 1.2,
                 high: 1.25,
                 low: 1.19,
                 close: 1.24,
-                volume: nil,
-                volumeFormatted: nil
+                volume: nil
             ),
         ]
         manager.configureRealTime(dataManager: dataManager)
