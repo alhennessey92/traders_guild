@@ -2742,6 +2742,18 @@ struct ChartBottomSheet: View {
         }
     }
 
+    /// A dot on a placement tab button when that tab still has unmet required items.
+    @ViewBuilder
+    private func placementRequirementDot(count: Int) -> some View {
+        if count > 0 {
+            Circle()
+                .fill(AppColors.statusWarning)
+                .frame(width: 9, height: 9)
+                .overlay(Circle().stroke(bottomTabBarContainerBackground, lineWidth: 2))
+                .offset(x: -3, y: 3)
+        }
+    }
+
     private var placementBottomBarActionColor: Color {
         guard placementState.intent == .alert else {
             return placementState.intent.color
@@ -2769,6 +2781,9 @@ struct ChartBottomSheet: View {
                         placementState.selectedPlacementTab = .general
                     }
                 }
+                .overlay(alignment: .topTrailing) {
+                    placementRequirementDot(count: placementState.unmetRequiredCount(for: .general))
+                }
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
@@ -2787,10 +2802,21 @@ struct ChartBottomSheet: View {
                                 placementState.selectedPlacementTab = tab
                             }
                         }
+                        .overlay(alignment: .topTrailing) {
+                            placementRequirementDot(count: placementState.unmetRequiredCount(for: tab))
+                        }
                     }
 
                     Button {
-                        onPlaceMarker?()
+                        if placementState.isValid {
+                            onPlaceMarker?()
+                        } else if let tab = placementState.unmetRequiredChecklistItems.first?.tab {
+                            // A dead button that says nothing is the whole complaint. Send the
+                            // user to the tab that can fix the first unmet requirement.
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                placementState.selectedPlacementTab = tab
+                            }
+                        }
                     } label: {
                         let actionColor = placementBottomBarActionColor
                         let showsMarkerColor = placementBottomBarShowsMarkerColor
@@ -2836,8 +2862,14 @@ struct ChartBottomSheet: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .disabled(!placementState.isValid)
+                    // Deliberately NOT .disabled: an invalid tap now navigates to the requirement
+                    // that is blocking it. The dimmed fill still reads as "not ready".
                     .opacity(placementBottomBarShowsMarkerColor ? 1.0 : 0.55)
+                    .accessibilityLabel(
+                        placementState.isValid
+                            ? (placementState.isEditingExistingMarker ? "Save" : "Place Marker")
+                            : "Place Marker — \(placementState.unmetRequiredChecklistItems.first?.title ?? "not ready")"
+                    )
                 }
             }
             .padding(.horizontal, 20)
