@@ -15,6 +15,14 @@ final class MarkerOverlayState: ObservableObject {
 
     private var previousMarkerId: UUID?
 
+    /// The pane this overlay belongs to. Its notifications are addressed to that
+    /// pane so sibling panes ignore them.
+    let paneID: UUID
+
+    init(paneID: UUID = UUID()) {
+        self.paneID = paneID
+    }
+
     func activateViewing(marker: ChartMarkerUI, indicatorManager: IndicatorManager, candles: [RLCandleDTO]) {
         if !isOverlayActive {
             indicatorManager.saveSnapshot()
@@ -36,9 +44,9 @@ final class MarkerOverlayState: ObservableObject {
         previousMarkerId = activeMarkerId
         activeMarkerId = marker.id
         isOverlayActive = true
-        NotificationCenter.default.post(
-            name: .markerOverlayApply,
-            object: nil,
+        ChartPaneAddressing.post(
+            .markerOverlayApply,
+            to: paneID,
             userInfo: [
                 "markerId": marker.id.uuidString,
                 "previousMarkerId": previousMarkerId?.uuidString as Any,
@@ -51,9 +59,9 @@ final class MarkerOverlayState: ObservableObject {
         let id = activeMarkerId?.uuidString
         activeMarkerId = nil
         isOverlayActive = false
-        NotificationCenter.default.post(
-            name: .markerOverlayClear,
-            object: nil,
+        ChartPaneAddressing.post(
+            .markerOverlayClear,
+            to: paneID,
             userInfo: [
                 "markerId": id as Any,
                 "restoreMarkerId": previousMarkerId?.uuidString as Any,
