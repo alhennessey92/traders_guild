@@ -6130,11 +6130,19 @@ struct TradingChartView: View {
                 let newScale = initialPriceScale * scaleMultiplier
                 let clampedScale = Swift.min(maxVerticalScale, Swift.max(minVerticalScale, newScale))
                 
-                let chartHeight = UIScreen.main.bounds.height
-                let screenCenterY = chartHeight / 2
-                
-                let scaleRatio = clampedScale / initialPriceScale
-                let newVerticalOffset = initialVerticalOffset * scaleRatio + screenCenterY * (1.0 - scaleRatio)
+                // Anchor the zoom at the centre of *this chart*, not the centre of
+                // the display. `verticalPanOffset` is consumed in chart-local space
+                // (ChartCoordinateSystem.yPosition uses chartSize.height), so a
+                // screen-derived anchor was a coordinate-space mismatch: the chart
+                // never fills the whole screen, so the anchor sat below its visual
+                // centre and the price axis crept while zooming. In a 2x2 grid the
+                // anchor would land outside the pane entirely.
+                let newVerticalOffset = VerticalZoomAnchor.adjustedVerticalOffset(
+                    initialOffset: initialVerticalOffset,
+                    initialScale: initialPriceScale,
+                    newScale: clampedScale,
+                    chartHeight: chartSize.height
+                )
                 
                 gestureState.priceScale = clampedScale
                 gestureState.verticalPanOffset = newVerticalOffset
@@ -6162,11 +6170,19 @@ struct TradingChartView: View {
                 let newScale = initialPriceScale * dampenedValue
                 let clampedScale = Swift.min(maxVerticalScale, Swift.max(minVerticalScale, newScale))
                 
-                let chartHeight = UIScreen.main.bounds.height
-                let screenCenterY = chartHeight / 2
-                
-                let scaleRatio = clampedScale / initialPriceScale
-                let newVerticalOffset = initialVerticalOffset * scaleRatio + screenCenterY * (1.0 - scaleRatio)
+                // Anchor the zoom at the centre of *this chart*, not the centre of
+                // the display. `verticalPanOffset` is consumed in chart-local space
+                // (ChartCoordinateSystem.yPosition uses chartSize.height), so a
+                // screen-derived anchor was a coordinate-space mismatch: the chart
+                // never fills the whole screen, so the anchor sat below its visual
+                // centre and the price axis crept while zooming. In a 2x2 grid the
+                // anchor would land outside the pane entirely.
+                let newVerticalOffset = VerticalZoomAnchor.adjustedVerticalOffset(
+                    initialOffset: initialVerticalOffset,
+                    initialScale: initialPriceScale,
+                    newScale: clampedScale,
+                    chartHeight: chartSize.height
+                )
                 
                 gestureState.priceScale = clampedScale
                 gestureState.verticalPanOffset = newVerticalOffset
