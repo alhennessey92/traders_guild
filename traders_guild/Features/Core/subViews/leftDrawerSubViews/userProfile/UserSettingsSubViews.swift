@@ -558,6 +558,8 @@ struct AvatarSelectionView: View {
     }
 }
 
+#if canImport(UIKit)
+
 // Simple image picker wrapper
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: PlatformImage?
@@ -598,6 +600,33 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
     }
 }
+
+#else
+
+/// macOS counterpart. The iOS version uses `allowsEditing`, which has no open-panel
+/// equivalent — the user crops elsewhere or picks an already-square image.
+struct ImagePicker: View {
+
+    @Binding var image: PlatformImage?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        MacImageChooser(
+            allowsMultipleSelection: false,
+            onChosen: { urls in
+                if let url = urls.first {
+                    image = PlatformImage(contentsOf: url)
+                }
+                dismiss()
+            },
+            onCancel: { dismiss() }
+        )
+    }
+}
+
+#endif
+
 
 
 // ================================================================================================

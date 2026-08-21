@@ -7,6 +7,8 @@ import PhotosUI
 
 /// SwiftUI wrapper around PHPickerViewController for selecting photos from the library.
 /// Returns selected image data and filename to the caller via onImagesSelected callback.
+#if canImport(UIKit)
+
 struct PhotoPickerView: UIViewControllerRepresentable {
     let onImagesSelected: ([(Data, String, String)]) -> Void  // [(imageData, filename, mimeType)]
     let onCancel: () -> Void
@@ -89,3 +91,31 @@ struct PhotoPickerView: UIViewControllerRepresentable {
         }
     }
 }
+
+#else
+
+/// macOS counterpart to the PHPicker sheet. Reads the chosen files straight off
+/// disk and reports the same (data, filename, mimeType) tuples the iOS coordinator
+/// produces, so `appendAttachments` is unchanged.
+struct PhotoPickerView: View {
+
+    let onImagesSelected: ([(Data, String, String)]) -> Void
+    let onCancel: () -> Void
+    var selectionLimit: Int = 10
+
+    var body: some View {
+        MacImageChooser(
+            allowsMultipleSelection: selectionLimit != 1,
+            onChosen: { urls in
+                let picked = urls.prefix(selectionLimit).compactMap { url -> (Data, String, String)? in
+                    guard let data = try? Data(contentsOf: url) else { return nil }
+                    return (data, url.lastPathComponent, PlatformFilePanel.mimeType(for: url))
+                }
+                if picked.isEmpty { onCancel() } else { onImagesSelected(picked) }
+            },
+            onCancel: onCancel
+        )
+    }
+}
+
+#endif
