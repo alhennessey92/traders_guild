@@ -12,7 +12,9 @@
 //  State management remains in individual managers (MessagingManager, ChartChatManager, etc.)
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // MARK: - ================================================================================================
 // MARK: - CHAT CONTEXT ENUM

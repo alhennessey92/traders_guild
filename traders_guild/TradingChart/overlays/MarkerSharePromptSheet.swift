@@ -9,7 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 extension Notification.Name {
     /// Posted by the chart after a guild-visible marker is placed. MainView

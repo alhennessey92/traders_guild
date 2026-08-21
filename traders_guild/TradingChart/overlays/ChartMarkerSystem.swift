@@ -16,7 +16,9 @@
 
 import SwiftUI
 import Combine
+#if canImport(UIKit)
 import UIKit
+#endif
 
 enum MarkerVisibilityMode: String, CaseIterable, Identifiable {
     case off

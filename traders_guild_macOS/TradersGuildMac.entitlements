@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mandatory for the Mac App Store, which is where Universal Purchase
+	     requires this to ship (same bundle ID as the iOS app). -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- REST API + the market-data WebSocket. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Attaching files in chat, and saving exported marker images. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- Voice dictation in the chat composer. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- Same App ID as iOS, so the existing apple-app-site-association file at
+	     tradersguild.co already covers this app with no change. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:tradersguild.co</string>
+		<string>applinks:open.tradersguild.co</string>
+	</array>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>
