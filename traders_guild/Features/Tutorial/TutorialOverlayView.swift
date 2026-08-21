@@ -27,7 +27,7 @@ struct TutorialOverlayView: View {
     var body: some View {
         let step = tutorialManager.currentStep
         let spotlightRect = tutorialManager.currentSpotlightRect
-        let screen = UIScreen.main.bounds
+        let screen = PlatformScreen.bounds
         let visible = tutorialManager.showSpotlight
 
         ZStack {
@@ -181,7 +181,7 @@ struct TutorialOverlayView: View {
 
     private func dimmingLayer(spotlightRect: CGRect?) -> some View {
         let step = tutorialManager.currentStep
-        let screen = UIScreen.main.bounds
+        let screen = PlatformScreen.bounds
 
         return Color.black.opacity(0.75)
             .ignoresSafeArea()
@@ -218,7 +218,7 @@ struct TutorialOverlayView: View {
 
     private func spotlightRing(rect: CGRect) -> some View {
         let step = tutorialManager.currentStep
-        let screen = UIScreen.main.bounds
+        let screen = PlatformScreen.bounds
 
         let ringWidth: CGFloat
         let ringHeight: CGFloat

@@ -123,7 +123,7 @@ struct MainView: View {
     @State private var didScheduleTutorialAutoStart: Bool = false
     // MARK: - Computed Properties
     private var screenSize: CGSize {
-        UIScreen.main.bounds.size
+        PlatformScreen.bounds.size
     }
     
     private var drawerWidth: CGFloat {
@@ -1725,7 +1725,7 @@ enum DrawerSide { case left, right }
     
 //     // MARK: - Computed Properties
 //     private var screenSize: CGSize {
-//         UIScreen.main.bounds.size
+//         PlatformScreen.bounds.size
 //     }
     
 //     private var drawerWidth: CGFloat {

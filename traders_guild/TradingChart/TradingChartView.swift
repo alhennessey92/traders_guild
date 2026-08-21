@@ -3075,10 +3075,10 @@ struct TradingChartView: View {
         // Auto-scroll to latest candle with smooth animation
         gestureState.animateCenterOnMarker(
             at: lastIndex,
-            chartWidth: chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width,
+            chartWidth: chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width,
             candleWidth: totalCandleWidth,
             price: entryPrice,
-            chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
+            chartHeight: chartSize.height > 0 ? chartSize.height : PlatformScreen.bounds.height * 0.6,
             priceRange: chartData.priceRange,
             historicalRenderIndexOffset: chartData.historicalRenderIndexOffset
         )
@@ -3322,7 +3322,7 @@ struct TradingChartView: View {
             return
         }
 
-        let effectiveHeight = chartHeight ?? (chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55)
+        let effectiveHeight = chartHeight ?? (chartSize.height > 0 ? chartSize.height : PlatformScreen.bounds.height * 0.55)
         updateHistoricalPriceRangePreservingVerticalPosition(
             anchorPrice: visibleCenterPriceForCurrentOffset(chartWidth: chartWidth),
             chartHeight: effectiveHeight
@@ -3345,7 +3345,7 @@ struct TradingChartView: View {
         let visibleStartIndex = visibleStartIndexForCurrentOffset()
 
         // FIXED: Use screen width as fallback when chartSize not yet set
-        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width
         let candlesOnScreen = Int(effectiveWidth / totalCandleWidth)
 
         let visibleEndIndex = Swift.min(
@@ -3623,8 +3623,8 @@ struct TradingChartView: View {
     }
 
     private func settleHistoricalPriceRangeAfterMarkerExit(chartWidth: CGFloat? = nil, chartHeight: CGFloat? = nil) {
-        let effectiveWidth = chartWidth ?? (chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width)
-        let effectiveHeight = chartHeight ?? (chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55)
+        let effectiveWidth = chartWidth ?? (chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width)
+        let effectiveHeight = chartHeight ?? (chartSize.height > 0 ? chartSize.height : PlatformScreen.bounds.height * 0.55)
         updateHistoricalPriceRangePreservingVerticalPosition(
             anchorPrice: visibleCenterPriceForCurrentOffset(chartWidth: effectiveWidth),
             chartHeight: effectiveHeight
@@ -3707,8 +3707,8 @@ struct TradingChartView: View {
     }
 
     private var previewDragPlotSize: CGSize {
-        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
-        let effectiveHeight = chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width
+        let effectiveHeight = chartSize.height > 0 ? chartSize.height : PlatformScreen.bounds.height * 0.55
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: effectiveHeight,
             includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
@@ -3887,8 +3887,8 @@ struct TradingChartView: View {
         var focusMarker = matchingMarker
         focusMarker?.candleIndex = resolvedIndex
 
-        let chartWidth = UIScreen.main.bounds.width
-        let chartHeight = UIScreen.main.bounds.height * 0.55
+        let chartWidth = PlatformScreen.bounds.width
+        let chartHeight = PlatformScreen.bounds.height * 0.55
         let candleWidth = totalCandleWidth
         if let focusMarker {
             tappedMarkerId = focusMarker.id
@@ -7524,7 +7524,7 @@ struct TradingChartView: View {
     }
 
     private var visibleDayLabelText: String {
-        let effectiveWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        let effectiveWidth = chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width
         return ChartXAxisLabelEngine.visibleDayLabel(
             input: .init(
                 candles: chartData.candles,
@@ -8007,8 +8007,8 @@ struct TradingChartView: View {
         guard !chartData.candles.isEmpty else { return }
         
         let resetCandleWidthScale: CGFloat = 1.0
-        let chartWidth = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
-        let chartHeight = chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55
+        let chartWidth = chartSize.width > 0 ? chartSize.width : PlatformScreen.bounds.width
+        let chartHeight = chartSize.height > 0 ? chartSize.height : PlatformScreen.bounds.height * 0.55
         let targetOffset = latestCandlePanOffset(
             chartWidth: chartWidth,
             candleWidthScale: resetCandleWidthScale
@@ -8076,7 +8076,7 @@ struct TradingChartView: View {
         
         controlViewModel.jumpToStartAction = {
             self.isProgrammaticScroll = true
-            let width = self.chartSize.width > 0 ? self.chartSize.width : UIScreen.main.bounds.width
+            let width = self.chartSize.width > 0 ? self.chartSize.width : PlatformScreen.bounds.width
             let guardCount = self.olderEdgeGuardCandleCount(chartWidth: width)
             let targetOffset = CGFloat(self.chartData.historicalRenderIndexOffset - guardCount) * self.totalCandleWidth
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -8093,8 +8093,8 @@ struct TradingChartView: View {
 
         controlViewModel.jumpToLatestAction = {
             guard !self.chartData.candles.isEmpty else { return }
-            let width = self.chartSize.width > 0 ? self.chartSize.width : UIScreen.main.bounds.width
-            let height = self.chartSize.height > 0 ? self.chartSize.height : UIScreen.main.bounds.height * 0.55
+            let width = self.chartSize.width > 0 ? self.chartSize.width : PlatformScreen.bounds.width
+            let height = self.chartSize.height > 0 ? self.chartSize.height : PlatformScreen.bounds.height * 0.55
             let targetOffset = self.latestCandlePanOffset(
                 chartWidth: width,
                 candleWidthScale: self.gestureState.candleWidthScale
