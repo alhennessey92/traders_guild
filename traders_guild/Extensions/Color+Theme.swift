@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 enum AppColors {
     // MARK: - Theme Helpers

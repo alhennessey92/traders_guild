@@ -20,3 +20,6 @@ build/
 # Credential stores (never commit!)
 *.kdbx
 *.kdb
+
+# Local verification builds (macOS port work)
+.build-verify/

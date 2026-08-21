@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import UIKit
 import Network
 import UserNotifications
 
@@ -490,7 +489,7 @@ class RLAppState: ObservableObject {
         )
         currentAlert = alert
         if style == .toast {
-            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+            ToastPresenter.current.showToast(alert) { [weak self] in self?.clearAlert() }
         }
     }
 
@@ -510,7 +509,7 @@ class RLAppState: ObservableObject {
         )
         currentAlert = alert
         if style == .toast {
-            ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+            ToastPresenter.current.showToast(alert) { [weak self] in self?.clearAlert() }
         }
     }
     
@@ -522,7 +521,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
-        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        ToastPresenter.current.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showInfo(_ message: String, title: String = RLUserFacingCopy.text(.infoTitle)) {
@@ -533,7 +532,7 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
-        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        ToastPresenter.current.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func showWarning(_ message: String, title: String = RLUserFacingCopy.text(.warningTitle)) {
@@ -544,12 +543,12 @@ class RLAppState: ObservableObject {
             style: .toast
         )
         currentAlert = alert
-        ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
+        ToastPresenter.current.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
     func clearAlert() {
         currentAlert = nil
-        ToastWindowManager.shared.hideToast()
+        ToastPresenter.current.hideToast()
     }
 
     private func syncNotificationBadge() {
@@ -3105,13 +3104,12 @@ class RLAppState: ObservableObject {
     }
 
     private func buildDeviceInfo() -> [String: String] {
-        let device = UIDevice.current
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
         return [
-            "model": device.model,
-            "systemName": device.systemName,
-            "systemVersion": device.systemVersion,
+            "model": PlatformDeviceInfo.model,
+            "systemName": PlatformDeviceInfo.systemName,
+            "systemVersion": PlatformDeviceInfo.systemVersion,
             "appVersion": appVersion,
             "buildNumber": buildNumber
         ]
