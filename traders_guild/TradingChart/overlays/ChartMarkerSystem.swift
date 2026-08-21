@@ -290,11 +290,21 @@ class MarkerManager: ObservableObject {
     ///   - userId: Current user's ID
     ///   - guildId: Current guild's ID
     ///   - userMembership: Current user's guild membership
+    /// Identifies this manager to `RealTimeService`'s channel reference counting.
+    ///
+    /// The marker channel is guild-scoped, so every chart on screen subscribes to
+    /// the *same* channel. Subscribing as the literal owner `"markers"` meant the
+    /// owner set held one entry however many charts existed, and the first one to
+    /// tear down unsubscribed everyone. See `ChartViewModel.ownerToken`.
+    let ownerToken: String
+
     init(
         userId: UUID,
         guildId: UUID,
-        currentUserMember: RLGuildMemberDTO
+        currentUserMember: RLGuildMemberDTO,
+        ownerToken: String? = nil
     ) {
+        self.ownerToken = ownerToken ?? "markers_\(UUID().uuidString.lowercased())"
         self.currentUserId = userId
         self.currentGuildId = guildId
         self.currentUserMember = currentUserMember
@@ -605,18 +615,19 @@ class MarkerManager: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func subscribeToMarkerChannel(guildId: UUID) {
+    // Internal for the same reason as ChartViewModel's — see ownerToken.
+    func subscribeToMarkerChannel(guildId: UUID) {
         let channel = "guild:\(guildId.uuidString.lowercased()):markers"
         guard currentMarkerChannel != channel else { return }
 
         unsubscribeFromMarkerChannel()
         currentMarkerChannel = channel
-        RealTimeService.shared.subscribe(to: [channel], owner: "markers")
+        RealTimeService.shared.subscribe(to: [channel], owner: ownerToken)
     }
 
     private func unsubscribeFromMarkerChannel() {
         if let channel = currentMarkerChannel {
-            RealTimeService.shared.unsubscribe(from: [channel], owner: "markers")
+            RealTimeService.shared.unsubscribe(from: [channel], owner: ownerToken)
             currentMarkerChannel = nil
         }
     }

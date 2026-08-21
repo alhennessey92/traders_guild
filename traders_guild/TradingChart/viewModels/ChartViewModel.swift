@@ -158,7 +158,23 @@ class ChartViewModel: ObservableObject {
     
     // MARK: - Initialization
     
-    init(appState: RLAppState, dataManager: ChartDataManager, api: RealAPIService) {
+    /// Identifies this chart to `RealTimeService`'s channel reference counting.
+    ///
+    /// Every chart used to subscribe as the literal owner `"chart"`, so the owner
+    /// set never held more than one entry no matter how many charts existed. With
+    /// several charts on screen the first one to change symbol emptied that set and
+    /// the shared socket unsubscribed the channel out from under all the others.
+    /// A per-instance token makes the reference count real. Mirrors the pattern
+    /// already used by `TimeframePanelManager`.
+    let ownerToken: String
+
+    init(
+        appState: RLAppState,
+        dataManager: ChartDataManager,
+        api: RealAPIService,
+        ownerToken: String? = nil
+    ) {
+        self.ownerToken = ownerToken ?? "chart_\(UUID().uuidString.lowercased())"
         self.appState = appState
         self.dataManager = dataManager
         self.api = api
@@ -996,7 +1012,7 @@ class ChartViewModel: ObservableObject {
             if let ch = oldTickChannel, ch != currentTickChannel { oldChannels.append(ch) }
             if let ch = oldCandleChannel, ch != currentCandleChannel { oldChannels.append(ch) }
             if !oldChannels.isEmpty {
-                RealTimeService.shared.unsubscribe(from: oldChannels, owner: "chart")
+                RealTimeService.shared.unsubscribe(from: oldChannels, owner: ownerToken)
             }
         }
     }
@@ -1038,7 +1054,7 @@ class ChartViewModel: ObservableObject {
             if let ch = oldTickChannel, ch != currentTickChannel { oldChannels.append(ch) }
             if let ch = oldCandleChannel, ch != currentCandleChannel { oldChannels.append(ch) }
             if !oldChannels.isEmpty {
-                RealTimeService.shared.unsubscribe(from: oldChannels, owner: "chart")
+                RealTimeService.shared.unsubscribe(from: oldChannels, owner: ownerToken)
             }
         }
     }
@@ -1521,7 +1537,9 @@ class ChartViewModel: ObservableObject {
     }
     
     /// Subscribe to real-time market data for a symbol/timeframe
-    private func subscribeToRealTimeTicks(guildId: UUID, symbolId: UUID, timeframe: RLChartTimeframe) {
+    // Internal rather than private so tests can pin the multi-pane invariant:
+    // these must register under `ownerToken`, never a shared literal.
+    func subscribeToRealTimeTicks(guildId: UUID, symbolId: UUID, timeframe: RLChartTimeframe) {
         // Unsubscribe from previous channels
         unsubscribeFromRealTimeTicks()
 
@@ -1536,12 +1554,12 @@ class ChartViewModel: ObservableObject {
         let candleChannel = "market:candles:\(symbolIdStr):\(timeframeString)"
         currentCandleChannel = candleChannel
 
-        RealTimeService.shared.subscribe(to: [tickChannel, candleChannel], owner: "chart")
+        RealTimeService.shared.subscribe(to: [tickChannel, candleChannel], owner: ownerToken)
         print("📡 [Chart] Subscribed to market data: \(tickChannel), \(candleChannel)")
     }
 
     /// Unsubscribe from real-time market data (called when chart is closed or symbol changes)
-    private func unsubscribeFromRealTimeTicks() {
+    func unsubscribeFromRealTimeTicks() {
         var channels: [String] = []
         if let channel = currentTickChannel {
             channels.append(channel)
@@ -1552,7 +1570,7 @@ class ChartViewModel: ObservableObject {
             currentCandleChannel = nil
         }
         if !channels.isEmpty {
-            RealTimeService.shared.unsubscribe(from: channels, owner: "chart")
+            RealTimeService.shared.unsubscribe(from: channels, owner: ownerToken)
             print("📡 [Chart] Unsubscribed from market data")
         }
     }
