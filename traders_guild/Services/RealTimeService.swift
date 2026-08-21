@@ -246,6 +246,17 @@ class RealTimeService: ObservableObject {
         print("📡 [WS] Unsubscribed: \(channelsToRemove) owner=\(owner)")
     }
     
+    /// Read-only view of the channel → owner reference count.
+    ///
+    /// Exposed for tests: multi-pane correctness rests entirely on each chart
+    /// registering under its own owner token, and that invariant is invisible
+    /// from the outside otherwise.
+    var channelOwnersSnapshot: [String: Set<String>] { channelOwners }
+
+    /// Channels currently subscribed on the socket, or queued for subscription
+    /// while it is down.
+    var trackedChannelsSnapshot: Set<String> { subscribedChannels.union(subscriptionsQueue) }
+
     func sendTyping(channel: String, isTyping: Bool) {
         let message = WSTypingMessage(channel: channel, isTyping: isTyping)
         send(message)
