@@ -30,7 +30,7 @@ final class ToastPassthroughWindow: UIWindow {
 }
 
 @MainActor
-class ToastWindowManager: ObservableObject {
+class ToastWindowManager: ObservableObject, ToastPresenting {
     static let shared = ToastWindowManager()
 
     private var toastWindow: ToastPassthroughWindow?
