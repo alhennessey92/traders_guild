@@ -183,7 +183,7 @@ struct TradingChartView: View {
     @State private var isMarkerBeingDragged = false
     
     /// Haptic feedback generator for marker interactions
-    private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+    private let impactFeedback = PlatformImpactGenerator(style: .medium)
     
     /// Temporary storage for marker info before final creation
     /// FIXED: Now Identifiable and used with sheet(item:) for robust presentation
@@ -3589,7 +3589,7 @@ struct TradingChartView: View {
                 case .second(true, let drag):
                     if let location = drag?.location {
                         if !crosshairManager.isActive {
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            let generator = PlatformImpactGenerator(style: .medium)
                             generator.impactOccurred()
                             
                             crosshairManager.activate(
@@ -3620,7 +3620,7 @@ struct TradingChartView: View {
         TapGesture()
             .onEnded {
                 if crosshairManager.isActive {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    let generator = PlatformImpactGenerator(style: .light)
                     generator.impactOccurred()
                     crosshairManager.deactivate()
                     

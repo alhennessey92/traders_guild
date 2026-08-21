@@ -1185,8 +1185,8 @@ struct ChatInputFooter: View {
     private func attachmentPreviewChip(for attachment: ChatAttachmentDraft, at index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             Group {
-                if attachment.isImage, let image = UIImage(data: attachment.data) {
-                    Image(uiImage: image)
+                if attachment.isImage, let image = PlatformImage(data: attachment.data) {
+                    Image(platformImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 76, height: 76)
@@ -2390,7 +2390,7 @@ extension View {
     
     /// Hide keyboard helper
     func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        PlatformKeyboard.dismiss()
     }
 }
 

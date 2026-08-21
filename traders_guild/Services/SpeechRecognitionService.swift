@@ -96,7 +96,13 @@ final class SpeechRecognitionService: ObservableObject {
             return
         }
 
-        // Configure audio session
+        // Configure audio session.
+        //
+        // AVAudioSession does not exist on macOS: there is no system-wide audio
+        // session to negotiate with, and AVAudioEngine drives the input device
+        // directly. Recording works without any of this — the sandbox's
+        // audio-input entitlement is what grants access there.
+        #if canImport(UIKit)
         let audioSession = AVAudioSession.sharedInstance()
         do {
             try audioSession.setCategory(
@@ -109,6 +115,7 @@ final class SpeechRecognitionService: ObservableObject {
             errorMessage = "Failed to configure audio session."
             return
         }
+        #endif
 
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -208,14 +215,21 @@ final class SpeechRecognitionService: ObservableObject {
     }
 
     private func deactivateAudioSession() {
+        #if canImport(UIKit)
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             // Non-critical — audio session will clean up eventually
         }
+        #endif
     }
 
     private func configureAudioSessionObservers() {
+        // Interruptions, route changes and media-services resets are all
+        // AVAudioSession concepts. A Mac has no phone call to interrupt
+        // recording, so there is nothing to observe.
+        #if canImport(UIKit)
+
         let center = NotificationCenter.default
 
         notificationObservers.append(
@@ -247,9 +261,11 @@ final class SpeechRecognitionService: ObservableObject {
                 self?.handleMediaServicesReset()
             }
         )
+        #endif
     }
 
     private func handleAudioSessionInterruption(_ notification: Notification) {
+        #if canImport(UIKit)
         guard isRecording else { return }
         guard let userInfo = notification.userInfo,
               let rawType = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -261,9 +277,11 @@ final class SpeechRecognitionService: ObservableObject {
             errorMessage = nil
             finishRecordingSession()
         }
+        #endif
     }
 
     private func handleAudioSessionRouteChange(_ notification: Notification) {
+        #if canImport(UIKit)
         guard isRecording else { return }
         guard let userInfo = notification.userInfo,
               let rawReason = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -277,6 +295,7 @@ final class SpeechRecognitionService: ObservableObject {
         default:
             break
         }
+        #endif
     }
 
     private func handleMediaServicesReset() {

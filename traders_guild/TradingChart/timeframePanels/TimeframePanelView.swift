@@ -873,7 +873,7 @@ struct TimeframePanelView: View {
                         dragStartHeight = isCollapsed
                             ? max(minPanelHeight, entry.expandedHeight > 0 ? entry.expandedHeight : minPanelHeight)
                             : panelHeight
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        PlatformImpactGenerator(style: .light).impactOccurred()
                     }
                     let delta = -value.translation.height
                     let rawHeight = dragStartHeight + delta
@@ -886,7 +886,7 @@ struct TimeframePanelView: View {
                 }
                 .onEnded { _ in
                     isDraggingHandle = false
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    PlatformImpactGenerator(style: .light).impactOccurred()
                 }
         )
         .onTapGesture {
@@ -1361,7 +1361,7 @@ struct TimeframePanelView: View {
             withAnimation(.easeInOut(duration: 0.16)) {
                 entry.isLockedToMainChart.toggle()
             }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            PlatformImpactGenerator(style: .light).impactOccurred()
         }
         .accessibilityLabel(entry.isLockedToMainChart ? "Unlock timeframe from main chart" : "Lock timeframe to main chart")
     }

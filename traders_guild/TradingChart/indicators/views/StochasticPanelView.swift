@@ -114,7 +114,7 @@ struct StochasticPanelView: View {
                         dragStartHeight = isCollapsed
                             ? max(minPanelHeight, expandedPanelHeight > 0 ? expandedPanelHeight : minPanelHeight)
                             : panelHeight
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        PlatformImpactGenerator(style: .light).impactOccurred()
                     }
                     let delta = -value.translation.height
                     let rawHeight = dragStartHeight + delta
@@ -131,7 +131,7 @@ struct StochasticPanelView: View {
                 }
                 .onEnded { _ in
                     isDraggingHandle = false
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    PlatformImpactGenerator(style: .light).impactOccurred()
                 }
         )
         .onTapGesture {

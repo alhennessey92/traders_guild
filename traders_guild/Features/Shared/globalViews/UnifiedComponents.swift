@@ -1132,7 +1132,7 @@ struct UnifiedAuthorFooter: View {
 /// iOS 17 deployment target — it arrives with SF Symbols 6. `Image(systemName:)`
 /// fails silently, so on iOS 17/18 every reputation figure in the app has been
 /// rendering with an invisible icon and a stray gap where it should be. Verified
-/// on an iOS 18.2 simulator: `UIImage(systemName: "star.hexagon.fill")` is nil.
+/// on an iOS 18.2 simulator: `PlatformImage.symbol(named: "star.hexagon.fill")` is nil.
 ///
 /// Composing it from two symbols that do exist on every supported version keeps
 /// one appearance everywhere, rather than branching by OS and shipping two looks.
@@ -1144,7 +1144,7 @@ struct ReputationGlyph: View {
     /// out of a circle where it doesn't — same idea, and visible, which the raw
     /// name is not on iOS 17/18.
     static let symbolName: String =
-        UIImage(systemName: "star.hexagon.fill") != nil ? "star.hexagon.fill" : "star.circle.fill"
+        PlatformImage.symbol(named: "star.hexagon.fill") != nil ? "star.hexagon.fill" : "star.circle.fill"
 
     var body: some View {
         ZStack {

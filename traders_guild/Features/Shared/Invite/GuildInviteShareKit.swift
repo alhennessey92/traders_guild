@@ -140,7 +140,7 @@ enum GuildInviteShare {
     }
 
     /// Render a QR code image for a URL string (CoreImage `CIQRCodeGenerator`).
-    static func qrCode(for string: String, size: CGFloat = 240) -> UIImage? {
+    static func qrCode(for string: String, size: CGFloat = 240) -> PlatformImage? {
         let data = Data(string.utf8)
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(data, forKey: "inputMessage")
@@ -150,7 +150,7 @@ enum GuildInviteShare {
         let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let context = CIContext()
         guard let cg = context.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return UIImage(cgImage: cg)
+        return PlatformImage(cgImage: cg)
     }
 }
 
@@ -197,8 +197,8 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         // the OG card itself is a valid 1200x630 PNG, so the failure is inside
         // that render, not in what we serve.
 
-        // Register PNG *data*, not a UIImage. The previous guard checked
-        // `cgImage != nil` but still handed UIImage to NSItemProvider, which
+        // Register PNG *data*, not a PlatformImage. The previous guard checked
+        // `cgImage != nil` but still handed PlatformImage to NSItemProvider, which
         // re-serialises it on the share sheet's own terms — and still crashed
         // with "Need an imageRef". Data has no backing-image to lose.
         if let icon = Self.appIconImage(), let png = icon.pngData() {
@@ -217,8 +217,8 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
     /// Asset-catalog "AppIcon" / named icons frequently lack a CGImage, which
     /// crashes `LPLinkMetadata`/`NSItemProvider` when the share sheet renders
     /// its preview — so any candidate is re-drawn into a renderer bitmap.
-    private static func appIconImage() -> UIImage? {
-        guard let candidate = UIImage(named: "AppIcon")
+    private static func appIconImage() -> PlatformImage? {
+        guard let candidate = PlatformImage.asset(named: "AppIcon")
                 ?? infoPlistAppIcon()
                 ?? composedBundledAppIcon() else {
             return renderedFallbackIcon()
@@ -231,19 +231,19 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         return rendered.cgImage != nil ? rendered : renderedFallbackIcon()
     }
 
-    private static func infoPlistAppIcon() -> UIImage? {
+    private static func infoPlistAppIcon() -> PlatformImage? {
         guard let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any],
               let primaryIcon = icons["CFBundlePrimaryIcon"] as? [String: Any],
               let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String] else {
             return nil
         }
         for name in iconFiles.reversed() {
-            if let icon = UIImage(named: name) { return icon }
+            if let icon = PlatformImage.asset(named: name) { return icon }
         }
         return nil
     }
 
-    private static func bundledImage(named name: String, subdirectory: String) -> UIImage? {
+    private static func bundledImage(named name: String, subdirectory: String) -> PlatformImage? {
         let url = Bundle.main.url(
             forResource: name,
             withExtension: "png",
@@ -251,10 +251,10 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         ) ?? Bundle.main.url(forResource: name, withExtension: "png")
         guard let url else { return nil }
 
-        return UIImage(contentsOfFile: url.path)
+        return PlatformImage.loaded(contentsOfFile: url.path)
     }
 
-    private static func composedBundledAppIcon() -> UIImage? {
+    private static func composedBundledAppIcon() -> PlatformImage? {
         let logo = bundledImage(named: "TG 6", subdirectory: "AppIcon.icon/Assets")
             ?? bundledImage(named: "TG 3", subdirectory: "AppIconPreview/Assets")
         let background = bundledImage(named: "appiconbg 2", subdirectory: "AppIcon.icon/Assets")
@@ -286,7 +286,7 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         }
     }
 
-    private static func renderedFallbackIcon() -> UIImage {
+    private static func renderedFallbackIcon() -> PlatformImage {
         let size = CGSize(width: 96, height: 96)
         return UIGraphicsImageRenderer(size: size).image { context in
             let rect = CGRect(origin: .zero, size: size)

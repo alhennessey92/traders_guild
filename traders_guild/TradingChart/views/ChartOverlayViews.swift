@@ -105,7 +105,7 @@ struct PlacementLineDragOverlay: View {
 
     @State private var dragStartY: CGFloat = 0
     @State private var dragStartPrice: Double = 0
-    private let haptic = UIImpactFeedbackGenerator(style: .medium)
+    private let haptic = PlatformImpactGenerator(style: .medium)
 
     private var effectivePrice: Double { linePrice ?? defaultPrice }
     private var lineY: CGFloat { coordinateSystem.yPosition(forPrice: effectivePrice) }
@@ -208,7 +208,7 @@ struct PlacementSupportResistanceOverlay: View {
     var topExclusionHeight: CGFloat = 0
 
     @State private var dragStartYByType: [RLComponentType: CGFloat] = [:]
-    private let haptic = UIImpactFeedbackGenerator(style: .medium)
+    private let haptic = PlatformImpactGenerator(style: .medium)
 
     private var supportLevel: LevelPayload? {
         guard case let .levelSupport(payload)? = placementState.component(.levelSupport)?.payload else {
@@ -390,7 +390,7 @@ struct PredictionPlacementOverlay: View {
 
     @State private var dragStartY: CGFloat = 0
     @State private var dragStartPrice: Double = 0
-    private let haptic = UIImpactFeedbackGenerator(style: .medium)
+    private let haptic = PlatformImpactGenerator(style: .medium)
 
     private var layout: SetupCorePriceLineLayout {
         SetupCorePriceLineLayout(renderWidth: renderWidth, plotWidth: plotWidth)

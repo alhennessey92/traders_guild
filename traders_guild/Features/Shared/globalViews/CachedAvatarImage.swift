@@ -12,7 +12,7 @@ import SwiftUI
 
 final class AvatarImageCache {
     static let shared = AvatarImageCache()
-    private let cache = NSCache<NSString, UIImage>()
+    private let cache = NSCache<NSString, PlatformImage>()
     private let responseCache = URLCache.shared
 
     private init() {
@@ -20,14 +20,14 @@ final class AvatarImageCache {
         cache.countLimit = 400
     }
 
-    func image(for url: URL) -> UIImage? {
+    func image(for url: URL) -> PlatformImage? {
         if let memoryCached = cache.object(forKey: url.absoluteString as NSString) {
             return memoryCached
         }
 
         let request = URLRequest(url: url)
         guard let cachedResponse = responseCache.cachedResponse(for: request),
-              let cachedImage = UIImage(data: cachedResponse.data) else {
+              let cachedImage = PlatformImage(data: cachedResponse.data) else {
             return nil
         }
 
@@ -35,11 +35,11 @@ final class AvatarImageCache {
         return cachedImage
     }
 
-    func store(_ image: UIImage, for url: URL) {
+    func store(_ image: PlatformImage, for url: URL) {
         cache.setObject(image, forKey: url.absoluteString as NSString)
     }
 
-    func store(_ image: UIImage, data: Data, response: URLResponse, for url: URL) {
+    func store(_ image: PlatformImage, data: Data, response: URLResponse, for url: URL) {
         store(image, for: url)
         let request = URLRequest(url: url)
         responseCache.storeCachedResponse(
@@ -48,7 +48,7 @@ final class AvatarImageCache {
         )
     }
 
-    func loadImage(for url: URL) async throws -> UIImage {
+    func loadImage(for url: URL) async throws -> PlatformImage {
         if let cached = image(for: url) {
             return cached
         }
@@ -61,7 +61,7 @@ final class AvatarImageCache {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode),
-              let image = UIImage(data: data) else {
+              let image = PlatformImage(data: data) else {
             throw URLError(.badServerResponse)
         }
 
@@ -99,7 +99,7 @@ struct CachedAvatarImage: View {
     let size: CGFloat
     let initials: String
 
-    @State private var image: UIImage?
+    @State private var image: PlatformImage?
     @State private var loadFailed: Bool = false
 
     init(url: URL, size: CGFloat, initials: String) {
@@ -112,7 +112,7 @@ struct CachedAvatarImage: View {
     var body: some View {
         Group {
             if let image, !loadFailed {
-                Image(uiImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFill()
             } else {
@@ -163,7 +163,7 @@ struct CachedAvatarImage: View {
             )
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode),
-                  let uiImage = UIImage(data: data) else {
+                  let uiImage = PlatformImage(data: data) else {
                 await MainActor.run {
                     if targetURL == url {
                         loadFailed = true

@@ -324,7 +324,7 @@ class ChartGestureState: ObservableObject {
         cachedPriceScale = priceScale
 
         // Start the animation with current velocity
-        displayLink = CADisplayLink(target: self, selector: #selector(momentumTick))
+        displayLink = PlatformDisplayLink.make(target: self, selector: #selector(momentumTick))
         displayLink?.add(to: .main, forMode: .common)
     }
     
@@ -495,7 +495,7 @@ class ChartGestureState: ObservableObject {
         centeringStartTime = CACurrentMediaTime()
 
         // Start display link
-        centeringDisplayLink = CADisplayLink(target: self, selector: #selector(centeringTick))
+        centeringDisplayLink = PlatformDisplayLink.make(target: self, selector: #selector(centeringTick))
         centeringDisplayLink?.add(to: .main, forMode: .common)
     }
 
