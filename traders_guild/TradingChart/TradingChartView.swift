@@ -6141,7 +6141,7 @@ struct TradingChartView: View {
                     initialOffset: initialVerticalOffset,
                     initialScale: initialPriceScale,
                     newScale: clampedScale,
-                    chartHeight: chartSize.height
+                    anchorY: VerticalZoomAnchor.anchorY(chartHeight: chartSize.height)
                 )
                 
                 gestureState.priceScale = clampedScale
@@ -6181,7 +6181,7 @@ struct TradingChartView: View {
                     initialOffset: initialVerticalOffset,
                     initialScale: initialPriceScale,
                     newScale: clampedScale,
-                    chartHeight: chartSize.height
+                    anchorY: VerticalZoomAnchor.anchorY(chartHeight: chartSize.height)
                 )
                 
                 gestureState.priceScale = clampedScale
