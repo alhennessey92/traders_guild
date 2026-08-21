@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 private struct DrawingColorOption: Identifiable {
     let name: String

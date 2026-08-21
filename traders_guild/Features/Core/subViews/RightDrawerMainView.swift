@@ -7,7 +7,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The main container for the right-side drawer.
 /// Hosts search/filter UI, lists for chatrooms and users, and opens chats via RLMessagingManager.

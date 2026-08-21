@@ -12,7 +12,9 @@
 //  Created by Al Hennessey on 16/09/2025.
 //
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 enum StandardTextFieldValidationState {
     case neutral

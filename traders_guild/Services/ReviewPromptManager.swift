@@ -17,7 +17,9 @@
 
 import Foundation
 import StoreKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 final class ReviewPromptManager {
     static let shared = ReviewPromptManager()

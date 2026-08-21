@@ -9,7 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct GuildInviteHubView: View {
     // Customisation points so the same hub fits every surface.
