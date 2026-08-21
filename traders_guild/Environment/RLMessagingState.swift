@@ -807,12 +807,7 @@ struct RLMessagingSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture {
                 chatSurfaceOverlayCoordinator.dismissAll()
-                UIApplication.shared.sendAction(
-                    #selector(UIResponder.resignFirstResponder),
-                    to: nil,
-                    from: nil,
-                    for: nil
-                )
+                PlatformKeyboard.dismiss()
             }
             .onChange(of: chatroomMessages.count) { _, _ in
                 guard !isLoadingMore else { return }

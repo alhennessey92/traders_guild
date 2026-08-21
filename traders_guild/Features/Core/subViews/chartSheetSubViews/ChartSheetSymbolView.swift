@@ -617,7 +617,7 @@ struct ChartSheetSymbolView: View {
     // MARK: - Watchlist Toggle Actions
     
     private func togglePersonalWatchlist(symbol: RLTradingSymbolDTO, isCurrentlyIn: Bool) {
-        let impact = UIImpactFeedbackGenerator(style: .light)
+        let impact = PlatformImpactGenerator(style: .light)
         impact.impactOccurred()
         
         isAddingToPersonal = true
@@ -646,7 +646,7 @@ struct ChartSheetSymbolView: View {
     }
     
     private func sendGuildWatchlistRequest(symbol: RLTradingSymbolDTO) {
-        let impact = UIImpactFeedbackGenerator(style: .light)
+        let impact = PlatformImpactGenerator(style: .light)
         impact.impactOccurred()
 
         guard symbol.isActive else {
@@ -682,7 +682,7 @@ struct ChartSheetSymbolView: View {
     }
 
     private func addToGuildWatchlistWithPreflight(symbol: RLTradingSymbolDTO) {
-        let impact = UIImpactFeedbackGenerator(style: .light)
+        let impact = PlatformImpactGenerator(style: .light)
         impact.impactOccurred()
 
         guard symbol.isActive else {
@@ -1034,7 +1034,7 @@ struct ChartSheetSymbolView: View {
     // MARK: - Helper Methods
     
     private func dismissKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        PlatformKeyboard.dismiss()
     }
 
     private func updateKeyboardInset(from notification: Notification) {
@@ -1089,7 +1089,7 @@ struct ChartSheetSymbolView: View {
         }
         dismissKeyboard()
         
-        let impact = UIImpactFeedbackGenerator(style: .medium)
+        let impact = PlatformImpactGenerator(style: .medium)
         impact.impactOccurred()
         
         chartViewModel.setSymbol(symbol)
@@ -1296,7 +1296,7 @@ struct SymbolListRow: View {
         let isCompactPills = pillCount >= 3
         Button(action: {
             // Haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .medium)
+            let impact = PlatformImpactGenerator(style: .medium)
             impact.impactOccurred()
             action()
         }) {

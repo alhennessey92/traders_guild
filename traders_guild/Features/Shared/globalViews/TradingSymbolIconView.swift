@@ -44,7 +44,7 @@ struct TradingSymbolIconView: View {
         return BundledTradingSymbolIconResolver.assetName(for: symbol.ticker, assetClass: symbol.assetClass)
     }
 
-    @State private var loadedImage: UIImage?
+    @State private var loadedImage: PlatformImage?
     @State private var loadFailed: Bool = false
 
     var body: some View {
@@ -81,7 +81,7 @@ struct TradingSymbolIconView: View {
         // Synchronous cache hit: render immediately, no decode-flash on scroll.
         let cached = AvatarImageCache.shared.image(for: url) ?? loadedImage
         if let cached {
-            Image(uiImage: cached)
+            Image(platformImage: cached)
                 .resizable()
                 .scaledToFill()
         } else if loadFailed {
@@ -107,7 +107,7 @@ struct TradingSymbolIconView: View {
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode),
-                  let uiImage = UIImage(data: data) else {
+                  let uiImage = PlatformImage(data: data) else {
                 await MainActor.run { loadFailed = true }
                 return
             }

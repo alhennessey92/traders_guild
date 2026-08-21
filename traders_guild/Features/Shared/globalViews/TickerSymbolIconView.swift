@@ -1,8 +1,4 @@
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
-
 enum BundledTradingSymbolIconResolver {
     static func assetName(for ticker: String?, assetClass: String?) -> String? {
         let normalizedTicker = normalizedTicker(ticker)
@@ -55,11 +51,10 @@ enum BundledTradingSymbolIconResolver {
     }
 
     static func assetExists(named assetName: String) -> Bool {
-        #if canImport(UIKit)
-        return UIImage(named: assetName) != nil
-        #else
-        return false
-        #endif
+        // Was `return false` on any non-UIKit platform, which would have silently
+        // hidden *every* bundled ticker icon on macOS — the asset catalogue is
+        // platform-neutral, so the lookup works there too.
+        PlatformImage.asset(named: assetName) != nil
     }
 
     private static func sanitized(_ value: String?) -> String? {

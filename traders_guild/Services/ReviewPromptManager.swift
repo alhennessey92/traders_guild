@@ -94,11 +94,17 @@ final class ReviewPromptManager {
 
     @MainActor
     private func requestReview() {
+        #if canImport(UIKit)
         guard let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
             return
         }
         AppStore.requestReview(in: scene)
+        #else
+        // macOS has no window scenes, and AppStore.requestReview still requires
+        // one there. SKStoreReviewController is the app-wide equivalent.
+        SKStoreReviewController.requestReview()
+        #endif
         UserDefaults.standard.set(Date(), forKey: lastPromptDateKey)
     }
 }

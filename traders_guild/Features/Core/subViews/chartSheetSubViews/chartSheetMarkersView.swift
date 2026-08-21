@@ -757,7 +757,7 @@ struct chartSheetMarkersView: View {
     }
 
     private func handleLike(marker: RLMarkerActivityItemDTO) {
-        let generator = UIImpactFeedbackGenerator(style: .light)
+        let generator = PlatformImpactGenerator(style: .light)
         generator.impactOccurred()
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {

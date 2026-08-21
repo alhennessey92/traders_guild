@@ -385,7 +385,7 @@ struct AvatarSelectionView: View {
     let onBack: () -> Void
     
     @State private var showingImagePicker = false
-    @State private var selectedImage: UIImage?
+    @State private var selectedImage: PlatformImage?
     @State private var isSaving = false
     
     var body: some View {
@@ -405,7 +405,7 @@ struct AvatarSelectionView: View {
                             .frame(width: 100, height: 100)
                         
                         if let image = selectedImage {
-                            Image(uiImage: image)
+                            Image(platformImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 100, height: 100)
@@ -560,7 +560,7 @@ struct AvatarSelectionView: View {
 
 // Simple image picker wrapper
 struct ImagePicker: UIViewControllerRepresentable {
-    @Binding var image: UIImage?
+    @Binding var image: PlatformImage?
     @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -585,9 +585,9 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let editedImage = info[.editedImage] as? UIImage {
+            if let editedImage = info[.editedImage] as? PlatformImage {
                 parent.image = editedImage
-            } else if let originalImage = info[.originalImage] as? UIImage {
+            } else if let originalImage = info[.originalImage] as? PlatformImage {
                 parent.image = originalImage
             }
             parent.dismiss()
@@ -2217,10 +2217,10 @@ private struct AppIconPreviewView: View {
             withExtension: "png",
             subdirectory: "AppIconPreview/Assets"
         ) ?? Bundle.main.url(forResource: name, withExtension: "png"),
-        let image = UIImage(contentsOfFile: url.path) else {
+        let image = PlatformImage.loaded(contentsOfFile: url.path) else {
             return nil
         }
-        return Image(uiImage: image)
+        return Image(platformImage: image)
     }
 }
 

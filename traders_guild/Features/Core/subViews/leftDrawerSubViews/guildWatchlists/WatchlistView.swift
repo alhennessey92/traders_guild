@@ -489,7 +489,7 @@ struct WatchlistView: View {
         }
         dismissKeyboard()
         
-        let impact = UIImpactFeedbackGenerator(style: .medium)
+        let impact = PlatformImpactGenerator(style: .medium)
         impact.impactOccurred()
         
         // Visual feedback
@@ -532,7 +532,7 @@ struct WatchlistView: View {
     private func confirmRemoveSymbol(_ symbol: RLTradingSymbolDTO) {
         isRemovingSymbol = symbol.id
         
-        let impact = UIImpactFeedbackGenerator(style: .light)
+        let impact = PlatformImpactGenerator(style: .light)
         impact.impactOccurred()
         
         Task {
@@ -561,7 +561,7 @@ struct WatchlistView: View {
         }
         isAddingSymbol = symbol.id
         
-        let impact = UIImpactFeedbackGenerator(style: .light)
+        let impact = PlatformImpactGenerator(style: .light)
         impact.impactOccurred()
         
         Task {
@@ -585,7 +585,7 @@ struct WatchlistView: View {
     }
     
     private func dismissKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        PlatformKeyboard.dismiss()
     }
 }
 

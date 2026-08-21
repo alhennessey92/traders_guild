@@ -679,7 +679,7 @@ struct SignupProfileSetupView: View {
     @State private var tradingViewHandle: String = ""
     @State private var youtubeHandle: String = ""
     @State private var selectedInterests: Set<String> = []
-    @State private var selectedAvatarImage: UIImage?
+    @State private var selectedAvatarImage: PlatformImage?
     @State private var showingImagePicker: Bool = false
     @State private var isSaving: Bool = false
 
@@ -732,7 +732,7 @@ struct SignupProfileSetupView: View {
                             ZStack(alignment: .bottomTrailing) {
                                 Group {
                                     if let selectedAvatarImage {
-                                        Image(uiImage: selectedAvatarImage)
+                                        Image(platformImage: selectedAvatarImage)
                                             .resizable()
                                             .aspectRatio(contentMode: .fill)
                                     } else if let avatar = rlAppState.currentUser?.avatarUrl, let url = URL(string: avatar) {
@@ -990,7 +990,7 @@ struct SignupProfileSetupView: View {
             }
             if selectedAvatarImage == nil,
                let imageData = data.profileAvatarImageData {
-                selectedAvatarImage = UIImage(data: imageData)
+                selectedAvatarImage = PlatformImage(data: imageData)
             }
         }
     }

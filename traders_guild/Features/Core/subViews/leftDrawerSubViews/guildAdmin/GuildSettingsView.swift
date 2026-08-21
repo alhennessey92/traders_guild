@@ -21,7 +21,7 @@ struct GuildSettingsView: View {
     @State private var isSubmitting = false
     @State private var crestSymbol = GuildCrestCatalog.defaultSymbolKey
     @State private var crestColor = GuildCrestCatalog.defaultColorKey
-    @State private var pickedCrestImage: UIImage?
+    @State private var pickedCrestImage: PlatformImage?
     @State private var crestImageRemoved = false
     @State private var showCrestImagePicker = false
 
@@ -798,7 +798,7 @@ struct GuildSettingsView: View {
     @ViewBuilder
     private func crestPreview(size: CGFloat) -> some View {
         if let image = pickedCrestImage {
-            Image(uiImage: image)
+            Image(platformImage: image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)

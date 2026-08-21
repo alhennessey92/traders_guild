@@ -329,9 +329,9 @@ final class MarkerShareActivityItemSource: NSObject, UIActivityItemSource {
 
     /// Re-draws the app icon into a guaranteed-bitmap image (asset-catalog icons
     /// frequently lack a CGImage). Falls back to a rendered "TG" tile.
-    private static func appIconBitmap() -> UIImage? {
+    private static func appIconBitmap() -> PlatformImage? {
         let size = CGSize(width: 96, height: 96)
-        if let candidate = UIImage(named: "AppIcon") {
+        if let candidate = PlatformImage.asset(named: "AppIcon") {
             let rendered = UIGraphicsImageRenderer(size: size).image { _ in
                 candidate.draw(in: CGRect(origin: .zero, size: size))
             }

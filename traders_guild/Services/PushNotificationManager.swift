@@ -9,6 +9,8 @@
 import Foundation
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 import UserNotifications
 
@@ -39,9 +41,15 @@ protocol RemoteNotificationRegistering {
     func registerForRemoteNotifications()
 }
 
+/// The seam was already here — it just had one conformer. APNs registration is
+/// the only platform-specific part of push; everything downstream is shared.
 struct UIApplicationRemoteNotificationRegistrar: RemoteNotificationRegistering {
     func registerForRemoteNotifications() {
+        #if canImport(UIKit)
         UIApplication.shared.registerForRemoteNotifications()
+        #elseif canImport(AppKit)
+        NSApplication.shared.registerForRemoteNotifications()
+        #endif
     }
 }
 

@@ -24,10 +24,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AAF1000000000000000001 /* Traders Guild.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Traders Guild.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D60EC7702E280DB2005E2FF1 /* traders_guild.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = traders_guild.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D60EC7802E280DB3005E2FF1 /* traders_guildTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = traders_guildTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D60EC78A2E280DB3005E2FF1 /* traders_guildUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = traders_guildUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		AAF1000000000000000001 /* Traders Guild.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Traders Guild.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,9 +36,9 @@
 			membershipExceptions = (
 				App/AppDelegate.swift,
 				App/traders_guildApp.swift,
-				"Features/Core/MainView.swift",
-				"Features/Shared/globalViews/KeyboardDismissal.swift",
-				"Features/Shared/globalViews/ToastWindowManager.swift",
+				Features/Core/MainView.swift,
+				Features/Shared/globalViews/KeyboardDismissal.swift,
+				Features/Shared/globalViews/ToastWindowManager.swift,
 			);
 			target = AAF1000000000000000003 /* TradersGuildMac */;
 		};
@@ -46,28 +46,26 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"Info-macOS.plist",
-				TradersGuildMac.entitlements,
-				TradersGuildMac.Release.entitlements,
 			);
 			target = AAF1000000000000000003 /* TradersGuildMac */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D60EC7722E280DB2005E2FF1 /* traders_guild */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				AAF100000000000000000A /* Exceptions for "traders_guild" folder in "TradersGuildMac" target */,
-			);
-			path = traders_guild;
-			sourceTree = "<group>";
-		};
 		AAF1000000000000000002 /* traders_guild_macOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				AAF100000000000000000B /* Exceptions for "traders_guild_macOS" folder in "TradersGuildMac" target */,
 			);
 			path = traders_guild_macOS;
+			sourceTree = "<group>";
+		};
+		D60EC7722E280DB2005E2FF1 /* traders_guild */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AAF100000000000000000A /* Exceptions for "traders_guild" folder in "TradersGuildMac" target */,
+			);
+			path = traders_guild;
 			sourceTree = "<group>";
 		};
 		D60EC7832E280DB3005E2FF1 /* traders_guildTests */ = {
@@ -83,6 +81,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		AAF1000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D60EC76D2E280DB2005E2FF1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -98,13 +103,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		D60EC7872E280DB3005E2FF1 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AAF1000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -139,6 +137,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		AAF1000000000000000003 /* TradersGuildMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AAF1000000000000000007 /* Build configuration list for PBXNativeTarget "TradersGuildMac" */;
+			buildPhases = (
+				AAF1000000000000000004 /* Sources */,
+				AAF1000000000000000005 /* Frameworks */,
+				AAF1000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AAF1000000000000000002 /* traders_guild_macOS */,
+				D60EC7722E280DB2005E2FF1 /* traders_guild */,
+			);
+			name = TradersGuildMac;
+			packageProductDependencies = (
+			);
+			productName = TradersGuildMac;
+			productReference = AAF1000000000000000001 /* Traders Guild.app */;
+			productType = "com.apple.product-type.application";
+		};
 		D60EC76F2E280DB2005E2FF1 /* traders_guild */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D60EC7942E280DB3005E2FF1 /* Build configuration list for PBXNativeTarget "traders_guild" */;
@@ -207,29 +228,6 @@
 			productReference = D60EC78A2E280DB3005E2FF1 /* traders_guildUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		AAF1000000000000000003 /* TradersGuildMac */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AAF1000000000000000007 /* Build configuration list for PBXNativeTarget "TradersGuildMac" */;
-			buildPhases = (
-				AAF1000000000000000004 /* Sources */,
-				AAF1000000000000000005 /* Frameworks */,
-				AAF1000000000000000006 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				D60EC7722E280DB2005E2FF1 /* traders_guild */,
-				AAF1000000000000000002 /* traders_guild_macOS */,
-			);
-			name = TradersGuildMac;
-			packageProductDependencies = (
-			);
-			productName = TradersGuildMac;
-			productReference = AAF1000000000000000001 /* Traders Guild.app */;
-			productType = "com.apple.product-type.application";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -240,6 +238,9 @@
 				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					AAF1000000000000000003 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					D60EC76F2E280DB2005E2FF1 = {
 						CreatedOnToolsVersion = 16.2;
 					};
@@ -250,9 +251,6 @@
 					D60EC7892E280DB3005E2FF1 = {
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = D60EC76F2E280DB2005E2FF1;
-					};
-					AAF1000000000000000003 = {
-						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -281,6 +279,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		AAF1000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D60EC76E2E280DB2005E2FF1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -302,16 +307,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AAF1000000000000000006 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AAF1000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
 		D60EC76C2E280DB2005E2FF1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -327,13 +332,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		D60EC7862E280DB3005E2FF1 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AAF1000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -356,6 +354,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		AAF1000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = traders_guild_macOS/TradersGuildMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"traders_guild/Preview Content\"";
+				DEVELOPMENT_TEAM = B4WE2NR99U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = "traders_guild_macOS/Info-macOS.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Traders Guild";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.tradersguild.app;
+				PRODUCT_NAME = "Traders Guild";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AAF1000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = traders_guild_macOS/TradersGuildMac.Release.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"traders_guild/Preview Content\"";
+				DEVELOPMENT_TEAM = B4WE2NR99U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = "traders_guild_macOS/Info-macOS.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Traders Guild";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.tradersguild.app;
+				PRODUCT_NAME = "Traders Guild";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		D60EC7922E280DB3005E2FF1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -599,71 +659,18 @@
 			};
 			name = Release;
 		};
-		AAF1000000000000000008 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "traders_guild_macOS/TradersGuildMac.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"traders_guild/Preview Content\"";
-				DEVELOPMENT_TEAM = B4WE2NR99U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = "traders_guild_macOS/Info-macOS.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Traders Guild";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = co.tradersguild.app;
-				PRODUCT_NAME = "Traders Guild";
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		AAF1000000000000000009 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "traders_guild_macOS/TradersGuildMac.Release.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"traders_guild/Preview Content\"";
-				DEVELOPMENT_TEAM = B4WE2NR99U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = "traders_guild_macOS/Info-macOS.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Traders Guild";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = co.tradersguild.app;
-				PRODUCT_NAME = "Traders Guild";
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AAF1000000000000000007 /* Build configuration list for PBXNativeTarget "TradersGuildMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AAF1000000000000000008 /* Debug */,
+				AAF1000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D60EC76B2E280DB2005E2FF1 /* Build configuration list for PBXProject "traders_guild" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -696,15 +703,6 @@
 			buildConfigurations = (
 				D60EC79B2E280DB3005E2FF1 /* Debug */,
 				D60EC79C2E280DB3005E2FF1 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AAF1000000000000000007 /* Build configuration list for PBXNativeTarget "TradersGuildMac" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AAF1000000000000000008 /* Debug */,
-				AAF1000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

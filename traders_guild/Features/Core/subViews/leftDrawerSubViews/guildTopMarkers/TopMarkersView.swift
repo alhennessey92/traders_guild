@@ -559,7 +559,7 @@ struct TopMarkersView: View {
     }
 
     private func handleLike(marker: RLMarkerActivityItemDTO) {
-        let generator = UIImpactFeedbackGenerator(style: .light)
+        let generator = PlatformImpactGenerator(style: .light)
         generator.impactOccurred()
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -584,7 +584,7 @@ struct TopMarkersView: View {
     }
 
     private func handleMarkerTap(marker: RLMarkerActivityItemDTO) {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
+        let generator = PlatformImpactGenerator(style: .medium)
         generator.impactOccurred()
 
         let topMarker = marker.asTopMarkerDTO()

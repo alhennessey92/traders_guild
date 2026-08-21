@@ -720,7 +720,7 @@ struct JoinGuildView: View {
     }
 
     private func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        PlatformKeyboard.dismiss()
     }
 }
 
@@ -1483,7 +1483,7 @@ struct CreateGuildView: View {
     @State private var visibleSections: Set<Int> = []
     @State private var selectedCrestSymbol: String = GuildCrestCatalog.defaultSymbolKey
     @State private var selectedCrestColor: String = GuildCrestCatalog.defaultColorKey
-    @State private var pickedCrestImage: UIImage?
+    @State private var pickedCrestImage: PlatformImage?
     @State private var showCrestImagePicker = false
     @State private var showInviteHubAfterCreate = false
 
@@ -1568,7 +1568,7 @@ struct CreateGuildView: View {
     @ViewBuilder
     private func crestPreview(size: CGFloat) -> some View {
         if let image = pickedCrestImage {
-            Image(uiImage: image)
+            Image(platformImage: image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
@@ -1668,7 +1668,7 @@ struct CreateGuildView: View {
 
                             if let image = pickedCrestImage {
                                 HStack(spacing: 12) {
-                                    Image(uiImage: image)
+                                    Image(platformImage: image)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 44, height: 44)

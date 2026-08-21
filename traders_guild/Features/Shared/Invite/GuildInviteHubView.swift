@@ -514,7 +514,7 @@ struct GuildInviteHubView: View {
     /// scale/brightness pulse — then run the action. Action-driven (not press
     /// state) so it fires reliably inside the scroll view and on the simulator.
     private func fireChannel(_ kind: ChannelKind, _ action: @escaping () -> Void) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        PlatformImpactGenerator(style: .light).impactOccurred()
         withAnimation(.easeOut(duration: 0.09)) { pulseChannel = kind }
         // The slow channels (QR/More build + present a sheet) get their spinner
         // immediately, so the wait is obvious from the instant of the tap.
@@ -661,7 +661,7 @@ struct InvitePressStyle: ButtonStyle {
                        value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    PlatformImpactGenerator(style: .light).impactOccurred()
                 }
             }
     }
