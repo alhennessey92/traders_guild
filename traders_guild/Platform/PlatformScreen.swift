@@ -26,6 +26,10 @@ enum PlatformScreen {
     /// iOS: `UIScreen.main.bounds`, unchanged.
     /// macOS: the main display's frame — the closest equivalent, and only ever
     /// consulted before a chart has been measured.
+    /// `@inline(__always)` so that even an unoptimised debug build collapses this
+    /// to the same direct access the call sites used before the shim existed —
+    /// several of them sit in computed properties read from `body`.
+    @inline(__always)
     static var bounds: CGRect {
         #if canImport(UIKit)
         return UIScreen.main.bounds
