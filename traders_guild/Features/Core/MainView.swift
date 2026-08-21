@@ -67,7 +67,9 @@ struct MainView: View {
     @StateObject private var chartStateOwner = ChartStateOwner()
     @StateObject private var indicatorPanelViewportStore = IndicatorPanelViewportStore()
     @StateObject private var placementState = MarkerPlacementState()
-    @StateObject private var markerOverlayState = MarkerOverlayState()
+    /// Shares `chartViewModel.paneID` so its notifications reach this chart.
+    /// When panes become plural this pairing moves into ChartPanelEntry.
+    @StateObject private var markerOverlayState: MarkerOverlayState
 
     private var chartGestureState: ChartGestureState { chartStateOwner.gestureState }
 
@@ -380,13 +382,19 @@ struct MainView: View {
     init() {
         let dataManager = ChartDataManager()
         _chartDataManager = StateObject(wrappedValue: dataManager)
+        // One pane on iOS. Everything belonging to it shares this identity so
+        // pane-directed notifications land on the right chart — on macOS the
+        // same objects are minted per pane by ChartPanelEntry.
+        let paneID = UUID()
         // ChartViewModel will be properly initialized in onAppear with rlAppState
         // For now, create a temporary app state without session side effects.
         _chartViewModel = StateObject(wrappedValue: ChartViewModel(
             appState: RLAppState(restoreSessionOnInit: false),
             dataManager: dataManager,
-            api: RealAPIService()
+            api: RealAPIService(),
+            paneID: paneID
         ))
+        _markerOverlayState = StateObject(wrappedValue: MarkerOverlayState(paneID: paneID))
     }
     
     // MARK: - Body
@@ -539,7 +547,9 @@ struct MainView: View {
                         leftDrawerViewModel.requestNavigationToMarker(marker)
                     },
                     onPlaceMarker: {
-                        NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
+                        // Addressed to the focused pane. iOS has exactly one;
+                        // macOS routes this to whichever pane has focus.
+                        ChartPaneAddressing.post(.placeMarkerRequested, to: chartViewModel.paneID)
                     },
                     onViewingAuthorTap: { marker in
                         if marker.author.userId == rlAppState.currentUser?.id {

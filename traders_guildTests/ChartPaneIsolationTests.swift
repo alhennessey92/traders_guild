@@ -174,4 +174,77 @@ struct ChartPaneIsolationTests {
         service.unsubscribe(from: [channel], owner: "chart")
         #expect(service.channelOwnersSnapshot[channel] == nil)
     }
+
+    // MARK: - Notification addressing
+
+    /// The reason this matters: "Place Marker" used to be posted with
+    /// `object: nil`, so with four panes on screen one tap would have created
+    /// four markers.
+    @Test
+    func aPaneDirectedNotificationReachesOnlyItsTarget() {
+        let paneA = UUID()
+        let paneB = UUID()
+        var received: Notification?
+
+        let token = NotificationCenter.default.addObserver(
+            forName: .placeMarkerRequested, object: nil, queue: nil
+        ) { received = $0 }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        ChartPaneAddressing.post(.placeMarkerRequested, to: paneA)
+
+        let note = try! #require(received)
+        #expect(ChartPaneAddressing.isAddressed(note, to: paneA))
+        #expect(!ChartPaneAddressing.isAddressed(note, to: paneB),
+                "pane B must ignore a request aimed at pane A")
+    }
+
+    @Test
+    func addressingPreservesTheExistingUserInfo() {
+        let pane = UUID()
+        var received: Notification?
+        let token = NotificationCenter.default.addObserver(
+            forName: .markerOverlayClear, object: nil, queue: nil
+        ) { received = $0 }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        ChartPaneAddressing.post(.markerOverlayClear, to: pane, userInfo: ["markerId": "abc"])
+
+        let note = try! #require(received)
+        #expect(note.userInfo?["markerId"] as? String == "abc")
+        #expect(note.userInfo?[ChartPaneAddressing.paneIDKey] as? UUID == pane)
+    }
+
+    /// The overlay must post under the pane it was built for, not a fresh id —
+    /// otherwise the chart it belongs to would filter its own notifications out.
+    @Test
+    func markerOverlayStatePostsUnderItsOwnPane() {
+        let pane = UUID()
+        let overlay = MarkerOverlayState(paneID: pane)
+        var received: Notification?
+        let token = NotificationCenter.default.addObserver(
+            forName: .markerOverlayClear, object: nil, queue: nil
+        ) { received = $0 }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        overlay.clear()
+
+        let note = try! #require(received)
+        #expect(ChartPaneAddressing.isAddressed(note, to: pane))
+    }
+
+    /// paneID is the single identity: the WebSocket owner token derives from it,
+    /// so the two can never drift apart.
+    @Test
+    func ownerTokenDerivesFromPaneID() {
+        let pane = UUID()
+        let vm = ChartViewModel(
+            appState: RLAppState(restoreSessionOnInit: false),
+            dataManager: ChartDataManager(),
+            api: RealAPIService(),
+            paneID: pane
+        )
+        #expect(vm.paneID == pane)
+        #expect(vm.ownerToken == "chart_\(pane.uuidString.lowercased())")
+    }
 }

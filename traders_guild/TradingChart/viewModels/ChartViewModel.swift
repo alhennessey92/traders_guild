@@ -168,13 +168,20 @@ class ChartViewModel: ObservableObject {
     /// already used by `TimeframePanelManager`.
     let ownerToken: String
 
+    /// Identity of the chart pane this view model drives. One pane on iOS; up to
+    /// four on macOS. Also addresses pane-directed notifications — see
+    /// [ChartPaneAddressing].
+    let paneID: UUID
+
     init(
         appState: RLAppState,
         dataManager: ChartDataManager,
         api: RealAPIService,
+        paneID: UUID = UUID(),
         ownerToken: String? = nil
     ) {
-        self.ownerToken = ownerToken ?? "chart_\(UUID().uuidString.lowercased())"
+        self.paneID = paneID
+        self.ownerToken = ownerToken ?? "chart_\(paneID.uuidString.lowercased())"
         self.appState = appState
         self.dataManager = dataManager
         self.api = api

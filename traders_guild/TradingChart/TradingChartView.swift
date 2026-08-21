@@ -1051,19 +1051,25 @@ struct TradingChartView: View {
 
     private func withNotificationHandlers<Content: View>(_ content: Content) -> some View {
         content
+            // Each of these is addressed to a single pane. Without the filter,
+            // one "Place Marker" tap would fire on every chart on screen.
             .onReceive(NotificationCenter.default.publisher(for: .focusSharedMarker)) { notification in
+                guard ChartPaneAddressing.isAddressed(notification, to: chartViewModel.paneID) else { return }
                 guard let userInfo = notification.userInfo,
                       let payload = MarkerSharePayloadV1(userInfo) else { return }
                 focusSharedMarker(payload)
             }
             .onReceive(NotificationCenter.default.publisher(for: .markerOverlayApply)) { notification in
+                guard ChartPaneAddressing.isAddressed(notification, to: chartViewModel.paneID) else { return }
                 guard let marker = notification.userInfo?["marker"] as? ChartMarkerUI else { return }
                 applyMarkerOverlay(marker)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .markerOverlayClear)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .markerOverlayClear)) { notification in
+                guard ChartPaneAddressing.isAddressed(notification, to: chartViewModel.paneID) else { return }
                 clearMarkerOverlay()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .placeMarkerRequested)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .placeMarkerRequested)) { notification in
+                guard ChartPaneAddressing.isAddressed(notification, to: chartViewModel.paneID) else { return }
                 placeMarkerFromState()
             }
     }
