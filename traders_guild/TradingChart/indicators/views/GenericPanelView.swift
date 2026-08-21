@@ -480,7 +480,7 @@ struct GenericIndicatorPanelView: View {
                     timestamp: timestamp,
                     timeframe: timeframe,
                     timeZone: chartData.currentSymbol?.exchangeTimeZone ?? .current,
-                    availableWidth: UIScreen.main.bounds.width
+                    availableWidth: PlatformScreen.bounds.width
                 ),
                 y: CrosshairTimeLabel.indicatorHeight * 0.5
             )

@@ -1,10 +1,6 @@
 import CoreGraphics
 import Foundation
 
-#if canImport(UIKit)
-import UIKit
-#endif
-
 /// Where vertical (price-axis) zoom pivots, and what that does to the pan offset.
 ///
 /// Pure maths, deliberately outside any view — the same reasoning as
@@ -33,7 +29,8 @@ enum VerticalZoomAnchor {
         #if os(macOS)
         return chartHeight > 0 ? chartHeight / 2 : 0
         #else
-        return UIScreen.main.bounds.height / 2
+        // Verbatim the shipped iOS constant. See the note above before touching.
+        return PlatformScreen.bounds.height / 2
         #endif
     }
 

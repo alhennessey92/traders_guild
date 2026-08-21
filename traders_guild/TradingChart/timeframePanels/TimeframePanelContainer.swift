@@ -45,7 +45,7 @@ struct TimeframePanelContainer: View {
             baseCandleWidth: baseCandleWidth,
             candleSpacing: candleSpacing,
             historicalRenderIndexOffset: chartData.historicalRenderIndexOffset,
-            viewportWidth: UIScreen.main.bounds.width,
+            viewportWidth: PlatformScreen.bounds.width,
             candleTimestamps: chartData.candles.map(\.timestamp),
             timeframeSeconds: mainChartTimeframeSeconds
         )

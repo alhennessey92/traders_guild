@@ -371,7 +371,7 @@ struct RLRightDrawerMainView: View {
             return
         }
 
-        let screenHeight = UIScreen.main.bounds.height
+        let screenHeight = PlatformScreen.bounds.height
         let overlap = max(0, screenHeight - endFrame.minY - bottomSafeAreaInset)
         withAnimation(.easeOut(duration: 0.25)) {
             keyboardInset = overlap

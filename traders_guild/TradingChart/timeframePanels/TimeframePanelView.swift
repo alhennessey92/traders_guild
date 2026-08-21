@@ -307,7 +307,7 @@ struct TimeframePanelView: View {
     @State private var initialPriceScale: CGFloat = 1.0
     @State private var initialVerticalOffset: CGFloat = 0
     @State private var hasCenteredOnMarker = false
-    @State private var lastKnownChartWidth: CGFloat = UIScreen.main.bounds.width
+    @State private var lastKnownChartWidth: CGFloat = PlatformScreen.bounds.width
     @State private var lockedRawPriceRange: (min: Double, max: Double)?
     @State private var isCenteringToMainChartTime = false
     @State private var isLoadingCandlesForMarkerCenter = false

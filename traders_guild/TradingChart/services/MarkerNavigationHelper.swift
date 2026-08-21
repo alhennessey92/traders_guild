@@ -191,7 +191,7 @@ class MarkerNavigationHelper {
         }
         
         // Use provided width or fall back to screen width
-        let width = chartWidth ?? UIScreen.main.bounds.width
+        let width = chartWidth ?? PlatformScreen.bounds.width
         print("🎯 Chart width: \(width)")
         
         // Step 1: Check current state
@@ -399,7 +399,7 @@ class MarkerNavigationHelper {
         }
 
         let historicalRenderIndexOffset = chartViewModel.dataManager.historicalRenderIndexOffset
-        let chartHeight = UIScreen.main.bounds.height * 0.6
+        let chartHeight = PlatformScreen.bounds.height * 0.6
         let oldPriceRange = chartViewModel.dataManager.priceRange
         let oldVerticalOffset = gestureState.verticalPanOffset
         let anchorPrice = targetMarker.price ?? candles[targetCandleIndex].close
