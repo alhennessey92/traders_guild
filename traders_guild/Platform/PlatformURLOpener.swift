@@ -27,6 +27,22 @@ enum PlatformURLOpener {
         #endif
     }
 
+    /// Opens the app's own entry in the system settings app.
+    ///
+    /// iOS deep-links to the app's page; macOS has no per-app settings pane, so it
+    /// opens Notifications, which is what this button is for in both apps.
+    static func openSystemSettings() {
+        #if canImport(UIKit)
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+        #elseif canImport(AppKit)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+        #endif
+    }
+
     /// Opens `url` and reports whether the system accepted it. Used to decide
     /// whether a custom-scheme link resolved before falling back to https.
     static func open(_ url: URL, completion: @escaping (Bool) -> Void) {

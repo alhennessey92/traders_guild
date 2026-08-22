@@ -53,7 +53,7 @@ struct StandardDatePickerView: View {
                         selection: $date,
                         displayedComponents: .date
                     )
-                    .datePickerStyle(.wheel)
+                    .platformWheelDatePickerStyle()
                     .labelsHidden()
                     .foregroundColor(AppColors.whiteText)
                     .colorScheme(ThemeManager.shared.currentTheme.colorScheme)

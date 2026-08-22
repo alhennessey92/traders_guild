@@ -92,9 +92,9 @@ struct UserGlobalSheetView: View {
                 GlobalReputationBreakdownSheetView()
                     .environmentObject(rlAppState)
                     .navigationTitle("Global Reputation Breakdown")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .platformNavigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItem(placement: .platformTrailing) {
                             SheetCloseButton(action: { showGlobalReputationBreakdown = false })
                         }
                     }
@@ -105,9 +105,9 @@ struct UserGlobalSheetView: View {
                 GlobalAccuracyBreakdownSheetView()
                     .environmentObject(rlAppState)
                     .navigationTitle("Global Accuracy Breakdown")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .platformNavigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItem(placement: .platformTrailing) {
                             SheetCloseButton(action: { showGlobalAccuracyBreakdown = false })
                         }
                     }

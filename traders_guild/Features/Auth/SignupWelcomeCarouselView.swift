@@ -78,7 +78,7 @@ struct SignupWelcomeCarouselView: View {
                     .tag(index)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
+            .platformPageTabViewStyle()
             .frame(height: 280)
 
             HStack(spacing: 10) {

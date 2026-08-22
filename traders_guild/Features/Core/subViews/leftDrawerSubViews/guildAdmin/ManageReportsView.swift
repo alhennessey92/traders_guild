@@ -871,7 +871,7 @@ struct ManageReportsView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Report Details")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     SheetCloseButton(action: { selectedReport = nil })

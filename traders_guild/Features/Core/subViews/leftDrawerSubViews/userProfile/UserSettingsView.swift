@@ -757,10 +757,15 @@ struct UserSettingsSheetView: View {
     }
     
     private func requestAppReview() {
+        #if canImport(UIKit)
         if let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
             AppStore.requestReview(in: scene)
         }
+        #else
+        // macOS AppStore.requestReview still wants a scene; this is the app-wide form.
+        SKStoreReviewController.requestReview()
+        #endif
     }
 
     private func handleBiometricToggle(enabled: Bool) {

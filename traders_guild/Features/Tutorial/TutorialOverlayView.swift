@@ -376,6 +376,8 @@ struct TutorialOverlayView: View {
 
 // MARK: - Tutorial Window Manager
 
+#if canImport(UIKit)
+
 /// Manages a transparent `UIWindow` that hosts the tutorial overlay.
 /// This window sits above all other content, including `.sheet()` presentations,
 /// ensuring the tutorial overlay covers the entire screen.
@@ -420,3 +422,30 @@ final class TutorialWindowManager {
         hostingController = nil
     }
 }
+
+#else
+
+/// macOS stand-in.
+///
+/// The iOS tutorial cannot be ported, only rewritten. It teaches touch gestures —
+/// pinch to zoom, long-press for the crosshair, drag to pan — and its coach marks
+/// point at iPhone chrome: the bottom sheet and the slide-over drawers. On macOS
+/// none of that exists: zoom is the scroll wheel, the crosshair follows the
+/// pointer, and the shell is sidebars, a top bar and a pane grid. A ported
+/// tutorial would teach interactions the Mac app does not have.
+///
+/// So this is a no-op until there is a Mac shell to attach a Mac-native
+/// onboarding to. That is sequencing, not a scope cut: the call sites and the
+/// TutorialManager state machine are untouched, so a real implementation drops in
+/// here without changing anything else.
+@MainActor
+final class TutorialWindowManager {
+    static let shared = TutorialWindowManager()
+    private init() {}
+
+    func show(tutorialManager: TutorialManager) {}
+    func dismiss() {}
+}
+
+#endif
+

@@ -123,7 +123,7 @@ struct traders_guildApp: App {
             }
             
             // Guild selection sheet - ONLY controlled by rlAppState
-            .fullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
+            .platformFullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
                 GuildSelectionFullView()
                     .environmentObject(rlAppState)
                     .environmentObject(rlMessagingManager)
@@ -139,7 +139,7 @@ struct traders_guildApp: App {
                 BiometricEnrollmentView()
                     .environmentObject(rlAppState)
             }
-            .fullScreenCover(isPresented: $rlAppState.showBetaWelcomeSheet) {
+            .platformFullScreenCover(isPresented: $rlAppState.showBetaWelcomeSheet) {
                 BetaWelcomeSheetView()
                     .environmentObject(rlAppState)
             }
@@ -348,7 +348,7 @@ struct traders_guildApp: App {
 //             }
             
 //             // Guild selection sheet - ONLY controlled by rlAppState
-//             .fullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
+//             .platformFullScreenCover(isPresented: $rlAppState.showGuildSelectionSheet) {
 //                 GuildSelectionFullView()
 //                     .environmentObject(rlAppState)
 //                     .environmentObject(appState) // TODO: remove

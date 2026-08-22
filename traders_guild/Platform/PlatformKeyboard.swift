@@ -41,6 +41,20 @@ enum PlatformKeyboard {
         #endif
     }
 
+    /// Converts a keyboard height into the inset a bottom-anchored view needs,
+    /// discounting the home indicator's safe area — which the raw height includes.
+    static func overlap(forKeyboardHeight height: CGFloat) -> CGFloat {
+        guard height > 0 else { return 0 }
+        #if canImport(UIKit)
+        let safeArea = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.windows.first(where: \.isKeyWindow)?.safeAreaInsets.bottom }
+            .first ?? 0
+        return Swift.max(0, height - safeArea)
+        #else
+        return 0
+        #endif
+    }
+
     /// Height the software keyboard currently covers, in points.
     ///
     /// Always 0 on macOS, so layouts that inset for the keyboard simply do not

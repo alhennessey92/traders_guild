@@ -238,10 +238,10 @@ struct SignupGuildView: View {
                 .dismissKeyboardOnTapAndDragBackground()
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+        .platformNavigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .platformLeading) {
                 if !rlAppState.isAuthenticated {
                     Button(action: {
                         if !path.isEmpty { path.removeLast() }
@@ -338,7 +338,7 @@ struct SignupGuildView: View {
 
             HStack(spacing: 8) {
                 TextField("Guild handle or invite code", text: $handleInput)
-                    .textInputAutocapitalization(.never)
+                    .platformAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 12)
@@ -895,10 +895,10 @@ struct SignupProfileSetupView: View {
             .scrollDismissesKeyboard(.interactively)
             .dismissKeyboardOnTapAndDragBackground()
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+        .platformNavigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .platformLeading) {
                 if !rlAppState.isAuthenticated {
                     Button(action: {
                         if !path.isEmpty { path.removeLast() }
@@ -1049,7 +1049,7 @@ struct SignupProfileSetupView: View {
                 .font(.body)
                 .foregroundColor(AppColors.whiteText)
                 .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
+                .platformAutocapitalization(.never)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 14)
@@ -1079,7 +1079,7 @@ struct SignupProfileSetupView: View {
         data.profileTelegramHandle = RLAuthValidator.trimmed(telegramHandle)
         data.profileTradingViewHandle = RLAuthValidator.trimmed(tradingViewHandle)
         data.profileYoutubeHandle = RLAuthValidator.trimmed(youtubeHandle)
-        data.profileAvatarImageData = selectedAvatarImage?.jpegData(compressionQuality: 0.82)
+        data.profileAvatarImageData = selectedAvatarImage?.jpegBytes(compressionQuality: 0.82)
         data.selectedInterests = suggestedInterests
             .map(\.name)
             .filter { selectedInterests.contains($0) }

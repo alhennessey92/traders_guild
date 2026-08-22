@@ -213,10 +213,10 @@ struct SignupEmailView: View {
                     password = data.password
                 }
             }
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
+            .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+            .platformNavigationBarBackButtonHidden(true)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button(action: {
                         if !path.isEmpty { path.removeLast() }
                     }) {

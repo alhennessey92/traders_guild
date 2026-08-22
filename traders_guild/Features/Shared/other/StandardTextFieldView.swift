@@ -82,18 +82,18 @@ struct StandardTextFieldView: View {
                     ZStack {
                         TextField(title, text: $text)
                             .platformTextContentType(secureContentType)
-                            .textInputAutocapitalization(.never)
+                            .platformAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .opacity(isSecureTextVisible ? 1 : 0)
                         SecureField(title, text: $text)
                             .platformTextContentType(secureContentType)
-                            .textInputAutocapitalization(.never)
+                            .platformAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .opacity(isSecureTextVisible ? 0 : 1)
                     }
                 } else {
                     TextField(title, text: $text)
-                        .textInputAutocapitalization(isDisplayNameField ? .words : .never)
+                        .platformAutocapitalization(isDisplayNameField ? .words : .never)
                         .platformTextContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
                         .platformKeyboardType(isEmailField ? .emailAddress : .default)
                         .autocorrectionDisabled()

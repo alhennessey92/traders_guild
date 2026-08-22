@@ -342,9 +342,9 @@ struct MarkerShareSheet: View {
             }
             .padding(.horizontal, 16)
             .navigationTitle("Share Marker")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("Cancel") { dismiss() }
                         .foregroundColor(AppColors.accentColor)
                 }
@@ -568,13 +568,13 @@ struct MarkerShareSheet: View {
         guard canShareExternally,
               let externalShareURL = await loadExternalShareURL() else { return }
         showDiscordDestination = false
-        UIPasteboard.general.string = MarkerShare.discordMessage(
+        PlatformPasteboard.copy(MarkerShare.discordMessage(
             symbolTicker: symbolTicker,
             caption: trimmedNote,
             url: externalShareURL,
             intent: marker.intent.rawValue,
             price: marker.price
-        )
+        ))
         GuildInviteShare.openAppOrWeb(
             MarkerShare.discordAppURL,
             fallback: MarkerShare.discordWebURL
@@ -587,7 +587,7 @@ struct MarkerShareSheet: View {
         isSending = true
         defer { isSending = false }
         guard let externalShareURL = await loadExternalShareURL() else { return }
-        UIPasteboard.general.string = externalShareURL.absoluteString
+        PlatformPasteboard.copy(externalShareURL.absoluteString)
         rlAppState.showSuccess("Marker link copied")
         dismiss()
     }
@@ -1024,8 +1024,8 @@ struct CommentsView: View {
                 onBack: onExitChat
             )
         }
-        .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .platformNavigationBarBackground(AppColors.sheetBackground)
+        .platformNavigationBarBackground(.visible)
         .sheet(isPresented: $showReportCommentReasonSheet) {
             if let comment = commentToReport {
                 ReportReasonSheet(

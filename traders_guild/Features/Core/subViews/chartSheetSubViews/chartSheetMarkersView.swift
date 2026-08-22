@@ -202,7 +202,7 @@ struct chartSheetMarkersView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .background(AppColors.systemBlack.ignoresSafeArea())
                     .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
+                        ToolbarItem(placement: .platformTrailing) {
                             SheetCloseButton(action: {
                                 showMarkerSettingsSheet = false
                             })

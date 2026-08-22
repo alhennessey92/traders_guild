@@ -94,10 +94,10 @@ struct SignupInterestsView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
         }
-        .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+        .platformNavigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .platformLeading) {
                 if !rlAppState.accountCreatedDuringOnboarding {
                     Button(action: {
                         if !path.isEmpty { path.removeLast() }

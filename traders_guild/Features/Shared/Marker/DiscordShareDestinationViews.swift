@@ -81,9 +81,9 @@ struct DiscordDestinationSheet<Preview: View>: View {
             }
             .background(AppColors.sheetBackground.ignoresSafeArea())
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("Cancel") { dismiss() }
                         .foregroundColor(AppColors.accentColor)
                 }

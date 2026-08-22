@@ -153,7 +153,7 @@ enum GuildInviteShare {
     @MainActor
     static func open(_ url: URL?) {
         guard let url else { return }
-        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        PlatformURLOpener.open(url)
     }
 
     /// Try to open a native app via its scheme; if it isn't installed (open
@@ -162,9 +162,9 @@ enum GuildInviteShare {
     @MainActor
     static func openAppOrWeb(_ appURL: URL?, fallback webURL: URL?) {
         guard let appURL else { open(webURL); return }
-        UIApplication.shared.open(appURL, options: [:]) { success in
+        PlatformURLOpener.open(appURL) { success in
             if !success, let webURL {
-                UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
+                PlatformURLOpener.open(webURL)
             }
         }
     }
@@ -180,7 +180,7 @@ enum GuildInviteShare {
         let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let context = CIContext()
         guard let cg = context.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return PlatformImage(cgImage: cg)
+        return PlatformImage.from(cgImage: cg)
     }
 }
 

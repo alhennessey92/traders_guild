@@ -107,7 +107,7 @@ struct ManageBansView: View {
         HStack(spacing: 12) {
             // Avatar
             Circle()
-                .fill(Color(.systemGray4))
+                .fill(Color.platformSystemGray4)
                 .frame(width: 44, height: 44)
                 .overlay(
                     Group {

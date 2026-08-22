@@ -1574,14 +1574,14 @@ struct DrawingTextEditorSheet: View {
                             .frame(minHeight: 120)
                     } else {
                         TextField(context.placeholder, text: $value)
-                            .textInputAutocapitalization(.never)
+                            .platformAutocapitalization(.never)
                     }
                 }
             }
             .scrollContentBackground(.hidden)
             .background(AppColors.systemBlack)
             .navigationTitle(context.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

@@ -106,7 +106,7 @@ struct MarkerSharePromptSheet: View {
 
             TextField("Add a message (optional)", text: $caption, axis: .vertical)
                 .lineLimit(1...3)
-                .textInputAutocapitalization(.sentences)
+                .platformAutocapitalization(.sentences)
                 .font(.subheadline)
                 .foregroundColor(AppColors.primaryForeground)
                 .padding(.horizontal, 14)
@@ -418,13 +418,13 @@ struct MarkerSharePromptSheet: View {
         guard context.canShareExternally,
               let shareURL = await loadExternalShareURL() else { return }
         showDiscordDestination = false
-        UIPasteboard.general.string = MarkerShare.discordMessage(
+        PlatformPasteboard.copy(MarkerShare.discordMessage(
             symbolTicker: context.symbolTicker,
             caption: caption,
             url: shareURL,
             intent: context.marker.intent,
             price: context.marker.price
-        )
+        ))
         GuildInviteShare.openAppOrWeb(
             MarkerShare.discordAppURL,
             fallback: MarkerShare.discordWebURL
@@ -437,7 +437,7 @@ struct MarkerSharePromptSheet: View {
         busyChannel = .copy
         defer { busyChannel = nil }
         guard let shareURL = await loadExternalShareURL() else { return }
-        UIPasteboard.general.string = shareURL.absoluteString
+        PlatformPasteboard.copy(shareURL.absoluteString)
         appState.showSuccess("Marker link copied")
         dismiss()
     }

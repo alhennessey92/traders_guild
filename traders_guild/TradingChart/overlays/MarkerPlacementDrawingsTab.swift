@@ -109,28 +109,12 @@ struct MarkerPlacementDrawingsTab: View {
         .onDisappear {
             keyboardInset = 0
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-            updateKeyboardInset(from: notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        // A Mac has no software keyboard, so this publisher never raises the
+        // inset there and the layout simply stays put.
+        .onReceive(PlatformKeyboard.heightPublisher) { height in
             withAnimation(.easeOut(duration: 0.2)) {
-                keyboardInset = 0
+                keyboardInset = PlatformKeyboard.overlap(forKeyboardHeight: height)
             }
-        }
-    }
-
-    private func updateKeyboardInset(from notification: Notification) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first(where: \.isKeyWindow),
-              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let convertedEndFrame = window.convert(endFrame, from: nil)
-        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            keyboardInset = overlap
         }
     }
 
@@ -1053,7 +1037,7 @@ struct MarkerPlacementDrawingsTab: View {
             }
             .padding(16)
             .navigationTitle("Drawing Style")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.height(420), .medium])
         .presentationDragIndicator(.visible)

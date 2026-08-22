@@ -207,7 +207,7 @@ struct UnifiedSearchBar: View {
                 .font(.system(size: 15))
                 .tint(unifiedSearchAccessoryForeground)
                 .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
+                .platformAutocapitalization(.never)
                 .submitLabel(.done)
                 .focused($isFocused)
                 .onChange(of: text) { oldValue, newValue in
@@ -263,7 +263,7 @@ struct UnifiedSymbolSearchBar: View {
             TextField(placeholder, text: $text)
                 .foregroundColor(AppColors.primaryForeground)
                 .font(.system(size: 15))
-                .autocapitalization(.allCharacters)
+                .platformAutocapitalization(.characters)
                 .disableAutocorrection(true)
                 .submitLabel(.done)
                 .focused($isFocused)

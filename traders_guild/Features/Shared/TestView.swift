@@ -56,11 +56,11 @@ struct TestView: View {
               
                 
             }
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
+            .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+            .platformNavigationBarBackButtonHidden(true)
             
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "chevron.left")
                             .font(.headline)

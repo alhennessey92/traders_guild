@@ -130,12 +130,10 @@ struct ChartSheetSymbolView: View {
             dismissKeyboard()
             keyboardInset = 0
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-            updateKeyboardInset(from: notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        // A Mac has no software keyboard, so this never raises the inset there.
+        .onReceive(PlatformKeyboard.heightPublisher) { height in
             withAnimation(.easeOut(duration: 0.2)) {
-                keyboardInset = 0
+                keyboardInset = PlatformKeyboard.overlap(forKeyboardHeight: height)
             }
         }
         .onAppear {
@@ -1037,20 +1035,6 @@ struct ChartSheetSymbolView: View {
         PlatformKeyboard.dismiss()
     }
 
-    private func updateKeyboardInset(from notification: Notification) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first(where: \.isKeyWindow),
-              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let convertedEndFrame = window.convert(endFrame, from: nil)
-        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            keyboardInset = overlap
-        }
-    }
     
     private func performSearch(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespaces)

@@ -70,7 +70,7 @@ struct PhotoPickerView: UIViewControllerRepresentable {
                 provider.loadObject(ofClass: UIImage.self) { object, _ in
                     defer { group.leave() }
                     guard let image = object as? UIImage,
-                          let data = image.jpegData(compressionQuality: 0.85) else {
+                          let data = image.jpegBytes(compressionQuality: 0.85) else {
                         return
                     }
                     let baseName = provider.suggestedName ?? "photo_\(UUID().uuidString.prefix(8))"

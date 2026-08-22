@@ -389,7 +389,7 @@ private struct ChatroomEditorSheet: View {
             }
             .padding(16)
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .background(AdminSheetBackground())
             .onChange(of: icon) { _, newValue in
                 let sanitized = ChatroomValidation.sanitizedIconInput(newValue)

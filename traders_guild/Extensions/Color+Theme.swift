@@ -2014,14 +2014,22 @@ enum AppColors {
     static var duplicateDialogCardBackground: Color {
         switch theme {
         case .lightGrey: return tgSheetBackground
-        case .midGrey, .dark: return Color(uiColor: .systemBackground)
+        case .midGrey, .dark: #if canImport(UIKit)
+            return Color(uiColor: .systemBackground)
+            #else
+            return Color(nsColor: .windowBackgroundColor)
+            #endif
         }
     }
 
     static var duplicateDialogSecondaryButtonFill: Color {
         switch theme {
         case .lightGrey: return tgSheetDarkBackground
-        case .midGrey, .dark: return Color(uiColor: .systemGray6)
+        case .midGrey, .dark: #if canImport(UIKit)
+            return Color(uiColor: .systemGray6)
+            #else
+            return Color(nsColor: .controlBackgroundColor)
+            #endif
         }
     }
 

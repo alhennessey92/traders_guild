@@ -318,7 +318,7 @@ struct GuildInviteHubView: View {
             }
             Spacer()
             Button {
-                UIPasteboard.general.string = handle.absoluteString
+                PlatformPasteboard.copy(handle.absoluteString)
                 rlAppState.showSuccess("Guild address copied")
             } label: {
                 Image(systemName: "doc.on.doc")
@@ -453,7 +453,7 @@ struct GuildInviteHubView: View {
                 .multilineTextAlignment(.center)
 
             if let url = inviteURL, let qr = GuildInviteShare.qrCode(for: url.absoluteString) {
-                Image(uiImage: qr)
+                Image(platformImage: qr)
                     .interpolation(.none)
                     .resizable()
                     .frame(width: 240, height: 240)
@@ -532,7 +532,7 @@ struct GuildInviteHubView: View {
 
     private func copyInviteLink() {
         guard let url = inviteURL else { return }
-        UIPasteboard.general.string = url.absoluteString
+        PlatformPasteboard.copy(url.absoluteString)
         rlAppState.showSuccess("Invite link copied")
     }
 
@@ -588,7 +588,7 @@ struct GuildInviteHubView: View {
     private func copyForDiscordAndOpen() {
         guard let url = inviteURL else { return }
         showDiscordDestination = false
-        UIPasteboard.general.string = GuildInviteShare.discordMessage(guildName: guildName, url: url)
+        PlatformPasteboard.copy(GuildInviteShare.discordMessage(guildName: guildName, url: url))
         rlAppState.showSuccess("Message copied — paste it into Discord")
         GuildInviteShare.openAppOrWeb(
             GuildInviteShare.discordAppURL,
