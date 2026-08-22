@@ -295,6 +295,7 @@ struct PanelMiniInfoBadge: Identifiable {
 
 enum PanelChromeTextColorResolver {
     static func textColor(for background: Color) -> Color {
+        #if canImport(UIKit)
         let uiColor = UIColor(background)
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -309,11 +310,24 @@ enum PanelChromeTextColorResolver {
             (0.2126 * red) +
             (0.7152 * green) +
             (0.0722 * blue)
+        #else
+        guard let components = PlatformColorMath.rgba(
+            of: PlatformColorMath.cgColor(from: background)
+        ) else {
+            return AppColors.onAccentForeground
+        }
+
+        let luminance =
+            (0.2126 * components.red) +
+            (0.7152 * components.green) +
+            (0.0722 * components.blue)
+        #endif
 
         return luminance > 0.62 ? AppColors.primaryForeground : AppColors.onAccentForeground
     }
 
     static func readableAccentColor(_ preferred: Color) -> Color {
+        #if canImport(UIKit)
         let uiColor = UIColor(preferred)
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -328,6 +342,18 @@ enum PanelChromeTextColorResolver {
             (0.2126 * red) +
             (0.7152 * green) +
             (0.0722 * blue)
+        #else
+        guard let components = PlatformColorMath.rgba(
+            of: PlatformColorMath.cgColor(from: preferred)
+        ) else {
+            return preferred
+        }
+
+        let luminance =
+            (0.2126 * components.red) +
+            (0.7152 * components.green) +
+            (0.0722 * components.blue)
+        #endif
 
         return luminance > 0.7 ? AppColors.primaryForeground : preferred
     }

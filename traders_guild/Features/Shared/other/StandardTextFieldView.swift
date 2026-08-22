@@ -52,7 +52,7 @@ struct StandardTextFieldView: View {
         normalizedTitle.contains("token")
     }
 
-    private var secureContentType: UITextContentType? {
+    private var secureContentType: PlatformTextContentType? {
         if normalizedTitle.contains("new password") || normalizedTitle.contains("confirm password") {
             return .newPassword
         }
@@ -81,12 +81,12 @@ struct StandardTextFieldView: View {
                     // the view-destroy/create flash that if/else causes.
                     ZStack {
                         TextField(title, text: $text)
-                            .textContentType(secureContentType)
+                            .platformTextContentType(secureContentType)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .opacity(isSecureTextVisible ? 1 : 0)
                         SecureField(title, text: $text)
-                            .textContentType(secureContentType)
+                            .platformTextContentType(secureContentType)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .opacity(isSecureTextVisible ? 0 : 1)
@@ -94,8 +94,8 @@ struct StandardTextFieldView: View {
                 } else {
                     TextField(title, text: $text)
                         .textInputAutocapitalization(isDisplayNameField ? .words : .never)
-                        .textContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
-                        .keyboardType(isEmailField ? .emailAddress : .default)
+                        .platformTextContentType(isEmailField ? .emailAddress : (isUsernameField ? .username : (isTokenField ? .oneTimeCode : nil)))
+                        .platformKeyboardType(isEmailField ? .emailAddress : .default)
                         .autocorrectionDisabled()
                 }
             }
