@@ -9,7 +9,7 @@ set -e
 cd "$(dirname "$0")/.."
 OUT=$(mktemp -d)
 swiftc -target arm64-apple-macos14.0 -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
-    traders_guild_macOS/ChartPaneLayout.swift \
+    traders_guild_macOS/ChartPaneLayout.swift traders_guild_macOS/ChartPaneArrangement.swift traders_guild_macOS/ChartPaneLinking.swift traders_guild_macOS/MacCommandCatalog.swift traders_guild_macOS/ChartWorkspace.swift \
     scripts/panelayout-checks/main.swift \
     -o "$OUT/run"
 "$OUT/run"
