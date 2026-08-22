@@ -86,6 +86,9 @@ struct traders_guildTests {
         #expect(BundledTradingSymbolIconResolver.assetName(for: "SHIB/USD", assetClass: "crypto") == "icon_shib")
         #expect(BundledTradingSymbolIconResolver.assetName(for: "ATOM/USD", assetClass: "crypto") == "icon_atom")
         #expect(BundledTradingSymbolIconResolver.assetName(for: "LTC/USD", assetClass: "crypto") == "icon_ltc")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "BNB/USD", assetClass: "crypto") == "icon_bnb")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "LINK/USD", assetClass: "crypto") == "icon_link")
+        #expect(BundledTradingSymbolIconResolver.assetName(for: "SUI/USD", assetClass: "crypto") == "icon_sui")
     }
 
     private func colorDistance(_ lhs: Color, _ rhs: Color) -> Double {
