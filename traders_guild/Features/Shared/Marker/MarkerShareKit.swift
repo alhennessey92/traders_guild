@@ -10,6 +10,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 import LinkPresentation
 
@@ -219,6 +221,8 @@ enum MarkerShare {
     static var discordAppURL: URL? { GuildInviteShare.discordAppURL }
     static var discordWebURL: URL? { GuildInviteShare.discordWebURL }
 
+    #if canImport(UIKit)
+
     /// Presents `UIActivityViewController` for a marker. Mirrors
     /// `GuildInviteShare.presentNativeShareSheet` — UIKit presentation avoids the
     /// SwiftUI `.sheet(item:)` modal-layer wedge documented there.
@@ -257,6 +261,32 @@ enum MarkerShare {
 
         presenter.present(activityVC, animated: true) { onPresented?() }
     }
+
+    #else
+
+    /// macOS share sheet.
+    ///
+    /// `NSSharingServicePicker` needs an NSView to anchor to, so it hangs off the
+    /// key window's content view — the equivalent of the iOS version walking to the
+    /// topmost presented view controller.
+    ///
+    /// The iOS path passes a `UIActivityItemSource` so the sheet shows a title and
+    /// the app icon. AppKit has no direct counterpart, so the URL is shared plainly;
+    /// the receiving app unfurls it from the server's Open Graph tags anyway.
+    @MainActor
+    static func presentNativeShareSheet(for item: MarkerShareItem, onPresented: (() -> Void)? = nil) {
+        guard let contentView = NSApp.keyWindow?.contentView else {
+            onPresented?()
+            return
+        }
+        let picker = NSSharingServicePicker(items: [item.url])
+        let anchor = NSRect(x: contentView.bounds.midX, y: contentView.bounds.midY, width: 1, height: 1)
+        picker.show(relativeTo: anchor, of: contentView, preferredEdge: .minY)
+        onPresented?()
+    }
+
+    #endif
+
 }
 
 // MARK: - Deep-link failure copy
@@ -285,6 +315,7 @@ struct MarkerDeepLinkFailureCopy: Equatable {
 
 // MARK: - Rich-link Activity Item Source
 
+#if canImport(UIKit)
 final class MarkerShareActivityItemSource: NSObject, UIActivityItemSource {
     private let item: MarkerShareItem
 
@@ -369,3 +400,4 @@ final class MarkerShareActivityItemSource: NSObject, UIActivityItemSource {
         }
     }
 }
+#endif
