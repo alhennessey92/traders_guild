@@ -10,6 +10,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 import LinkPresentation
 import UniformTypeIdentifiers
@@ -76,6 +78,8 @@ enum GuildInviteShare {
     /// Web fallback that opens Discord (app via universal link, else browser).
     static var discordWebURL: URL? { URL(string: "https://discord.com/channels/@me") }
 
+    #if canImport(UIKit)
+
     /// Presents `UIActivityViewController` directly via UIKit.
     ///
     /// Wrapping it in a SwiftUI `.sheet(item:)` wedges the modal layer because
@@ -119,6 +123,32 @@ enum GuildInviteShare {
         presenter.present(activityVC, animated: true) { onPresented?() }
     }
 
+    #else
+
+    /// macOS share sheet.
+    ///
+    /// `NSSharingServicePicker` needs an NSView to anchor to, so it hangs off the
+    /// key window's content view — the equivalent of the iOS version walking to the
+    /// topmost presented view controller.
+    ///
+    /// The iOS path passes a `UIActivityItemSource` so the sheet shows a title and
+    /// the app icon. AppKit has no direct counterpart, so the URL is shared plainly;
+    /// the receiving app unfurls it from the server's Open Graph tags anyway.
+    @MainActor
+    static func presentNativeShareSheet(for item: GuildInviteShareItem, onPresented: (() -> Void)? = nil) {
+        guard let contentView = NSApp.keyWindow?.contentView else {
+            onPresented?()
+            return
+        }
+        let picker = NSSharingServicePicker(items: [item.url])
+        let anchor = NSRect(x: contentView.bounds.midX, y: contentView.bounds.midY, width: 1, height: 1)
+        picker.show(relativeTo: anchor, of: contentView, preferredEdge: .minY)
+        onPresented?()
+    }
+
+    #endif
+
+
     /// Open a URL if the system can handle it (e.g. sms: composer).
     @MainActor
     static func open(_ url: URL?) {
@@ -156,6 +186,7 @@ enum GuildInviteShare {
 
 // MARK: - Rich-link Activity Item Source
 
+#if canImport(UIKit)
 final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
     private let item: GuildInviteShareItem
 
@@ -326,3 +357,4 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         }
     }
 }
+#endif
