@@ -9,20 +9,6 @@
 import SwiftUI
 import UIKit
 
-// MARK: - Constants
-enum LayoutConstants {
-    static let drawerWidthRatio: CGFloat = 0.9
-    static let drawerDismissThreshold: CGFloat = 100
-    static let overlayOpacity: CGFloat = 0.4
-    static let cornerRadius: CGFloat = 33
-    static let shadowRadius: CGFloat = 8
-}
-
-enum AnimationConstants {
-    static let standard = Animation.spring(response: 0.6, dampingFraction: 0.8)
-    static let quick = Animation.spring(response: 0.3, dampingFraction: 0.9)
-}
-
 private enum MarkerAuthorProfileRoute: Identifiable {
     case currentUser
     case guildMember(RLGuildMemberDTO)
@@ -829,10 +815,10 @@ struct MainView: View {
             .toolbar {
                 mainToolbarContent
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
+            .platformNavigationBarBackground(.hidden)
+            .platformNavigationBarColorScheme(ThemeManager.shared.currentTheme.colorScheme)
             .tint(AppColors.primaryForeground)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .onAppear {
                 configureNavigationBarAppearance()
             }
@@ -910,7 +896,7 @@ struct MainView: View {
 
     @ToolbarContentBuilder
     private var mainToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .platformLeading) {
             mainToolbarLeadingItem
         }
         ToolbarItem(placement: .principal) {
@@ -987,16 +973,16 @@ struct MainView: View {
     private var mainToolbarTrailingContent: some ToolbarContent {
         if chartControlVM.isMarkerPlacementMode {
             if placementState.shouldShowDrawingDiscardAction {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     drawingDiscardToolbarButton
                 }
             }
         } else if chartControlVM.isMarkerViewingMode {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .platformTrailing) {
                 markerViewingAuthorToolbarButton
             }
         } else {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .platformTrailing) {
                 rightDrawerToolbarButton
             }
         }
@@ -2011,7 +1997,7 @@ enum DrawerSide { case left, right }
 //             }
 //             .toolbar {
 //                 // Left Drawer Button
-//                 ToolbarItem(placement: .topBarLeading) {
+//                 ToolbarItem(placement: .platformLeading) {
 //                     ToolbarIconButton(
 //                         systemName: "shield.pattern.checkered",
 //                         backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
@@ -2040,7 +2026,7 @@ enum DrawerSide { case left, right }
 //                 }
                 
 //                 // Right Drawer Button
-//                 ToolbarItem(placement: .topBarTrailing) {
+//                 ToolbarItem(placement: .platformTrailing) {
 //                     ToolbarIconButton(
 //                         systemName: "message.badge.filled.fill",
 //                         backgroundTint: AppColors.unhighlightedTextBoxBackground.opacity(0.5),
@@ -2059,10 +2045,10 @@ enum DrawerSide { case left, right }
 //                     }
 //                 }
 //             }
-//             .toolbarBackground(.hidden, for: .navigationBar)
-//             .toolbarColorScheme(.dark, for: .navigationBar)
+//             .platformNavigationBarBackground(.hidden)
+//             .platformNavigationBarColorScheme(.dark)
 //             .tint(.white)
-//             .navigationBarTitleDisplayMode(.inline)
+//             .platformNavigationBarTitleDisplayMode(.inline)
 //         }
 //     }
     

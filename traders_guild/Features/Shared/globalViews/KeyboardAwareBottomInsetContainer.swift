@@ -44,11 +44,16 @@ struct KeyboardPinnedFooterLayout: Equatable {
 
 private enum KeyboardPinnedBottomInsetWindowInsets {
     static var bottomSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
+        #if canImport(UIKit)
+        return UIApplication.shared.connectedScenes
             .compactMap { scene in
                 (scene as? UIWindowScene)?.windows.first(where: \.isKeyWindow)?.safeAreaInsets.bottom
             }
             .first ?? 0
+        #else
+        // No home indicator and no software keyboard to clear on macOS.
+        return 0
+        #endif
     }
 }
 

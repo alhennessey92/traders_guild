@@ -153,7 +153,7 @@ struct GuildSettingsView: View {
                             // renaming it would break links already shared.
                             if let handle = rlAppState.currentGuild?.shareURL {
                                 Button {
-                                    UIPasteboard.general.string = handle.absoluteString
+                                    PlatformPasteboard.copy(handle.absoluteString)
                                     rlAppState.showSuccess("Guild handle copied")
                                 } label: {
                                     HStack(spacing: 12) {
@@ -856,7 +856,7 @@ struct GuildSettingsView: View {
                 )
             }
 
-            if let image = pickedCrestImage, let data = image.jpegData(compressionQuality: 0.85) {
+            if let image = pickedCrestImage, let data = image.jpegBytes(compressionQuality: 0.85) {
                 _ = try await rlAppState.uploadGuildAvatar(imageData: data)
                 pickedCrestImage = nil
             } else if crestImageRemoved && guildHadUploadedImage {

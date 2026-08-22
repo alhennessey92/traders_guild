@@ -7391,12 +7391,12 @@ struct TradingChartView: View {
             }
             .navigationTitle("Marker Intents")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("All") {
                         markerManager.visibleIntents = Set(RLMarkerIntent.allCases)
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     SheetCloseButton(action: {
                         showMarkerTypeFilterSheet = false
                     })

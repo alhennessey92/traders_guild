@@ -763,7 +763,7 @@ struct AddMarkerMASheet: View {
                 }
             }
             .navigationTitle("Add \(indicatorType.shortName)")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

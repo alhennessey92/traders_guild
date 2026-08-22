@@ -342,12 +342,12 @@ struct RLRightDrawerMainView: View {
             .shadow(radius: LayoutConstants.shadowRadius)
             .ignoresSafeArea()
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                updateKeyboardInset(from: notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            // A Mac has no software keyboard, so this never raises the inset there.
+            .onReceive(PlatformKeyboard.heightPublisher) { height in
                 withAnimation(.easeOut(duration: 0.25)) {
-                    keyboardInset = 0
+                    keyboardInset = isSearchFocused
+                        ? PlatformKeyboard.overlap(forKeyboardHeight: height)
+                        : 0
                 }
             }
             .onDisappear {
@@ -365,27 +365,6 @@ struct RLRightDrawerMainView: View {
     
     private func hideKeyboard() {
         PlatformKeyboard.dismiss()
-    }
-
-    private func updateKeyboardInset(from notification: Notification) {
-        guard isSearchFocused,
-              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let screenHeight = PlatformScreen.bounds.height
-        let overlap = max(0, screenHeight - endFrame.minY - bottomSafeAreaInset)
-        withAnimation(.easeOut(duration: 0.25)) {
-            keyboardInset = overlap
-        }
-    }
-
-    private var bottomSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { scene in
-                (scene as? UIWindowScene)?.windows.first(where: \.isKeyWindow)?.safeAreaInsets.bottom
-            }
-            .first ?? 0
     }
 
     private func openOrCreateDM(with member: RLGuildMemberDTO, guildId: UUID) {

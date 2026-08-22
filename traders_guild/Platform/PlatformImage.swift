@@ -45,6 +45,17 @@ extension PlatformImage {
         PlatformImage(data: data)
     }
 
+    /// `NSImage(cgImage:)` requires an explicit size, unlike `UIImage(cgImage:)`,
+    /// so the bitmap's own pixel dimensions are used.
+    static func from(cgImage: CGImage) -> PlatformImage {
+        #if canImport(UIKit)
+        return UIImage(cgImage: cgImage)
+        #else
+        return NSImage(cgImage: cgImage,
+                       size: NSSize(width: cgImage.width, height: cgImage.height))
+        #endif
+    }
+
     static func loaded(contentsOfFile path: String) -> PlatformImage? {
         #if canImport(UIKit)
         return UIImage(contentsOfFile: path)

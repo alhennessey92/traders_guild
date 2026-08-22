@@ -7,6 +7,9 @@
 //
 
 import AuthenticationServices
+#if canImport(AppKit) && !canImport(UIKit)
+import AppKit
+#endif
 import SwiftUI
 
 class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
@@ -90,10 +93,16 @@ class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAut
     // MARK: - ASAuthorizationControllerPresentationContextProviding
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        #if canImport(UIKit)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first else {
             return ASPresentationAnchor()
         }
         return window
+        #else
+        // ASPresentationAnchor is NSWindow on macOS. Sign in with Apple attaches
+        // to the key window; the fallback is an empty anchor exactly as on iOS.
+        return NSApplication.shared.keyWindow ?? ASPresentationAnchor()
+        #endif
     }
 }

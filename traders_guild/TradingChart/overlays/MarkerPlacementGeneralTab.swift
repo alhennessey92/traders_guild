@@ -117,12 +117,11 @@ struct MarkerPlacementGeneralTab: View {
             placementState.isTextInputFocused = false
             keyboardInset = 0
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-            updateKeyboardInset(from: notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        // A Mac has no software keyboard, so this publisher never raises the
+        // inset there and the layout simply stays put.
+        .onReceive(PlatformKeyboard.heightPublisher) { height in
             withAnimation(.easeOut(duration: 0.2)) {
-                keyboardInset = 0
+                keyboardInset = PlatformKeyboard.overlap(forKeyboardHeight: height)
             }
         }
         .alert(item: $pendingIntentSwitch) { pending in
@@ -136,21 +135,6 @@ struct MarkerPlacementGeneralTab: View {
                     pendingIntentSwitch = nil
                 }
             )
-        }
-    }
-
-    private func updateKeyboardInset(from notification: Notification) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first(where: \.isKeyWindow),
-              let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-
-        let convertedEndFrame = window.convert(endFrame, from: nil)
-        let overlap = max(0, window.bounds.maxY - convertedEndFrame.minY - window.safeAreaInsets.bottom)
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            keyboardInset = overlap
         }
     }
 
@@ -366,7 +350,7 @@ struct MarkerPlacementGeneralTab: View {
                     text: newsURLBinding,
                     focus: .newsURL
                 )
-                .textInputAutocapitalization(.never)
+                .platformAutocapitalization(.never)
                 .autocorrectionDisabled(true)
 
                 if !placementState.newsURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -520,7 +504,7 @@ struct MarkerPlacementGeneralTab: View {
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(AppColors.primaryForeground)
                 .multilineTextAlignment(.trailing)
-                .keyboardType(.decimalPad)
+                .platformKeyboardType(.decimalPad)
                 .focused($focusedInput, equals: .level(componentType.rawValue))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)

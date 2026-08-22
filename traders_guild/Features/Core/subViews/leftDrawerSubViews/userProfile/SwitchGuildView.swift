@@ -293,11 +293,11 @@ struct SwitchGuildView: View {
             await rlAppState.refreshMyJoinRequests()
             await loadUserGuilds()
         }
-        .fullScreenCover(isPresented: $showJoinGuild) {
+        .platformFullScreenCover(isPresented: $showJoinGuild) {
             JoinGuildFlowView()
                 .environmentObject(rlAppState)
         }
-        .fullScreenCover(isPresented: $showCreateGuild) {
+        .platformFullScreenCover(isPresented: $showCreateGuild) {
             CreateGuildFlowView()
                 .environmentObject(rlAppState)
         }
@@ -594,7 +594,7 @@ struct JoinGuildView: View {
                 }
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .platformHideNavigationBar()
         .task {
             await loadOpenGuilds()
         }
@@ -860,11 +860,11 @@ struct JoinGuildFilterSheet: View {
             }
             .background(AppColors.sheetBackground)
             .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
-            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
+            .platformNavigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarBackground(AppColors.sheetBackground)
+            .platformNavigationBarColorScheme(ThemeManager.shared.currentTheme.colorScheme)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("Reset") {
                         selectedAccess = .all
                         selectedSort = .popular
@@ -875,7 +875,7 @@ struct JoinGuildFilterSheet: View {
                     }
                     .foregroundColor(AppColors.greyText)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     Button("Apply") {
                         onApply()
                         dismiss()
@@ -1126,7 +1126,7 @@ struct GuildDetailView: View {
                 }
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .platformHideNavigationBar()
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
@@ -1393,9 +1393,9 @@ struct JoinGuildFormView: View {
                     }
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .platformHideNavigationBar()
         }
-        .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
+        .platformNavigationBarColorScheme(ThemeManager.shared.currentTheme.colorScheme)
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
@@ -1630,7 +1630,7 @@ struct CreateGuildView: View {
                                     .font(.body)
                                     .foregroundColor(AppColors.whiteText)
                                     .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.words)
+                                    .platformAutocapitalization(.words)
 
                                 if !guildName.isEmpty {
                                     Text(" Guild")
@@ -1891,7 +1891,7 @@ struct CreateGuildView: View {
                 pickedCrestImage = image
             }
         }
-        .fullScreenCover(isPresented: $showInviteHubAfterCreate) {
+        .platformFullScreenCover(isPresented: $showInviteHubAfterCreate) {
             GuildInviteHubView(
                 headline: "Your guild is live 🎉",
                 subheadline: "Now bring your community in. Share your guild on X, Discord, or with your contacts to get your first members.",
@@ -1904,7 +1904,7 @@ struct CreateGuildView: View {
             )
             .environmentObject(rlAppState)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .platformHideNavigationBar()
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
                 Divider()
@@ -1972,7 +1972,7 @@ struct CreateGuildView: View {
             // (now the current guild). A failure here is non-fatal — the guild
             // still has its symbol crest.
             if let image = pickedCrestImage,
-               let data = image.jpegData(compressionQuality: 0.85) {
+               let data = image.jpegBytes(compressionQuality: 0.85) {
                 _ = try? await rlAppState.uploadGuildAvatar(imageData: data)
             }
             // Present the invite hub so the owner can immediately bring their

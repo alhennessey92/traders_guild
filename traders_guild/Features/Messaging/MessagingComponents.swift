@@ -890,7 +890,7 @@ struct ChatInputFooter: View {
         .sheet(isPresented: $showCameraPicker) {
             SharedImagePicker(sourceType: .camera) { image in
                 showCameraPicker = false
-                guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+                guard let data = image.jpegBytes(compressionQuality: 0.85) else { return }
                 selectedAttachments.append(ChatAttachmentDraft(
                     data: data,
                     filename: "camera-\(UUID().uuidString.prefix(8)).jpg",
@@ -1730,9 +1730,9 @@ struct ChatFullScreenImageViewer: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color.black)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     Button {
                         dismiss()
                     } label: {
@@ -1742,7 +1742,7 @@ struct ChatFullScreenImageViewer: View {
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .platformNavigationBarBackground(.hidden)
         }
         .presentationBackground(.black)
     }
@@ -2202,15 +2202,15 @@ struct UnifiedEditMessageSheet: View {
                 Spacer()
             }
             .navigationTitle("Edit Message")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     if isSaving {
                         ProgressView()
                     } else {
@@ -2484,12 +2484,12 @@ struct ChatSearchView: View {
                 }
             }
             .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppColors.sheetBackground, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(ThemeManager.shared.currentTheme.colorScheme, for: .navigationBar)
+            .platformNavigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarBackground(AppColors.sheetBackground)
+            .platformNavigationBarBackground(.visible)
+            .platformNavigationBarColorScheme(ThemeManager.shared.currentTheme.colorScheme)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .platformTrailing) {
                     SheetCloseButton(action: { dismiss() }, tint: AppColors.accentColor)
                 }
             }
@@ -3286,7 +3286,7 @@ struct ChatSurfaceOverlayHost<Message: RLChatMessageDisplayable>: View {
                                 pendingDeleteMessageID = message.id
                             },
                             onCopy: {
-                                UIPasteboard.general.string = previewText(for: message, isDeleted: isDeleted)
+                                PlatformPasteboard.copy(previewText(for: message, isDeleted: isDeleted))
                                 onCopy?(message)
                                 chatSurfaceOverlayCoordinator.dismissOverlay()
                             },

@@ -55,7 +55,7 @@ struct ContentView: View {
         }
         .toolbar {
             if !path.isEmpty {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .platformLeading) {
                     Button("Exit") {
                         showAbandonSignupConfirm = true
                     }
@@ -93,7 +93,7 @@ struct ContentView: View {
         .onChange(of: RLAppState.pendingPasswordResetToken) { _, newValue in
             showResetFromDeepLink = newValue != nil
         }
-        .fullScreenCover(isPresented: $showResetFromDeepLink, onDismiss: {
+        .platformFullScreenCover(isPresented: $showResetFromDeepLink, onDismiss: {
             RLAppState.setPendingPasswordResetToken(nil)
         }) {
             NavigationStack {

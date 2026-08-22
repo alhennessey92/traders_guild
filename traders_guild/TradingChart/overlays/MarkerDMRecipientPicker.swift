@@ -71,7 +71,7 @@ struct MarkerDMRecipientPicker: View {
                 }
             }
             .navigationTitle("Send to guild")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search members")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

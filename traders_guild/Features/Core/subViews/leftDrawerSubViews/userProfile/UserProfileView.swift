@@ -109,9 +109,9 @@ struct UserProfileDetailView: View {
                 GuildReputationBreakdownSheetView()
                     .environmentObject(rlAppState)
                     .navigationTitle("Guild Reputation Breakdown")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .platformNavigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItem(placement: .platformTrailing) {
                             SheetCloseButton(action: { showGuildReputationBreakdown = false })
                         }
                     }
@@ -122,9 +122,9 @@ struct UserProfileDetailView: View {
                 GuildAccuracyBreakdownSheetView()
                     .environmentObject(rlAppState)
                     .navigationTitle("Guild Accuracy Breakdown")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .platformNavigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItem(placement: .platformTrailing) {
                             SheetCloseButton(action: { showGuildAccuracyBreakdown = false })
                         }
                     }

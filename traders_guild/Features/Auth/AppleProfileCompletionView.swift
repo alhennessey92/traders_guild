@@ -73,8 +73,8 @@ struct AppleProfileCompletionView: View {
                     name = data.name
                 }
             }
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
+            .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+            .platformNavigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("TG")

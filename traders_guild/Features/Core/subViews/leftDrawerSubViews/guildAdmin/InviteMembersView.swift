@@ -155,7 +155,7 @@ struct InviteMembersView: View {
         HStack(spacing: 12) {
             // Avatar
             Circle()
-                .fill(Color(.systemGray4))
+                .fill(Color.platformSystemGray4)
                 .frame(width: 40, height: 40)
                 .overlay(
                     Group {
@@ -199,7 +199,7 @@ struct InviteMembersView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color(.systemGray5))
+                    .background(Color.platformSystemGray5)
                     .cornerRadius(6)
             } else if user.hasPendingInvite {
                 Text("Invited")
@@ -238,7 +238,7 @@ struct InviteMembersView: View {
         HStack(spacing: 12) {
             // Avatar
             Circle()
-                .fill(Color(.systemGray4))
+                .fill(Color.platformSystemGray4)
                 .frame(width: 36, height: 36)
                 .overlay(
                     Group {

@@ -526,7 +526,7 @@ struct AvatarSelectionView: View {
         Task {
             do {
                 // Compress image to JPEG
-                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                guard let imageData = image.jpegBytes(compressionQuality: 0.8) else {
                     throw NSError(domain: "AvatarError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to process image"])
                 }
                 
@@ -2547,7 +2547,7 @@ struct DeleteAccountConfirmationView: View {
                                             RoundedRectangle(cornerRadius: 12)
                                                 .stroke(AppColors.whiteText.opacity(0.15), lineWidth: 1)
                                         )
-                                        .textInputAutocapitalization(.never)
+                                        .platformAutocapitalization(.never)
                                         .autocorrectionDisabled()
                                 }
                                 
@@ -2721,7 +2721,7 @@ struct SettingsTextField: View {
                 TextField(placeholder, text: $text)
                     .foregroundColor(AppColors.whiteText)
                     .platformKeyboardType(keyboardType)
-                    .textInputAutocapitalization(.never)
+                    .platformAutocapitalization(.never)
                     .focused($isFocused)
             }
             .padding()
@@ -2839,12 +2839,12 @@ struct SettingsSecureField: View {
                 if showPassword {
                     TextField(placeholder, text: $text)
                         .foregroundColor(AppColors.whiteText)
-                        .textInputAutocapitalization(.never)
+                        .platformAutocapitalization(.never)
                         .focused($isFocused)
                 } else {
                     SecureField(placeholder, text: $text)
                         .foregroundColor(AppColors.whiteText)
-                        .textInputAutocapitalization(.never)
+                        .platformAutocapitalization(.never)
                         .focused($isFocused)
                 }
 
@@ -2961,9 +2961,7 @@ struct PushNotificationSettingsView: View {
             }
 
             Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
+                PlatformURLOpener.openSystemSettings()
             } label: {
                 Text("Open Settings")
                     .font(.caption)

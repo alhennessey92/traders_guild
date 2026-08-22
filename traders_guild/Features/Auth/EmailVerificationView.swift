@@ -109,9 +109,9 @@ struct EmailVerificationView: View {
                     .background(
                         TextField("", text: $verificationCode)
                             .focused($codeFieldFocused)
-                            .textInputAutocapitalization(.characters)
+                            .platformAutocapitalization(.characters)
                             .autocorrectionDisabled()
-                            .keyboardType(.asciiCapable)
+                            .platformKeyboardType(.asciiCapable)
                             .textContentType(.oneTimeCode)
                             .opacity(0)
                             .onChange(of: verificationCode) { _, newValue in
@@ -145,8 +145,8 @@ struct EmailVerificationView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .dismissKeyboardOnTapAndDragBackground()
-            .toolbarBackground(AppColors.gradientBackgroundDark, for: .navigationBar)
-            .navigationBarBackButtonHidden(true)
+            .platformNavigationBarBackground(AppColors.gradientBackgroundDark)
+            .platformNavigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("TG")

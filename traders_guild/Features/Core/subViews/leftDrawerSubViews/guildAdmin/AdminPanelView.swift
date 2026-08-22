@@ -739,7 +739,7 @@ private struct EventLocationPickerSheet: View {
                 }
             }
             .navigationTitle("Event Location")
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
