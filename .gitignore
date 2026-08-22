@@ -23,3 +23,7 @@ build/
 
 # Local verification builds (macOS port work)
 .build-verify/
+
+# Xcode derived data for the macOS target (any agent, any path)
+.build-macos/
+.build-*/

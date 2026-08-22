@@ -440,7 +440,7 @@ struct IndicatorSettingsEditorSheet: View {
             }
             .background(AppColors.surfaceBlack96)
             .navigationTitle(context.item.title)
-            .navigationBarTitleDisplayMode(.inline)
+            .platformNavigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -576,7 +576,7 @@ struct IndicatorSettingsEditorSheet: View {
         )
     }
 
-    private func numericField(label: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
+    private func numericField(label: String, text: Binding<String>, keyboard: PlatformKeyboardType) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.caption)
@@ -586,7 +586,7 @@ struct IndicatorSettingsEditorSheet: View {
                 .textFieldStyle(.plain)
                 .font(.subheadline)
                 .foregroundColor(AppColors.primaryForeground)
-                .keyboardType(keyboard)
+                .platformKeyboardType(keyboard)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)
                 .background(

@@ -586,6 +586,7 @@ struct CodableColor: Codable, Hashable {
     }
     
     init(_ color: Color) {
+        #if canImport(UIKit)
         let uiColor = UIColor(color)
         var r: CGFloat = 0
         var g: CGFloat = 0
@@ -597,6 +598,16 @@ struct CodableColor: Codable, Hashable {
         self.green = Double(g)
         self.blue = Double(b)
         self.opacity = Double(a)
+        #else
+        let components = PlatformColorMath.rgba(
+            of: PlatformColorMath.cgColor(from: color)
+        ) ?? .zero
+
+        self.red = Double(components.red)
+        self.green = Double(components.green)
+        self.blue = Double(components.blue)
+        self.opacity = Double(components.alpha)
+        #endif
     }
     
     init(red: Double, green: Double, blue: Double, opacity: Double = 1.0) {

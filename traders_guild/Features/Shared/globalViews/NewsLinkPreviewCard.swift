@@ -1,6 +1,8 @@
 import SwiftUI
 import Foundation
+#if canImport(UIKit)
 import SafariServices
+#endif
 
 struct NewsLinkPreview: Equatable {
     let resolvedURL: URL
@@ -221,7 +223,9 @@ struct NewsLinkPreviewCard: View {
     @State private var preview: NewsLinkPreview?
     @State private var isLoading = false
     @State private var didAttemptLoad = false
+#if canImport(UIKit)
     @State private var isExpandedArticlePresented = false
+#endif
 
     var body: some View {
         let url = normalizedURL
@@ -241,7 +245,13 @@ struct NewsLinkPreviewCard: View {
 
                 if preview?.resolvedURL ?? url != nil {
                     Button(displayMode == .compact ? "Read" : "Expand") {
+#if canImport(UIKit)
                         isExpandedArticlePresented = true
+#else
+                        if let openTarget = preview?.resolvedURL ?? normalizedURL {
+                            PlatformURLOpener.open(openTarget)
+                        }
+#endif
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundColor(accentColor)
@@ -311,11 +321,13 @@ struct NewsLinkPreviewCard: View {
         .task(id: normalizedURL?.absoluteString ?? urlString) {
             await loadPreviewIfNeeded()
         }
+#if canImport(UIKit)
         .sheet(isPresented: $isExpandedArticlePresented) {
             if let openTarget = preview?.resolvedURL ?? normalizedURL {
                 NewsArticleSheet(url: openTarget, accentColor: accentColor)
             }
         }
+#endif
     }
 
     private var normalizedURL: URL? {
@@ -356,6 +368,7 @@ struct NewsLinkPreviewCard: View {
     }
 }
 
+#if canImport(UIKit)
 private struct NewsArticleSheet: UIViewControllerRepresentable {
     let url: URL
     let accentColor: Color
@@ -369,3 +382,4 @@ private struct NewsArticleSheet: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
+#endif

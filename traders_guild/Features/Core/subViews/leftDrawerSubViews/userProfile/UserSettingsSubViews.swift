@@ -2689,7 +2689,7 @@ struct SettingsTextField: View {
     var icon: String? = nil
     var error: String? = nil
     var prefix: String? = nil
-    var keyboardType: UIKeyboardType = .default
+    var keyboardType: PlatformKeyboardType = .default
 
     @FocusState private var isFocused: Bool
 
@@ -2720,7 +2720,7 @@ struct SettingsTextField: View {
 
                 TextField(placeholder, text: $text)
                     .foregroundColor(AppColors.whiteText)
-                    .keyboardType(keyboardType)
+                    .platformKeyboardType(keyboardType)
                     .textInputAutocapitalization(.never)
                     .focused($isFocused)
             }

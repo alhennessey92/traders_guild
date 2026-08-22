@@ -161,6 +161,7 @@ private extension ChartMarkerUI {
 
 // MARK: - Marker Appearance Model
 
+#if canImport(UIKit)
 extension Color {
     /// Darker variant for borders (reduce luminance)
     func markerBorderVariant() -> Color {
@@ -223,6 +224,90 @@ extension Color {
         )
     }
 }
+#else
+extension Color {
+    private var markerRGBA: PlatformRGBA? {
+        PlatformColorMath.rgba(of: PlatformColorMath.cgColor(from: self))
+    }
+
+    /// Darker variant for borders (reduce luminance)
+    func markerBorderVariant() -> Color {
+        guard let components = markerRGBA else { return self }
+        let factor: CGFloat = 0.28
+        return Color(
+            red: components.red * factor,
+            green: components.green * factor,
+            blue: components.blue * factor
+        )
+    }
+
+    /// Slightly lighter variant for icons (boost toward white, but darker than before)
+    func markerIconVariant() -> Color {
+        guard let components = markerRGBA else { return self }
+        let blend: CGFloat = 0.35
+        return Color(
+            red: components.red * (1 - blend) + blend,
+            green: components.green * (1 - blend) + blend,
+            blue: components.blue * (1 - blend) + blend
+        )
+    }
+
+    /// Dark gradient start for marker background
+    func markerGradientStart() -> Color {
+        guard let components = markerRGBA else { return self }
+        let factor: CGFloat = 0.1
+        return Color(
+            red: components.red * factor,
+            green: components.green * factor,
+            blue: components.blue * factor
+        )
+    }
+
+    /// Dark gradient end for marker background
+    func markerGradientEnd() -> Color {
+        guard let components = markerRGBA else { return self }
+        let factor: CGFloat = 0.18
+        return Color(
+            red: components.red * factor,
+            green: components.green * factor,
+            blue: components.blue * factor
+        )
+    }
+
+    /// Border gradient bright end (sits at bottom, opposite to fill) — type color at ~55%
+    func markerBorderGradientStart() -> Color {
+        guard let components = markerRGBA else { return self }
+        let factor: CGFloat = 0.55
+        return Color(
+            red: components.red * factor,
+            green: components.green * factor,
+            blue: components.blue * factor
+        )
+    }
+
+    /// Border gradient dim end (sits at top, opposite to fill) — type color at ~25%
+    func markerBorderGradientEnd() -> Color {
+        guard let components = markerRGBA else { return self }
+        let factor: CGFloat = 0.25
+        return Color(
+            red: components.red * factor,
+            green: components.green * factor,
+            blue: components.blue * factor
+        )
+    }
+
+    /// Blend toward white for glow/activity effects
+    func blendedForGlow(brightness: CGFloat) -> Color {
+        guard let components = markerRGBA else { return self }
+        let blend = min(max((brightness - 1.0) * 0.5, 0), 1.0)
+        return Color(
+            red: components.red + (1.0 - components.red) * blend,
+            green: components.green + (1.0 - components.green) * blend,
+            blue: components.blue + (1.0 - components.blue) * blend
+        )
+    }
+}
+#endif
 
 // MARK: - Marker Manager
 
@@ -2711,10 +2796,17 @@ struct ChartMarkerSystem {
 }
 
 enum MarkerLabelStyling {
+    #if canImport(UIKit)
     private static let chartBackground = UIColor(AppColors.chartPanelBackgroundAlt)
+    #else
+    private static let chartBackground = PlatformColorMath.cgColor(
+        from: AppColors.chartPanelBackgroundAlt
+    )
+    #endif
     private static let minimumContrast: CGFloat = 2.8
 
     static func usernameColor(for marker: ChartMarkerUI) -> Color {
+        #if canImport(UIKit)
         let baseColor = UIColor(marker.displayColor)
         let contrast = baseColor.contrastRatio(against: chartBackground)
         if contrast >= minimumContrast {
@@ -2724,9 +2816,19 @@ enum MarkerLabelStyling {
         let deficit = minimumContrast - contrast
         let blendAmount = min(0.6, max(0.2, deficit / minimumContrast))
         return Color(baseColor.blended(with: .white, amount: blendAmount))
+        #else
+        let baseColor = PlatformColorMath.cgColor(from: marker.displayColor)
+        let adjusted = PlatformColorMath.adjustedForeground(
+            baseColor,
+            against: chartBackground,
+            minimumContrast: minimumContrast
+        )
+        return Color(cgColor: adjusted)
+        #endif
     }
 }
 
+#if canImport(UIKit)
 private extension UIColor {
     var relativeLuminance: CGFloat {
         var red: CGFloat = 0
@@ -2776,3 +2878,4 @@ private extension UIColor {
         )
     }
 }
+#endif

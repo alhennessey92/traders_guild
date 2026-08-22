@@ -137,6 +137,7 @@ struct PanelAuditViewportTests {
     func brightPanelAccentsSwitchToDarkForeground() {
         #expect(colorDistance(PanelChromeTextColorResolver.textColor(for: .yellow), AppColors.primaryForeground) < 0.001)
         #expect(colorDistance(PanelChromeTextColorResolver.readableAccentColor(.yellow), AppColors.primaryForeground) < 0.001)
+        MarkerColorMathRegression.assertShippedOutputsArePinned()
     }
 }
 
