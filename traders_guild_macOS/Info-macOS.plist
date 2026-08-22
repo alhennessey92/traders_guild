@@ -22,6 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Without NSPrincipalClass the bundle launches but AppKit never sets up an
+	     NSApplication, so SwiftUI's WindowGroup produces no window at all: a live
+	     process with no UI and no logging. Xcode's macOS template includes this;
+	     a hand-written plist has to remember it. -->
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
