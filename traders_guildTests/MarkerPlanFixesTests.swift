@@ -430,6 +430,101 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func markerMovingAverageCreationSettingsIncludeSelectedLineWidth() {
+        let settings = MarkerMovingAverageDraftSettings.make(
+            period: 50,
+            lineWidth: 3.0,
+            color: .cyan
+        )
+
+        #expect(settings["period"]?.value as? Int == 50)
+        #expect(settings["source"]?.value as? String == "close")
+        #expect(settings["lineWidth"]?.value as? Double == 3.0)
+    }
+
+    @Test
+    func markerMovingAverageEditorUpdatesExactDraftWithoutDuplicatingIt() {
+        let state = MarkerPlacementState()
+        let instanceId = UUID()
+        let initialSettings = MarkerMovingAverageDraftSettings.make(
+            period: 20,
+            lineWidth: 1.5,
+            color: .cyan
+        )
+        #expect(
+            state.upsertMovingAverage(
+                name: "EMA",
+                settings: initialSettings,
+                instanceId: instanceId
+            )
+        )
+
+        guard let draft = state.indicatorDrafts.first,
+              case let .indicator(payload) = draft.payload,
+              let item = IndicatorCatalogItem.item(forIndicatorName: payload.name) else {
+            Issue.record("Expected an attached EMA draft")
+            return
+        }
+
+        let context = IndicatorEditingContext(item: item, draftId: draft.id, payload: payload)
+        let updatedSettings = MarkerMovingAverageDraftSettings.make(
+            period: 20,
+            lineWidth: 3.0,
+            color: .cyan
+        )
+
+        #expect(context.save(settings: updatedSettings, to: state))
+        #expect(state.movingAverageCount(named: "EMA") == 1)
+
+        guard case let .indicator(updatedPayload)? = state.indicatorDrafts.first?.payload else {
+            Issue.record("Expected the EMA draft to remain attached")
+            return
+        }
+        #expect(updatedPayload.instanceId == instanceId)
+        #expect(updatedPayload.settings?["lineWidth"]?.value as? Double == 3.0)
+    }
+
+    @Test
+    func legacyMovingAverageEditorAssignsIdentityWithoutDuplicatingIt() {
+        let state = MarkerPlacementState()
+        let draftId = UUID()
+        let legacyPayload = IndicatorPayload(
+            name: "EMA",
+            settings: MarkerMovingAverageDraftSettings.make(period: 20, lineWidth: 1.5, color: .cyan),
+            isPrimary: nil
+        )
+        state.components = [
+            MarkerComponentDraft(
+                id: draftId,
+                componentType: .indicator,
+                payload: .indicator(legacyPayload)
+            )
+        ]
+
+        guard let item = IndicatorCatalogItem.item(forIndicatorName: legacyPayload.name) else {
+            Issue.record("Expected EMA in the indicator catalog")
+            return
+        }
+        let context = IndicatorEditingContext(item: item, draftId: draftId, payload: legacyPayload)
+
+        #expect(
+            context.save(
+                settings: MarkerMovingAverageDraftSettings.make(period: 50, lineWidth: 2.5, color: .cyan),
+                to: state
+            )
+        )
+        #expect(state.movingAverageCount(named: "EMA") == 1)
+
+        guard case let .indicator(updatedPayload)? = state.indicatorDrafts.first?.payload else {
+            Issue.record("Expected the legacy EMA draft to remain attached")
+            return
+        }
+        #expect(updatedPayload.instanceId != nil)
+        #expect(updatedPayload.settings?["period"]?.value as? Int == 50)
+        #expect(updatedPayload.settings?["lineWidth"]?.value as? Double == 2.5)
+    }
+
+    @Test
     func copyChartDrawingsPreservesZoneAndTextColors() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let end = Date(timeIntervalSince1970: 1_700_003_600)

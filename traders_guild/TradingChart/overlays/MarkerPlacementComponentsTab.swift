@@ -80,10 +80,7 @@ struct MarkerPlacementComponentsTab: View {
             IndicatorSettingsEditorSheet(
                 context: context,
                 onSave: { updatedSettings in
-                    _ = placementState.upsertIndicator(
-                        name: context.indicatorName,
-                        settings: updatedSettings
-                    )
+                    _ = context.save(settings: updatedSettings, to: placementState)
                     infoMessage = "Updated \(context.item.title) settings."
                     limitWarning = nil
                 }
@@ -215,7 +212,7 @@ struct MarkerPlacementComponentsTab: View {
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 0)
-                            indicatorSettingsButton(for: payload)
+                            indicatorSettingsButton(for: draft)
                             removeDraftButton(draft.id)
                         }
                         .padding(.horizontal, 10)
@@ -223,7 +220,7 @@ struct MarkerPlacementComponentsTab: View {
                         .background(rowCardBackground())
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                         .onTapGesture {
-                            openIndicatorEditor(for: payload)
+                            openIndicatorEditor(for: draft)
                         }
                     }
                 }
@@ -366,10 +363,11 @@ struct MarkerPlacementComponentsTab: View {
     }
 
     @ViewBuilder
-    private func indicatorSettingsButton(for payload: IndicatorPayload) -> some View {
-        if IndicatorCatalogItem.item(forIndicatorName: payload.name) != nil {
+    private func indicatorSettingsButton(for draft: MarkerComponentDraft) -> some View {
+        if case let .indicator(payload) = draft.payload,
+           IndicatorCatalogItem.item(forIndicatorName: payload.name) != nil {
             Button {
-                openIndicatorEditor(for: payload)
+                openIndicatorEditor(for: draft)
             } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 12, weight: .semibold))
@@ -425,15 +423,16 @@ struct MarkerPlacementComponentsTab: View {
         }
     }
 
-    private func openIndicatorEditor(for payload: IndicatorPayload) {
+    private func openIndicatorEditor(for draft: MarkerComponentDraft) {
+        guard case let .indicator(payload) = draft.payload else { return }
         guard let item = IndicatorCatalogItem.item(forIndicatorName: payload.name) else {
             infoMessage = "Settings editor unavailable for this indicator."
             return
         }
         editingIndicatorContext = IndicatorEditingContext(
             item: item,
-            indicatorName: payload.name,
-            existingSettings: payload.settings
+            draftId: draft.id,
+            payload: payload
         )
     }
 
