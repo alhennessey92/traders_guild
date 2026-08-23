@@ -580,13 +580,11 @@ struct ChartComponentReactivityTests {
     private func makeCandle(open: Double, close: Double) -> RLCandleDTO {
         RLCandleDTO(
             timestamp: Date(timeIntervalSince1970: 0),
-            timestampFormatted: nil,
             open: open,
             high: max(open, close),
             low: min(open, close),
             close: close,
-            volume: 1,
-            volumeFormatted: "1"
+            volume: 1
         )
     }
 }

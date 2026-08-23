@@ -92,6 +92,7 @@
 "message.success.referral_accepted" = "Referral accepted";
 "message.success.password_updated_sign_in" = "Password updated. Please sign in with your new password.";
 "message.info.referral_saved" = "Referral saved. Sign up or log in to accept it.";
+"message.info.already_guild_member" = "You're already in this guild.";
 "message.info.report.user_already_submitted" = "You already reported this user. Moderators will review it.";
 "message.info.report.message_already_submitted" = "You already reported this message. Moderators will review it.";
 "message.info.report.marker_already_submitted" = "You already reported this marker. Moderators will review it.";

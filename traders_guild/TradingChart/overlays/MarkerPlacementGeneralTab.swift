@@ -308,13 +308,17 @@ struct MarkerPlacementGeneralTab: View {
             }
 
         case .analysis:
-            placementInputField(
-                "Write analysis context",
-                text: $placementState.note,
-                axis: .vertical,
-                focus: .analysisNote
-            )
-                .lineLimit(3...6)
+            VStack(alignment: .leading, spacing: 0) {
+                placementInputField(
+                    "Write analysis context",
+                    text: $placementState.note,
+                    axis: .vertical,
+                    focus: .analysisNote
+                )
+                    .lineLimit(3...6)
+                requirementHint(id: "analysis_note")
+                requirementHint(id: "analysis_structure")
+            }
 
         case .alert:
             let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -325,23 +329,30 @@ struct MarkerPlacementGeneralTab: View {
                     }
                 }
 
-                placementInputField(
-                    "Describe the alert",
-                    text: $placementState.note,
-                    axis: .vertical,
-                    focus: .alertNote
-                )
-                    .lineLimit(3...5)
+                VStack(alignment: .leading, spacing: 0) {
+                    requirementHint(id: "alert_severity")
+                    placementInputField(
+                        "Describe the alert",
+                        text: $placementState.note,
+                        axis: .vertical,
+                        focus: .alertNote
+                    )
+                        .lineLimit(3...5)
+                    minimumCharacterHint(count: placementState.trimmedAlertDescription.count)
+                }
                 }
 
         case .question:
-            placementInputField(
-                "Type your question",
-                text: $placementState.note,
-                axis: .vertical,
-                focus: .questionNote
-            )
-                .lineLimit(3...5)
+            VStack(alignment: .leading, spacing: 0) {
+                placementInputField(
+                    "Type your question",
+                    text: $placementState.note,
+                    axis: .vertical,
+                    focus: .questionNote
+                )
+                    .lineLimit(3...5)
+                minimumCharacterHint(count: placementState.trimmedQuestionNote.count)
+            }
 
         case .poll:
             pollFields
@@ -611,6 +622,48 @@ struct MarkerPlacementGeneralTab: View {
                 }
             }
         )
+    }
+
+    /// A one-line statement of a requirement and whether it is met.
+    ///
+    /// Always driven from `placementChecklistItems` rather than a re-implemented rule, so the hint
+    /// and the Place button cannot disagree — the failure this exists to fix. Before this, the only
+    /// place any rule was stated was the floating checklist over the chart.
+    @ViewBuilder
+    private func requirementHint(id: String) -> some View {
+        if let item = placementState.placementChecklistItems.first(where: { $0.id == id }) {
+            HStack(spacing: 6) {
+                Image(systemName: item.isComplete ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(item.isComplete ? AppColors.statusPositive : AppColors.statusWarning)
+                Text(item.title)
+                    .font(.system(size: 11))
+                    .foregroundColor(item.isComplete ? AppColors.greyText : AppColors.statusWarning)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    /// "N more characters" for the two rules with a length minimum.
+    @ViewBuilder
+    private func minimumCharacterHint(count: Int) -> some View {
+        let minimum = MarkerPlacementRequirements.minimumContextCharacters
+        let remaining = max(0, minimum - count)
+        HStack(spacing: 6) {
+            Image(systemName: remaining == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundColor(remaining == 0 ? AppColors.statusPositive : AppColors.statusWarning)
+            Text(
+                remaining == 0
+                    ? "Minimum length reached"
+                    : "\(remaining) more character\(remaining == 1 ? "" : "s") needed"
+            )
+                .font(.system(size: 11))
+                .foregroundColor(remaining == 0 ? AppColors.greyText : AppColors.statusWarning)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 6)
     }
 
     private func alertSeverityButton(_ option: AlertSeverityOption) -> some View {

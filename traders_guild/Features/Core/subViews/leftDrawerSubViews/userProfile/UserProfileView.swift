@@ -327,7 +327,7 @@ struct UserProfileDetailView: View {
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(membership.reputation)",
-                icon: "star.hexagon.fill",
+                icon: ReputationGlyph.symbolName,
                 color: AppColors.guildReputationAccent,
                 trend: nil,
                 sparkline: reputationSparkline

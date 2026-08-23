@@ -18,6 +18,9 @@ enum BundledTradingSymbolIconResolver {
             if normalizedTicker.hasPrefix("SHIB") { return "icon_shib" }
             if normalizedTicker.hasPrefix("ATOM") { return "icon_atom" }
             if normalizedTicker.hasPrefix("LTC") { return "icon_ltc" }
+            if normalizedTicker.hasPrefix("BNB") { return "icon_bnb" }
+            if normalizedTicker.hasPrefix("LINK") { return "icon_link" }
+            if normalizedTicker.hasPrefix("SUI") { return "icon_sui" }
         }
 
         switch normalizedTicker {

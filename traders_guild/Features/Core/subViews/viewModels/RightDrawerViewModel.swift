@@ -331,6 +331,12 @@ class RLRightDrawerViewModel: ObservableObject {
                 skip += pageSize
             }
 
+            // The user may have switched guild while this paged through — up to 2000 members over
+            // as many round trips, so there is plenty of time to lose the race. Applying it then
+            // would put the old guild's members on the new guild's screen. Other paths in this
+            // view model already guard on currentGuildId; this one did not.
+            guard currentGuildId == guildId else { return }
+
             // Deduplicate by user id while preserving order.
             var seenUserIds = Set<UUID>()
             guildMembers = collected.filter { member in

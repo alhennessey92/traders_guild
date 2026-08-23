@@ -317,13 +317,11 @@ class TimeframePanelDataManager: ObservableObject {
         if message.type == "candle_complete" {
             let candle = RLCandleDTO(
                 timestamp: payload.candle.timestamp,
-                timestampFormatted: nil,
                 open: payload.candle.open,
                 high: payload.candle.high,
                 low: payload.candle.low,
                 close: payload.candle.close,
                 volume: payload.candle.volume,
-                volumeFormatted: nil,
                 isGapFill: false
             )
             let result = RealtimeCandleStreamReducer.processCompletedCandle(

@@ -233,13 +233,11 @@ extension RLCandleDTO {
         
         return RLCandleDTO(
             timestamp: timestamp,
-            timestampFormatted: formatTimestamp(timestamp),
             open: open,
             high: high,
             low: low,
             close: close,
-            volume: volume,
-            volumeFormatted: formatVolume(volume)
+            volume: volume
         )
     }
     

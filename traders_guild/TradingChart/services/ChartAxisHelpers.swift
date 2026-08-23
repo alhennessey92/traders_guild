@@ -357,13 +357,26 @@ struct PriceAxisHelper {
         case .crypto:
             return cryptoYAxisDecimalPlaces()
         case .stocks, .commodities, .futures:
-            return 2
+            // Two places is the floor, not the answer. Zoomed in far enough that the grid step is
+            // finer than a cent, "123.45" repeated down the axis says nothing about where the
+            // lines are — so let the step add places, up to what the 64pt lane can show. Zoomed
+            // out the step is >= 1 and this stays at 2. Mirrors Android PriceAxisHelper.
+            return stepAwarePlaces(minimum: 2, maximum: Self.maxStepAwarePlaces)
         case .indices:
             let avgPrice = (priceRange.min + priceRange.max) / 2
-            return avgPrice > 10000 ? 0 : 2
+            return avgPrice > 10000 ? 0 : stepAwarePlaces(minimum: 2, maximum: Self.maxStepAwarePlaces)
         }
     }
     
+    /// Ceiling for step-derived precision: four places plus a thousands-scale integer part is
+    /// about what fits the 64pt price lane before the labels have to shrink.
+    private static let maxStepAwarePlaces = 4
+
+    /// `decimalPlacesForStep`, clamped to a sensible band for the asset class.
+    private func stepAwarePlaces(minimum: Int, maximum: Int) -> Int {
+        min(maximum, max(minimum, decimalPlacesForStep(nicePriceStep)))
+    }
+
     /// Fallback decimal places based on the current grid step when no symbol is set.
     private func decimalPlacesForStep(_ step: Double) -> Int {
         let absoluteStep = abs(step)
@@ -415,10 +428,23 @@ struct PriceAxisHelper {
     
     /// Format a price value for display on the Y-axis
     func formatPrice(_ price: Double) -> String {
-        if let symbol = symbol, symbol.assetClassEnum != .crypto {
+        if let symbol = symbol, symbol.assetClassEnum != .crypto, !usesStepAwarePrecision {
             return symbol.formatPrice(price)
         }
         return String(format: "%.\(decimalPlaces)f", price)
+    }
+
+    /// The asset classes whose axis precision now follows the grid step.
+    ///
+    /// `symbol.formatPrice` uses the DTO's fixed `decimalPlaces`, so delegating to it would
+    /// discard the step-aware rule above and keep a stock at two places however far you zoom in.
+    /// Forex is deliberately left on the old path — its DTO precision is already finer than the
+    /// asset-class rule, and changing it is not what this is for.
+    private var usesStepAwarePrecision: Bool {
+        switch symbol?.assetClassEnum {
+        case .stocks, .commodities, .futures, .indices: return true
+        default: return false
+        }
     }
     
     /// Format price for a grid label (may be more compact)

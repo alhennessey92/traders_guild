@@ -71,8 +71,8 @@ struct MarkerActivityNavigationTests {
         let manager = ChartDataManager()
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         manager.updateWithMarketData([
-            RLCandleDTO(timestamp: timestamp, timestampFormatted: nil, open: 100, high: 100, low: 100, close: 100, volume: 0, volumeFormatted: nil, isGapFill: true),
-            RLCandleDTO(timestamp: timestamp.addingTimeInterval(60), timestampFormatted: nil, open: 100, high: 100, low: 100, close: 100, volume: 0, volumeFormatted: nil, isGapFill: true)
+            RLCandleDTO(timestamp: timestamp, open: 100, high: 100, low: 100, close: 100, volume: 0, isGapFill: true),
+            RLCandleDTO(timestamp: timestamp.addingTimeInterval(60), open: 100, high: 100, low: 100, close: 100, volume: 0, isGapFill: true)
         ])
 
         #expect(manager.priceRange.max > manager.priceRange.min)

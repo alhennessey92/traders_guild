@@ -524,9 +524,7 @@ struct FriendRow: View {
                 Spacer()
                 
                 HStack(spacing: 2) {
-                    Image(systemName: "star.hexagon.fill")
-                        .font(.caption2)
-                        .fontWeight(.bold)
+                    ReputationGlyph(size: 11)
                     Text("\(friend.globalReputation)")
                         .font(.system(size: 13, weight: .bold))
                 }
@@ -680,7 +678,7 @@ struct GuildUserDetailViewRL: View {
             ProfileStatDTO(
                 label: "Guild Reputation",
                 value: "\(member.reputation)",
-                icon: "star.hexagon.fill",
+                icon: ReputationGlyph.symbolName,
                 color: AppColors.guildReputationAccent,
                 trend: nil
             ),

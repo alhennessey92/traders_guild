@@ -117,13 +117,11 @@ class ChartDataManager: ObservableObject {
         // Update candle with new tick data
         let updatedCandle = RLCandleDTO(
             timestamp: lastCandle.timestamp,
-            timestampFormatted: lastCandle.timestampFormatted,  // Keep same formatted timestamp
             open: lastCandle.open,
             high: max(lastCandle.high, tickPrice),
             low: min(lastCandle.low, tickPrice),
             close: tickPrice,
             volume: newVolume,
-            volumeFormatted: formatVolume(newVolume),
             isGapFill: false
         )
         

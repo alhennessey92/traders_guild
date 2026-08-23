@@ -187,6 +187,7 @@ struct ReportResolutionSummaryView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
+            .scrollDismissesKeyboard(.interactively)
 
             SheetCloseButton(action: { dismiss() })
                 .padding(.top, 20)
@@ -387,6 +388,7 @@ struct ManageReportsView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
     }
 
@@ -867,6 +869,7 @@ struct ManageReportsView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Report Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

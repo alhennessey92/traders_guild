@@ -2104,6 +2104,30 @@ enum AppColors {
         }
     }
 
+    /// Recessed base painted behind a guild card, under `contentCardFill`.
+    ///
+    /// Guild cards used to be the page background at 0.42 opacity sitting on the
+    /// page background, so they never separated from it. This gives the card a
+    /// value of its own while staying translucent enough to keep the honeycomb
+    /// pattern showing through. Darker than the page on dark themes, lighter on
+    /// light — a black wash would read as grey mud on `lightGrey`.
+    static var guildCardBase: Color {
+        switch theme {
+        case .lightGrey: return systemWhite.opacity(0.55)
+        case .midGrey, .dark: return systemBlack.opacity(0.20)
+        }
+    }
+
+    /// Drop shadow for guild cards. Guild surfaces were the only major card
+    /// family in the app with no elevation cue at all; drawers, messaging and
+    /// chart overlays have always used the `surfaceBlack*` family for this.
+    static var guildCardShadow: Color {
+        switch theme {
+        case .lightGrey: return systemBlack.opacity(0.10)
+        case .midGrey, .dark: return systemBlack.opacity(0.30)
+        }
+    }
+
     /// `UnifiedLeaderboardRow` background (was systemWhite by rank/press).
     static func leaderboardRowFill(isTopRank: Bool, isPressed: Bool) -> Color {
         switch theme {

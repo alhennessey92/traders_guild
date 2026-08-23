@@ -215,6 +215,9 @@ struct IndicatorEditingContext: Identifiable {
     let item: IndicatorCatalogItem
     let indicatorName: String
     let existingSettings: [String: AnyCodable]?
+    /// The placement-local component identity. Editing through the Active list must update this
+    /// exact draft; routing by indicator name would append another moving-average instance.
+    let draftId: UUID?
     /// Non-nil for multi-instance indicators (moving averages) so saves route to the
     /// specific instance rather than creating a new one.
     let instanceId: UUID?
@@ -223,12 +226,49 @@ struct IndicatorEditingContext: Identifiable {
         item: IndicatorCatalogItem,
         indicatorName: String,
         existingSettings: [String: AnyCodable]?,
+        draftId: UUID? = nil,
         instanceId: UUID? = nil
     ) {
         self.item = item
         self.indicatorName = indicatorName
         self.existingSettings = existingSettings
+        self.draftId = draftId
         self.instanceId = instanceId
+    }
+
+    init(item: IndicatorCatalogItem, draftId: UUID, payload: IndicatorPayload) {
+        self.init(
+            item: item,
+            indicatorName: payload.name,
+            existingSettings: payload.settings,
+            draftId: draftId,
+            instanceId: payload.instanceId
+        )
+    }
+
+    /// Persist an editor save without losing the identity of a multi-instance indicator.
+    @MainActor
+    @discardableResult
+    func save(
+        settings: [String: AnyCodable]?,
+        to placementState: MarkerPlacementState
+    ) -> Bool {
+        if let draftId {
+            return placementState.updateIndicatorDraft(
+                id: draftId,
+                name: indicatorName,
+                settings: settings,
+                instanceId: instanceId
+            )
+        }
+        if let instanceId {
+            return placementState.upsertMovingAverage(
+                name: indicatorName,
+                settings: settings,
+                instanceId: instanceId
+            )
+        }
+        return placementState.upsertIndicator(name: indicatorName, settings: settings)
     }
 }
 
@@ -244,28 +284,49 @@ struct IndicatorSettingField: Identifiable {
     let label: String
     let valueType: ValueType
     let defaultValue: Any
+    /// When set, the field renders as a Slider with a live value readout instead of a keyboard
+    /// text field — matching Android's IndicatorConfigSheets, which is all sliders.
+    var range: ClosedRange<Double>? = nil
+    /// Slider granularity. Ignored when [range] is nil.
+    var step: Double = 1
 
     var id: String { key }
+
+    /// Line width, offered by every line-based indicator.
+    ///
+    /// `lineWidth` has always existed on the config models and been honoured by the renderers —
+    /// only the UI to change it was missing, so thin default lines could not be made easier to see.
+    static let lineWidth = IndicatorSettingField(
+        key: "lineWidth",
+        label: "Line Width",
+        valueType: .double,
+        defaultValue: 1.5,
+        range: 1...4,
+        step: 0.5
+    )
 
     static func fields(for type: IndicatorType) -> [IndicatorSettingField] {
         switch type {
         case .ema, .sma, .wma, .hma:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20, range: 2...300),
+                .lineWidth,
                 .init(key: "color", label: "Color", valueType: .color, defaultValue: AppColors.systemCyan),
             ]
         case .vwap:
             return [
                 .init(key: "showStandardDeviationBands", label: "Show Std Dev Bands", valueType: .bool, defaultValue: false),
+                .lineWidth,
                 .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusWarning),
                 .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusWarning50),
                 .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusWarning50),
             ]
         case .bollingerBands:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
-                .init(key: "standardDeviations", label: "Std Deviations", valueType: .double, defaultValue: 2.0),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20, range: 2...300),
+                .init(key: "standardDeviations", label: "Std Deviations", valueType: .double, defaultValue: 2.0, range: 1...4, step: 0.5),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: AppColors.systemGray),
                 .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusNegative70),
                 .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusPositive70),
@@ -273,9 +334,10 @@ struct IndicatorSettingField: Identifiable {
             ]
         case .donchianChannels:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20, range: 2...300),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
                 .init(key: "showMiddleLine", label: "Show Middle Line", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "Middle Line Color", valueType: .color, defaultValue: AppColors.systemGray),
                 .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusInfo80),
                 .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusInfo80),
@@ -283,10 +345,11 @@ struct IndicatorSettingField: Identifiable {
             ]
         case .keltnerChannels:
             return [
-                .init(key: "emaPeriod", label: "EMA Period", valueType: .int, defaultValue: 20),
-                .init(key: "atrPeriod", label: "ATR Period", valueType: .int, defaultValue: 14),
-                .init(key: "atrMultiplier", label: "ATR Multiplier", valueType: .double, defaultValue: 2.0),
+                .init(key: "emaPeriod", label: "EMA Period", valueType: .int, defaultValue: 20, range: 2...300),
+                .init(key: "atrPeriod", label: "ATR Period", valueType: .int, defaultValue: 14, range: 2...100),
+                .init(key: "atrMultiplier", label: "ATR Multiplier", valueType: .double, defaultValue: 2.0, range: 0.5...5, step: 0.5),
                 .init(key: "showFill", label: "Show Fill", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "EMA Color", valueType: .color, defaultValue: AppColors.systemPurple),
                 .init(key: "upperBandColor", label: "Upper Band Color", valueType: .color, defaultValue: AppColors.statusSecondary70),
                 .init(key: "lowerBandColor", label: "Lower Band Color", valueType: .color, defaultValue: AppColors.statusSecondary70),
@@ -294,30 +357,32 @@ struct IndicatorSettingField: Identifiable {
             ]
         case .parabolicSAR:
             return [
-                .init(key: "accelerationStart", label: "Acceleration Start", valueType: .double, defaultValue: 0.02),
-                .init(key: "accelerationIncrement", label: "Acceleration Increment", valueType: .double, defaultValue: 0.02),
-                .init(key: "accelerationMax", label: "Acceleration Max", valueType: .double, defaultValue: 0.2),
+                .init(key: "accelerationStart", label: "Acceleration Start", valueType: .double, defaultValue: 0.02, range: 0.01...0.1, step: 0.01),
+                .init(key: "accelerationIncrement", label: "Acceleration Increment", valueType: .double, defaultValue: 0.02, range: 0.01...0.1, step: 0.01),
+                .init(key: "accelerationMax", label: "Acceleration Max", valueType: .double, defaultValue: 0.2, range: 0.1...0.5, step: 0.05),
                 .init(key: "color", label: "Primary Color", valueType: .color, defaultValue: AppColors.systemYellow),
                 .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: AppColors.statusPositive),
                 .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: AppColors.statusNegative),
             ]
         case .rsi:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
-                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 70.0),
-                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 30.0),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14, range: 2...300),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 70.0, range: 50...95),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 30.0, range: 5...50),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.systemPurple),
                 .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
                 .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .macd:
             return [
-                .init(key: "fastPeriod", label: "Fast Period", valueType: .int, defaultValue: 12),
-                .init(key: "slowPeriod", label: "Slow Period", valueType: .int, defaultValue: 26),
-                .init(key: "signalPeriod", label: "Signal Period", valueType: .int, defaultValue: 9),
+                .init(key: "fastPeriod", label: "Fast Period", valueType: .int, defaultValue: 12, range: 2...50),
+                .init(key: "slowPeriod", label: "Slow Period", valueType: .int, defaultValue: 26, range: 5...100),
+                .init(key: "signalPeriod", label: "Signal Period", valueType: .int, defaultValue: 9, range: 2...50),
                 .init(key: "showHistogram", label: "Show Histogram", valueType: .bool, defaultValue: true),
                 .init(key: "showSignalLine", label: "Show Signal", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "MACD Color", valueType: .color, defaultValue: AppColors.systemCyan),
                 .init(key: "signalColor", label: "Signal Color", valueType: .color, defaultValue: AppColors.statusWarning),
                 .init(key: "histogramPositiveColor", label: "Histogram + Color", valueType: .color, defaultValue: AppColors.statusPositive70),
@@ -325,12 +390,13 @@ struct IndicatorSettingField: Identifiable {
             ]
         case .stochastic:
             return [
-                .init(key: "kPeriod", label: "K Period", valueType: .int, defaultValue: 14),
-                .init(key: "dPeriod", label: "D Period", valueType: .int, defaultValue: 3),
-                .init(key: "smoothK", label: "Smooth K", valueType: .int, defaultValue: 3),
-                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 80.0),
-                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 20.0),
+                .init(key: "kPeriod", label: "K Period", valueType: .int, defaultValue: 14, range: 2...50),
+                .init(key: "dPeriod", label: "D Period", valueType: .int, defaultValue: 3, range: 1...20),
+                .init(key: "smoothK", label: "Smooth K", valueType: .int, defaultValue: 3, range: 1...20),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 80.0, range: 50...95),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: 20.0, range: 5...50),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "K Color", valueType: .color, defaultValue: AppColors.systemYellow),
                 .init(key: "dColor", label: "D Color", valueType: .color, defaultValue: AppColors.statusNegative),
                 .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
@@ -338,33 +404,36 @@ struct IndicatorSettingField: Identifiable {
             ]
         case .cci:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20),
-                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 100.0),
-                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -100.0),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 20, range: 2...300),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: 100.0, range: 50...300),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -100.0, range: -300...(-50)),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusWarning),
                 .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
                 .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .williamsR:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
-                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: -20.0),
-                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -80.0),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14, range: 2...300),
+                .init(key: "overboughtLevel", label: "Overbought", valueType: .double, defaultValue: -20.0, range: -50...(-5)),
+                .init(key: "oversoldLevel", label: "Oversold", valueType: .double, defaultValue: -80.0, range: -95...(-50)),
                 .init(key: "showLevels", label: "Show Levels", valueType: .bool, defaultValue: true),
+                .lineWidth,
                 .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.systemPink),
                 .init(key: "overboughtColor", label: "Overbought Color", valueType: .color, defaultValue: AppColors.statusNegative15),
                 .init(key: "oversoldColor", label: "Oversold Color", valueType: .color, defaultValue: AppColors.statusPositive15),
             ]
         case .atr:
             return [
-                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14),
+                .init(key: "period", label: "Period", valueType: .int, defaultValue: 14, range: 2...300),
+                .lineWidth,
                 .init(key: "color", label: "Line Color", valueType: .color, defaultValue: AppColors.statusNegative),
             ]
         case .volume:
             return [
                 .init(key: "showMA", label: "Show MA", valueType: .bool, defaultValue: false),
-                .init(key: "maPeriod", label: "MA Period", valueType: .int, defaultValue: 20),
+                .init(key: "maPeriod", label: "MA Period", valueType: .int, defaultValue: 20, range: 2...100),
                 .init(key: "color", label: "Base Color", valueType: .color, defaultValue: AppColors.statusInfo),
                 .init(key: "bullishColor", label: "Bullish Color", valueType: .color, defaultValue: AppColors.statusPositive70),
                 .init(key: "bearishColor", label: "Bearish Color", valueType: .color, defaultValue: AppColors.statusNegative70),
@@ -432,23 +501,52 @@ struct IndicatorSettingsEditorSheet: View {
     private func settingFieldView(_ field: IndicatorSettingField) -> some View {
         switch field.valueType {
         case .int:
-            numericField(
-                label: field.label,
-                text: Binding(
-                    get: { intValues[field.key, default: ""] },
-                    set: { intValues[field.key] = $0 }
-                ),
-                keyboard: .numberPad
-            )
+            if let range = field.range {
+                // Bounded numbers get a slider, matching Android's IndicatorConfigSheets. A number
+                // pad for "period: 20" means summoning a keyboard to nudge a value you want to
+                // feel your way to.
+                sliderField(
+                    label: field.label,
+                    text: Binding(
+                        get: { intValues[field.key, default: ""] },
+                        set: { intValues[field.key] = $0 }
+                    ),
+                    range: range,
+                    step: max(1, field.step),
+                    decimals: 0
+                )
+            } else {
+                numericField(
+                    label: field.label,
+                    text: Binding(
+                        get: { intValues[field.key, default: ""] },
+                        set: { intValues[field.key] = $0 }
+                    ),
+                    keyboard: .numberPad
+                )
+            }
         case .double:
-            numericField(
-                label: field.label,
-                text: Binding(
-                    get: { doubleValues[field.key, default: ""] },
-                    set: { doubleValues[field.key] = $0 }
-                ),
-                keyboard: .decimalPad
-            )
+            if let range = field.range {
+                sliderField(
+                    label: field.label,
+                    text: Binding(
+                        get: { doubleValues[field.key, default: ""] },
+                        set: { doubleValues[field.key] = $0 }
+                    ),
+                    range: range,
+                    step: field.step,
+                    decimals: field.step < 1 ? 2 : 1
+                )
+            } else {
+                numericField(
+                    label: field.label,
+                    text: Binding(
+                        get: { doubleValues[field.key, default: ""] },
+                        set: { doubleValues[field.key] = $0 }
+                    ),
+                    keyboard: .decimalPad
+                )
+            }
         case .bool:
             Toggle(isOn: Binding(
                 get: { boolValues[field.key, default: false] },
@@ -478,6 +576,44 @@ struct IndicatorSettingsEditorSheet: View {
                 )
             )
         }
+    }
+
+    /// Label + live value readout + Slider, backed by the same String store the text fields use so
+    /// `buildSettings()` keeps working unchanged.
+    private func sliderField(
+        label: String,
+        text: Binding<String>,
+        range: ClosedRange<Double>,
+        step: Double,
+        decimals: Int
+    ) -> some View {
+        let value = Binding<Double>(
+            get: { (Double(text.wrappedValue) ?? range.lowerBound).clamped(to: range) },
+            set: { text.wrappedValue = decimals == 0 ? String(Int($0.rounded())) : String($0) }
+        )
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                Spacer()
+                Text(String(format: "%.\(decimals)f", value.wrappedValue))
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(AppColors.primaryForeground)
+            }
+            Slider(value: value, in: range, step: step)
+                .tint(AppColors.accentColor)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.whiteText.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                )
+        )
     }
 
     private func numericField(label: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {

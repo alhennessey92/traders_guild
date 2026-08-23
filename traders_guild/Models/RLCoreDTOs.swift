@@ -671,8 +671,11 @@ struct RLCreateGuildRequestDTO: Codable {
     let language: String?
     let location: String?
     let joinQuestions: [RLGuildJoinQuestionInputDTO]
-    let initialAnnouncementTitle: String
-    let initialAnnouncementContent: String
+    // Optional: creation asks for a name only, and the welcome post is
+    // offered afterwards via the invite hub's setup checklist. The backend
+    // accepts the pair as absent but rejects half of one.
+    let initialAnnouncementTitle: String?
+    let initialAnnouncementContent: String?
     let initialAnnouncementPreview: String?
     let initialAnnouncementIsImportant: Bool
     let crestSymbol: String?         // backend: crest_symbol (neutral key)
@@ -2968,4 +2971,22 @@ enum RLOnboardingState: String, Codable, Equatable {
     case guildSelected = "guild_selected"
     case optionalDetailsCompleted = "optional_details_completed"
     case complete = "onboarding_complete"
+}
+
+/// A join request from the requester's own point of view.
+///
+/// Carries the guild inline so a "pending" row renders without a round-trip
+/// each. Backend: `GuildMyJoinRequestResponse`.
+struct RLGuildMyJoinRequestDTO: Codable, Identifiable, Equatable {
+    let id: UUID
+    let guild: RLGuildDTO
+    /// "pending" | "approved" | "declined"
+    let status: String
+    let note: String?
+    let createdAt: Date
+    let reviewedAt: Date?
+}
+
+struct RLGuildMyJoinRequestsListDTO: Codable, Equatable {
+    let requests: [RLGuildMyJoinRequestDTO]
 }

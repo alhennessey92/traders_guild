@@ -364,7 +364,7 @@ struct UserGlobalSheetView: View {
                     title: "Global Reputation Breakdown",
                     subtitle: "Tier, weekly delta, guild contributions",
                     value: "\(globalRepData?.globalReputation ?? rlAppState.currentUser?.globalReputation ?? 0)",
-                    icon: "star.hexagon.fill",
+                    icon: ReputationGlyph.symbolName,
                     iconColor: AppColors.guildReputationAccent,
                     action: { showGlobalReputationBreakdown = true }
                 )
@@ -472,10 +472,11 @@ struct UserGlobalSheetView: View {
             } else {
                 VStack(spacing: 12) {
                     ForEach(Array(userGuilds.enumerated()), id: \.element.id) { index, guild in
-                        GlobalGuildCard(
-                            guildWithMembership: guild,
-                            isCurrentGuild: guild.guild.id == rlAppState.currentGuild?.id,
-                            accentColor: guildColor(for: index)
+                        GuildCardView(
+                            guild: guild.guild,
+                            style: .switchRow,
+                            role: guild.role,
+                            isCurrent: guild.guild.id == rlAppState.currentGuild?.id
                         )
                     }
                 }
@@ -753,79 +754,6 @@ struct AccountInfoRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-}
-
-struct GlobalGuildCard: View {
-    let guildWithMembership: RLGuildWithMembership
-    let isCurrentGuild: Bool
-    let accentColor: Color
-
-    var body: some View {
-        HStack(spacing: 14) {
-            GuildCrestView(guild: guildWithMembership.guild, size: 50)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(guildWithMembership.guild.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.whiteText)
-
-                    if isCurrentGuild {
-                        Text("CURRENT")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppColors.guildReputationAccent.opacity(0.2))
-                            .cornerRadius(4)
-                    }
-                }
-
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "shield.fill")
-                            .font(.caption2)
-                            .foregroundColor(guildWithMembership.membership.memberRole.color)
-                        Text(guildWithMembership.membership.memberRole.displayName)
-                            .font(.caption)
-                            .foregroundColor(guildWithMembership.membership.memberRole.color)
-                    }
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.hexagon.fill")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                        Text("\(guildWithMembership.membership.reputation)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                    }
-
-                    if let accuracy = guildWithMembership.membership.accuracyFormatted {
-                        HStack(spacing: 4) {
-                            Image(systemName: "target")
-                                .font(.caption2)
-                                .foregroundColor(AppColors.statusPositive90)
-                            Text(accuracy)
-                                .font(.caption)
-                                .foregroundColor(AppColors.statusPositive90)
-                        }
-                    }
-                }
-
-                Text("\(guildWithMembership.guild.memberCountDisplay) members")
-                    .font(.caption2)
-                    .foregroundColor(AppColors.greyText)
-            }
-
-            Spacer()
-        }
-        .padding(14)
-        .background(AppColors.insetPanelBackground)
-        .cornerRadius(12)
     }
 }
 

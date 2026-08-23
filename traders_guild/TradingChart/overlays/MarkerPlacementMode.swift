@@ -158,6 +158,16 @@ struct MarkerPlacementChecklistItem: Identifiable, Equatable {
     let title: String
     let isRequired: Bool
     let isComplete: Bool
+    /// Which tab's UI satisfies this, so the bottom bar can point at the one still needing
+    /// attention. `nil` means it is satisfied on the chart itself (the anchor).
+    var tab: MarkerPlacementTab? = .general
+}
+
+enum MarkerPlacementRequirements {
+    /// Minimum user-authored characters for ALERT context and QUESTION text.
+    /// Was a bare `10` in four places across this file. Mirrors Android
+    /// `MarkerPlacementController.MIN_CONTEXT_CHARACTERS`.
+    static let minimumContextCharacters = 10
 }
 
 @MainActor
@@ -465,7 +475,8 @@ final class MarkerPlacementState: ObservableObject {
                 id: "anchor",
                 title: "Anchor placed on chart",
                 isRequired: true,
-                isComplete: anchorDraft != nil
+                isComplete: anchorDraft != nil,
+                tab: nil
             ),
         ]
 
@@ -523,7 +534,8 @@ final class MarkerPlacementState: ObservableObject {
                     id: "analysis_structure",
                     title: "Add at least one chart component",
                     isRequired: true,
-                    isComplete: hasStructuredAnalysisComponents
+                    isComplete: hasStructuredAnalysisComponents,
+                    tab: .components
                 )
             )
 
@@ -539,9 +551,9 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "alert_context",
-                    title: "Write at least 10 characters of alert context",
+                    title: "Write at least \(MarkerPlacementRequirements.minimumContextCharacters) characters of alert context",
                     isRequired: true,
-                    isComplete: trimmedAlertDescription.count >= 10
+                    isComplete: trimmedAlertDescription.count >= MarkerPlacementRequirements.minimumContextCharacters
                 )
             )
 
@@ -549,9 +561,9 @@ final class MarkerPlacementState: ObservableObject {
             items.append(
                 checklistItem(
                     id: "question_required",
-                    title: "Write at least 10 characters",
+                    title: "Write at least \(MarkerPlacementRequirements.minimumContextCharacters) characters",
                     isRequired: true,
-                    isComplete: trimmedQuestionNote.count >= 10
+                    isComplete: trimmedQuestionNote.count >= MarkerPlacementRequirements.minimumContextCharacters
                 )
             )
             items.append(
@@ -559,7 +571,8 @@ final class MarkerPlacementState: ObservableObject {
                     id: "question_recommendation",
                     title: "Add a drawing for context",
                     isRequired: false,
-                    isComplete: drawingOverlayCount > 0
+                    isComplete: drawingOverlayCount > 0,
+                    tab: .components
                 )
             )
 
@@ -649,7 +662,8 @@ final class MarkerPlacementState: ObservableObject {
                 id: "validity",
                 title: "Placement requirements met",
                 isRequired: true,
-                isComplete: isValid
+                isComplete: isValid,
+                tab: nil
             )
         )
 
@@ -723,9 +737,9 @@ final class MarkerPlacementState: ObservableObject {
             // additional directional/location requirements.
             return true
         case .alert:
-            return resolvedAlertSeverity != nil && trimmedAlertDescription.count >= 10
+            return resolvedAlertSeverity != nil && trimmedAlertDescription.count >= MarkerPlacementRequirements.minimumContextCharacters
         case .question:
-            return trimmedQuestionNote.count >= 10
+            return trimmedQuestionNote.count >= MarkerPlacementRequirements.minimumContextCharacters
         case .poll:
             return false
         case .news:
@@ -906,6 +920,37 @@ final class MarkerPlacementState: ObservableObject {
         components.append(
             MarkerComponentDraft(componentType: .indicator, payload: .indicator(payload))
         )
+        return true
+    }
+
+    /// Update the exact indicator row selected in the placement UI. This also gives legacy moving
+    /// averages (which predate `instanceId`) an identity without inserting a duplicate component.
+    @discardableResult
+    func updateIndicatorDraft(
+        id: UUID,
+        name: String,
+        settings: [String: AnyCodable]?,
+        instanceId: UUID?
+    ) -> Bool {
+        guard let index = components.firstIndex(where: { $0.id == id }),
+              case let .indicator(existingPayload) = components[index].payload else {
+            return false
+        }
+
+        let resolvedInstanceId: UUID?
+        if isMovingAverageName(name) {
+            resolvedInstanceId = instanceId ?? existingPayload.instanceId ?? UUID()
+        } else {
+            resolvedInstanceId = existingPayload.instanceId
+        }
+
+        let updated = IndicatorPayload(
+            name: name,
+            settings: settings,
+            isPrimary: existingPayload.isPrimary,
+            instanceId: resolvedInstanceId
+        )
+        setComponentPayload(at: index, to: .indicator(updated))
         return true
     }
 
@@ -2204,7 +2249,8 @@ final class MarkerPlacementState: ObservableObject {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var trimmedQuestionNote: String {
+    /// Exposed (was private) so the General tab can show a live character-count hint.
+    var trimmedQuestionNote: String {
         trimmedNote
     }
 
@@ -2212,7 +2258,8 @@ final class MarkerPlacementState: ObservableObject {
         pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var trimmedAlertDescription: String {
+    /// Exposed (was private) so the General tab can show a live character-count hint.
+    var trimmedAlertDescription: String {
         stripAlertSeverityPrefix(from: trimmedNote)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -2289,8 +2336,26 @@ final class MarkerPlacementState: ObservableObject {
         return isLong || isShort
     }
 
-    private func checklistItem(id: String, title: String, isRequired: Bool, isComplete: Bool) -> MarkerPlacementChecklistItem {
-        MarkerPlacementChecklistItem(id: id, title: title, isRequired: isRequired, isComplete: isComplete)
+    /// Required requirements that are still unmet, in the order the checklist presents them.
+    /// Drives the bottom-bar dots and the "tap the disabled Place button to jump" behaviour.
+    var unmetRequiredChecklistItems: [MarkerPlacementChecklistItem] {
+        // "validity" is the summary row (isComplete == isValid), not a requirement of its own —
+        // counting it would badge General even when the only real gap is on Components.
+        placementChecklistItems.filter { $0.isRequired && !$0.isComplete && $0.id != "validity" }
+    }
+
+    func unmetRequiredCount(for tab: MarkerPlacementTab) -> Int {
+        unmetRequiredChecklistItems.filter { $0.tab == tab }.count
+    }
+
+    private func checklistItem(
+        id: String,
+        title: String,
+        isRequired: Bool,
+        isComplete: Bool,
+        tab: MarkerPlacementTab? = .general
+    ) -> MarkerPlacementChecklistItem {
+        MarkerPlacementChecklistItem(id: id, title: title, isRequired: isRequired, isComplete: isComplete, tab: tab)
     }
 
     private func isStyledDrawingComponent(_ componentType: RLComponentType) -> Bool {

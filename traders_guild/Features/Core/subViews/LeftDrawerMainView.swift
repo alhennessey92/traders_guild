@@ -670,9 +670,7 @@ struct MainDrawerView: View {
                 .padding(.top, 6)
                 
                 HStack(spacing: 2) {
-                    Image(systemName: "star.hexagon.fill")
-                        .font(.footnote)
-                        .fontWeight(.bold)
+                    ReputationGlyph(size: 13)
                         .foregroundColor(AppColors.guildReputationAccent)
                     Text("\(guildReputation)")
                         .font(.caption)

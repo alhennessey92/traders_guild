@@ -172,44 +172,71 @@ class RealAPIService {
     
     // MARK: - JSON Decoder
     
+    /// Date parsers, built once.
+    ///
+    /// These used to be constructed *inside* the decoding closure, so every date in every response
+    /// allocated a fresh `ISO8601DateFormatter` — and because candle timestamps carry no fractional
+    /// seconds, the fractional parser always failed first and a second formatter was allocated
+    /// behind it. A single history page is 1000 candles, so one pan past the left edge cost ~2000
+    /// formatter constructions on the main actor. `DateFormatter` construction is expensive (it
+    /// builds an ICU formatter underneath); this was the periodic stutter felt roughly once per
+    /// screen-width of panning.
+    ///
+    /// Held as immutable statics and never mutated after construction, which is what makes sharing
+    /// them safe — the old code mutated `formatOptions` between attempts, which a shared instance
+    /// could not have done.
+    private enum WireDateParsers {
+        static let iso8601Fractional: ISO8601DateFormatter = {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter
+        }()
+
+        static let iso8601: ISO8601DateFormatter = {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter
+        }()
+
+        /// No timezone designator, e.g. `2026-08-13T08:05:00`.
+        static let naiveDateTime: DateFormatter = {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            return formatter
+        }()
+
+        /// Date only, e.g. a profile's `date_of_birth`.
+        static let dateOnly: DateFormatter = {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter
+        }()
+    }
+
     private lazy var decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            
-            // Try ISO8601 with fractional seconds
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: dateString) {
+
+            if let date = WireDateParsers.iso8601Fractional.date(from: dateString) {
                 return date
             }
-            
-            // Try ISO8601 without fractional seconds
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: dateString) {
+            if let date = WireDateParsers.iso8601.date(from: dateString) {
+                return date
+            }
+            if let date = WireDateParsers.naiveDateTime.date(from: dateString) {
+                return date
+            }
+            if let date = WireDateParsers.dateOnly.date(from: dateString) {
                 return date
             }
 
-            // Try "yyyy-MM-dd'T'HH:mm:ss" (no timezone)
-            let noTZDateTime = DateFormatter()
-            noTZDateTime.locale = Locale(identifier: "en_US_POSIX")
-            noTZDateTime.timeZone = TimeZone(secondsFromGMT: 0)
-            noTZDateTime.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-            if let date = noTZDateTime.date(from: dateString) {
-                return date
-            }
-
-            // Try date-only "yyyy-MM-dd"
-            let dateOnly = DateFormatter()
-            dateOnly.locale = Locale(identifier: "en_US_POSIX")
-            dateOnly.timeZone = TimeZone(secondsFromGMT: 0)
-            dateOnly.dateFormat = "yyyy-MM-dd"
-            if let date = dateOnly.date(from: dateString) {
-                return date
-            }
-            
             throw DecodingError.dataCorruptedError(
                 in: container,
                 debugDescription: "Cannot decode date: \(dateString)"
@@ -217,15 +244,13 @@ class RealAPIService {
         }
         return decoder
     }()
-    
+
     private lazy var encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let dateString = formatter.string(from: date)
+            let dateString = WireDateParsers.iso8601Fractional.string(from: date)
             try container.encode(dateString)
         }
         return encoder
@@ -581,7 +606,28 @@ private struct EmptyResponse: Decodable {}
 enum APIRequestLogRedactor {
     private static let replacement = "<redacted>"
 
+    /// Above this, don't attempt redaction — see [redactedJSONString].
+    private static let maxRedactableBytes = 8 * 1024
+
+    /// Redacted, printable form of a response body.
+    ///
+    /// Bails out on large payloads instead of redacting them. Redaction is a full
+    /// `JSONSerialization` parse, a recursive rebuild of the object tree (allocating two Strings per
+    /// key for the sensitivity check), a re-serialise with `.sortedKeys`, and a final `String`
+    /// conversion — four passes over the whole body. Callers then keep the first 1000 characters and
+    /// throw the rest away.
+    ///
+    /// On this app's larger responses (marker lists run past 100 KB) that was tens of milliseconds
+    /// of pure waste per request, on every request, while the chart's history pager fires them in
+    /// sequence. It is `#if DEBUG`-only so it never shipped, but it made debug builds — the ones
+    /// anyone profiles — look far worse than the real thing, which is its own kind of harm.
+    ///
+    /// Small bodies are the ones that actually carry tokens and secrets, and those still get the
+    /// full treatment.
     static func redactedJSONString(from data: Data) -> String {
+        guard data.count <= maxRedactableBytes else {
+            return "<\(data.count) bytes — too large to redact, body omitted>"
+        }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               JSONSerialization.isValidJSONObject(object),
               let redactedData = try? JSONSerialization.data(
@@ -959,8 +1005,8 @@ extension RealAPIService {
         language: String? = nil,
         location: String? = nil,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
-        initialAnnouncementTitle: String,
-        initialAnnouncementContent: String,
+        initialAnnouncementTitle: String? = nil,
+        initialAnnouncementContent: String? = nil,
         initialAnnouncementPreview: String? = nil,
         initialAnnouncementIsImportant: Bool = true,
         crestSymbol: String? = nil,
@@ -1016,6 +1062,19 @@ extension RealAPIService {
             service: .core,
             method: "PUT",
             body: body,
+            auth: true
+        )
+    }
+
+    /// The caller's own join requests.
+    ///
+    /// `GET /guilds/me/join-requests`. The per-guild list is moderator-only, so
+    /// this is the only way an applicant can see a request is still open.
+    func fetchMyJoinRequests(status: String = "pending") async throws -> RLGuildMyJoinRequestsListDTO {
+        try await request(
+            "/guilds/me/join-requests?status=\(status)",
+            service: .core,
+            method: "GET",
             auth: true
         )
     }

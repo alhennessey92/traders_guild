@@ -223,6 +223,15 @@ class RLAppState: ObservableObject {
     @Published var pendingReferralInviteCode: String?
     /// Guild vanity handle captured from a /g/{slug} deep link.
     @Published var pendingGuildSlug: String?
+
+    /// An invite-only guild reached by its handle. A handle can't open-join one,
+    /// so the app presents its application form rather than dead-ending with
+    /// "ask for an invite link". Cleared once the flow is dismissed.
+    @Published var pendingGuildRequestGuild: RLGuildDTO?
+
+    /// Guilds applied to and still awaiting a decision. Server-backed, so it
+    /// survives a relaunch rather than living only in the current session.
+    @Published var pendingJoinRequests: [RLGuildMyJoinRequestDTO] = []
     /// Marker id captured from a /marker/{id} deep link, opened once authenticated.
     @Published var pendingMarkerLinkId: UUID?
     /// Resolved marker navigation retained until a ready MainView explicitly accepts it.
@@ -1060,7 +1069,13 @@ class RLAppState: ObservableObject {
 
         do {
             let guildWithMembership = try await realApi.acceptGuildInviteLink(code: code)
-            if let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id }) {
+            // Were we already in this guild? Tapping your own share link is the
+            // common way to land here, and claiming "Referral accepted" when no
+            // referral was credited is a lie the user can see through — they were
+            // already a member.
+            let existingIndex = userGuilds.firstIndex(where: { $0.guild.id == guildWithMembership.guild.id })
+            let wasAlreadyMember = existingIndex != nil
+            if let existingIndex {
                 userGuilds[existingIndex] = guildWithMembership
             } else {
                 userGuilds.append(guildWithMembership)
@@ -1068,7 +1083,11 @@ class RLAppState: ObservableObject {
             selectGuild(guildWithMembership, showTransition: false)
             pendingReferralInviteCode = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingReferralInviteCodeStorageKey)
-            showSuccess(RLUserFacingCopy.text(.successReferralAccepted))
+            if wasAlreadyMember {
+                showInfo(RLUserFacingCopy.text(.infoAlreadyGuildMember))
+            } else {
+                showSuccess(RLUserFacingCopy.text(.successReferralAccepted))
+            }
             return true
         } catch APIError.unauthorized {
             return false
@@ -1267,13 +1286,20 @@ class RLAppState: ObservableObject {
             if guild.isOpen {
                 _ = try await joinGuild(guildId: guild.id, showTransition: false)
                 clearPending()
+                // Closes the loop signup opens with "You'll join X". The join
+                // happens after email verification, so without this it lands
+                // invisibly and the promise looks unkept.
+                showSuccess("You've joined \(guild.name)")
                 return true
             }
 
-            // Private guild — can't open-join from a public handle.
+            // Private guild — a handle can't open-join one, so hand the user
+            // the application form. Matches Android, where the accept screen is
+            // a top-level route; here it needs a published signal the root view
+            // presents on.
             clearPending()
-            showInfo("\(guild.name) is invite-only. Ask the guild for an invite link to join.")
-            return false
+            pendingGuildRequestGuild = guild
+            return true
         } catch APIError.unauthorized {
             return false
         } catch APIError.serverError(let status, _) where status == 403 {
@@ -1903,8 +1929,8 @@ class RLAppState: ObservableObject {
         language: String? = nil,
         location: String? = nil,
         joinQuestions: [RLGuildJoinQuestionInputDTO] = [],
-        initialAnnouncementTitle: String,
-        initialAnnouncementContent: String,
+        initialAnnouncementTitle: String? = nil,
+        initialAnnouncementContent: String? = nil,
         initialAnnouncementPreview: String? = nil,
         initialAnnouncementIsImportant: Bool = true,
         crestSymbol: String? = nil,
@@ -2062,6 +2088,13 @@ class RLAppState: ObservableObject {
             showError(error, title: "Failed to Update Questions", style: .toast)
             throw error
         }
+    }
+
+    /// Refresh the caller's outstanding join requests. Best-effort: a failure
+    /// leaves the previous list rather than blanking the section.
+    func refreshMyJoinRequests() async {
+        guard let list = try? await realApi.fetchMyJoinRequests() else { return }
+        pendingJoinRequests = list.requests
     }
 
     func submitGuildJoinRequest(guildId: UUID, note: String?, answers: [RLGuildJoinRequestAnswerInputDTO]) async throws -> RLGuildJoinRequestDTO {
@@ -2604,6 +2637,12 @@ class RLAppState: ObservableObject {
     }
 
     /// Resolve a shareable guild invite/referral code
+    /// Resolve a guild by its vanity handle. Used by the signup step to show
+    /// which guild a link or typed handle points at before the join happens.
+    func resolveGuildBySlug(slug: String) async throws -> RLGuildDTO {
+        try await realApi.resolveGuildBySlug(slug: slug)
+    }
+
     func resolveGuildInviteLink(code: String) async throws -> RLGuildInviteLinkResolveDTO {
         do {
             return try await realApi.resolveGuildInviteLink(code: code)

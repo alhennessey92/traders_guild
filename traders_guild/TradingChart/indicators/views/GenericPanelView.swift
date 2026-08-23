@@ -89,6 +89,18 @@ struct GenericIndicatorPanelView: View {
         }
     }
 
+    /// The configured stroke width for this panel's line. Was hardcoded to 1.5, so the new
+    /// Line Width control would have had no effect on CCI / Williams %R / ATR.
+    private var panelLineWidth: CGFloat {
+        switch panelType {
+        case .cci: return indicatorManager.activeIndicators.cci?.lineWidth ?? 1.5
+        case .williamsR: return indicatorManager.activeIndicators.williamsR?.lineWidth ?? 1.5
+        case .atr: return indicatorManager.activeIndicators.atr?.lineWidth ?? 1.5
+        case .volume: return indicatorManager.activeIndicators.volume?.lineWidth ?? 1.5
+        default: return 1.5
+        }
+    }
+
     private var cciConfig: CCIConfig? {
         indicatorManager.activeIndicators.cci
     }
@@ -545,7 +557,8 @@ struct GenericIndicatorPanelView: View {
             size: size,
             data: data.map { ($0.candleIndex, $0.value) },
             viewport: viewport,
-            color: lineColor
+            color: lineColor,
+            lineWidth: panelLineWidth
         )
     }
     
@@ -572,7 +585,8 @@ struct GenericIndicatorPanelView: View {
             size: size,
             data: data.map { ($0.candleIndex, $0.value) },
             viewport: viewport,
-            color: lineColor
+            color: lineColor,
+            lineWidth: panelLineWidth
         )
     }
     
@@ -588,7 +602,8 @@ struct GenericIndicatorPanelView: View {
             size: size,
             data: data.map { ($0.candleIndex, $0.value) },
             viewport: viewport,
-            color: lineColor
+            color: lineColor,
+            lineWidth: panelLineWidth
         )
     }
     
@@ -640,7 +655,11 @@ struct GenericIndicatorPanelView: View {
                 }
             }
             
-            context.stroke(maPath, with: .color(config?.maColor.color ?? .white), lineWidth: 1)
+            context.stroke(
+                maPath,
+                with: .color(config?.maColor.color ?? .white),
+                lineWidth: config?.lineWidth ?? 1
+            )
         }
     }
     
@@ -709,7 +728,8 @@ struct GenericIndicatorPanelView: View {
         size: CGSize,
         data: [(candleIndex: Int, value: Double)],
         viewport: IndicatorPanelViewport,
-        color: Color
+        color: Color,
+        lineWidth: CGFloat = 1.5
     ) {
         guard !data.isEmpty else { return }
         
@@ -733,7 +753,7 @@ struct GenericIndicatorPanelView: View {
             }
         }
         
-        context.stroke(path, with: .color(color), lineWidth: 1.5)
+        context.stroke(path, with: .color(color), lineWidth: lineWidth)
     }
     
     // MARK: - Value Helpers

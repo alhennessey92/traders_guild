@@ -147,7 +147,21 @@ class RealTimeService: ObservableObject {
         
         startPingTimer()
         
-        print("🌐 [WS] Connecting to \(url.absoluteString)...")
+        // The URL carries the access token as a query parameter, so it must never be logged whole.
+        // This line was ungated, which put a live JWT into the device log of every release build.
+        #if DEBUG
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        // Build the sanitised items first: assigning straight from `components?.queryItems` into
+        // `components?.queryItems` reads and writes the same storage in one statement, which Swift's
+        // exclusivity checking rejects.
+        let sanitisedQuery = components?.queryItems?.map { item in
+            // No angle brackets: they percent-encode into the URL string and make the log harder
+            // to read than the thing it is redacting.
+            item.name == "token" ? URLQueryItem(name: item.name, value: "REDACTED") : item
+        }
+        components?.queryItems = sanitisedQuery
+        print("🌐 [WS] Connecting to \(components?.string ?? url.path)")
+        #endif
     }
     
     /// Disconnect cleanly
