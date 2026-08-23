@@ -58,18 +58,7 @@ struct MarkerPlacementIndicatorsTab: View {
             IndicatorSettingsEditorSheet(
                 context: context,
                 onSave: { updatedSettings in
-                    if let instanceId = context.instanceId {
-                        _ = placementState.upsertMovingAverage(
-                            name: context.indicatorName,
-                            settings: updatedSettings,
-                            instanceId: instanceId
-                        )
-                    } else {
-                        _ = placementState.upsertIndicator(
-                            name: context.indicatorName,
-                            settings: updatedSettings
-                        )
-                    }
+                    _ = context.save(settings: updatedSettings, to: placementState)
                     infoMessage = "Updated \(context.item.title) settings."
                 }
             )
@@ -77,8 +66,13 @@ struct MarkerPlacementIndicatorsTab: View {
         .sheet(item: $addingMAType) { type in
             AddMarkerMASheet(
                 indicatorType: type,
-                onAdd: { period, color in
-                    addMovingAverageInstance(type: type, period: period, color: color)
+                onAdd: { period, lineWidth, color in
+                    addMovingAverageInstance(
+                        type: type,
+                        period: period,
+                        lineWidth: lineWidth,
+                        color: color
+                    )
                 }
             )
         }
@@ -343,6 +337,7 @@ struct MarkerPlacementIndicatorsTab: View {
                 return nil
             }
             return AttachedMovingAverage(
+                draftId: draft.id,
                 instanceId: instanceId,
                 name: payload.name,
                 settings: payload.settings
@@ -362,15 +357,19 @@ struct MarkerPlacementIndicatorsTab: View {
         addingMAType = type
     }
 
-    private func addMovingAverageInstance(type: IndicatorType, period: Int, color: Color) {
+    private func addMovingAverageInstance(
+        type: IndicatorType,
+        period: Int,
+        lineWidth: Double,
+        color: Color
+    ) {
         let name = type.rawValue
         let instanceId = UUID()
-        let settings: [String: AnyCodable] = [
-            "period": AnyCodable(period),
-            "source": AnyCodable("close"),
-            "lineWidth": AnyCodable(1.5),
-            "color": encodedColor(color),
-        ]
+        let settings = MarkerMovingAverageDraftSettings.make(
+            period: period,
+            lineWidth: lineWidth,
+            color: color
+        )
         if placementState.upsertMovingAverage(name: name, settings: settings, instanceId: instanceId) {
             infoMessage = "Added \(type.shortName) \(period)."
             limitWarning = nil
@@ -385,19 +384,8 @@ struct MarkerPlacementIndicatorsTab: View {
             item: item,
             indicatorName: entry.name,
             existingSettings: entry.settings,
+            draftId: entry.draftId,
             instanceId: entry.instanceId
-        )
-    }
-
-    private func encodedColor(_ color: Color) -> AnyCodable {
-        let codable = CodableColor(color)
-        return AnyCodable(
-            [
-                "red": codable.red,
-                "green": codable.green,
-                "blue": codable.blue,
-                "opacity": codable.opacity,
-            ]
         )
     }
 
@@ -474,7 +462,7 @@ struct MarkerPlacementIndicatorsTab: View {
             Spacer(minLength: 0)
 
             Button {
-                openSettingsEditor(item: item, payload: attached.payload)
+                openSettingsEditor(item: item, draftId: attached.draftID, payload: attached.payload)
             } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 12, weight: .semibold))
@@ -513,7 +501,7 @@ struct MarkerPlacementIndicatorsTab: View {
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture {
             if let item {
-                openSettingsEditor(item: item, payload: attached.payload)
+                openSettingsEditor(item: item, draftId: attached.draftID, payload: attached.payload)
             }
         }
     }
@@ -642,7 +630,7 @@ struct MarkerPlacementIndicatorsTab: View {
             limitWarning = nil
             // Auto-open settings editor for newly added indicator
             if let attached = attachedIndicator(for: item) {
-                openSettingsEditor(item: item, payload: attached.payload)
+                openSettingsEditor(item: item, draftId: attached.draftID, payload: attached.payload)
             }
         } else {
             limitWarning = placementState.limitMessage(for: .indicatorPanels)
@@ -650,15 +638,19 @@ struct MarkerPlacementIndicatorsTab: View {
         }
     }
 
-    private func openSettingsEditor(item: IndicatorCatalogItem?, payload: IndicatorPayload) {
+    private func openSettingsEditor(
+        item: IndicatorCatalogItem?,
+        draftId: UUID,
+        payload: IndicatorPayload
+    ) {
         guard let item else {
             infoMessage = "Settings editor unavailable for this indicator."
             return
         }
         editingContext = IndicatorEditingContext(
             item: item,
-            indicatorName: payload.name,
-            existingSettings: payload.settings
+            draftId: draftId,
+            payload: payload
         )
     }
 
@@ -686,6 +678,7 @@ private struct AttachedIndicator: Identifiable {
 }
 
 struct AttachedMovingAverage: Identifiable {
+    let draftId: UUID
     let instanceId: UUID
     let name: String
     let settings: [String: AnyCodable]?
@@ -726,16 +719,17 @@ struct AttachedMovingAverage: Identifiable {
 
 struct AddMarkerMASheet: View {
     let indicatorType: IndicatorType
-    let onAdd: (Int, Color) -> Void
+    let onAdd: (Int, Double, Color) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var period: Int = 20
+    @State private var lineWidth: Double = 1.5
     @State private var selectedColor: Color
 
     private let presets: [Int] = [9, 10, 12, 14, 20, 21, 26, 50, 100, 200]
 
-    init(indicatorType: IndicatorType, onAdd: @escaping (Int, Color) -> Void) {
+    init(indicatorType: IndicatorType, onAdd: @escaping (Int, Double, Color) -> Void) {
         self.indicatorType = indicatorType
         self.onAdd = onAdd
         _selectedColor = State(initialValue: indicatorType.defaultColor)
@@ -754,6 +748,16 @@ struct AddMarkerMASheet: View {
                         }
                     }
                 }
+                Section("Line") {
+                    HStack {
+                        Text("Line Width")
+                        Spacer()
+                        Text(String(format: "%.1f", lineWidth))
+                            .monospacedDigit()
+                            .foregroundColor(AppColors.secondaryForeground)
+                    }
+                    Slider(value: $lineWidth, in: 1...4, step: 0.5)
+                }
                 Section("Color") {
                     ColorPickerGrid(selectedColor: $selectedColor)
                 }
@@ -764,12 +768,31 @@ struct AddMarkerMASheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        onAdd(period, selectedColor)
+                        onAdd(period, lineWidth, selectedColor)
                         dismiss()
                     }
                 }
             }
         }
+    }
+}
+
+enum MarkerMovingAverageDraftSettings {
+    static func make(period: Int, lineWidth: Double, color: Color) -> [String: AnyCodable] {
+        let codable = CodableColor(color)
+        return [
+            "period": AnyCodable(period),
+            "source": AnyCodable("close"),
+            "lineWidth": AnyCodable(lineWidth),
+            "color": AnyCodable(
+                [
+                    "red": codable.red,
+                    "green": codable.green,
+                    "blue": codable.blue,
+                    "opacity": codable.opacity,
+                ]
+            ),
+        ]
     }
 }
 

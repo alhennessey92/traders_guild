@@ -923,6 +923,37 @@ final class MarkerPlacementState: ObservableObject {
         return true
     }
 
+    /// Update the exact indicator row selected in the placement UI. This also gives legacy moving
+    /// averages (which predate `instanceId`) an identity without inserting a duplicate component.
+    @discardableResult
+    func updateIndicatorDraft(
+        id: UUID,
+        name: String,
+        settings: [String: AnyCodable]?,
+        instanceId: UUID?
+    ) -> Bool {
+        guard let index = components.firstIndex(where: { $0.id == id }),
+              case let .indicator(existingPayload) = components[index].payload else {
+            return false
+        }
+
+        let resolvedInstanceId: UUID?
+        if isMovingAverageName(name) {
+            resolvedInstanceId = instanceId ?? existingPayload.instanceId ?? UUID()
+        } else {
+            resolvedInstanceId = existingPayload.instanceId
+        }
+
+        let updated = IndicatorPayload(
+            name: name,
+            settings: settings,
+            isPrimary: existingPayload.isPrimary,
+            instanceId: resolvedInstanceId
+        )
+        setComponentPayload(at: index, to: .indicator(updated))
+        return true
+    }
+
     /// Remove a specific moving average instance by its instanceId.
     func removeMovingAverage(instanceId: UUID) {
         components.removeAll { draft in

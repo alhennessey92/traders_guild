@@ -215,6 +215,9 @@ struct IndicatorEditingContext: Identifiable {
     let item: IndicatorCatalogItem
     let indicatorName: String
     let existingSettings: [String: AnyCodable]?
+    /// The placement-local component identity. Editing through the Active list must update this
+    /// exact draft; routing by indicator name would append another moving-average instance.
+    let draftId: UUID?
     /// Non-nil for multi-instance indicators (moving averages) so saves route to the
     /// specific instance rather than creating a new one.
     let instanceId: UUID?
@@ -223,12 +226,49 @@ struct IndicatorEditingContext: Identifiable {
         item: IndicatorCatalogItem,
         indicatorName: String,
         existingSettings: [String: AnyCodable]?,
+        draftId: UUID? = nil,
         instanceId: UUID? = nil
     ) {
         self.item = item
         self.indicatorName = indicatorName
         self.existingSettings = existingSettings
+        self.draftId = draftId
         self.instanceId = instanceId
+    }
+
+    init(item: IndicatorCatalogItem, draftId: UUID, payload: IndicatorPayload) {
+        self.init(
+            item: item,
+            indicatorName: payload.name,
+            existingSettings: payload.settings,
+            draftId: draftId,
+            instanceId: payload.instanceId
+        )
+    }
+
+    /// Persist an editor save without losing the identity of a multi-instance indicator.
+    @MainActor
+    @discardableResult
+    func save(
+        settings: [String: AnyCodable]?,
+        to placementState: MarkerPlacementState
+    ) -> Bool {
+        if let draftId {
+            return placementState.updateIndicatorDraft(
+                id: draftId,
+                name: indicatorName,
+                settings: settings,
+                instanceId: instanceId
+            )
+        }
+        if let instanceId {
+            return placementState.upsertMovingAverage(
+                name: indicatorName,
+                settings: settings,
+                instanceId: instanceId
+            )
+        }
+        return placementState.upsertIndicator(name: indicatorName, settings: settings)
     }
 }
 
