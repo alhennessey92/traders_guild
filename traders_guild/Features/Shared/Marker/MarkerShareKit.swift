@@ -111,10 +111,51 @@ enum MarkerShare {
         return formatter.string(from: NSNumber(value: price))
     }
 
+    /// Currencies, metals and energy are searched as a whole pair on X
+    /// ($EURUSD, $XAUUSD); crypto is searched by the coin ($BTC, not $BTCUSD).
+    private static let pairBases: Set<String> = [
+        "USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF", "CNH", "SEK", "NOK", "MXN",
+        "XAU", "XAG", "XPT", "XPD", "BCO", "WTI", "NATGAS", "COPPER",
+    ]
+
+    /// The `$TAG` for an instrument, or nil when it wouldn't be a useful one.
+    ///
+    /// A cashtag is a real searchable entity on X, so a shared marker carrying
+    /// one reaches people following the instrument rather than only the author's
+    /// followers. Mirrors `shared/services/cashtags.py` in the backend and
+    /// `Cashtags.kt` on Android — change one, change all three.
+    static func cashtag(_ symbolTicker: String?) -> String? {
+        let raw = (symbolTicker ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: "$", with: "")
+        guard !raw.isEmpty else { return nil }
+
+        let parts = raw.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+        let base = String(parts.first ?? "")
+        let quote = parts.count > 1 ? String(parts[1]) : ""
+
+        let tag: String
+        if quote.isEmpty {
+            tag = base
+        } else if pairBases.contains(base) {
+            tag = base + quote
+        } else {
+            tag = base
+        }
+
+        guard !tag.isEmpty, tag.count <= 12,
+              tag.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
+        return "$" + tag
+    }
+
     /// The headline a marker leads with — "BTCUSD setup at 67,250.12".
     /// Falls back gracefully as each piece of context goes missing.
     static func shareHeadline(symbolTicker: String?, intent: String?, price: Double?) -> String {
-        let ticker = symbolTicker?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // The cashtag is what makes the post findable; fall back to the plain
+        // ticker when the instrument doesn't yield a usable one.
+        let ticker = cashtag(symbolTicker)
+            ?? (symbolTicker?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
         let intentWord = intent?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let priceText = formattedPrice(price)
 
@@ -137,10 +178,19 @@ enum MarkerShare {
     ) -> String {
         let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedCaption.isEmpty {
-            return "\(trimmedCaption) \(url.absoluteString)"
+            // The author's own words lead; the cashtag rides along so the post
+            // is still findable, unless they already used it themselves.
+            var lead = trimmedCaption
+            if let tag = cashtag(symbolTicker),
+               !trimmedCaption.uppercased().contains(tag.uppercased()) {
+                lead += " \(tag)"
+            }
+            return "\(lead) \(url.absoluteString)"
         }
         let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
-        return "Just dropped \(headline) on Traders Guild — the social trading platform where guilds call the markets together. 📈 \(url.absoluteString)"
+        // The unfurled card already brands and explains the product, so the
+        // post spends its characters on the trade, not on a tagline.
+        return "Just marked \(headline) on Traders Guild 📈 \(url.absoluteString)"
     }
 
     /// Native X app composer scheme; falls back to `xComposeURL` (web).
@@ -204,7 +254,7 @@ enum MarkerShare {
         let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
         let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let lead = trimmedCaption.isEmpty
-            ? "Called it on Traders Guild — the social trading platform where guilds call the markets together."
+            ? "Shared from my chart on Traders Guild."
             : trimmedCaption
         return """
         **\(headline.prefix(1).uppercased() + headline.dropFirst()) on Traders Guild** 📈

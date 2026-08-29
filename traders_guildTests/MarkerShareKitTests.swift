@@ -133,21 +133,23 @@ struct MarkerShareKitTests {
 
     @Test func headlineCombinesTickerIntentAndPrice() {
         let headline = MarkerShare.shareHeadline(
-            symbolTicker: "BTCUSD",
+            symbolTicker: "BTC/USD",
             intent: "setup",
             price: 67250.12
         )
 
-        #expect(headline == "BTCUSD setup at 67,250.12")
+        // Leads with the cashtag: on X that is a searchable entity, so the post
+        // reaches people following the instrument, not just the author.
+        #expect(headline == "$BTC setup at 67,250.12")
     }
 
     @Test func headlineDropsMissingContextGracefully() {
         #expect(
-            MarkerShare.shareHeadline(symbolTicker: "BTCUSD", intent: nil, price: nil) == "BTCUSD"
+            MarkerShare.shareHeadline(symbolTicker: "BTC/USD", intent: nil, price: nil) == "$BTC"
         )
         #expect(
-            MarkerShare.shareHeadline(symbolTicker: "BTCUSD", intent: "alert", price: nil)
-                == "BTCUSD alert"
+            MarkerShare.shareHeadline(symbolTicker: "BTC/USD", intent: "alert", price: nil)
+                == "$BTC alert"
         )
         #expect(
             MarkerShare.shareHeadline(symbolTicker: nil, intent: "setup", price: 100)
@@ -158,8 +160,8 @@ struct MarkerShareKitTests {
     @Test func headlineHidesThePersonalIntent() {
         // "BTCUSD personal at ..." reads like a label, not a call.
         #expect(
-            MarkerShare.shareHeadline(symbolTicker: "BTCUSD", intent: "personal", price: 100)
-                == "BTCUSD at 100"
+            MarkerShare.shareHeadline(symbolTicker: "BTC/USD", intent: "personal", price: 100)
+                == "$BTC at 100"
         )
     }
 
@@ -413,5 +415,63 @@ struct MarkerShareKitTests {
         #expect(!logged.contains(secret))
         #expect(!logged.contains("also-secret"))
         #expect(!logged.contains(shareURL))
+    }
+}
+
+
+// MARK: - Cashtags
+
+@Suite("Marker cashtags")
+struct MarkerCashtagTests {
+    @Test func cryptoTagsTheCoinAndForexTagsThePair() {
+        // How each is actually searched on X.
+        #expect(MarkerShare.cashtag("BTC/USD") == "$BTC")
+        #expect(MarkerShare.cashtag("SOL/USD") == "$SOL")
+        #expect(MarkerShare.cashtag("EUR/USD") == "$EURUSD")
+        #expect(MarkerShare.cashtag("USD/JPY") == "$USDJPY")
+        #expect(MarkerShare.cashtag("XAU/USD") == "$XAUUSD")
+    }
+
+    @Test func equitiesTagAsTheyTrade() {
+        #expect(MarkerShare.cashtag("AAPL") == "$AAPL")
+        #expect(MarkerShare.cashtag("NVDA") == "$NVDA")
+    }
+
+    @Test func anUnknownPairBaseIsTreatedAsACoin() {
+        // The right default for a listing the app has not caught up with.
+        #expect(MarkerShare.cashtag("PEPE/USD") == "$PEPE")
+    }
+
+    @Test func caseAndStrayDollarAreNormalised() {
+        #expect(MarkerShare.cashtag("btc/usd") == "$BTC")
+        #expect(MarkerShare.cashtag("$AAPL") == "$AAPL")
+    }
+
+    @Test func nothingUsefulYieldsNoTag() {
+        #expect(MarkerShare.cashtag(nil) == nil)
+        #expect(MarkerShare.cashtag("   ") == nil)
+        #expect(MarkerShare.cashtag("weird ticker!") == nil)
+    }
+
+    @Test func aCaptionedPostStillCarriesTheCashtag() {
+        let text = MarkerShare.xComposeURL(
+            symbolTicker: "BTC/USD",
+            caption: "Reclaim confirmed",
+            url: URL(string: "https://tradersguild.co/marker/abc")!
+        )?.absoluteString ?? ""
+
+        #expect(text.contains("%24BTC") || text.contains("$BTC"))
+    }
+
+    @Test func aCaptionThatAlreadyTagsIsLeftAlone() {
+        let text = MarkerShare.xComposeURL(
+            symbolTicker: "BTC/USD",
+            caption: "$BTC reclaim confirmed",
+            url: URL(string: "https://tradersguild.co/marker/abc")!
+        )?.absoluteString ?? ""
+
+        // One tag, not two.
+        let encoded = text.replacingOccurrences(of: "%24", with: "$")
+        #expect(encoded.components(separatedBy: "$BTC").count - 1 == 1)
     }
 }
