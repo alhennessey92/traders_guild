@@ -38,43 +38,67 @@ struct DiscordDestinationSheet<Preview: View>: View {
                         preview()
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Destination")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppColors.greyText)
-                        channelPicker
-                    }
-
-                    Button(action: onPost) {
-                        Group {
-                            if isPosting {
-                                ProgressView().tint(AppColors.onAccentForeground)
-                            } else {
-                                Text(selectedChannel.map { "Post to \($0.displayLabel)" } ?? "Choose a channel")
-                                    .font(.headline)
-                            }
+                    if usableChannels.isEmpty {
+                        // No webhook on this guild — the system guild, or one
+                        // nobody has connected yet. Say so plainly: this used to
+                        // copy and jump to Discord with no explanation, leaving
+                        // people on Discord's home screen wondering what happened.
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("No connected channel")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(AppColors.greyText)
+                            Text("This guild hasn't connected a Discord channel, so we can't post for you. Copy the message and paste it into any channel yourself.")
+                                .font(.footnote)
+                                .foregroundColor(AppColors.greyText)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .foregroundColor(AppColors.onAccentForeground)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(selectedChannel == nil ? AppColors.surfaceWhite12 : AppColors.tgAccent)
-                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Destination")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(AppColors.greyText)
+                            channelPicker
+                        }
+
+                        Button(action: onPost) {
+                            Group {
+                                if isPosting {
+                                    ProgressView().tint(AppColors.onAccentForeground)
+                                } else {
+                                    Text(selectedChannel.map { "Post to \($0.displayLabel)" } ?? "Choose a channel")
+                                        .font(.headline)
+                                }
+                            }
+                            .foregroundColor(AppColors.onAccentForeground)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(selectedChannel == nil ? AppColors.surfaceWhite12 : AppColors.tgAccent)
+                            )
+                        }
+                        .buttonStyle(InvitePressStyle())
+                        .disabled(selectedChannel == nil || isPosting)
                     }
-                    .buttonStyle(InvitePressStyle())
-                    .disabled(selectedChannel == nil || isPosting)
 
                     Button {
                         onCopyAndOpen()
                     } label: {
                         Text("Copy message and open Discord")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(AppColors.guildReputationAccent)
+                            .font(usableChannels.isEmpty ? .headline : .subheadline.weight(.semibold))
+                            .foregroundColor(
+                                usableChannels.isEmpty
+                                    ? AppColors.onAccentForeground
+                                    : AppColors.guildReputationAccent
+                            )
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, usableChannels.isEmpty ? 14 : 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(usableChannels.isEmpty ? AppColors.tgAccent : Color.clear)
+                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(InvitePressStyle())
                     .disabled(isPosting)
                 }
                 .padding(20)

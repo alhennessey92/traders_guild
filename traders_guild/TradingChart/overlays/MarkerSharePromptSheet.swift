@@ -371,10 +371,9 @@ struct MarkerSharePromptSheet: View {
         busyChannel = nil
 
         let response = RLGuildDiscordChannelsListDTO(channels: discordChannels)
-        guard response.preferredChannel != nil else {
-            await copyForDiscordAndOpen()
-            return
-        }
+        // No bypass when the guild has no connected channel: the sheet says so
+        // and offers the copy-and-paste path. Jumping straight to Discord left
+        // people on its home screen with a clipboard they didn't know was full.
         if !discordChannels.contains(where: { $0.id == selectedDiscordChannelId && $0.canPost }) {
             selectedDiscordChannelId = response.preferredChannel?.id
         }
