@@ -36,8 +36,17 @@ struct GuildInviteShareItem: Identifiable {
 
 enum GuildInviteShare {
 
+    /// The invite text, without the link.
+    ///
+    /// Telegram's composer takes the body and the link as separate parameters
+    /// and renders both, so a URL in here would appear twice; Reddit's title
+    /// takes no URL at all. X and the native sheet append it themselves.
+    static func inviteBody(guildName: String) -> String {
+        "Join my guild \(guildName) on Traders Guild — the social trading platform where communities call the markets together. 📈"
+    }
+
     private static func xComposeText(guildName: String, url: URL) -> String {
-        "Join my guild \(guildName) on Traders Guild — the social trading platform where communities call the markets together. 📈 \(url.absoluteString)"
+        "\(inviteBody(guildName: guildName)) \(url.absoluteString)"
     }
 
     /// Native X (Twitter) app composer scheme — opens the X app's tweet
@@ -67,6 +76,48 @@ enum GuildInviteShare {
         We're calling the markets together on Traders Guild — the social trading platform. Tap to join the guild and build reputation with us:
         \(url.absoluteString)
         """
+    }
+
+    /// Native Telegram composer; falls back to `telegramWebURL`.
+    ///
+    /// `text` and `url` stay separate — Telegram renders the text and then
+    /// unfurls the link, so `inviteBody` carries no URL of its own.
+    static func telegramAppURL(guildName: String, url: URL) -> URL? {
+        var components = URLComponents()
+        components.scheme = "tg"
+        components.host = "msg_url"
+        components.queryItems = telegramQueryItems(guildName: guildName, url: url)
+        return components.url
+    }
+
+    /// Web fallback; `t.me` is a universal link Telegram claims, so an installed
+    /// app still catches it.
+    static func telegramWebURL(guildName: String, url: URL) -> URL? {
+        var components = URLComponents(string: "https://t.me/share/url")
+        components?.queryItems = telegramQueryItems(guildName: guildName, url: url)
+        return components?.url
+    }
+
+    private static func telegramQueryItems(guildName: String, url: URL) -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "url", value: url.absoluteString),
+            URLQueryItem(name: "text", value: inviteBody(guildName: guildName)),
+        ]
+    }
+
+    /// Reddit's submit page. A link post is a title plus a URL, no body, so the
+    /// invite body doubles as the title (capped at Reddit's 300 characters).
+    /// No app scheme: Reddit claims this as a universal link.
+    static func redditSubmitURL(guildName: String, url: URL) -> URL? {
+        var components = URLComponents(string: "https://www.reddit.com/submit")
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: url.absoluteString),
+            URLQueryItem(
+                name: "title",
+                value: String(inviteBody(guildName: guildName).prefix(MarkerShare.redditTitleLimit))
+            ),
+        ]
+        return components?.url
     }
 
     /// Native Discord app scheme (opens the app); used first.

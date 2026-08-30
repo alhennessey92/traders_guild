@@ -5,7 +5,8 @@
 //  The single, reusable "bring your community in" hub. Used after guild
 //  creation, from the owner drawer promo, and from the User List "Refer
 //  Friends" button. Generates the guild's invite link and offers
-//  channel-specific sharing (X, Discord, Messages, Copy, QR, More).
+//  channel-specific sharing (X, Discord, Reddit, Telegram, Messages, Copy,
+//  QR, More).
 //
 
 import SwiftUI
@@ -14,7 +15,7 @@ import UIKit
 struct GuildInviteHubView: View {
     // Customisation points so the same hub fits every surface.
     var headline: String = "Invite your community"
-    var subheadline: String = "Share your guild and bring traders in from X, Discord, and your contacts."
+    var subheadline: String = "Share your guild and bring traders in from X, Discord, Reddit, Telegram, and your contacts."
     var primaryButtonTitle: String = "Done"
     /// When provided, the bottom button calls this (e.g. advance signup step).
     /// When nil, it dismisses the presented sheet.
@@ -215,35 +216,42 @@ struct GuildInviteHubView: View {
 
     // MARK: - Channels
 
-    private enum ChannelIcon {
-        case system(String)
-        case asset(String)
-    }
-
     private enum ChannelKind {
-        case x, discord, messages, copy, qr, more
+        case x, discord, reddit, telegram, messages, copy, qr, more
     }
 
     private var channelGrid: some View {
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        // Four columns: eight channels fill two rows exactly, so nothing grows.
+        let columns = [
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+        ]
         return LazyVGrid(columns: columns, spacing: 12) {
-            channelButton(kind: .x, title: "X", icon: .asset("XLogo"), tint: AppColors.whiteText) {
+            channelButton(kind: .x, title: "X", spec: ShareChannelStyle.x) {
                 shareToX()
             }
-            channelButton(kind: .discord, title: "Discord", icon: .asset("DiscordLogo"), tint: AppColors.whiteText) {
+            channelButton(kind: .discord, title: "Discord", spec: ShareChannelStyle.discord) {
                 Task { await prepareDiscordShare() }
             }
-            channelButton(kind: .messages, title: "Messages", icon: .system("message.fill"), tint: AppColors.statusPositive70) {
+            channelButton(kind: .reddit, title: "Reddit", spec: ShareChannelStyle.reddit) {
+                shareToReddit()
+            }
+            channelButton(kind: .telegram, title: "Telegram", spec: ShareChannelStyle.telegram) {
+                shareToTelegram()
+            }
+            channelButton(kind: .messages, title: "Messages", spec: ShareChannelStyle.messages) {
                 shareViaMessages()
             }
-            channelButton(kind: .copy, title: "Copy link", icon: .system("doc.on.doc.fill"), tint: AppColors.guildReputationAccent) {
+            channelButton(kind: .copy, title: "Copy link", spec: ShareChannelStyle.copyLink) {
                 copyInviteLink()
             }
-            channelButton(kind: .qr, title: "QR code", icon: .system("qrcode"), tint: AppColors.whiteText) {
+            channelButton(kind: .qr, title: "QR code", spec: ShareChannelStyle.qrCode) {
                 // Spinner is shown immediately by fireChannel; cleared in qrSheet.
                 showQRSheet = true
             }
-            channelButton(kind: .more, title: "More", icon: .system("square.and.arrow.up"), tint: AppColors.friendAccent) {
+            channelButton(kind: .more, title: "More", spec: ShareChannelStyle.more) {
                 shareMore()
             }
         }
@@ -252,8 +260,7 @@ struct GuildInviteHubView: View {
     private func channelButton(
         kind: ChannelKind,
         title: String,
-        icon: ChannelIcon,
-        tint: Color,
+        spec: ShareChannelSpec,
         action: @escaping () -> Void
     ) -> some View {
         Button {
@@ -268,7 +275,7 @@ struct GuildInviteHubView: View {
                         ProgressView()
                             .tint(AppColors.whiteText)
                     } else {
-                        channelIcon(icon, tint: tint)
+                        ShareChannelMark(spec: spec, size: 24)
                     }
                 }
                 Text(title)
@@ -281,22 +288,6 @@ struct GuildInviteHubView: View {
         .buttonStyle(.plain)
         .disabled(inviteURL == nil || busyChannel != nil)
         .opacity(inviteURL == nil ? 0.5 : 1)
-    }
-
-    @ViewBuilder
-    private func channelIcon(_ icon: ChannelIcon, tint: Color) -> some View {
-        switch icon {
-        case .system(let name):
-            Image(systemName: name)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(tint)
-        case .asset(let name):
-            Image(name)
-                .resizable()
-                .renderingMode(.original)
-                .scaledToFit()
-                .frame(width: 24, height: 24)
-        }
     }
 
     private func guildAddressRow(_ handle: URL) -> some View {
@@ -541,6 +532,21 @@ struct GuildInviteHubView: View {
             GuildInviteShare.xAppURL(guildName: guildName, url: url),
             fallback: GuildInviteShare.xComposeURL(guildName: guildName, url: url)
         )
+    }
+
+    private func shareToTelegram() {
+        guard let url = inviteURL else { return }
+        GuildInviteShare.openAppOrWeb(
+            GuildInviteShare.telegramAppURL(guildName: guildName, url: url),
+            fallback: GuildInviteShare.telegramWebURL(guildName: guildName, url: url)
+        )
+    }
+
+    private func shareToReddit() {
+        guard let url = inviteURL else { return }
+        // No app scheme to try first — Reddit claims its submit page as a
+        // universal link, so an installed app catches this itself.
+        GuildInviteShare.open(GuildInviteShare.redditSubmitURL(guildName: guildName, url: url))
     }
 
     private func prepareDiscordShare() async {

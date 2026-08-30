@@ -81,7 +81,7 @@ struct MarkerSharePromptSheet: View {
     @State private var busyChannel: ChannelKind?
     @State private var externalShareURL: URL?
 
-    private enum ChannelKind { case guildDM, discord, x, copy, more }
+    private enum ChannelKind { case guildDM, discord, x, telegram, reddit, copy, more }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -193,10 +193,17 @@ struct MarkerSharePromptSheet: View {
 
     @ViewBuilder
     private var channelGrid: some View {
-        let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        // Four columns, not three: seven channels still land in two rows, so the
+        // sheet keeps its height instead of growing a third.
+        let columns = [
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+        ]
         if context.canShareExternally {
             LazyVGrid(columns: columns, spacing: 12) {
-                channel(kind: .guildDM, label: "Guild DM", systemImage: "person.2.fill") {
+                channel(kind: .guildDM, label: "Guild DM", spec: ShareChannelStyle.guildDM) {
                     showRecipientPicker = true
                 }
                 // Posting to Discord means posting to the *guild's* channel, so
@@ -204,27 +211,33 @@ struct MarkerSharePromptSheet: View {
                 channel(
                     kind: .discord,
                     label: discordLabel,
-                    asset: "DiscordLogo",
+                    spec: ShareChannelStyle.discord,
                     badge: discordChannels.contains(where: \.needsAttention)
                         ? "exclamationmark.circle.fill"
                         : nil
                 ) {
                     Task { await prepareDiscordShare() }
                 }
-                channel(kind: .x, label: "X", xGlyph: true) {
+                channel(kind: .x, label: "X", spec: ShareChannelStyle.x) {
                     Task { await shareToX() }
                 }
-                channel(kind: .copy, label: "Copy link", systemImage: "link") {
+                channel(kind: .telegram, label: "Telegram", spec: ShareChannelStyle.telegram) {
+                    Task { await shareToTelegram() }
+                }
+                channel(kind: .reddit, label: "Reddit", spec: ShareChannelStyle.reddit) {
+                    Task { await shareToReddit() }
+                }
+                channel(kind: .copy, label: "Copy link", spec: ShareChannelStyle.copyLink) {
                     Task { await copyLink() }
                 }
-                channel(kind: .more, label: "More", systemImage: "square.and.arrow.up") {
+                channel(kind: .more, label: "More", spec: ShareChannelStyle.more) {
                     Task { await shareMore() }
                 }
             }
         } else if context.canShareWithinGuild {
             HStack {
                 Spacer()
-                channel(kind: .guildDM, label: "Guild DM", systemImage: "person.2.fill") {
+                channel(kind: .guildDM, label: "Guild DM", spec: ShareChannelStyle.guildDM) {
                     showRecipientPicker = true
                 }
                 .frame(width: 104)
@@ -238,12 +251,12 @@ struct MarkerSharePromptSheet: View {
         discordChannels.contains(where: \.canPost) ? "Guild Discord" : "Discord"
     }
 
+    /// A channel tile. The mark comes from `ShareChannelStyle` so this sheet and
+    /// the invite hub cannot drift apart again; only the container is local.
     private func channel(
         kind: ChannelKind,
         label: String,
-        systemImage: String? = nil,
-        asset: String? = nil,
-        xGlyph: Bool = false,
+        spec: ShareChannelSpec,
         badge: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
@@ -255,21 +268,8 @@ struct MarkerSharePromptSheet: View {
                         .frame(width: 58, height: 58)
                     if busyChannel == kind {
                         ProgressView().tint(AppColors.primaryForeground)
-                    } else if xGlyph {
-                        Text("𝕏")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundColor(AppColors.primaryForeground)
-                    } else if let asset {
-                        Image(asset)
-                            .resizable()
-                            .renderingMode(.template)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 26, height: 26)
-                            .foregroundColor(AppColors.primaryForeground)
-                    } else if let systemImage {
-                        Image(systemName: systemImage)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(AppColors.accentColor)
+                    } else {
+                        ShareChannelMark(spec: spec)
                     }
 
                     if let badge, busyChannel != kind {
@@ -284,7 +284,9 @@ struct MarkerSharePromptSheet: View {
                     .font(.caption)
                     .foregroundColor(AppColors.secondaryForeground)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    // Four columns leaves ~78pt a cell on a 375pt screen, and the
+                    // longest label ("Guild Discord") needs the extra headroom.
+                    .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
         }
@@ -350,6 +352,49 @@ struct MarkerSharePromptSheet: View {
                 price: context.marker.price
             ),
             fallback: MarkerShare.xComposeURL(
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                url: shareURL,
+                intent: context.marker.intent,
+                price: context.marker.price
+            )
+        )
+        dismiss()
+    }
+
+    private func shareToTelegram() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .telegram
+        defer { busyChannel = nil }
+        guard let shareURL = await loadExternalShareURL() else { return }
+        GuildInviteShare.openAppOrWeb(
+            MarkerShare.telegramAppURL(
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                url: shareURL,
+                intent: context.marker.intent,
+                price: context.marker.price
+            ),
+            fallback: MarkerShare.telegramWebURL(
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                url: shareURL,
+                intent: context.marker.intent,
+                price: context.marker.price
+            )
+        )
+        dismiss()
+    }
+
+    private func shareToReddit() async {
+        guard context.canShareExternally else { return }
+        busyChannel = .reddit
+        defer { busyChannel = nil }
+        guard let shareURL = await loadExternalShareURL() else { return }
+        // No app scheme to try first — Reddit claims its submit page as a
+        // universal link, so an installed app catches this itself.
+        GuildInviteShare.open(
+            MarkerShare.redditSubmitURL(
                 symbolTicker: context.symbolTicker,
                 caption: caption,
                 url: shareURL,

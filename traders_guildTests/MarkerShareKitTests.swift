@@ -123,6 +123,10 @@ struct MarkerShareKitTests {
 
         #expect(disclosure.contains("X"))
         #expect(disclosure.contains("Discord"))
+        // Every external destination is named, not summarised as "and others" —
+        // the bundled privacy copy names the same list and the two must not drift.
+        #expect(disclosure.contains("Reddit"))
+        #expect(disclosure.contains("Telegram"))
         #expect(disclosure.contains("profile handle"))
         #expect(disclosure.contains("guild name"))
         #expect(disclosure.contains("public outside Traders Guild"))
@@ -210,7 +214,9 @@ struct MarkerShareKitTests {
                 .queryItems?.first(where: { $0.name == "text" })?.value
         )
 
-        #expect(text == "Eyes on this one \(shareURL.absoluteString)")
+        // The caption leads and the cashtag rides behind it — the post still has
+        // to be findable by instrument.
+        #expect(text == "Eyes on this one $BTCUSD \(shareURL.absoluteString)")
     }
 
     @Test func xAppURLUsesTheNativeComposerScheme() throws {
@@ -231,7 +237,9 @@ struct MarkerShareKitTests {
                 .queryItems?.first(where: { $0.name == "message" })?.value
         )
 
-        #expect(message == "\(caption) \(shareURL.absoluteString)")
+        // "#BTC" is a hashtag, not this instrument's cashtag, so the tag is still
+        // appended — the round-trip being asserted is the escaping, not the copy.
+        #expect(message == "\(caption) $BTCUSD \(shareURL.absoluteString)")
     }
 
     // MARK: - Discord message
@@ -245,7 +253,7 @@ struct MarkerShareKitTests {
             price: 67250.12
         )
 
-        #expect(message.contains("**BTCUSD setup at 67,250.12 on Traders Guild**"))
+        #expect(message.contains("**$BTCUSD setup at 67,250.12 on Traders Guild**"))
         #expect(message.contains(shareURL.absoluteString))
     }
 
@@ -415,6 +423,137 @@ struct MarkerShareKitTests {
         #expect(!logged.contains(secret))
         #expect(!logged.contains("also-secret"))
         #expect(!logged.contains(shareURL))
+    }
+
+    // MARK: - Share body
+
+    /// Telegram renders the body and *then* unfurls the link separately, so a
+    /// URL in the body shows up twice in its composer.
+    @Test func theShareBodyCarriesNoLinkOfItsOwn() {
+        let generated = MarkerShare.shareBody(
+            symbolTicker: "BTC/USD",
+            caption: nil,
+            intent: "setup",
+            price: 67250.12
+        )
+        let captioned = MarkerShare.shareBody(
+            symbolTicker: "BTC/USD",
+            caption: "Eyes on this one",
+            intent: "setup",
+            price: 67250.12
+        )
+
+        #expect(!generated.contains("http"))
+        #expect(!captioned.contains("http"))
+        #expect(generated == "Just marked $BTC setup at 67,250.12 on Traders Guild \u{1F4C8}")
+        #expect(captioned == "Eyes on this one $BTC")
+    }
+
+    /// Pins the split: the X composer text must stay exactly what it produced
+    /// before `shareBody` was extracted out of it.
+    @Test func theXComposerTextIsTheBodyPlusTheLink() throws {
+        let body = MarkerShare.shareBody(
+            symbolTicker: "BTC/USD",
+            caption: "Eyes on this one",
+            intent: "setup",
+            price: 67250.12
+        )
+        let url = try #require(
+            MarkerShare.xComposeURL(
+                symbolTicker: "BTC/USD",
+                caption: "Eyes on this one",
+                url: shareURL,
+                intent: "setup",
+                price: 67250.12
+            )
+        )
+        let text = try #require(
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "text" })?.value
+        )
+
+        #expect(text == "\(body) \(shareURL.absoluteString)")
+    }
+
+    // MARK: - Telegram
+
+    @Test func telegramCarriesTheLinkAndTheBodySeparately() throws {
+        let appURL = try #require(
+            MarkerShare.telegramAppURL(
+                symbolTicker: "BTC/USD",
+                caption: nil,
+                url: shareURL,
+                intent: "setup",
+                price: 67250.12
+            )
+        )
+        let webURL = try #require(
+            MarkerShare.telegramWebURL(
+                symbolTicker: "BTC/USD",
+                caption: nil,
+                url: shareURL,
+                intent: "setup",
+                price: 67250.12
+            )
+        )
+
+        #expect(appURL.scheme == "tg")
+        #expect(appURL.host == "msg_url")
+        #expect(webURL.absoluteString.hasPrefix("https://t.me/share/url?"))
+
+        for url in [appURL, webURL] {
+            let items = try #require(
+                URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+            )
+            let link = try #require(items.first(where: { $0.name == "url" })?.value)
+            let text = try #require(items.first(where: { $0.name == "text" })?.value)
+
+            #expect(link == shareURL.absoluteString)
+            #expect(!text.contains("http"))
+        }
+    }
+
+    // MARK: - Reddit
+
+    @Test func redditSubmitsATitleAndAURLToTheDocumentedPage() throws {
+        let url = try #require(
+            MarkerShare.redditSubmitURL(
+                symbolTicker: "BTC/USD",
+                caption: nil,
+                url: shareURL,
+                intent: "setup",
+                price: 67250.12
+            )
+        )
+        let items = try #require(
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        )
+
+        #expect(url.absoluteString.hasPrefix("https://www.reddit.com/submit?"))
+        #expect(items.first(where: { $0.name == "url" })?.value == shareURL.absoluteString)
+        #expect(
+            items.first(where: { $0.name == "title" })?.value
+                == MarkerShare.shareBody(
+                    symbolTicker: "BTC/USD",
+                    caption: nil,
+                    intent: "setup",
+                    price: 67250.12
+                )
+        )
+    }
+
+    /// A caption can reach 280 characters and the cashtag rides behind it, so
+    /// the title has to be cut somewhere — Reddit rejects anything over 300.
+    @Test func redditTitleIsClampedToRedditsLimit() {
+        let title = MarkerShare.redditTitle(
+            symbolTicker: "BTC/USD",
+            caption: String(repeating: "x", count: 280),
+            intent: "setup",
+            price: 67250.12
+        )
+
+        #expect(title.count <= MarkerShare.redditTitleLimit)
+        #expect(!title.contains("http"))
     }
 }
 

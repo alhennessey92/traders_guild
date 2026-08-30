@@ -46,7 +46,7 @@ enum MarkerShare {
     /// explicit: the durable link and preview leave the guild boundary and can
     /// be retained by the receiving service or its users.
     static let externalSharingDisclosure =
-        "X, Discord, Copy link and More make this marker card, your profile handle and guild name public outside Traders Guild. Other services may retain or reshare it."
+        "X, Discord, Reddit, Telegram, Copy link and More make this marker card, your profile handle and guild name public outside Traders Guild. Other services may retain or reshare it."
 
     /// Guild-visible markers can be forwarded to another member inside the app.
     /// Private markers remain visible only to their author and must not expose a
@@ -169,10 +169,15 @@ enum MarkerShare {
         return headline
     }
 
-    private static func xComposeText(
+    /// The post text, without the link.
+    ///
+    /// Split out from `xComposeText` because not every destination wants the URL
+    /// inline. Telegram's composer takes the body and the link as *separate*
+    /// parameters and renders both, so a URL in here would appear twice. X and
+    /// the native share sheet append it; Telegram passes it alongside.
+    static func shareBody(
         symbolTicker: String?,
         caption: String?,
-        url: URL,
         intent: String? = nil,
         price: Double? = nil
     ) -> String {
@@ -185,12 +190,28 @@ enum MarkerShare {
                !trimmedCaption.uppercased().contains(tag.uppercased()) {
                 lead += " \(tag)"
             }
-            return "\(lead) \(url.absoluteString)"
+            return lead
         }
         let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
         // The unfurled card already brands and explains the product, so the
         // post spends its characters on the trade, not on a tagline.
-        return "Just marked \(headline) on Traders Guild 📈 \(url.absoluteString)"
+        return "Just marked \(headline) on Traders Guild 📈"
+    }
+
+    private static func xComposeText(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> String {
+        let body = shareBody(
+            symbolTicker: symbolTicker,
+            caption: caption,
+            intent: intent,
+            price: price
+        )
+        return "\(body) \(url.absoluteString)"
     }
 
     /// Native X app composer scheme; falls back to `xComposeURL` (web).
@@ -261,6 +282,122 @@ enum MarkerShare {
         \(lead)
         \(url.absoluteString)
         """
+    }
+
+    // MARK: Telegram
+
+    /// Native Telegram composer; falls back to `telegramWebURL`.
+    ///
+    /// `text` and `url` are deliberately separate: Telegram renders the text and
+    /// then unfurls the link, so `shareBody` carries no URL of its own.
+    static func telegramAppURL(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> URL? {
+        var components = URLComponents()
+        components.scheme = "tg"
+        components.host = "msg_url"
+        components.queryItems = telegramQueryItems(
+            symbolTicker: symbolTicker,
+            caption: caption,
+            url: url,
+            intent: intent,
+            price: price
+        )
+        return components.url
+    }
+
+    /// Web composer fallback; `t.me` is a universal link Telegram claims, so an
+    /// installed app still catches it.
+    static func telegramWebURL(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> URL? {
+        var components = URLComponents(string: "https://t.me/share/url")
+        components?.queryItems = telegramQueryItems(
+            symbolTicker: symbolTicker,
+            caption: caption,
+            url: url,
+            intent: intent,
+            price: price
+        )
+        return components?.url
+    }
+
+    private static func telegramQueryItems(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String?,
+        price: Double?
+    ) -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "url", value: url.absoluteString),
+            URLQueryItem(
+                name: "text",
+                value: shareBody(
+                    symbolTicker: symbolTicker,
+                    caption: caption,
+                    intent: intent,
+                    price: price
+                )
+            ),
+        ]
+    }
+
+    // MARK: Reddit
+
+    /// Reddit's own ceiling for a post title.
+    static let redditTitleLimit = 300
+
+    /// A Reddit link post carries a title and a URL — there is no body — so the
+    /// title is the whole message. `shareBody` already reads as one and already
+    /// names the product, so it is reused rather than given its own copy to
+    /// drift from.
+    static func redditTitle(
+        symbolTicker: String?,
+        caption: String?,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> String {
+        let body = shareBody(
+            symbolTicker: symbolTicker,
+            caption: caption,
+            intent: intent,
+            price: price
+        )
+        return String(body.prefix(redditTitleLimit))
+    }
+
+    /// Reddit's submit page. No app scheme: Reddit claims this as a universal
+    /// link, so an installed app catches it and a browser handles it otherwise.
+    static func redditSubmitURL(
+        symbolTicker: String?,
+        caption: String?,
+        url: URL,
+        intent: String? = nil,
+        price: Double? = nil
+    ) -> URL? {
+        var components = URLComponents(string: "https://www.reddit.com/submit")
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: url.absoluteString),
+            URLQueryItem(
+                name: "title",
+                value: redditTitle(
+                    symbolTicker: symbolTicker,
+                    caption: caption,
+                    intent: intent,
+                    price: price
+                )
+            ),
+        ]
+        return components?.url
     }
 
     /// Native Discord app scheme, then the web fallback.
