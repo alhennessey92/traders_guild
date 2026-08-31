@@ -74,12 +74,7 @@ struct GuildBannerView: View {
             generatedBanner
 
             if let bannerUrl, !bannerUrl.isEmpty, let url = URL(string: bannerUrl) {
-                // Reuses the avatar cache: same first-party `/_tg_media` origin, same
-                // no-placeholder-flash behaviour.
-                CachedAvatarImage(url: url, size: height, initials: "")
-                    .scaledToFill()
-                    .frame(height: height)
-                    .clipped()
+                CachedBannerImage(url: url, height: height)
             }
         }
         .frame(maxWidth: .infinity)
@@ -89,6 +84,58 @@ struct GuildBannerView: View {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .stroke(AppColors.whiteText.opacity(0.10), lineWidth: 1)
         )
+    }
+
+    // MARK: - Uploaded artwork
+
+    /// The uploaded banner, filling the banner's rect.
+    ///
+    /// Deliberately not `CachedAvatarImage`: that is an avatar component and clips itself to
+    /// a circle at a fixed square size, which drew the upload as a disc floating in the
+    /// middle of the banner with the generated one showing around it. Only the *cache* is
+    /// shared — `AvatarImageCache` is explicitly reused across avatars and symbol icons —
+    /// so this keeps the no-flash behaviour without inheriting the shape.
+    ///
+    /// A failed load renders nothing, which lets the generated banner underneath show
+    /// through rather than leaving a hole.
+    private struct CachedBannerImage: View {
+        let url: URL
+        let height: CGFloat
+
+        @State private var image: UIImage?
+        @State private var loadFailed = false
+
+        init(url: URL, height: CGFloat) {
+            self.url = url
+            self.height = height
+            // Seed synchronously from the cache so a known banner never flashes.
+            _image = State(initialValue: AvatarImageCache.shared.image(for: url))
+        }
+
+        var body: some View {
+            Group {
+                if let image, !loadFailed {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: height)
+                        .clipped()
+                }
+            }
+            .task(id: url.absoluteString) {
+                guard image == nil else { return }
+                do {
+                    let loaded = try await AvatarImageCache.shared.loadImage(for: url)
+                    await MainActor.run {
+                        image = loaded
+                        loadFailed = false
+                    }
+                } catch {
+                    await MainActor.run { loadFailed = true }
+                }
+            }
+        }
     }
 
     // MARK: - Generated fallback

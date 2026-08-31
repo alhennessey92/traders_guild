@@ -320,9 +320,14 @@ struct LeftDrawerMainView: View {
                     return
                 }
                 sheetOverlayVisible = newValue != nil
-                // Reset detent when opening new sheet
-                if newValue != nil {
-                    selectedDetent = .fraction(0.6)
+                // Reset detent when opening new sheet — to one the sheet actually offers.
+                // This reset was unconditional, so opening any of the full-height sheets
+                // (guild settings, invite members, create announcement…) asked for a 0.6
+                // they do not support and logged "Cannot set selected sheet detent if it is
+                // not included in supported sheet detents." SwiftUI fell back to .large, so
+                // nothing looked wrong; it just said so, four times, on every open.
+                if let content = newValue {
+                    selectedDetent = defaultDetent(for: content)
                 }
             }
             .onChange(of: navigationState) { _, newValue in
@@ -345,6 +350,15 @@ struct LeftDrawerMainView: View {
             // Optional: Show error state if user/guild missing
             EmptyView()
         }
+    }
+
+    /// The detent a sheet opens at: its smallest offered size, so a detail sheet starts
+    /// partway up and a full-height one starts where it has to.
+    private func defaultDetent(for content: BottomSheetContent) -> PresentationDetent {
+        let supported = detentsForContent(content)
+        if supported.contains(.fraction(0.6)) { return .fraction(0.6) }
+        if supported.contains(.fraction(0.55)) { return .fraction(0.55) }
+        return .large
     }
 
     private func detentsForContent(_ content: BottomSheetContent) -> Set<PresentationDetent> {
