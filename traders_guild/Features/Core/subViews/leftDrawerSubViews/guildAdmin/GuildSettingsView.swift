@@ -23,10 +23,17 @@ struct GuildSettingsView: View {
     @State private var crestColor = GuildCrestCatalog.defaultColorKey
     @State private var pickedCrestImage: UIImage?
     @State private var crestImageRemoved = false
-    @State private var showCrestImagePicker = false
     @State private var pickedBannerImage: UIImage?
     @State private var bannerImageRemoved = false
-    @State private var showBannerImagePicker = false
+
+    /// Which image the picker is being opened for. One piece of state, because the view can
+    /// only present one sheet.
+    private enum GuildImageTarget: String, Identifiable {
+        case crest, banner
+        var id: String { rawValue }
+    }
+
+    @State private var activeImagePicker: GuildImageTarget?
 
     // Discord destinations act immediately rather than waiting for "Save
     // Details". Webhook URLs remain write-only bearer secrets.
@@ -303,7 +310,7 @@ struct GuildSettingsView: View {
                             // the fallback for guilds without artwork, and read
                             // that way in the layout too.
                             Button {
-                                showCrestImagePicker = true
+                                activeImagePicker = .crest
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "photo.on.rectangle")
@@ -415,7 +422,7 @@ struct GuildSettingsView: View {
                             .padding(.vertical, 2)
 
                             Button {
-                                showBannerImagePicker = true
+                                activeImagePicker = .banner
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "photo.on.rectangle.angled")
@@ -498,16 +505,19 @@ struct GuildSettingsView: View {
             guard !newValue, joinQuestions.isEmpty else { return }
             joinQuestions = initialJoinQuestionPrompts.isEmpty ? [""] : initialJoinQuestionPrompts
         }
-        .sheet(isPresented: $showCrestImagePicker) {
+        // One sheet, not two. SwiftUI presents a single sheet per view: chaining a second
+        // `.sheet` here meant the banner picker silently never appeared, so no image was
+        // ever picked, nothing counted as a change, and Save had nothing to upload.
+        .sheet(item: $activeImagePicker) { target in
             SharedImagePicker(sourceType: .photoLibrary) { image in
-                pickedCrestImage = image
-                crestImageRemoved = false
-            }
-        }
-        .sheet(isPresented: $showBannerImagePicker) {
-            SharedImagePicker(sourceType: .photoLibrary) { image in
-                pickedBannerImage = image
-                bannerImageRemoved = false
+                switch target {
+                case .crest:
+                    pickedCrestImage = image
+                    crestImageRemoved = false
+                case .banner:
+                    pickedBannerImage = image
+                    bannerImageRemoved = false
+                }
             }
         }
     }
