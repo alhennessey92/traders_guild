@@ -2855,6 +2855,9 @@ extension RealAPIService {
         guard let url = URL(string: "\(APIService.core.baseURL)/guilds/\(guildId.uuidString)/banner") else {
             throw APIError.invalidURL
         }
+        #if DEBUG
+        print("🌐 [core] PUT /guilds/\(guildId.uuidString)/banner (\(imageData.count) bytes)")
+        #endif
 
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
@@ -2892,6 +2895,9 @@ extension RealAPIService {
             default: throw APIError.serverError(httpResponse.statusCode, detail)
             }
         }
+        #if DEBUG
+        print("🖼️ [banner] PUT ok \(httpResponse.statusCode): \(String(data: data, encoding: .utf8)?.prefix(400) ?? "")")
+        #endif
         return try decoder.decode(RLGuildDTO.self, from: data)
     }
 

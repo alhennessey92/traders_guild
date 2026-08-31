@@ -3,6 +3,10 @@ import UIKit
 
 struct SharedImagePicker: UIViewControllerRepresentable {
     let sourceType: UIImagePickerController.SourceType
+    /// UIKit's editing step crops to a *square*, which is right for a circular
+    /// avatar and wrong for a wide header. Defaults to the historical `true` so
+    /// every existing caller is unchanged.
+    var allowsEditing: Bool = true
     let onImagePicked: (UIImage) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -11,7 +15,7 @@ struct SharedImagePicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = UIImagePickerController.isSourceTypeAvailable(sourceType) ? sourceType : .photoLibrary
-        picker.allowsEditing = true
+        picker.allowsEditing = allowsEditing
         return picker
     }
 

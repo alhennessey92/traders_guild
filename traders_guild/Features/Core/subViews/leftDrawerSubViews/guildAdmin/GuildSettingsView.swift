@@ -489,6 +489,12 @@ struct GuildSettingsView: View {
             await loadJoinQuestions()
         }
         .onAppear {
+            // If this fires a second time after an image is picked, the editor was
+            // torn down and rebuilt and every @State — the picked image included —
+            // went with it.
+            #if DEBUG
+            print("🖼️ [banner] settings onAppear (pickedBanner=\(pickedBannerImage != nil))")
+            #endif
             guard let guild = rlAppState.currentGuild else { return }
             name = guild.name
             description = guild.description ?? ""
@@ -509,7 +515,15 @@ struct GuildSettingsView: View {
         // `.sheet` here meant the banner picker silently never appeared, so no image was
         // ever picked, nothing counted as a change, and Save had nothing to upload.
         .sheet(item: $activeImagePicker) { target in
-            SharedImagePicker(sourceType: .photoLibrary) { image in
+            SharedImagePicker(
+                sourceType: .photoLibrary,
+                // The emblem is a disc, so UIKit's square crop suits it. A banner
+                // is a wide strip and a square crop throws away most of the shot.
+                allowsEditing: target == .crest
+            ) { image in
+                #if DEBUG
+                print("🖼️ [banner] picked \(target.rawValue): \(Int(image.size.width))x\(Int(image.size.height))")
+                #endif
                 switch target {
                 case .crest:
                     pickedCrestImage = image
@@ -926,7 +940,34 @@ struct GuildSettingsView: View {
         }
     }
 
+    /// Encode a picked banner, fitted to the server's own `BANNER_MAX_SIDE`.
+    ///
+    /// The upload endpoint rejects anything over 5 MB *before* it decodes, and a
+    /// full-resolution photo from a recent phone clears that on its own — so the
+    /// image is bounded here rather than being sent whole and refused.
+    private func bannerUploadData(_ image: UIImage, maxSide: CGFloat = 1600) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        guard longest > maxSide else { return image.jpegData(compressionQuality: 0.85) }
+
+        let scale = maxSide / longest
+        let target = CGSize(
+            width: (image.size.width * scale).rounded(),
+            height: (image.size.height * scale).rounded()
+        )
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
+    }
+
     private func saveSettings() async {
+        #if DEBUG
+        print("🖼️ [banner] save gate: picked=\(pickedBannerImage != nil) removed=\(bannerImageRemoved) "
+              + "hasBannerChanges=\(hasBannerChanges) hasChanges=\(hasChanges) isValid=\(isValid) "
+              + "isSubmitting=\(isSubmitting) storedBanner=\(rlAppState.currentGuild?.bannerUrl ?? "nil")")
+        #endif
         guard isValid && hasChanges && !isSubmitting else { return }
         guard !isMissingRequiredJoinQuestion else {
             rlAppState.showError(
@@ -975,7 +1016,10 @@ struct GuildSettingsView: View {
 
             // The banner is a second, independent image: uploading one must
             // never disturb the emblem, and vice versa.
-            if let banner = pickedBannerImage, let data = banner.jpegData(compressionQuality: 0.85) {
+            if let banner = pickedBannerImage, let data = bannerUploadData(banner) {
+                #if DEBUG
+                print("🖼️ [banner] uploading \(data.count) bytes")
+                #endif
                 _ = try await rlAppState.uploadGuildBanner(imageData: data)
                 pickedBannerImage = nil
             } else if bannerImageRemoved && guildHadUploadedBanner {
