@@ -31,6 +31,67 @@ struct ShareChannelSpec {
     let tint: Color
 }
 
+/// Every destination either share surface can offer, and the order both must show them in.
+///
+/// The order is the contract, not a suggestion. Someone who has shared a guild invite should
+/// find X in the same place when they share a marker — and until now they didn't: the two
+/// surfaces each declared their own private `ChannelKind` and their own literal ordering, so
+/// X and Discord were swapped on one and Telegram and Reddit on the other.
+///
+/// `ShareChannelStyle` already existed to stop these two drifting, but it only owned how a
+/// channel *looks*. Order is the other half, so it lives here too, and each surface renders
+/// `canonicalOrder` filtered to what it actually offers — a new channel then lands in the
+/// same slot everywhere by construction.
+enum ShareChannel: CaseIterable {
+    /// The public channels. These four are the top row of every share surface.
+    case x, discord, reddit, telegram
+    /// Send it to one person, inside the app. Only one of these appears per surface.
+    case guildDM, messages
+    /// Utilities, always last.
+    case copyLink, qrCode, more
+
+    /// The single source of order. Every surface's list must be a subsequence of this.
+    ///
+    /// Both surfaces lay out four to a row, so the first four entries *are* the top row:
+    /// X, Discord, Reddit, Telegram, in that order, on every share screen in the app.
+    /// Everything else sits underneath.
+    static let canonicalOrder: [ShareChannel] = [
+        .x, .discord, .reddit, .telegram,
+        .guildDM, .messages,
+        .copyLink, .qrCode, .more,
+    ]
+
+    var spec: ShareChannelSpec {
+        switch self {
+        case .guildDM:  return ShareChannelStyle.guildDM
+        case .messages: return ShareChannelStyle.messages
+        case .x:        return ShareChannelStyle.x
+        case .discord:  return ShareChannelStyle.discord
+        case .telegram: return ShareChannelStyle.telegram
+        case .reddit:   return ShareChannelStyle.reddit
+        case .copyLink: return ShareChannelStyle.copyLink
+        case .qrCode:   return ShareChannelStyle.qrCode
+        case .more:     return ShareChannelStyle.more
+        }
+    }
+
+    /// The label both surfaces use, unless one has a reason to override it (the marker
+    /// sheet names a connected Discord channel).
+    var title: String {
+        switch self {
+        case .guildDM:  return "Guild DM"
+        case .messages: return "Messages"
+        case .x:        return "X"
+        case .discord:  return "Discord"
+        case .telegram: return "Telegram"
+        case .reddit:   return "Reddit"
+        case .copyLink: return "Copy link"
+        case .qrCode:   return "QR code"
+        case .more:     return "More"
+        }
+    }
+}
+
 /// The channel table.
 ///
 /// Computed rather than stored: every `AppColors` token here is theme-aware, and

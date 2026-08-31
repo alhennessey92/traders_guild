@@ -78,10 +78,16 @@ struct MarkerSharePromptSheet: View {
     @State private var caption = ""
     @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
     @State private var selectedDiscordChannelId: UUID?
-    @State private var busyChannel: ChannelKind?
+    @State private var busyChannel: ShareChannel?
     @State private var externalShareURL: URL?
 
-    private enum ChannelKind { case guildDM, discord, x, telegram, reddit, copy, more }
+    /// What this surface offers, in `ShareChannel.canonicalOrder`. Rendering iterates this
+    /// rather than a literal call sequence, so the order cannot drift from the invite hub's
+    /// again — see `ShareChannel`.
+    private static let channels: [ShareChannel] = [
+        .x, .discord, .reddit, .telegram,
+        .guildDM, .copyLink, .more,
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -192,6 +198,53 @@ struct MarkerSharePromptSheet: View {
     // MARK: - Channels
 
     @ViewBuilder
+    private func channelTile(_ kind: ShareChannel) -> some View {
+        switch kind {
+        case .guildDM:
+            channel(kind: .guildDM, label: kind.title, spec: kind.spec) {
+                showRecipientPicker = true
+            }
+        case .x:
+            channel(kind: .x, label: kind.title, spec: kind.spec) {
+                Task { await shareToX() }
+            }
+        case .discord:
+            // Posting to Discord means posting to the *guild's* channel, so it only makes
+            // sense for markers the guild can see.
+            channel(
+                kind: .discord,
+                label: discordLabel,
+                spec: kind.spec,
+                badge: discordChannels.contains(where: \.needsAttention)
+                    ? "exclamationmark.circle.fill"
+                    : nil
+            ) {
+                Task { await prepareDiscordShare() }
+            }
+        case .telegram:
+            channel(kind: .telegram, label: kind.title, spec: kind.spec) {
+                Task { await shareToTelegram() }
+            }
+        case .reddit:
+            channel(kind: .reddit, label: kind.title, spec: kind.spec) {
+                Task { await shareToReddit() }
+            }
+        case .copyLink:
+            channel(kind: .copyLink, label: kind.title, spec: kind.spec) {
+                Task { await copyLink() }
+            }
+        case .more:
+            channel(kind: .more, label: kind.title, spec: kind.spec) {
+                Task { await shareMore() }
+            }
+        case .messages, .qrCode:
+            // Not offered for a marker: a marker goes to a guild member or out to the
+            // world, not to a phone contact or a printed code.
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
     private var channelGrid: some View {
         // Four columns, not three: seven channels still land in two rows, so the
         // sheet keeps its height instead of growing a third.
@@ -203,41 +256,14 @@ struct MarkerSharePromptSheet: View {
         ]
         if context.canShareExternally {
             LazyVGrid(columns: columns, spacing: 12) {
-                channel(kind: .guildDM, label: "Guild DM", spec: ShareChannelStyle.guildDM) {
-                    showRecipientPicker = true
-                }
-                // Posting to Discord means posting to the *guild's* channel, so
-                // it only makes sense for markers the guild can see.
-                channel(
-                    kind: .discord,
-                    label: discordLabel,
-                    spec: ShareChannelStyle.discord,
-                    badge: discordChannels.contains(where: \.needsAttention)
-                        ? "exclamationmark.circle.fill"
-                        : nil
-                ) {
-                    Task { await prepareDiscordShare() }
-                }
-                channel(kind: .x, label: "X", spec: ShareChannelStyle.x) {
-                    Task { await shareToX() }
-                }
-                channel(kind: .telegram, label: "Telegram", spec: ShareChannelStyle.telegram) {
-                    Task { await shareToTelegram() }
-                }
-                channel(kind: .reddit, label: "Reddit", spec: ShareChannelStyle.reddit) {
-                    Task { await shareToReddit() }
-                }
-                channel(kind: .copy, label: "Copy link", spec: ShareChannelStyle.copyLink) {
-                    Task { await copyLink() }
-                }
-                channel(kind: .more, label: "More", spec: ShareChannelStyle.more) {
-                    Task { await shareMore() }
+                ForEach(Self.channels, id: \.self) { channelKind in
+                    channelTile(channelKind)
                 }
             }
         } else if context.canShareWithinGuild {
             HStack {
                 Spacer()
-                channel(kind: .guildDM, label: "Guild DM", spec: ShareChannelStyle.guildDM) {
+                channel(kind: .guildDM, label: ShareChannel.guildDM.title, spec: ShareChannel.guildDM.spec) {
                     showRecipientPicker = true
                 }
                 .frame(width: 104)
@@ -254,7 +280,7 @@ struct MarkerSharePromptSheet: View {
     /// A channel tile. The mark comes from `ShareChannelStyle` so this sheet and
     /// the invite hub cannot drift apart again; only the container is local.
     private func channel(
-        kind: ChannelKind,
+        kind: ShareChannel,
         label: String,
         spec: ShareChannelSpec,
         badge: String? = nil,
@@ -349,14 +375,16 @@ struct MarkerSharePromptSheet: View {
                 caption: caption,
                 url: shareURL,
                 intent: context.marker.intent,
-                price: context.marker.price
+                price: context.marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
             ),
             fallback: MarkerShare.xComposeURL(
                 symbolTicker: context.symbolTicker,
                 caption: caption,
                 url: shareURL,
                 intent: context.marker.intent,
-                price: context.marker.price
+                price: context.marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
             )
         )
         dismiss()
@@ -373,14 +401,16 @@ struct MarkerSharePromptSheet: View {
                 caption: caption,
                 url: shareURL,
                 intent: context.marker.intent,
-                price: context.marker.price
+                price: context.marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
             ),
             fallback: MarkerShare.telegramWebURL(
                 symbolTicker: context.symbolTicker,
                 caption: caption,
                 url: shareURL,
                 intent: context.marker.intent,
-                price: context.marker.price
+                price: context.marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
             )
         )
         dismiss()
@@ -399,7 +429,8 @@ struct MarkerSharePromptSheet: View {
                 caption: caption,
                 url: shareURL,
                 intent: context.marker.intent,
-                price: context.marker.price
+                price: context.marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
             )
         )
         dismiss()
@@ -465,7 +496,8 @@ struct MarkerSharePromptSheet: View {
             caption: caption,
             url: shareURL,
             intent: context.marker.intent,
-            price: context.marker.price
+            price: context.marker.price,
+            outcome: MarkerPredictionProgress.outcomeDescription(for: context.marker)
         )
         GuildInviteShare.openAppOrWeb(
             MarkerShare.discordAppURL,
@@ -476,7 +508,7 @@ struct MarkerSharePromptSheet: View {
 
     private func copyLink() async {
         guard context.canShareExternally else { return }
-        busyChannel = .copy
+        busyChannel = .copyLink
         defer { busyChannel = nil }
         guard let shareURL = await loadExternalShareURL() else { return }
         UIPasteboard.general.string = shareURL.absoluteString

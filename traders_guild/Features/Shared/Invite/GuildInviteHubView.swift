@@ -47,9 +47,9 @@ struct GuildInviteHubView: View {
     @State private var selectedDiscordChannelId: UUID?
     @State private var showDiscordDestination = false
     /// Channel whose action is being prepared (shows a spinner in its button).
-    @State private var busyChannel: ChannelKind?
+    @State private var busyChannel: ShareChannel?
     /// Channel currently showing a tap pulse (action-driven press feedback).
-    @State private var pulseChannel: ChannelKind?
+    @State private var pulseChannel: ShareChannel?
 
     private var guild: RLGuildDTO? { rlAppState.currentGuild }
     private var guildName: String { guild?.name ?? "your guild" }
@@ -216,9 +216,13 @@ struct GuildInviteHubView: View {
 
     // MARK: - Channels
 
-    private enum ChannelKind {
-        case x, discord, reddit, telegram, messages, copy, qr, more
-    }
+    /// What this surface offers, in `ShareChannel.canonicalOrder`. Rendering iterates this
+    /// rather than a literal call sequence, so the order cannot drift from the marker
+    /// sheet's again — see `ShareChannel`.
+    private static let channels: [ShareChannel] = [
+        .x, .discord, .reddit, .telegram,
+        .messages, .copyLink, .qrCode, .more,
+    ]
 
     private var channelGrid: some View {
         // Four columns: eight channels fill two rows exactly, so nothing grows.
@@ -229,36 +233,44 @@ struct GuildInviteHubView: View {
             GridItem(.flexible()),
         ]
         return LazyVGrid(columns: columns, spacing: 12) {
-            channelButton(kind: .x, title: "X", spec: ShareChannelStyle.x) {
-                shareToX()
-            }
-            channelButton(kind: .discord, title: "Discord", spec: ShareChannelStyle.discord) {
-                Task { await prepareDiscordShare() }
-            }
-            channelButton(kind: .reddit, title: "Reddit", spec: ShareChannelStyle.reddit) {
-                shareToReddit()
-            }
-            channelButton(kind: .telegram, title: "Telegram", spec: ShareChannelStyle.telegram) {
-                shareToTelegram()
-            }
-            channelButton(kind: .messages, title: "Messages", spec: ShareChannelStyle.messages) {
-                shareViaMessages()
-            }
-            channelButton(kind: .copy, title: "Copy link", spec: ShareChannelStyle.copyLink) {
-                copyInviteLink()
-            }
-            channelButton(kind: .qr, title: "QR code", spec: ShareChannelStyle.qrCode) {
-                // Spinner is shown immediately by fireChannel; cleared in qrSheet.
-                showQRSheet = true
-            }
-            channelButton(kind: .more, title: "More", spec: ShareChannelStyle.more) {
-                shareMore()
+            ForEach(Self.channels, id: \.self) { channelKind in
+                channelTile(channelKind)
             }
         }
     }
 
+    @ViewBuilder
+    private func channelTile(_ kind: ShareChannel) -> some View {
+        switch kind {
+        case .messages:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareViaMessages() }
+        case .x:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareToX() }
+        case .discord:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) {
+                Task { await prepareDiscordShare() }
+            }
+        case .telegram:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareToTelegram() }
+        case .reddit:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareToReddit() }
+        case .copyLink:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { copyInviteLink() }
+        case .qrCode:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) {
+                // Spinner is shown immediately by fireChannel; cleared in qrSheet.
+                showQRSheet = true
+            }
+        case .more:
+            channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareMore() }
+        case .guildDM:
+            // Not offered here: an invite goes to someone who is not in the guild yet.
+            EmptyView()
+        }
+    }
+
     private func channelButton(
-        kind: ChannelKind,
+        kind: ShareChannel,
         title: String,
         spec: ShareChannelSpec,
         action: @escaping () -> Void
@@ -502,12 +514,12 @@ struct GuildInviteHubView: View {
     /// Immediate tap feedback for a channel button — a light haptic + a quick
     /// scale/brightness pulse — then run the action. Action-driven (not press
     /// state) so it fires reliably inside the scroll view and on the simulator.
-    private func fireChannel(_ kind: ChannelKind, _ action: @escaping () -> Void) {
+    private func fireChannel(_ kind: ShareChannel, _ action: @escaping () -> Void) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeOut(duration: 0.09)) { pulseChannel = kind }
         // The slow channels (QR/More build + present a sheet) get their spinner
         // immediately, so the wait is obvious from the instant of the tap.
-        if kind == .qr || kind == .more {
+        if kind == .qrCode || kind == .more {
             hasShared = true
             busyChannel = kind
         }
