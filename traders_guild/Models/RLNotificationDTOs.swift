@@ -281,6 +281,15 @@ struct RLPushNotificationTapPayload: Equatable {
         uuidDataValue(forAnyOf: ["marker_id", "markerId"])
     }
 
+    /// The guild a marker notification belongs to.
+    ///
+    /// Markers are guild-scoped, and a result arrives whenever the market moves — often
+    /// while its author is looking at a different guild. Without this the chart searches the
+    /// guild they happen to be in and reports the marker unavailable.
+    var markerGuildId: UUID? {
+        uuidDataValue(forAnyOf: ["guild_id", "guildId"]) ?? destination?.guildId
+    }
+
     var contentReportResolutionSummary: RLReportResolutionSummary? {
         guard notificationType == RLNotificationType.contentReport.rawValue,
               let resolutionStatus = stringDataValue(forAnyOf: ["resolution_status", "resolutionStatus"]),
@@ -672,6 +681,11 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
 
     var markerId: UUID? {
         uuidDataValue(for: "marker_id")
+    }
+
+    /// See `RLNotificationDTO.markerGuildId`.
+    var markerGuildId: UUID? {
+        uuidDataValue(for: "guild_id") ?? destination?.guildId
     }
 
     var contentReportResolutionSummary: RLReportResolutionSummary? {

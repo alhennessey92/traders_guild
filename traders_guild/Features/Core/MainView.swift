@@ -1587,10 +1587,37 @@ struct MainView: View {
 
     private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
         guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
+        await switchToMarkerGuildIfNeeded(
+            userInfo[NotificationNavigationManager.markerGuildKey] as? UUID
+        )
         let opened = await openSharedMarker(payload)
         guard opened,
               userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true else { return }
         await presentSharePromptForNavigatedMarker()
+    }
+
+    /// Move to the guild a marker lives in before going looking for it.
+    ///
+    /// Markers are guild-scoped and the chart only ever fetches the current guild's, but a
+    /// result notification arrives whenever the market moves — frequently while its author
+    /// is in a different guild. Navigating without this searched the wrong guild, came back
+    /// with nothing, and told the author their own marker was unavailable.
+    ///
+    /// Does nothing when they are not a member: the fetch would 403, and the existing
+    /// unavailable message is then the honest answer.
+    private func switchToMarkerGuildIfNeeded(_ guildId: UUID?) async {
+        guard let guildId,
+              rlAppState.currentGuild?.id != guildId,
+              rlAppState.userGuilds.contains(where: { $0.guild.id == guildId }) else { return }
+
+        rlAppState.selectGuild(id: guildId)
+
+        // Selection fans out asynchronously; give it a moment to settle so the marker fetch
+        // that follows is scoped to the guild we just moved to.
+        for _ in 0..<30 {
+            if rlAppState.currentGuild?.id == guildId { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
     }
 
     /// Raise the share sheet for a marker we were sent to by a result notification.

@@ -86,14 +86,15 @@ class NotificationNavigationManager: ObservableObject {
         let requestedProfileTab: ProfileTab? = notification.type == .awardEarned ? .awards : nil
 
         let shareResultOnOpen = notification.type == .markerResult
+        let markerGuildId = notification.markerGuildId
         if let payload = notification.markerNavigationPayload {
-            openMarker(payload, shareOnOpen: shareResultOnOpen)
+            openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
             return
         }
 
         if let markerId = notification.markerId,
            let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
-            openMarker(payload, shareOnOpen: shareResultOnOpen)
+            openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
             return
         }
 
@@ -121,14 +122,15 @@ class NotificationNavigationManager: ObservableObject {
 
         let shareResultOnOpen =
             pushPayload.notificationType == RLNotificationType.markerResult.rawValue
+        let markerGuildId = pushPayload.markerGuildId
         if let payload = pushPayload.markerNavigationPayload {
-            openMarker(payload, shareOnOpen: shareResultOnOpen)
+            openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
             return
         }
 
         if let markerId = pushPayload.markerId,
            let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
-            openMarker(payload, shareOnOpen: shareResultOnOpen)
+            openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
             return
         }
 
@@ -253,15 +255,27 @@ class NotificationNavigationManager: ObservableObject {
     /// sheet already up. See `shareOnOpen` below.
     static let shareOnOpenKey = "tg.marker.shareOnOpen"
 
+    /// The guild the marker belongs to. A marker is guild-scoped, but a notification can
+    /// arrive while its author is looking at a different guild — so the destination has to
+    /// travel with it or the chart looks for the marker somewhere it was never going to be.
+    static let markerGuildKey = "tg.marker.guildId"
+
     /// - Parameter shareOnOpen: set for `marker_result` only. A tracked setup usually
     ///   resolves while the app is closed, so the push is the only moment the author hears
     ///   about it — and "take me to the thing I can post" is why they tapped. A like or a
     ///   comment gets the marker and nothing more.
-    private func openMarker(_ payload: MarkerSharePayloadV1, shareOnOpen: Bool = false) {
+    private func openMarker(
+        _ payload: MarkerSharePayloadV1,
+        shareOnOpen: Bool = false,
+        guildId: UUID? = nil
+    ) {
         dismissOverlays?()
         var userInfo = payload.notificationUserInfo
         if shareOnOpen {
             userInfo[Self.shareOnOpenKey] = true
+        }
+        if let guildId {
+            userInfo[Self.markerGuildKey] = guildId
         }
         NotificationCenter.default.post(
             name: .openSharedMarker,
