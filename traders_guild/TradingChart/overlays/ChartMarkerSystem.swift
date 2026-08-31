@@ -2512,6 +2512,26 @@ struct ChartMarkerSystem {
                     .foregroundColor(iconColor),
                 at: position
             )
+        } else if marker.intent == .personal,
+                  let avatar = drawContext.resolveSymbol(
+                      id: MarkerVisualSpec.avatarSymbolTag(
+                          authorId: marker.author.userId.uuidString,
+                          isSelected: isSelected
+                      )
+                  ) {
+            // A personal marker is the one that is about a person, so it wears their face —
+            // its author's, which is not always the viewer's now that one can be shared
+            // with the guild.
+            let size = avatar.size
+            drawContext.draw(
+                avatar,
+                in: CGRect(
+                    x: position.x - size.width / 2,
+                    y: position.y - size.height / 2,
+                    width: size.width,
+                    height: size.height
+                )
+            )
         } else {
             let symbolId = MarkerSymbolID(intent: marker.intent, alertSeverity: markerSeverity, isSelected: isSelected)
             if let resolved = drawContext.resolveSymbol(id: symbolId.tag) {

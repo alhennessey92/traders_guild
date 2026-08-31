@@ -1601,8 +1601,86 @@ struct TradingChartView: View {
             ForEach(MarkerVisualSpec.allSymbolIDs, id: \.tag) { symbolId in
                 markerSymbolView(for: symbolId).tag(symbolId.tag)
             }
+            // One avatar per author of a personal marker on screen. Not "the viewer's":
+            // a personal marker can be shared with the guild, so the face is its author's.
+            ForEach(personalMarkerAvatarSymbols, id: \.tag) { entry in
+                markerAvatarSymbolView(identity: entry.identity, isSelected: entry.isSelected)
+                    .tag(entry.tag)
+            }
         }
         .allowsHitTesting(false)
+    }
+
+    /// The current user's avatar, for the placement ghost — the marker being dragged has
+    /// no author yet, and it is going to be theirs.
+    private var currentUserMarkerAvatar: MarkerAvatarIdentity {
+        MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+    }
+
+    private struct MarkerAvatarSymbol {
+        let tag: String
+        let identity: MarkerAvatarIdentity
+        let isSelected: Bool
+    }
+
+    /// One entry per (author, selected) pair for the personal markers currently drawn.
+    ///
+    /// Deduplicated by author: a chart full of one person's notes registers one avatar,
+    /// not one per marker.
+    private var personalMarkerAvatarSymbols: [MarkerAvatarSymbol] {
+        var seen = Set<UUID>()
+        var symbols: [MarkerAvatarSymbol] = []
+        for marker in markerManager.filteredMarkers where marker.intent == .personal {
+            let authorId = marker.author.userId
+            guard !seen.contains(authorId) else { continue }
+            seen.insert(authorId)
+            let identity = MarkerAvatarIdentity.forMarker(marker)
+            guard !identity.isEmpty else { continue }
+            for isSelected in [false, true] {
+                symbols.append(
+                    MarkerAvatarSymbol(
+                        tag: MarkerVisualSpec.avatarSymbolTag(
+                            authorId: authorId.uuidString,
+                            isSelected: isSelected
+                        ),
+                        identity: identity,
+                        isSelected: isSelected
+                    )
+                )
+            }
+        }
+        return symbols
+    }
+
+    @ViewBuilder
+    private func markerAvatarSymbolView(
+        identity: MarkerAvatarIdentity,
+        isSelected: Bool
+    ) -> some View {
+        let disc = isSelected
+            ? MarkerVisualSpec.baseCanvasDiameter * 1.5
+            : MarkerVisualSpec.baseCanvasDiameter
+        let diameter = MarkerVisualSpec.avatarDiameter(for: disc)
+
+        if let urlString = identity.url, !urlString.isEmpty, let url = URL(string: urlString) {
+            CachedAvatarImage(url: url, size: diameter, initials: identity.initials ?? "")
+        } else {
+            // Same initials fallback as every other avatar surface, tinted to
+            // the personal marker's own palette.
+            Circle()
+                .fill(RLMarkerIntent.personal.color.opacity(0.30))
+                .frame(width: diameter, height: diameter)
+                .overlay(
+                    Text(identity.initials ?? "")
+                        .font(.system(size: diameter * 0.38, weight: .bold))
+                        .foregroundColor(
+                            MarkerVisualSpec.iconPrimaryColor(for: .personal, severity: nil)
+                        )
+                )
+        }
     }
 
     @ViewBuilder
@@ -2440,7 +2518,9 @@ struct TradingChartView: View {
                 alertSeverity: markerIntent == .alert ? placementPreviewAlertSeverity : nil,
                 sizeToken: .large,
                 emoji: markerIntent == .reaction ? placementPreviewReactionEmoji : nil,
-                isSelected: true
+                isSelected: true,
+                // The marker being dragged has no author yet; it is about to be theirs.
+                avatar: currentUserMarkerAvatar
             )
         }
         .position(x: x, y: y)

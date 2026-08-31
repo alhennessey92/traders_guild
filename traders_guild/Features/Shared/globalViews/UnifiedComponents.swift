@@ -1780,6 +1780,9 @@ struct UnifiedMarkerBadge: View {
     var emoji: String? = nil
     var textLabel: String? = nil
     var isSelected: Bool = false
+    /// Personal markers wear their author's face instead of a glyph — it is the
+    /// one marker type that is about a person rather than a chart idea.
+    var avatar: MarkerAvatarIdentity = .none
 
     init(
         intent: RLMarkerIntent,
@@ -1789,7 +1792,8 @@ struct UnifiedMarkerBadge: View {
         sizeToken: UnifiedMarkerBadgeSizeToken? = nil,
         emoji: String? = nil,
         textLabel: String? = nil,
-        isSelected: Bool = false
+        isSelected: Bool = false,
+        avatar: MarkerAvatarIdentity = .none
     ) {
         self.intent = intent
         self.displayColor = displayColor ?? intent.color
@@ -1798,6 +1802,17 @@ struct UnifiedMarkerBadge: View {
         self.emoji = emoji
         self.textLabel = textLabel
         self.isSelected = isSelected
+        self.avatar = avatar
+    }
+
+    /// Whether this badge shows a face. Only `.personal` ever does, and only
+    /// once the caller has supplied something to show.
+    private var showsAvatar: Bool {
+        intent == .personal && !avatar.isEmpty
+    }
+
+    private var avatarDiameter: CGFloat {
+        MarkerVisualSpec.avatarDiameter(for: size)
     }
 
     private var glassTint: Color {
@@ -1832,7 +1847,28 @@ struct UnifiedMarkerBadge: View {
             Circle().stroke(strokeColor, lineWidth: MarkerVisualSpec.glassStrokeWidth)
 
             // Icon
-            if intent == .reaction, let emoji = emoji {
+            if showsAvatar {
+                if let avatarURL = avatar.url, !avatarURL.isEmpty,
+                   let url = URL(string: avatarURL) {
+                    CachedAvatarImage(
+                        url: url,
+                        size: avatarDiameter,
+                        initials: avatar.initials ?? ""
+                    )
+                } else {
+                    // Same initials fallback every other avatar surface uses,
+                    // tinted to the marker's own palette so it still reads as
+                    // a marker rather than a member row.
+                    Circle()
+                        .fill(displayColor.opacity(0.30))
+                        .frame(width: avatarDiameter, height: avatarDiameter)
+                        .overlay(
+                            Text(avatar.initials ?? "")
+                                .font(.system(size: avatarDiameter * 0.38, weight: .bold))
+                                .foregroundColor(iconColor)
+                        )
+                }
+            } else if intent == .reaction, let emoji = emoji {
                 Text(emoji)
                     .font(.system(size: iconSize, weight: .semibold))
                     .foregroundColor(iconColor)

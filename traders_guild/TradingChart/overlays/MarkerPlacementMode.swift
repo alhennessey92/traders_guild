@@ -795,9 +795,22 @@ final class MarkerPlacementState: ObservableObject {
         resetDrawingInteraction()
     }
 
+    /// `visibility` constrained to what the backend accepts, so a stray value can never
+    /// be submitted. Only `.personal` may be private; every other intent is a guild post.
+    var submittedVisibility: String {
+        guard intent == .personal else { return "guild" }
+        return visibility == "private" ? "private" : "guild"
+    }
+
+    /// Whether the author gets to choose. Only personal markers do — the rest exist to be
+    /// seen by the guild.
+    var allowsVisibilityChoice: Bool { intent == .personal }
+
     func setIntent(_ newIntent: RLMarkerIntent) {
         intent = newIntent
 
+        // Defaults, not locks: a personal marker starts private because that is what
+        // most of them are, and the author can still share it with the guild.
         if newIntent == .personal {
             visibility = "private"
         } else if visibility != "guild" {
@@ -2019,7 +2032,10 @@ final class MarkerPlacementState: ObservableObject {
         let normalizedPollOptions = pollOptions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let resolvedVisibility = intent == .personal ? "private" : "guild"
+        // The author's choice, not a rule. A personal marker defaults to private but can
+        // be shared with the guild — it is still "personal" in that it is about them
+        // rather than a call on the market.
+        let resolvedVisibility = submittedVisibility
         let resolvedConfidence: Int? = nil
 
         return RLCreateMarkerRequest(
@@ -2051,7 +2067,10 @@ final class MarkerPlacementState: ObservableObject {
         let normalizedPollOptions = pollOptions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let resolvedVisibility = intent == .personal ? "private" : "guild"
+        // The author's choice, not a rule. A personal marker defaults to private but can
+        // be shared with the guild — it is still "personal" in that it is about them
+        // rather than a call on the market.
+        let resolvedVisibility = submittedVisibility
 
         return RLUpdateMarkerRequest(
             intent: nil,

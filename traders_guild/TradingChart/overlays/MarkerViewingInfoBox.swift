@@ -98,7 +98,8 @@ struct MarkerViewingInfoBox: View {
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity,
                 sizeToken: .tiny,
-                emoji: marker.intent == .reaction ? reactionEmoji : nil
+                emoji: marker.intent == .reaction ? reactionEmoji : nil,
+                avatar: MarkerAvatarIdentity.forMarker(marker)
             )
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
@@ -118,7 +119,8 @@ struct MarkerViewingInfoBox: View {
                 intent: marker.intent,
                 alertSeverity: marker.alertSeverity,
                 sizeToken: .small,
-                emoji: marker.intent == .reaction ? reactionEmoji : nil
+                emoji: marker.intent == .reaction ? reactionEmoji : nil,
+                avatar: MarkerAvatarIdentity.forMarker(marker)
             )
 
             VStack(alignment: .leading, spacing: 2) {

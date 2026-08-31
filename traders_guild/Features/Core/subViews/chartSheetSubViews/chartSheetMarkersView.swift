@@ -1115,9 +1115,19 @@ struct chartSheetMarkersView: View {
 // MARK: - Private Helper Views
 
 private struct MarkerPlacementOptionRow: View {
+    @EnvironmentObject private var rlAppState: RLAppState
     let intent: RLMarkerIntent
     let isActive: Bool
     let onToggle: () -> Void
+
+    /// A personal marker is always the current user's, so the picker previews it
+    /// with their own face rather than a generic person glyph.
+    private var currentUserAvatar: MarkerAvatarIdentity {
+        MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+    }
 
     private var rowAccentColor: Color {
         isActive ? AppColors.statusNegative95 : intent.color
@@ -1143,7 +1153,11 @@ private struct MarkerPlacementOptionRow: View {
                             .foregroundColor(AppColors.primaryForeground)
                             .frame(width: 46, height: 46)
                     } else {
-                        UnifiedMarkerBadge(intent: intent, sizeToken: .large)
+                        UnifiedMarkerBadge(
+                            intent: intent,
+                            sizeToken: .large,
+                            avatar: currentUserAvatar
+                        )
                             .frame(width: 46, height: 46)
                     }
 

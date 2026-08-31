@@ -303,7 +303,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     intent: marker.intentEnum,
                     alertSeverity: alertSeverity,
                     sizeToken: .large,
-                    emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
+                    emoji: marker.intentEnum == .reaction ? reactionEmoji : nil,
+                    avatar: MarkerAvatarIdentity.forListItem(marker)
                 )
                         .padding(.top, 2)
 
@@ -336,7 +337,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                     intent: marker.intentEnum,
                     alertSeverity: alertSeverity,
                     sizeToken: .tiny,
-                    emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
+                    emoji: marker.intentEnum == .reaction ? reactionEmoji : nil,
+                    avatar: MarkerAvatarIdentity.forListItem(marker)
                 )
 
                 TickerSymbolIconView(
@@ -509,7 +511,8 @@ struct MarkerListItem<M: MarkerListItemData>: View {
                 intent: marker.intentEnum,
                 alertSeverity: alertSeverity,
                 sizeToken: .large,
-                emoji: marker.intentEnum == .reaction ? reactionEmoji : nil
+                emoji: marker.intentEnum == .reaction ? reactionEmoji : nil,
+                avatar: MarkerAvatarIdentity.forListItem(marker)
             )
                 .frame(width: capsuleIconSize, height: capsuleIconSize)
         }

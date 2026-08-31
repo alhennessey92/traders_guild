@@ -2,6 +2,17 @@ import SwiftUI
 import UIKit
 
 struct MarkerPlacementGeneralTab: View {
+    @EnvironmentObject private var rlAppState: RLAppState
+
+    /// A personal marker is always the current user's, so the picker previews it
+    /// with their own face rather than a generic person glyph.
+    private var currentUserAvatar: MarkerAvatarIdentity {
+        MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+    }
+
     @ObservedObject var placementState: MarkerPlacementState
     @State private var intentChangeWarning: String?
     @State private var pendingIntentSwitch: PendingIntentSwitch?
@@ -93,6 +104,10 @@ struct MarkerPlacementGeneralTab: View {
                     intentPicker
                 }
 
+                if placementState.allowsVisibilityChoice {
+                    visibilityPicker
+                }
+
                 requirementsSection
                 generalSection
             }
@@ -171,7 +186,8 @@ struct MarkerPlacementGeneralTab: View {
                     UnifiedMarkerBadge(
                         intent: placementState.intent,
                         alertSeverity: placementState.intent == .alert ? placementState.alertSeverity : nil,
-                        sizeToken: .large
+                        sizeToken: .large,
+                        avatar: currentUserAvatar
                     )
 
                     Circle()
@@ -218,6 +234,70 @@ struct MarkerPlacementGeneralTab: View {
                     .stroke(heroColor.opacity(0.32), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Who a personal marker is for.
+    ///
+    /// Only personal markers offer this — every other intent exists to be seen by the
+    /// guild. A personal marker defaults to private, but keeping one to yourself and
+    /// posting one about yourself are both reasonable, and only the author knows which
+    /// this is. Choosing Guild also makes it shareable, since sharing keys off visibility.
+    @ViewBuilder
+    private var visibilityPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Who can see this")
+                .font(.caption2)
+                .foregroundColor(AppColors.greyText)
+
+            HStack(spacing: 8) {
+                visibilityOption(
+                    value: "private",
+                    title: "Only me",
+                    icon: "lock.fill"
+                )
+                visibilityOption(
+                    value: "guild",
+                    title: "My guild",
+                    icon: "person.2.fill"
+                )
+            }
+        }
+    }
+
+    private func visibilityOption(value: String, title: String, icon: String) -> some View {
+        let isSelected = placementState.visibility == value
+        return Button {
+            placementState.visibility = value
+            HapticFeedback.light.trigger()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundColor(isSelected ? AppColors.guildReputationAccent : AppColors.greyText)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        isSelected
+                            ? AppColors.guildReputationAccent.opacity(0.16)
+                            : Color.clear
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                isSelected
+                                    ? AppColors.guildReputationAccent.opacity(0.55)
+                                    : AppColors.surfaceWhite12,
+                                lineWidth: isSelected ? 1.4 : 1
+                            )
+                    )
+            )
         }
         .buttonStyle(.plain)
     }
@@ -465,7 +545,8 @@ struct MarkerPlacementGeneralTab: View {
                     intent: intent,
                     alertSeverity: intent == .alert ? placementState.alertSeverity : nil,
                     sizeToken: .small,
-                    isSelected: isSelected
+                    isSelected: isSelected,
+                    avatar: intent == .personal ? currentUserAvatar : .none
                 )
 
                 Text(intent.displayName)
