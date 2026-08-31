@@ -527,7 +527,12 @@ struct MainView: View {
             
             // MARK: - Bottom Sheet
             // Bottom sheet — stays visible during placement mode with swapped content
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet)) {
+            // SwiftUI presents one sheet per view. The bottom sheet is always up, so any
+            // other sheet on this view — the share prompt, an author profile — is refused
+            // and queued ("Currently, only presenting a single sheet is supported", logged
+            // hundreds of times), then shown only once this one goes away. Standing the
+            // bottom sheet down for them is the same thing already done for the drawers.
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -732,6 +737,13 @@ struct MainView: View {
                     if isPlacing {
                         // Show placement panel at compact height — maximize chart space
                         selectedDetent = .fraction(0.35)
+                    } else {
+                        // ...and put it back when the panel goes away. Raising the sheet on
+                        // the way in without lowering it on the way out left it standing open
+                        // after every place, edit and cancel, for the user to drag down by
+                        // hand. Placing a marker also selects it, and that path collapses to
+                        // the same detent, so the two agree.
+                        selectedDetent = .fraction(0.11)
                     }
                 }
                 syncTimeframePanelsForCurrentMode(resetPlacementSource: isPlacing)
@@ -1415,7 +1427,8 @@ struct MainView: View {
                 UnifiedMarkerBadge(
                     intent: marker.intent,
                     alertSeverity: marker.alertSeverity,
-                    size: 30
+                    size: 30,
+                    avatar: MarkerAvatarIdentity.forMarker(marker)
                 )
                 Text("\(marker.intent.displayName) Marker")
                     .font(.headline.weight(.bold))
@@ -1574,7 +1587,37 @@ struct MainView: View {
 
     private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
         guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
-        _ = await openSharedMarker(payload)
+        let opened = await openSharedMarker(payload)
+        guard opened,
+              userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true else { return }
+        await presentSharePromptForNavigatedMarker()
+    }
+
+    /// Raise the share sheet for a marker we were sent to by a result notification.
+    ///
+    /// Navigation selects the marker asynchronously — it has to load candles and centre —
+    /// so this waits for the selection rather than firing into an empty chart. If it never
+    /// arrives the user is simply left on the marker, which is where they asked to be.
+    private func presentSharePromptForNavigatedMarker() async {
+        for _ in 0..<40 {
+            if chartViewModel.selectedMarkerForSheet != nil { break }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard let marker = chartViewModel.selectedMarkerForSheet,
+              MarkerShare.canShareWithinGuild(visibility: marker.visibility) else { return }
+
+        let context = MarkerShareContext(
+            marker: marker.marker,
+            symbolTicker: chartViewModel.currentSymbol?.ticker,
+            isNewPlacement: false,
+            isCurrentUserMarker: marker.isCurrentUserMarker
+                || marker.author.userId == rlAppState.currentUser?.id
+        )
+        NotificationCenter.default.post(
+            name: .presentMarkerSharePrompt,
+            object: nil,
+            userInfo: [MarkerSharePromptNotification.contextKey: context]
+        )
     }
 
     @discardableResult
@@ -3351,7 +3394,8 @@ struct ChartBottomSheet: View {
                     intent: marker.intent,
                     alertSeverity: marker.alertSeverity,
                     size: 40,
-                    emoji: marker.intent == .reaction ? marker.selectedEmoji : nil
+                    emoji: marker.intent == .reaction ? marker.selectedEmoji : nil,
+                    avatar: MarkerAvatarIdentity.forMarker(marker)
                 )
 
                 VStack(alignment: .leading, spacing: 1) {
