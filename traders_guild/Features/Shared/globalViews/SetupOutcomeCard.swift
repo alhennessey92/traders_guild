@@ -30,6 +30,12 @@ struct SetupOutcomeCard: View {
     var riskRewardText: String? = nil
     /// Price formatter for the trigger price; falls back to 5dp if absent.
     var formatPrice: ((Double) -> String)? = nil
+    /// Opens the share sheet for this marker. A resolved call is the most
+    /// postable thing the app produces, so the result itself carries the
+    /// invitation to post it rather than leaving the author to go and find it.
+    /// Omitted where sharing is not available (non-authors, private markers)
+    /// and in `.compact`, which has no room for an action.
+    var onShare: (() -> Void)? = nil
 
     // MARK: - Derived styling
 
@@ -81,6 +87,10 @@ struct SetupOutcomeCard: View {
 
             if size == .detail, let note = outcome.impactNote {
                 impactRow(note)
+            }
+
+            if size != .compact, let onShare {
+                shareButton(onShare)
             }
         }
         .padding(cardPadding)
@@ -165,6 +175,31 @@ struct SetupOutcomeCard: View {
                             .stroke(AppColors.whiteText.opacity(0.10), lineWidth: 1)
                     )
             )
+    }
+
+    // MARK: - Share
+
+    private func shareButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Share result")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(tint.opacity(0.16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9)
+                            .stroke(tint.opacity(0.34), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Impact note (detail only)

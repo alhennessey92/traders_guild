@@ -62,7 +62,12 @@ struct MarkerDetailView: View {
 
                     // Info content
                     ScrollView(.vertical, showsIndicators: false) {
-                        MarkerInfoContent(marker: marker)
+                        MarkerInfoContent(
+                            marker: marker,
+                            onShareMarker: MarkerShare.canShareWithinGuild(
+                                visibility: marker.visibility
+                            ) ? { showShareSheet = true } : nil
+                        )
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
                             .padding(.bottom, 80) // space for floating engagement bar
@@ -503,14 +508,16 @@ struct MarkerShareSheet: View {
                 caption: trimmedNote,
                 url: externalShareURL,
                 intent: marker.intent.rawValue,
-                price: marker.price
+                price: marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: marker.marker)
             ),
             fallback: MarkerShare.xComposeURL(
                 symbolTicker: symbolTicker,
                 caption: trimmedNote,
                 url: externalShareURL,
                 intent: marker.intent.rawValue,
-                price: marker.price
+                price: marker.price,
+                outcome: MarkerPredictionProgress.outcomeDescription(for: marker.marker)
             )
         )
         dismiss()
@@ -572,7 +579,8 @@ struct MarkerShareSheet: View {
             caption: trimmedNote,
             url: externalShareURL,
             intent: marker.intent.rawValue,
-            price: marker.price
+            price: marker.price,
+            outcome: MarkerPredictionProgress.outcomeDescription(for: marker.marker)
         )
         GuildInviteShare.openAppOrWeb(
             MarkerShare.discordAppURL,
@@ -1055,7 +1063,8 @@ struct CommentsView: View {
                     intent: liveMarker.intent,
                     alertSeverity: liveMarker.alertSeverity,
                     sizeToken: .medium,
-                    emoji: liveMarker.intent == .reaction ? liveMarker.selectedEmoji : nil
+                    emoji: liveMarker.intent == .reaction ? liveMarker.selectedEmoji : nil,
+                    avatar: MarkerAvatarIdentity.forMarker(liveMarker)
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1355,7 +1364,8 @@ struct MarkerDetailHeaderView: View {
                                 alertSeverity: marker.alertSeverity,
                                 sizeToken: .large,
                                 emoji: marker.intent == .reaction ? marker.selectedEmoji : nil,
-                                isSelected: true
+                                isSelected: true,
+                                avatar: MarkerAvatarIdentity.forMarker(marker)
                             )
                         }
 
@@ -1487,6 +1497,9 @@ private struct SetupTimelineNode: Identifiable {
 struct MarkerInfoContent: View {
     let marker: ChartMarkerUI
     var currentPrice: Double? = nil
+    /// Supplied by the detail view when this marker can actually be shared, so
+    /// a resolved setup can be posted straight from its result.
+    var onShareMarker: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -1590,7 +1603,8 @@ struct MarkerInfoContent: View {
                         outcome: outcome,
                         size: .detail,
                         riskRewardText: setupRiskRewardText,
-                        formatPrice: { String(format: "%.5f", $0) }
+                        formatPrice: { String(format: "%.5f", $0) },
+                        onShare: onShareMarker
                     )
                 }
 

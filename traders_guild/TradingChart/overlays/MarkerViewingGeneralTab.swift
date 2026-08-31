@@ -92,7 +92,8 @@ struct MarkerViewingGeneralTab: View {
                 intent: liveMarker.intent,
                 alertSeverity: liveMarker.alertSeverity,
                 sizeToken: .large,
-                emoji: liveMarker.intent == .reaction ? reactionEmoji : nil
+                emoji: liveMarker.intent == .reaction ? reactionEmoji : nil,
+                avatar: MarkerAvatarIdentity.forMarker(liveMarker)
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -154,7 +155,10 @@ struct MarkerViewingGeneralTab: View {
                         outcome: outcome,
                         size: .standard,
                         riskRewardText: setupRiskRewardText,
-                        formatPrice: { formattedPrice($0) }
+                        formatPrice: { formattedPrice($0) },
+                        // Only where the same share affordance already exists —
+                        // the card must not offer what the panel would refuse.
+                        onShare: onShareMarker
                     )
                 } else {
                     setupStateHeader

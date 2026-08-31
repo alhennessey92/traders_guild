@@ -85,14 +85,15 @@ class NotificationNavigationManager: ObservableObject {
         let reportResolutionSummary = notification.contentReportResolutionSummary
         let requestedProfileTab: ProfileTab? = notification.type == .awardEarned ? .awards : nil
 
+        let shareResultOnOpen = notification.type == .markerResult
         if let payload = notification.markerNavigationPayload {
-            openMarker(payload)
+            openMarker(payload, shareOnOpen: shareResultOnOpen)
             return
         }
 
         if let markerId = notification.markerId,
            let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
-            openMarker(payload)
+            openMarker(payload, shareOnOpen: shareResultOnOpen)
             return
         }
 
@@ -118,14 +119,16 @@ class NotificationNavigationManager: ObservableObject {
         let reportResolutionSummary = pushPayload.contentReportResolutionSummary
         let requestedProfileTab: ProfileTab? = pushPayload.notificationType == RLNotificationType.awardEarned.rawValue ? .awards : nil
 
+        let shareResultOnOpen =
+            pushPayload.notificationType == RLNotificationType.markerResult.rawValue
         if let payload = pushPayload.markerNavigationPayload {
-            openMarker(payload)
+            openMarker(payload, shareOnOpen: shareResultOnOpen)
             return
         }
 
         if let markerId = pushPayload.markerId,
            let payload = await recoverMarkerNavigationPayload(markerId: markerId) {
-            openMarker(payload)
+            openMarker(payload, shareOnOpen: shareResultOnOpen)
             return
         }
 
@@ -246,12 +249,24 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
 
-    private func openMarker(_ payload: MarkerSharePayloadV1) {
+    /// Key carried alongside the marker payload when the marker should land with its share
+    /// sheet already up. See `shareOnOpen` below.
+    static let shareOnOpenKey = "tg.marker.shareOnOpen"
+
+    /// - Parameter shareOnOpen: set for `marker_result` only. A tracked setup usually
+    ///   resolves while the app is closed, so the push is the only moment the author hears
+    ///   about it — and "take me to the thing I can post" is why they tapped. A like or a
+    ///   comment gets the marker and nothing more.
+    private func openMarker(_ payload: MarkerSharePayloadV1, shareOnOpen: Bool = false) {
         dismissOverlays?()
+        var userInfo = payload.notificationUserInfo
+        if shareOnOpen {
+            userInfo[Self.shareOnOpenKey] = true
+        }
         NotificationCenter.default.post(
             name: .openSharedMarker,
             object: nil,
-            userInfo: payload.notificationUserInfo
+            userInfo: userInfo
         )
     }
 

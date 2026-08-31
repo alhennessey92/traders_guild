@@ -1100,6 +1100,19 @@ class LeftDrawerViewModel: ObservableObject {
                     object: nil,
                     userInfo: ["guildId": rlAppStateRef?.currentGuild?.id as Any]
                 )
+                // A resolved setup is the most postable thing the app produces,
+                // and the author is otherwise never told the moment arrived.
+                // A toast rather than a sheet: interrupting someone mid-chart to
+                // ask them to post would be worse than missing the moment. The
+                // durable affordance is "Share result" on the outcome card.
+                // Only the author receives a MARKER_RESULT, so no owner check.
+                if let body = notification.body?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !body.isEmpty {
+                    rlAppStateRef?.showSuccess(
+                        "\(body) — open the marker to share it.",
+                        title: notification.title ?? "Trade result"
+                    )
+                }
             }
 
         case .notificationStatsUpdate:

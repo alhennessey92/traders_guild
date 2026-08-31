@@ -149,9 +149,27 @@ enum MarkerShare {
         return "$" + tag
     }
 
+    /// How a resolved setup is named in post copy — "hit target", "stopped out".
+    ///
+    /// Mirrors the backend's `_outcome_phrase`, which writes the same words onto
+    /// the card and the landing page. Change one, change both.
+    static func outcomePhrase(_ outcome: SetupOutcome?) -> String? {
+        guard let outcome, outcome.isWin || outcome.isLoss else { return nil }
+        var phrase = outcome.isWin ? "hit target" : "stopped out"
+        if let pnl = outcome.pnl {
+            phrase += String(format: " %@%.2f%%", pnl >= 0 ? "+" : "", pnl)
+        }
+        return phrase
+    }
+
     /// The headline a marker leads with — "BTCUSD setup at 67,250.12".
     /// Falls back gracefully as each piece of context goes missing.
-    static func shareHeadline(symbolTicker: String?, intent: String?, price: Double?) -> String {
+    static func shareHeadline(
+        symbolTicker: String?,
+        intent: String?,
+        price: Double?,
+        outcome: SetupOutcome? = nil
+    ) -> String {
         // The cashtag is what makes the post findable; fall back to the plain
         // ticker when the instrument doesn't yield a usable one.
         let ticker = cashtag(symbolTicker)
@@ -179,7 +197,8 @@ enum MarkerShare {
         symbolTicker: String?,
         caption: String?,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> String {
         let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedCaption.isEmpty {
@@ -192,6 +211,14 @@ enum MarkerShare {
             }
             return lead
         }
+        // A resolved setup is the one post worth writing differently: it has a
+        // result, so it reads as a call that landed rather than an idea posted.
+        if let verdict = outcomePhrase(outcome) {
+            let tag = cashtag(symbolTicker)
+                ?? (symbolTicker?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+            let called = tag.isEmpty ? "Called this level" : "Called \(tag) off this level"
+            return "\(called) — \(verdict). Traders Guild 📈"
+        }
         let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
         // The unfurled card already brands and explains the product, so the
         // post spends its characters on the trade, not on a tagline.
@@ -203,13 +230,15 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> String {
         let body = shareBody(
             symbolTicker: symbolTicker,
             caption: caption,
             intent: intent,
-            price: price
+            price: price,
+            outcome: outcome
         )
         return "\(body) \(url.absoluteString)"
     }
@@ -221,14 +250,16 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> URL? {
         let text = xComposeText(
             symbolTicker: symbolTicker,
             caption: caption,
             url: url,
             intent: intent,
-            price: price
+            price: price,
+            outcome: outcome
         )
         var components = URLComponents()
         components.scheme = "twitter"
@@ -243,7 +274,8 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> URL? {
         var components = URLComponents(string: "https://x.com/intent/post")
         components?.queryItems = [
@@ -254,7 +286,8 @@ enum MarkerShare {
                     caption: caption,
                     url: url,
                     intent: intent,
-                    price: price
+                    price: price,
+                    outcome: outcome
                 )
             ),
         ]
@@ -270,9 +303,15 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> String {
-        let headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
+        var headline = shareHeadline(symbolTicker: symbolTicker, intent: intent, price: price)
+        // The attached card shows the result too, but the bolded line is what
+        // people read in the channel list, so it carries it as well.
+        if let verdict = outcomePhrase(outcome) {
+            headline += " — \(verdict)"
+        }
         let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let lead = trimmedCaption.isEmpty
             ? "Shared from my chart on Traders Guild."
@@ -295,7 +334,8 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> URL? {
         var components = URLComponents()
         components.scheme = "tg"
@@ -305,7 +345,8 @@ enum MarkerShare {
             caption: caption,
             url: url,
             intent: intent,
-            price: price
+            price: price,
+            outcome: outcome
         )
         return components.url
     }
@@ -317,7 +358,8 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> URL? {
         var components = URLComponents(string: "https://t.me/share/url")
         components?.queryItems = telegramQueryItems(
@@ -325,7 +367,8 @@ enum MarkerShare {
             caption: caption,
             url: url,
             intent: intent,
-            price: price
+            price: price,
+            outcome: outcome
         )
         return components?.url
     }
@@ -335,7 +378,8 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String?,
-        price: Double?
+        price: Double?,
+        outcome: SetupOutcome?
     ) -> [URLQueryItem] {
         [
             URLQueryItem(name: "url", value: url.absoluteString),
@@ -345,7 +389,8 @@ enum MarkerShare {
                     symbolTicker: symbolTicker,
                     caption: caption,
                     intent: intent,
-                    price: price
+                    price: price,
+                    outcome: outcome
                 )
             ),
         ]
@@ -364,13 +409,15 @@ enum MarkerShare {
         symbolTicker: String?,
         caption: String?,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> String {
         let body = shareBody(
             symbolTicker: symbolTicker,
             caption: caption,
             intent: intent,
-            price: price
+            price: price,
+            outcome: outcome
         )
         return String(body.prefix(redditTitleLimit))
     }
@@ -382,7 +429,8 @@ enum MarkerShare {
         caption: String?,
         url: URL,
         intent: String? = nil,
-        price: Double? = nil
+        price: Double? = nil,
+        outcome: SetupOutcome? = nil
     ) -> URL? {
         var components = URLComponents(string: "https://www.reddit.com/submit")
         components?.queryItems = [
@@ -393,7 +441,8 @@ enum MarkerShare {
                     symbolTicker: symbolTicker,
                     caption: caption,
                     intent: intent,
-                    price: price
+                    price: price,
+                    outcome: outcome
                 )
             ),
         ]

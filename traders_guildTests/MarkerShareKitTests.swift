@@ -614,3 +614,4 @@ struct MarkerCashtagTests {
         #expect(encoded.components(separatedBy: "$BTC").count - 1 == 1)
     }
 }
+
