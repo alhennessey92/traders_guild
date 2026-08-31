@@ -624,24 +624,33 @@ struct MainDrawerView: View {
            let rlGuild = rlAppState.currentGuild,
            let rlMembership = rlAppState.currentMembership {
             VStack(alignment: .leading, spacing: 0) {
-            // Header section
-            VStack {
-                HStack {
-                    Text("Guild")
-                        .font(.title)
+            // Pinned chrome. Only the title and the close control stay put — everything
+            // below scrolls, so the banner and stats can move up out of the way instead
+            // of permanently costing the menu its room.
+            HStack {
+                Text("Guild")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+                Spacer()
+                Button(action: {
+                    withAnimation(AnimationConstants.standard) { onClose() }
+                }) {
+                    Image(systemName: "chevron.left.chevron.left.dotted")
+                        .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
-                    Spacer()
-                    Button(action: {
-                        withAnimation(AnimationConstants.standard) { onClose() }
-                    }) {
-                        Image(systemName: "chevron.left.chevron.left.dotted")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-                    }
                 }
-                
+            }
+            .padding(.leading, 25)
+            .padding(.trailing, 25)
+            .padding(.top, 60)
+
+            // Menu Items
+            ScrollView {
+            VStack(spacing: 0) {
+            // Header section
+            VStack {
                 // The drawer is where members spend their time, so the guild's
                 // own artwork sits here too — shorter than the detail page's,
                 // which is a destination rather than a permanent header.
@@ -741,11 +750,9 @@ struct MainDrawerView: View {
             .padding(.leading, 25)
             .padding(.trailing, 25)
             .padding(.bottom, 4)
-            .padding(.top, 60)
+            .padding(.top, 12)
             .spotlightTarget("guild-header")
 
-            // Menu Items
-            ScrollView {
                 VStack(spacing: 8) {
                     ForEach(menuItems, id: \.title) { item in
                         DrawerMenuButton(
@@ -770,6 +777,7 @@ struct MainDrawerView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
                 .spotlightTarget("guild-menu-area")
+            }
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable {

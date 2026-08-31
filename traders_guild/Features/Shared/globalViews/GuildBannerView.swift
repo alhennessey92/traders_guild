@@ -121,6 +121,13 @@ struct GuildBannerView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: height)
                         .clipped()
+                } else {
+                    // Not nothing. A `Group` whose condition is false resolves to
+                    // `EmptyView`, which SwiftUI never instantiates — so `.task` below
+                    // never ran and the artwork was never fetched, leaving the generated
+                    // banner showing for ever. `CachedAvatarImage` gets away with the same
+                    // shape only because its else-branch draws initials.
+                    Color.clear
                 }
             }
             .task(id: url.absoluteString) {
