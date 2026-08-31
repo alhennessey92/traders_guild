@@ -308,6 +308,10 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     let updatedAt: Date              // backend: updated_at
     let crestSymbol: String?         // backend: crest_symbol (neutral key, nil → "checkered")
     let crestColor: String?          // backend: crest_color (palette key, nil → "brand")
+    // Wide header artwork for the guild page. Optional: a guild without one
+    // renders a gradient derived from its crest colour, so nil is a permanent
+    // valid state rather than missing data.
+    let bannerUrl: String?           // backend: banner_url
 
     // MARK: - Computed Properties
     
@@ -378,7 +382,8 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             dateCreated: dateCreated,
             updatedAt: Date(),
             crestSymbol: crestSymbol,
-            crestColor: crestColor
+            crestColor: crestColor,
+            bannerUrl: bannerUrl
         )
     }
 
@@ -404,7 +409,8 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             dateCreated: dateCreated,
             updatedAt: Date(),
             crestSymbol: crestSymbol,
-            crestColor: crestColor
+            crestColor: crestColor,
+            bannerUrl: bannerUrl
         )
     }
 }

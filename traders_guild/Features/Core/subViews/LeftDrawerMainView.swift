@@ -463,6 +463,12 @@ struct LeftDrawerMainView: View {
 /// Drawer home screen showing guild header and navigation menu for sections.
 /// Selecting a menu item updates `navigationState` to replace the content area.
 struct MainDrawerView: View {
+    /// The current guild's own colour, for the surfaces that are about it.
+    /// Scoped deliberately — see `GuildTheme`.
+    private var guildAccent: Color {
+        GuildTheme.accent(for: rlAppState.currentGuild)
+    }
+
     
     //let currentGuild: Guild
     @Binding var navigationState: DrawerNavigationState
@@ -622,17 +628,23 @@ struct MainDrawerView: View {
                     }
                 }
                 
+                // The drawer is where members spend their time, so the guild's
+                // own artwork sits here too — shorter than the detail page's,
+                // which is a destination rather than a permanent header.
+                GuildBannerView(guild: rlGuild, height: 76, cornerRadius: 12)
+                    .padding(.bottom, 2)
+
                 HStack {
                     GuildCrestView(guild: rlGuild, size: 38)
 
                     Text(rlGuild.name)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(AppColors.guildReputationAccent)
+                        .foregroundColor(guildAccent)
                     + Text(" Guild")
                         .font(.title2)
                         .fontWeight(.medium)
-                        .foregroundColor(AppColors.guildReputationAccent)
+                        .foregroundColor(guildAccent)
                     
                     
                     Spacer()

@@ -2512,6 +2512,30 @@ class RLAppState: ObservableObject {
 
     /// Upload a custom avatar image for the current guild (owner/admin).
     @discardableResult
+    func uploadGuildBanner(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.uploadGuildBanner(guildId: guild.id, imageData: imageData, mimeType: mimeType)
+            applyUpdatedGuild(updated)
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild Banner", style: .toast)
+            throw error
+        }
+    }
+
+    func removeGuildBanner() async throws -> RLGuildDTO {
+        guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
+        do {
+            let updated = try await realApi.removeGuildBanner(guildId: guild.id)
+            applyUpdatedGuild(updated)
+            return updated
+        } catch {
+            showError(error, title: "Failed to Update Guild Banner", style: .toast)
+            throw error
+        }
+    }
+
     func uploadGuildAvatar(imageData: Data, mimeType: String = "image/jpeg") async throws -> RLGuildDTO {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {

@@ -24,6 +24,9 @@ struct GuildSettingsView: View {
     @State private var pickedCrestImage: UIImage?
     @State private var crestImageRemoved = false
     @State private var showCrestImagePicker = false
+    @State private var pickedBannerImage: UIImage?
+    @State private var bannerImageRemoved = false
+    @State private var showBannerImagePicker = false
 
     // Discord destinations act immediately rather than waiting for "Save
     // Details". Webhook URLs remain write-only bearer secrets.
@@ -49,6 +52,13 @@ struct GuildSettingsView: View {
         if pickedCrestImage != nil { return true }
         if crestImageRemoved { return false }
         return !((rlAppState.currentGuild?.imageUrl ?? "").isEmpty)
+    }
+
+    /// True when a banner (newly picked or the guild's existing one) is in play.
+    private var hasEffectiveBanner: Bool {
+        if pickedBannerImage != nil { return true }
+        if bannerImageRemoved { return false }
+        return !((rlAppState.currentGuild?.bannerUrl ?? "").isEmpty)
     }
 
     private var crestSymbolOrColorChanged: Bool {
@@ -98,7 +108,12 @@ struct GuildSettingsView: View {
     }
 
     private var hasChanges: Bool {
-        hasSettingsChanges || hasJoinQuestionChanges || hasCrestChanges
+        hasSettingsChanges || hasJoinQuestionChanges || hasCrestChanges || hasBannerChanges
+    }
+
+    private var hasBannerChanges: Bool {
+        pickedBannerImage != nil
+            || (bannerImageRemoved && !((rlAppState.currentGuild?.bannerUrl ?? "").isEmpty))
     }
 
     private var isMissingRequiredJoinQuestion: Bool {
@@ -272,7 +287,7 @@ struct GuildSettingsView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(AppColors.whiteText)
 
-                            Text("Your guild's emblem — shown everywhere your guild appears.")
+                            Text("Your guild's emblem — shown everywhere your guild appears. Upload your own artwork to stand out; the shield symbols are a fallback.")
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
 
@@ -282,6 +297,33 @@ struct GuildSettingsView: View {
                                 Spacer()
                             }
                             .padding(.vertical, 2)
+
+                            // Upload leads. Eight near-identical shields made
+                            // every guild look the same, so the symbols are now
+                            // the fallback for guilds without artwork, and read
+                            // that way in the layout too.
+                            Button {
+                                showCrestImagePicker = true
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "photo.on.rectangle")
+                                    Text(hasEffectiveImage ? "Replace image" : "Upload an image")
+                                        .fontWeight(.semibold)
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.guildReputationAccent.opacity(0.14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.guildReputationAccent.opacity(0.5), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
 
                             if hasEffectiveImage {
                                 Button {
@@ -297,9 +339,14 @@ struct GuildSettingsView: View {
                                 }
                                 .buttonStyle(.plain)
                             } else {
+                                Text("Or choose a symbol")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                    .padding(.top, 2)
+
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        ForEach(GuildCrestCatalog.symbolKeys, id: \.self) { key in
+                                        ForEach(GuildCrestCatalog.offeredSymbolKeys, id: \.self) { key in
                                             Button { crestSymbol = key } label: {
                                                 Image(systemName: GuildCrestCatalog.sfSymbol(for: key))
                                                     .font(.system(size: 22, weight: .semibold))
@@ -336,19 +383,49 @@ struct GuildSettingsView: View {
                                     Spacer(minLength: 0)
                                 }
                             }
+                        }
+
+                        AdminSectionCard {
+                            Text("Guild Banner")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(AppColors.whiteText)
+
+                            Text("The wide header across the top of your guild page. Without one it uses a gradient from your crest colour.")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+
+                            GuildBannerView(
+                                bannerUrl: pickedBannerImage == nil && !bannerImageRemoved
+                                    ? rlAppState.currentGuild?.bannerUrl
+                                    : nil,
+                                crestColor: crestColor,
+                                guildName: name,
+                                height: 104
+                            )
+                            .overlay {
+                                if let picked = pickedBannerImage {
+                                    Image(uiImage: picked)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 104)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                }
+                            }
+                            .padding(.vertical, 2)
 
                             Button {
-                                showCrestImagePicker = true
+                                showBannerImagePicker = true
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "photo.on.rectangle")
-                                    Text("Upload an image")
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Text(hasEffectiveBanner ? "Replace banner" : "Upload a banner")
                                         .fontWeight(.semibold)
                                 }
                                 .font(.subheadline)
                                 .foregroundColor(AppColors.guildReputationAccent)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(AppColors.guildReputationAccent.opacity(0.14))
@@ -359,6 +436,21 @@ struct GuildSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+
+                            if hasEffectiveBanner {
+                                Button {
+                                    if pickedBannerImage != nil {
+                                        pickedBannerImage = nil
+                                    } else {
+                                        bannerImageRemoved = true
+                                    }
+                                } label: {
+                                    Label("Remove banner", systemImage: "xmark.circle.fill")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundColor(AppColors.statusNegative80)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
 
                         discordSection
@@ -410,6 +502,12 @@ struct GuildSettingsView: View {
             SharedImagePicker(sourceType: .photoLibrary) { image in
                 pickedCrestImage = image
                 crestImageRemoved = false
+            }
+        }
+        .sheet(isPresented: $showBannerImagePicker) {
+            SharedImagePicker(sourceType: .photoLibrary) { image in
+                pickedBannerImage = image
+                bannerImageRemoved = false
             }
         }
     }
@@ -833,6 +931,7 @@ struct GuildSettingsView: View {
         defer { isSubmitting = false }
 
         let guildHadUploadedImage = !((rlAppState.currentGuild?.imageUrl ?? "").isEmpty)
+        let guildHadUploadedBanner = !((rlAppState.currentGuild?.bannerUrl ?? "").isEmpty)
         let crestFieldsChanged = crestSymbolOrColorChanged
 
         do {
@@ -862,6 +961,16 @@ struct GuildSettingsView: View {
             } else if crestImageRemoved && guildHadUploadedImage {
                 _ = try await rlAppState.removeGuildAvatar()
                 crestImageRemoved = false
+            }
+
+            // The banner is a second, independent image: uploading one must
+            // never disturb the emblem, and vice versa.
+            if let banner = pickedBannerImage, let data = banner.jpegData(compressionQuality: 0.85) {
+                _ = try await rlAppState.uploadGuildBanner(imageData: data)
+                pickedBannerImage = nil
+            } else if bannerImageRemoved && guildHadUploadedBanner {
+                _ = try await rlAppState.removeGuildBanner()
+                bannerImageRemoved = false
             }
 
             dismiss()

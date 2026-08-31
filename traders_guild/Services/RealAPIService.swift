@@ -2840,6 +2840,72 @@ extension RealAPIService {
 
     /// Upload a guild's avatar image (owner/admin only).
     /// PUT /guilds/{guildId}/avatar (multipart/form-data) — returns the updated guild.
+    /// Upload a guild's wide header image (owner/admin only).
+    /// PUT /guilds/{guildId}/banner — returns the updated guild.
+    ///
+    /// Deliberately a separate endpoint and key prefix from the emblem: the two
+    /// images have independent lifetimes and one must never overwrite the other.
+    func uploadGuildBanner(
+        guildId: UUID,
+        imageData: Data,
+        mimeType: String = "image/jpeg"
+    ) async throws -> RLGuildDTO {
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        guard let url = URL(string: "\(APIService.core.baseURL)/guilds/\(guildId.uuidString)/banner") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw APIError.unauthorized
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"guild_banner.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let detail = extractErrorDetailFromData(data)
+            #if DEBUG
+            print("🛡️ uploadGuildBanner failed — HTTP \(httpResponse.statusCode): \(detail)")
+            #endif
+            switch httpResponse.statusCode {
+            case 401: throw APIError.unauthorized
+            case 403: throw APIError.serverError(403, detail)
+            case 400, 422: throw APIError.badRequest(detail)
+            default: throw APIError.serverError(httpResponse.statusCode, detail)
+            }
+        }
+        return try decoder.decode(RLGuildDTO.self, from: data)
+    }
+
+    /// Remove a guild's uploaded banner (owner/admin only).
+    /// DELETE /guilds/{guildId}/banner — returns the updated guild.
+    func removeGuildBanner(guildId: UUID) async throws -> RLGuildDTO {
+        return try await request(
+            "/guilds/\(guildId.uuidString)/banner",
+            service: .core,
+            method: "DELETE",
+            auth: true
+        )
+    }
+
     func uploadGuildAvatar(
         guildId: UUID,
         imageData: Data,

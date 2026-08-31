@@ -20,10 +20,23 @@ import SwiftUI
 /// with the backend and the Android client); this catalog maps them to the
 /// iOS SF Symbol names and colours.
 enum GuildCrestCatalog {
+    /// Every key the backend accepts and this app can render.
+    ///
+    /// **Never shrink this.** Guilds created by earlier versions still carry
+    /// these keys, and the backend keeps accepting all of them, so removing one
+    /// would render an existing guild's crest as the default shield.
     static let symbolKeys = [
         "checkered", "plain", "left_half", "right_half",
         "bolt", "star_of_life", "checkmark", "exclamation",
     ]
+
+    /// The keys the pickers actually offer.
+    ///
+    /// A symbol is the fallback for a guild that has not uploaded artwork, not
+    /// the main way to look distinct — eight near-identical shields made every
+    /// guild look the same. Trimmed to four so the upload tile leads.
+    static let offeredSymbolKeys = ["checkered", "plain", "bolt", "checkmark"]
+
     static let colorKeys = ["brand", "gold", "green", "blue", "red", "violet", "steel"]
 
     static let defaultSymbolKey = "checkered"
@@ -56,6 +69,21 @@ enum GuildCrestCatalog {
         case "steel":  return Color(red: 0.62, green: 0.66, blue: 0.71)
         default:       return AppColors.guildReputationAccent
         }
+    }
+}
+
+// MARK: - Guild accent
+
+/// A guild's chosen colour, used to tint the surfaces that are *about that guild*.
+///
+/// Deliberately not a replacement for `AppColors.guildReputationAccent`: that
+/// token is used across the whole app, and repointing it would recolour
+/// unrelated chrome and break surfaces that are meant to stay fixed. This is
+/// opt-in, applied only where a guild's own identity is the subject — its
+/// drawer header, its detail page, its cards.
+enum GuildTheme {
+    static func accent(for guild: RLGuildDTO?) -> Color {
+        GuildCrestCatalog.color(for: guild?.crestColor)
     }
 }
 

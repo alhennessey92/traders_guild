@@ -315,7 +315,8 @@ struct BetaRuntimeAndReportingTests {
             dateCreated: now,
             updatedAt: now,
             crestSymbol: nil,
-            crestColor: nil
+            crestColor: nil,
+            bannerUrl: nil
         )
     }
 }

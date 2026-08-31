@@ -1010,7 +1010,7 @@ struct GuildDetailView: View {
                 GuildFlowTitleHeader(
                     title: guild.name,
                     subtitle: "Guild details and entry requirements",
-                    icon: "shield.pattern.checkered",
+                    icon: GuildCrestCatalog.sfSymbol(for: guild.crestSymbol),
                     onBack: { dismiss() }
                 )
 
@@ -1021,6 +1021,12 @@ struct GuildDetailView: View {
                     // separate "Guild Snapshot" card holding four StatBoxes —
                     // a card nested inside a card, with different constants.
                     VStack(spacing: 0) {
+                        // The guild's own artwork leads the page. Without one
+                        // this is a gradient from its crest colour, so the
+                        // header still belongs to this guild specifically.
+                        GuildBannerView(guild: guild, height: 116)
+                            .padding(.bottom, 12)
+
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(alignment: .top, spacing: 12) {
                                 GuildCrestView(guild: guild, size: 48)
@@ -1662,9 +1668,35 @@ struct CreateGuildView: View {
                             Text("Guild Crest")
                                 .font(.caption)
                                 .foregroundColor(AppColors.greyText)
-                            Text("Your guild's emblem — shown everywhere your guild appears.")
+                            Text("Your guild's emblem — shown everywhere your guild appears. Upload your own artwork to stand out; the shield symbols are a fallback.")
                                 .font(.caption2)
                                 .foregroundColor(AppColors.greyText.opacity(0.85))
+
+                            // Upload leads: the shield symbols are the
+                            // fallback for a guild without artwork, not the main
+                            // way to look distinct. Mirrors Guild Settings.
+                            Button {
+                                showCrestImagePicker = true
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "photo.on.rectangle")
+                                    Text(pickedCrestImage == nil ? "Upload an image" : "Choose a different image")
+                                        .fontWeight(.semibold)
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.guildReputationAccent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(AppColors.guildReputationAccent.opacity(0.14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(AppColors.guildReputationAccent.opacity(0.5), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
 
                             if let image = pickedCrestImage {
                                 HStack(spacing: 12) {
@@ -1686,7 +1718,7 @@ struct CreateGuildView: View {
                                 // Symbol options
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        ForEach(GuildCrestCatalog.symbolKeys, id: \.self) { key in
+                                        ForEach(GuildCrestCatalog.offeredSymbolKeys, id: \.self) { key in
                                             Button {
                                                 selectedCrestSymbol = key
                                             } label: {
@@ -1731,28 +1763,6 @@ struct CreateGuildView: View {
                                 }
                             }
 
-                            Button {
-                                showCrestImagePicker = true
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "photo.on.rectangle")
-                                    Text(pickedCrestImage == nil ? "Upload an image" : "Choose a different image")
-                                        .fontWeight(.semibold)
-                                }
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.guildReputationAccent)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(AppColors.guildReputationAccent.opacity(0.14))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(AppColors.guildReputationAccent.opacity(0.5), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
                         }
                     }
                     .opacity(visibleSections.contains(1) ? 1 : 0)
