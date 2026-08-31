@@ -489,12 +489,8 @@ struct GuildSettingsView: View {
             await loadJoinQuestions()
         }
         .onAppear {
-            // If this fires a second time after an image is picked, the editor was
-            // torn down and rebuilt and every @State — the picked image included —
-            // went with it.
-            #if DEBUG
-            print("🖼️ [banner] settings onAppear (pickedBanner=\(pickedBannerImage != nil))")
-            #endif
+            // A second call here means the editor was torn down and rebuilt, taking
+            // every @State — the picked image included — with it.
             guard let guild = rlAppState.currentGuild else { return }
             name = guild.name
             description = guild.description ?? ""
@@ -521,9 +517,6 @@ struct GuildSettingsView: View {
                 // is a wide strip and a square crop throws away most of the shot.
                 allowsEditing: target == .crest
             ) { image in
-                #if DEBUG
-                print("🖼️ [banner] picked \(target.rawValue): \(Int(image.size.width))x\(Int(image.size.height))")
-                #endif
                 switch target {
                 case .crest:
                     pickedCrestImage = image
@@ -963,11 +956,6 @@ struct GuildSettingsView: View {
     }
 
     private func saveSettings() async {
-        #if DEBUG
-        print("🖼️ [banner] save gate: picked=\(pickedBannerImage != nil) removed=\(bannerImageRemoved) "
-              + "hasBannerChanges=\(hasBannerChanges) hasChanges=\(hasChanges) isValid=\(isValid) "
-              + "isSubmitting=\(isSubmitting) storedBanner=\(rlAppState.currentGuild?.bannerUrl ?? "nil")")
-        #endif
         guard isValid && hasChanges && !isSubmitting else { return }
         guard !isMissingRequiredJoinQuestion else {
             rlAppState.showError(
@@ -1017,9 +1005,6 @@ struct GuildSettingsView: View {
             // The banner is a second, independent image: uploading one must
             // never disturb the emblem, and vice versa.
             if let banner = pickedBannerImage, let data = bannerUploadData(banner) {
-                #if DEBUG
-                print("🖼️ [banner] uploading \(data.count) bytes")
-                #endif
                 _ = try await rlAppState.uploadGuildBanner(imageData: data)
                 pickedBannerImage = nil
             } else if bannerImageRemoved && guildHadUploadedBanner {

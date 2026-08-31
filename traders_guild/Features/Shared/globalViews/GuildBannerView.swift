@@ -134,17 +134,11 @@ struct GuildBannerView: View {
                 guard image == nil else { return }
                 do {
                     let loaded = try await AvatarImageCache.shared.loadImage(for: url)
-                    #if DEBUG
-                    print("🖼️ [banner] loaded artwork \(Int(loaded.size.width))x\(Int(loaded.size.height)) from \(url.lastPathComponent)")
-                    #endif
                     await MainActor.run {
                         image = loaded
                         loadFailed = false
                     }
                 } catch {
-                    #if DEBUG
-                    print("🖼️ [banner] artwork FAILED to load \(url.absoluteString): \(error)")
-                    #endif
                     await MainActor.run { loadFailed = true }
                 }
             }

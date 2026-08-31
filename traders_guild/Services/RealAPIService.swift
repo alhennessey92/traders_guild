@@ -2895,9 +2895,6 @@ extension RealAPIService {
             default: throw APIError.serverError(httpResponse.statusCode, detail)
             }
         }
-        #if DEBUG
-        print("🖼️ [banner] PUT ok \(httpResponse.statusCode): \(String(data: data, encoding: .utf8)?.prefix(400) ?? "")")
-        #endif
         return try decoder.decode(RLGuildDTO.self, from: data)
     }
 

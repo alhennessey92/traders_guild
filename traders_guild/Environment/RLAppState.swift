@@ -2564,9 +2564,6 @@ class RLAppState: ObservableObject {
 
     /// Propagate an updated guild into `currentGuild` and the `userGuilds` list.
     private func applyUpdatedGuild(_ updated: RLGuildDTO) {
-        #if DEBUG
-        print("🖼️ [banner] applyUpdatedGuild \(updated.name): bannerUrl=\(updated.bannerUrl ?? "nil") isCurrent=\(currentGuild?.id == updated.id)")
-        #endif
         if currentGuild?.id == updated.id {
             currentGuild = updated
         }
