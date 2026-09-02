@@ -180,7 +180,20 @@ struct LeaderboardWindowSharingTests {
         // the top of a board the sharer may be well down.
         let url = LeaderboardShare.publicURL(slug: "nocturne", window: .all, trader: "@mika")
 
-        #expect(url?.absoluteString == "https://tradersguild.co/g/nocturne/leaderboard?trader=mika")
+        // Query decides what the page renders — including pinning them when
+        // they rank below it. Fragment decides where the reader lands.
+        #expect(url?.absoluteString
+            == "https://tradersguild.co/g/nocturne/leaderboard?trader=mika#trader-mika")
+    }
+
+    @Test func theAnchorMatchesTheIdTheServerStamps() {
+        // Must equal `leaderboard_anchor` in public_invites.py; a mismatch
+        // means the browser silently fails to scroll.
+        #expect(LeaderboardShare.anchor(for: "@Mika") == "trader-mika")
+        #expect(LeaderboardShare.anchor(for: "a_b-c9") == "trader-a_b-c9")
+        #expect(LeaderboardShare.anchor(for: "x\" onload=1") == "trader-xonload1")
+        #expect(LeaderboardShare.anchor(for: nil) == "")
+        #expect(LeaderboardShare.anchor(for: "  @  ") == "")
     }
 
     @Test func aPersonalShareKeepsBothTheWindowAndTheTrader() {

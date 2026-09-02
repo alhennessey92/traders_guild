@@ -19,8 +19,25 @@ enum LeaderboardShare {
     ///
     /// Without it there is nothing an outsider could open, so the share sheet
     /// offers the guild's own page instead of a link that would 404.
-    /// `trader` highlights and anchors that member's row on the page, which is
-    /// what makes a personal share land on the person rather than the board.
+    /// The element id the page gives one trader's row.
+    ///
+    /// Must stay identical to `leaderboard_anchor` in the backend's
+    /// `public_invites.py` — the app appends this as the URL fragment and the
+    /// server stamps it on the row, and a mismatch means the browser silently
+    /// does not scroll.
+    static func anchor(for handle: String?) -> String {
+        let lowered = (handle ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "@", with: "")
+            .lowercased()
+        let kept = lowered.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        return kept.isEmpty ? "" : "trader-\(kept)"
+    }
+
+    /// `trader` highlights that member's row — and pins it below the page when
+    /// they rank past it — while the fragment scrolls the browser to it. Both
+    /// are needed: the query decides what is rendered, the fragment decides
+    /// where the reader lands.
     static func publicURL(
         slug: String?, window: LeaderboardWindow, trader: String? = nil
     ) -> URL? {
@@ -38,6 +55,10 @@ enum LeaderboardShare {
             items.append(URLQueryItem(name: "trader", value: handle))
         }
         components?.queryItems = items.isEmpty ? nil : items
+        let fragment = anchor(for: trader)
+        if !fragment.isEmpty {
+            components?.fragment = fragment
+        }
         return components?.url
     }
 
