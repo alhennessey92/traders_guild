@@ -601,7 +601,13 @@ enum LeaderboardWindow: String, CaseIterable, Identifiable, Equatable {
         switch self {
         case .week: return 1
         case .month: return 2
-        case .all: return 10
+        // Three, not the endpoint's default of ten. Ten is a bar a young guild
+        // never clears — a four-member community with a handful of resolved
+        // setups saw an empty board and, with it, none of the sharing built
+        // around one. It also matches `_PUBLIC_LEADERBOARD_MIN_PREDICTIONS`
+        // on the public page, which otherwise published standings the owner
+        // could not see in their own app.
+        case .all: return 3
         }
     }
 }

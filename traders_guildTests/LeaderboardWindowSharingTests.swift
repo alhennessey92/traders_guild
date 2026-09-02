@@ -38,6 +38,19 @@ struct LeaderboardWindowSharingTests {
         #expect(LeaderboardWindow.month.minimumPredictions < LeaderboardWindow.all.minimumPredictions)
     }
 
+    @Test func theAllTimeBarMatchesWhatThePublicPagePublishes() {
+        // `_PUBLIC_LEADERBOARD_MIN_PREDICTIONS` in public_invites.py. If the
+        // app asked for more, a guild could publish standings its own owner
+        // could not see.
+        #expect(LeaderboardWindow.all.minimumPredictions == 3)
+    }
+
+    @Test func aYoungGuildCanStillHaveABoardToShare() {
+        // Every sharing surface hangs off a non-empty board, so a threshold no
+        // new guild clears hides the feature rather than the data.
+        #expect(LeaderboardWindow.all.minimumPredictions <= 3)
+    }
+
     // MARK: - Decoding
 
     @Test func leaderboardDecodesWithoutTheNewWindowFields() throws {
