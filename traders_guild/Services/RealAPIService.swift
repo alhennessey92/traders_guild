@@ -1435,7 +1435,8 @@ extension RealAPIService {
         language: String? = nil,
         location: String? = nil,
         crestSymbol: String? = nil,
-        crestColor: String? = nil
+        crestColor: String? = nil,
+        publicLeaderboard: Bool? = nil
     ) async throws -> RLGuildDTO {
         let body = RLUpdateGuildRequestDTO(
             name: name,
@@ -1444,7 +1445,8 @@ extension RealAPIService {
             language: language,
             location: location,
             crestSymbol: crestSymbol,
-            crestColor: crestColor
+            crestColor: crestColor,
+            publicLeaderboard: publicLeaderboard
         )
         return try await request(
             "/guilds/\(guildId.uuidString)",
@@ -1602,16 +1604,18 @@ extension RealAPIService {
         )
     }
 
-    /// Rename or set a default destination. `autoPostMarkers` remains optional
-    /// for compatibility with the round-two server contract; the current iOS
-    /// release does not expose or send an auto-post preference. Admins only.
+    /// Rename a destination, make it the default, or opt it into the weekly
+    /// standings digest. `autoPostMarkers` remains optional: the app does not
+    /// expose the guild-wide broadcast switch, because a per-marker choice in
+    /// the composer covers the same ground with better consent. Admins only.
     /// PATCH /guilds/{guild_id}/discord-channels/{channel_id}
     func updateGuildDiscordChannel(
         guildId: UUID,
         channelId: UUID,
         label: String? = nil,
         isDefault: Bool? = nil,
-        autoPostMarkers: Bool? = nil
+        autoPostMarkers: Bool? = nil,
+        postWeeklyDigest: Bool? = nil
     ) async throws -> RLGuildDiscordChannelDTO {
         try await request(
             "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)",
@@ -1620,8 +1624,27 @@ extension RealAPIService {
             body: RLGuildDiscordChannelUpdateRequestDTO(
                 label: label,
                 isDefault: isDefault,
-                autoPostMarkers: autoPostMarkers
+                autoPostMarkers: autoPostMarkers,
+                postWeeklyDigest: postWeeklyDigest
             ),
+            auth: true
+        )
+    }
+
+    /// Post the guild's current accuracy standings into one channel. Any
+    /// active member may — the standings are already visible to all of them.
+    /// POST /guilds/{guild_id}/discord-channels/{channel_id}/share-leaderboard
+    @discardableResult
+    func shareGuildLeaderboardToDiscord(
+        guildId: UUID,
+        channelId: UUID,
+        window: LeaderboardWindow
+    ) async throws -> RLDetailResponseDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/discord-channels/\(channelId.uuidString)/share-leaderboard",
+            service: .core,
+            method: "POST",
+            body: RLGuildDiscordShareLeaderboardRequestDTO(window: window.rawValue),
             auth: true
         )
     }
@@ -4386,12 +4409,23 @@ extension RealAPIService {
     }
 
     /// Get the accuracy leaderboard for a guild.
-    func getGuildAccuracyLeaderboard(guildId: UUID, minPredictions: Int = 10, limit: Int = 50) async throws -> RLAccuracyLeaderboardDTO {
-        return try await request(
-            "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard?min_predictions=\(minPredictions)&limit=\(limit)",
-            service: .reputation,
-            auth: true
-        )
+    ///
+    /// `window` narrows the standings to the last 7 or 30 days, and `symbolId`
+    /// to a single instrument. Both default to the all-time, all-instrument
+    /// board this endpoint has always returned.
+    func getGuildAccuracyLeaderboard(
+        guildId: UUID,
+        minPredictions: Int = 10,
+        limit: Int = 50,
+        window: LeaderboardWindow = .all,
+        symbolId: UUID? = nil
+    ) async throws -> RLAccuracyLeaderboardDTO {
+        var path = "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard"
+        path += "?min_predictions=\(minPredictions)&limit=\(limit)&window=\(window.rawValue)"
+        if let symbolId {
+            path += "&symbol_id=\(symbolId.uuidString)"
+        }
+        return try await request(path, service: .reputation, auth: true)
     }
 
     func getGlobalUsersLeaderboard(limit: Int = 100, minPredictions: Int = 0) async throws -> RLGlobalUserLeaderboardDTO {

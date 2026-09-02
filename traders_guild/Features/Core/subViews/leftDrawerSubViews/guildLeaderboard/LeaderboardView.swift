@@ -129,6 +129,9 @@ struct LeaderboardListView: View {
     @State private var hasLoadedDiscoverableGuilds = false
     @State private var hasLoadedJoinedGuildAccuracy = false
     @State private var guildAccuracyRefreshHint: String? = nil
+    @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
+    @State private var showLeaderboardShare = false
+    @State private var showMyStatsShare = false
     @State private var globalUsersRefreshHint: String? = nil
     @State private var globalGuildsRefreshHint: String? = nil
 
@@ -242,6 +245,7 @@ private extension LeaderboardListView {
         }
         await refreshGlobalUsers()
         await refreshGlobalGuildData()
+        await loadDiscordChannels()
     }
 
     func refreshLeaderboard() async {
@@ -643,49 +647,285 @@ private extension LeaderboardListView {
     }
 
     var guildAccuracyContent: some View {
-        Group {
-            if (leftDrawerViewModel.isLoadingAccuracyLeaderboard || !hasLoadedGuildAccuracyLeaderboard)
-                && leftDrawerViewModel.accuracyLeaderboard.isEmpty {
-                VStack(spacing: 10) {
-                    refreshHintBanner(guildAccuracyRefreshHint)
-                    UnifiedLoadingState(message: "Loading guild accuracy...")
-                        .padding(.top, 40)
-                }
-            } else if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
-                VStack(spacing: 10) {
-                    refreshHintBanner(guildAccuracyRefreshHint)
-                    if let progressCard = guildAccuracyProgressCard {
-                        progressCard
+        VStack(spacing: 10) {
+            accuracyWindowPicker
+
+            Group {
+                if (leftDrawerViewModel.isLoadingAccuracyLeaderboard || !hasLoadedGuildAccuracyLeaderboard)
+                    && leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                    VStack(spacing: 10) {
+                        refreshHintBanner(guildAccuracyRefreshHint)
+                        UnifiedLoadingState(message: "Loading guild accuracy...")
+                            .padding(.top, 40)
                     }
-                    UnifiedEmptyState(
-                        icon: "target",
-                        title: "No accuracy data",
-                        subtitle: "Members need at least \(leftDrawerViewModel.accuracyLeaderboardMinPredictions) predictions to appear"
-                    )
-                    .padding(.top, 20)
-                }
-            } else {
-                VStack(spacing: 10) {
-                    refreshHintBanner(guildAccuracyRefreshHint)
-                    if let progressCard = guildAccuracyProgressCard {
-                        progressCard
-                    }
-                    LazyVStack(spacing: 8) {
-                        ForEach(leftDrawerViewModel.accuracyLeaderboard) { member in
-                            AccuracyLeaderboardRow(
-                                member: member,
-                                isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: false),
-                                onTap: {
-                                    if let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId }) {
-                                        openProfile(for: guildMember)
-                                    }
-                                }
-                            )
+                } else if leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+                    VStack(spacing: 10) {
+                        refreshHintBanner(guildAccuracyRefreshHint)
+                        if let progressCard = guildAccuracyProgressCard {
+                            progressCard
                         }
+                        UnifiedEmptyState(
+                            icon: "target",
+                            title: emptyAccuracyTitle,
+                            subtitle: emptyAccuracySubtitle
+                        )
+                        .padding(.top, 20)
+                        discordConnectNudge
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        refreshHintBanner(guildAccuracyRefreshHint)
+                        if let progressCard = guildAccuracyProgressCard {
+                            progressCard
+                        }
+                        myRecordCard
+                        LazyVStack(spacing: 8) {
+                            ForEach(leftDrawerViewModel.accuracyLeaderboard) { member in
+                                AccuracyLeaderboardRow(
+                                    member: member,
+                                    isOnline: rlAppState.effectiveOnlineStatus(userId: member.userId, fallback: false),
+                                    onTap: {
+                                        if let guildMember = leftDrawerViewModel.guildMembers.first(where: { $0.userId == member.userId }) {
+                                            openProfile(for: guildMember)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        discordConnectNudge
                     }
                 }
             }
         }
+    }
+
+    /// Week / Month / All time.
+    ///
+    /// The all-time board is the app's oldest view and stays the default; the
+    /// short windows are what make "trader of the month" a real thing you can
+    /// look at rather than a claim somebody makes in chat.
+    private var accuracyWindowPicker: some View {
+        HStack(spacing: 6) {
+            shareStandingsButton
+            ForEach(LeaderboardWindow.allCases) { window in
+                let isSelected = leftDrawerViewModel.accuracyLeaderboardWindow == window
+                Button {
+                    guard !isSelected, let guildId = rlAppState.currentGuild?.id else { return }
+                    HapticFeedback.light.trigger()
+                    Task {
+                        await leftDrawerViewModel.refreshAccuracyLeaderboard(
+                            guildId: guildId,
+                            rlAppState: rlAppState,
+                            window: window
+                        )
+                    }
+                } label: {
+                    Text(window.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(isSelected ? AppColors.guildReputationAccent : AppColors.greyText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9)
+                                .fill(isSelected ? AppColors.guildReputationAccent.opacity(0.16) : Color.clear)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9)
+                                        .stroke(
+                                            isSelected
+                                                ? AppColors.guildReputationAccent.opacity(0.55)
+                                                : AppColors.surfaceWhite12,
+                                            lineWidth: isSelected ? 1.4 : 1
+                                        )
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .disabled(leftDrawerViewModel.isLoadingAccuracyLeaderboard)
+    }
+
+    /// The current user's own record, with a way to post it.
+    ///
+    /// Somebody who is doing well is the most motivated distributor Traders
+    /// Guild has: their record is only credible *because* it was tracked
+    /// automatically, which is the whole pitch in one screenshot.
+    @ViewBuilder
+    private var myRecordCard: some View {
+        if let profile = currentGuildAccuracyProfile,
+           profile.totalPredictions >= leftDrawerViewModel.accuracyLeaderboardMinPredictions {
+            let accuracy = Int((profile.accuracyRate * 100).rounded())
+            let losses = max(0, profile.totalPredictions - profile.successfulPredictions)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Your record")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(AppColors.guildReputationAccent)
+                    HStack(spacing: 6) {
+                        Text("\(accuracy)%")
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(AppColors.whiteText)
+                        Text("\(profile.successfulPredictions)W · \(losses)L")
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                        if let rank = profile.rankInGuild {
+                            Text("· #\(rank)")
+                                .font(.caption)
+                                .foregroundColor(AppColors.greyText)
+                        }
+                    }
+                }
+                Spacer()
+                Button {
+                    HapticFeedback.light.trigger()
+                    showMyStatsShare = true
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.guildReputationAccent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().stroke(
+                                AppColors.guildReputationAccent.opacity(0.45), lineWidth: 1
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppColors.messagingListRowFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
+            .sheet(isPresented: $showMyStatsShare) {
+                if let guild = rlAppState.currentGuild {
+                    MemberStatsShareSheet(
+                        guildName: guild.name,
+                        guildSlug: guild.slug,
+                        isPublished: guild.publicLeaderboard ?? false,
+                        window: leftDrawerViewModel.accuracyLeaderboardWindow,
+                        profile: profile,
+                        rank: profile.rankInGuild
+                    )
+                }
+            }
+        }
+    }
+
+    /// Standings are only worth sharing once there are some.
+    @ViewBuilder
+    private var shareStandingsButton: some View {
+        if !leftDrawerViewModel.accuracyLeaderboard.isEmpty {
+            Button {
+                HapticFeedback.light.trigger()
+                showLeaderboardShare = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(AppColors.guildReputationAccent)
+                    .frame(width: 34)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showLeaderboardShare) {
+                if let guild = rlAppState.currentGuild {
+                    LeaderboardShareSheet(
+                        guildId: guild.id,
+                        guildName: guild.name,
+                        guildSlug: guild.slug,
+                        isPublished: guild.publicLeaderboard ?? false,
+                        window: leftDrawerViewModel.accuracyLeaderboardWindow,
+                        members: leftDrawerViewModel.accuracyLeaderboard,
+                        channels: discordChannels
+                    )
+                    .environmentObject(rlAppState)
+                }
+            }
+        }
+    }
+
+    /// Shown to admins whose guild has no Discord channel connected.
+    ///
+    /// The standings are the thing a trading Discord actually wants from
+    /// Traders Guild, and this screen is where an owner is most likely to
+    /// realise that — so the prompt to connect one belongs here rather than
+    /// buried in settings, which is the only place it currently lives.
+    @ViewBuilder
+    private var discordConnectNudge: some View {
+        if canManageGuild && discordChannels.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image("DiscordLogo")
+                        .resizable()
+                        .renderingMode(.template)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 15, height: 15)
+                        .foregroundColor(AppColors.guildReputationAccent)
+                    Text("Post these standings to your Discord")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText)
+                }
+                Text("Connect a channel and your guild's leaderboard — and every tracked setup's result — can post there automatically.")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.greyText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Guild settings → Discord")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(AppColors.guildReputationAccent)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.guildReputationAccent.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.guildReputationAccent.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            .padding(.top, 4)
+        }
+    }
+
+    private var canManageGuild: Bool {
+        rlAppState.canAdmin
+    }
+
+    /// Best-effort: the share sheet and the nudge both degrade quietly when
+    /// Discord config cannot be read.
+    private func loadDiscordChannels() async {
+        guard let guildId = rlAppState.currentGuild?.id else {
+            discordChannels = []
+            return
+        }
+        if let response = try? await rlAppState.realApi.getGuildDiscordChannels(guildId: guildId) {
+            discordChannels = response.channels
+        } else {
+            discordChannels = []
+        }
+    }
+
+    private var emptyAccuracyTitle: String {
+        leftDrawerViewModel.accuracyLeaderboardWindow == .all
+            ? "No accuracy data"
+            : "Nothing resolved yet"
+    }
+
+    private var emptyAccuracySubtitle: String {
+        let window = leftDrawerViewModel.accuracyLeaderboardWindow
+        if window == .all {
+            return "Members need at least \(leftDrawerViewModel.accuracyLeaderboardMinPredictions) predictions to appear"
+        }
+        return "No tracked setup has hit its target or stop in the \(window.caption.lowercased())"
     }
 
     var globalUsersReputationContent: some View {

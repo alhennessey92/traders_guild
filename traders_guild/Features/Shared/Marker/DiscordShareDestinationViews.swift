@@ -17,6 +17,7 @@ struct DiscordDestinationSheet<Preview: View>: View {
     let onPost: () -> Void
     let onCopyAndOpen: () -> Void
 
+    @EnvironmentObject private var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
 
     private var usableChannels: [RLGuildDiscordChannelDTO] {
@@ -51,6 +52,16 @@ struct DiscordDestinationSheet<Preview: View>: View {
                                 .font(.footnote)
                                 .foregroundColor(AppColors.greyText)
                                 .fixedSize(horizontal: false, vertical: true)
+                            // Only an admin can fix this, so only an admin is
+                            // told how — and told here, at the moment they hit
+                            // the wall, rather than in settings they had no
+                            // reason to open.
+                            if rlAppState.canAdmin {
+                                Text("Guild settings → Discord → Add channel. Once connected, tracked setups post their result here on their own.")
+                                    .font(.footnote)
+                                    .foregroundColor(AppColors.guildReputationAccent)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 8) {

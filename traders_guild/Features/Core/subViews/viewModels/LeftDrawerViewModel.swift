@@ -69,6 +69,10 @@ class LeftDrawerViewModel: ObservableObject {
     // Accuracy leaderboard
     @Published var accuracyLeaderboard: [RLAccuracyLeaderboardMemberDTO] = []
     @Published var accuracyLeaderboardMinPredictions: Int = 10
+    /// The period the accuracy board is currently showing. Held here rather
+    /// than in the view so a refresh triggered from anywhere reloads the same
+    /// window the member is looking at.
+    @Published var accuracyLeaderboardWindow: LeaderboardWindow = .all
     @Published var isLoadingAccuracyLeaderboard: Bool = false
 
     @Published var guildTradingWatchlist: [RLTradingSymbolDTO] = []
@@ -744,17 +748,29 @@ class LeftDrawerViewModel: ObservableObject {
 
     /// Refresh the accuracy leaderboard for the current guild
     @discardableResult
-    func refreshAccuracyLeaderboard(guildId: UUID, rlAppState: RLAppState) async -> Bool {
+    func refreshAccuracyLeaderboard(
+        guildId: UUID,
+        rlAppState: RLAppState,
+        window: LeaderboardWindow? = nil
+    ) async -> Bool {
+        let requestedWindow = window ?? accuracyLeaderboardWindow
         isLoadingAccuracyLeaderboard = true
         defer { isLoadingAccuracyLeaderboard = false }
         let endpoint = "/reputation/guilds/\(guildId.uuidString)/accuracy-leaderboard"
-        print("📊 [Leaderboard] guild-accuracy start endpoint=\(endpoint) guildId=\(guildId.uuidString)")
+        print("📊 [Leaderboard] guild-accuracy start endpoint=\(endpoint) guildId=\(guildId.uuidString) window=\(requestedWindow.rawValue)")
 
         do {
-            let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(guildId: guildId)
+            let response = try await rlAppState.realApi.getGuildAccuracyLeaderboard(
+                guildId: guildId,
+                // A week's board would be empty at the all-time threshold, so
+                // the bar travels with the window.
+                minPredictions: requestedWindow.minimumPredictions,
+                window: requestedWindow
+            )
             await MainActor.run {
                 self.accuracyLeaderboard = response.members
                 self.accuracyLeaderboardMinPredictions = response.minPredictionsThreshold
+                self.accuracyLeaderboardWindow = requestedWindow
             }
             print(
                 "✅ [Leaderboard] guild-accuracy success endpoint=\(endpoint) guildId=\(guildId.uuidString) " +

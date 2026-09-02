@@ -2486,7 +2486,8 @@ class RLAppState: ObservableObject {
         language: String? = nil,
         location: String? = nil,
         crestSymbol: String? = nil,
-        crestColor: String? = nil
+        crestColor: String? = nil,
+        publicLeaderboard: Bool? = nil
     ) async throws -> RLGuildDTO {
         guard let guild = currentGuild else { throw NSError(domain: "RLAppState", code: 0, userInfo: [NSLocalizedDescriptionKey: "No guild selected"]) }
         do {
@@ -2498,7 +2499,8 @@ class RLAppState: ObservableObject {
                 language: language,
                 location: location,
                 crestSymbol: crestSymbol,
-                crestColor: crestColor
+                crestColor: crestColor,
+                publicLeaderboard: publicLeaderboard
             )
             // Update local state
             applyUpdatedGuild(updated)

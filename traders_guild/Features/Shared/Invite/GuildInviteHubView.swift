@@ -345,6 +345,21 @@ struct GuildInviteHubView: View {
     /// shell, worse than the long form it replaced. Completion is derived from
     /// guild state rather than stored, so it stays honest wherever the owner
     /// does the work.
+    /// The step that turns a linked Discord into the reason to have one.
+    ///
+    /// Only for admins — nobody else can connect a webhook — and worded around
+    /// what the guild gets rather than what it is: results and standings
+    /// posting themselves is the part a server owner is actually buying.
+    private var discordSetupStep: [(title: String, subtitle: String, done: Bool, action: () -> Void)] {
+        guard rlAppState.canAdmin else { return [] }
+        return [(
+            "Connect your Discord",
+            "Post markers, results and weekly standings straight to a channel",
+            !discordChannels.isEmpty,
+            { showGuildSettings = true }
+        )]
+    }
+
     @ViewBuilder
     private var setupChecklist: some View {
         // Every row navigates. A checklist you can't act on is a nag list, so a
@@ -362,7 +377,7 @@ struct GuildInviteHubView: View {
              !(guild?.imageUrl?.isEmpty ?? true)
                 && !((guild?.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty),
              { showGuildSettings = true }),
-        ]
+        ] + discordSetupStep
         let remaining = steps.filter { !$0.done }.count
 
         if remaining > 0 {

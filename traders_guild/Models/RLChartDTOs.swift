@@ -2310,6 +2310,10 @@ struct RLCreateMarkerRequest: Codable {
     let components: [RLMarkerComponentRequest]
     let pollQuestion: String?
     let pollOptions: [String]?
+    /// The Discord channel the author chose to mirror this marker into as they
+    /// placed it. `nil` means they did not, and nothing is posted — this is a
+    /// per-marker decision, never a standing one.
+    var discordChannelId: UUID? = nil
 
     enum CodingKeys: String, CodingKey {
         case symbolId = "symbol_id"
@@ -2323,6 +2327,7 @@ struct RLCreateMarkerRequest: Codable {
         case components
         case pollQuestion = "poll_question"
         case pollOptions = "poll_options"
+        case discordChannelId = "discord_channel_id"
     }
 }
 

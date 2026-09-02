@@ -182,6 +182,14 @@ final class MarkerPlacementState: ObservableObject {
     @Published var visibility: String = "guild"
     @Published var confidence: Int?
     @Published var trackingEnabled: Bool = false
+    /// The Discord channel this marker will also be posted to, chosen here and
+    /// now. Never a standing setting: an author opts one marker in at a time,
+    /// which is what lets this work in an open guild where the guild-wide
+    /// broadcast switch deliberately does not.
+    @Published var discordChannelId: UUID?
+    /// Destinations the guild has connected, loaded when the composer opens.
+    /// Empty means the section stays hidden — there is nowhere to post.
+    @Published var discordChannels: [RLGuildDiscordChannelDTO] = []
     @Published var pollQuestion: String = ""
     @Published var pollOptions: [String] = ["", ""]
     @Published var alertSeverity: MarkerAlertSeverity?
@@ -2049,8 +2057,21 @@ final class MarkerPlacementState: ObservableObject {
             trackingEnabled: trackingEnabled,
             components: requestComponents,
             pollQuestion: intent == .poll ? (trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion) : nil,
-            pollOptions: intent == .poll ? normalizedPollOptions : nil
+            pollOptions: intent == .poll ? normalizedPollOptions : nil,
+            // Guild-visible only: a private marker has nothing to mirror, and
+            // the server would refuse to post one anyway.
+            discordChannelId: resolvedVisibility == "guild" ? selectedDiscordChannelId : nil
         )
+    }
+
+    /// The chosen destination, but only if it is still one we could post to.
+    ///
+    /// A channel can be removed or revoked in Discord while the composer is
+    /// open; sending an id that no longer resolves would silently drop the
+    /// post, so it is re-checked against what actually loaded.
+    var selectedDiscordChannelId: UUID? {
+        guard let discordChannelId else { return nil }
+        return discordChannels.first { $0.id == discordChannelId && $0.canPost }?.id
     }
 
     func buildUpdateRequest() -> RLUpdateMarkerRequest {

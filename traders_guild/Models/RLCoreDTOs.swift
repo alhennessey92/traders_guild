@@ -312,6 +312,10 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
     // renders a gradient derived from its crest colour, so nil is a permanent
     // valid state rather than missing data.
     let bannerUrl: String?           // backend: banner_url
+    /// Whether this guild publishes its accuracy standings at
+    /// tradersguild.co/g/{slug}/leaderboard. Optional so the app decodes
+    /// against a server that predates the public page.
+    let publicLeaderboard: Bool?     // backend: public_leaderboard
 
     // MARK: - Computed Properties
     
@@ -383,7 +387,8 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             updatedAt: Date(),
             crestSymbol: crestSymbol,
             crestColor: crestColor,
-            bannerUrl: bannerUrl
+            bannerUrl: bannerUrl,
+            publicLeaderboard: publicLeaderboard
         )
     }
 
@@ -410,7 +415,8 @@ struct RLGuildDTO: Codable, Identifiable, Equatable {
             updatedAt: Date(),
             crestSymbol: crestSymbol,
             crestColor: crestColor,
-            bannerUrl: bannerUrl
+            bannerUrl: bannerUrl,
+            publicLeaderboard: publicLeaderboard
         )
     }
 }
@@ -2040,6 +2046,9 @@ struct RLUpdateGuildRequestDTO: Codable {
     let location: String?
     var crestSymbol: String? = nil   // backend: crest_symbol
     var crestColor: String? = nil    // backend: crest_color
+    /// Publish the guild's accuracy standings publicly. Separate from
+    /// `isOpen`: who may join and what the world may read are different calls.
+    var publicLeaderboard: Bool? = nil   // backend: public_leaderboard
 }
 
 /// Guild invitation response DTO
@@ -2108,21 +2117,31 @@ struct RLGuildDiscordChannelUpdateRequestDTO: Codable {
     let label: String?
     let isDefault: Bool?
     let autoPostMarkers: Bool?
+    /// Opt this channel into the weekly standings digest.
+    let postWeeklyDigest: Bool?
 
     init(
         label: String? = nil,
         isDefault: Bool? = nil,
-        autoPostMarkers: Bool? = nil
+        autoPostMarkers: Bool? = nil,
+        postWeeklyDigest: Bool? = nil
     ) {
         self.label = label
         self.isDefault = isDefault
         self.autoPostMarkers = autoPostMarkers
+        self.postWeeklyDigest = postWeeklyDigest
     }
 }
 
 /// Post an existing invite link into the guild's Discord channel.
 struct RLGuildDiscordShareInviteRequestDTO: Codable {
     let code: String
+}
+
+/// Post the guild's current accuracy standings into a Discord channel.
+struct RLGuildDiscordShareLeaderboardRequestDTO: Codable {
+    /// `7d`, `30d` or `all` — the server's own vocabulary.
+    let window: String
 }
 
 /// Destination and optional note posted alongside a marker in Discord.
@@ -2153,6 +2172,9 @@ struct RLGuildDiscordChannelDTO: Codable, Identifiable, Equatable {
     let webhookId: String
     let isDefault: Bool
     let autoPostMarkers: Bool
+    /// Whether the weekly guild standings digest is posted here. Optional so
+    /// this decodes against a server that predates the digest.
+    let postWeeklyDigest: Bool?
     /// `active` | `failing` | `invalid`.
     let status: String
     let consecutiveFailures: Int

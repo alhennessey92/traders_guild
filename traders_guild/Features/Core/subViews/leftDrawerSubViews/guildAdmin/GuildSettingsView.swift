@@ -14,6 +14,7 @@ struct GuildSettingsView: View {
     @State private var name = ""
     @State private var description = ""
     @State private var isOpen = true
+    @State private var publicLeaderboard = false
     @State private var selectedLanguageCode = ""
     @State private var selectedCountryCode = ""
     @State private var joinQuestions: [String] = []
@@ -106,6 +107,7 @@ struct GuildSettingsView: View {
         return trimmedName != guild.name
             || trimmedDescription != (guild.description ?? "")
             || isOpen != guild.isOpen
+            || publicLeaderboard != (guild.publicLeaderboard ?? false)
             || selectedLanguageCode != LocaleOptionCatalog.languageCode(from: guild.language)
             || selectedCountryCode != LocaleOptionCatalog.countryCode(from: guild.location)
     }
@@ -216,6 +218,32 @@ struct GuildSettingsView: View {
                                 iconColor: isOpen ? .green : .orange,
                                 isOn: $isOpen
                             )
+                            // A separate decision from who may join: this one
+                            // names members and their records to anyone with
+                            // the link, which is exactly why it is worth having
+                            // when you are recruiting from a Discord.
+                            AdminToggleRow(
+                                title: "Public Leaderboard",
+                                subtitle: publicLeaderboard
+                                    ? "Anyone with the link can see your standings"
+                                    : "Standings stay inside the app",
+                                icon: publicLeaderboard ? "chart.bar.fill" : "eye.slash.fill",
+                                iconColor: publicLeaderboard ? .green : .orange,
+                                isOn: $publicLeaderboard
+                            )
+                            if publicLeaderboard, let shareURL = publicLeaderboardURL {
+                                Button {
+                                    UIPasteboard.general.string = shareURL
+                                    HapticFeedback.light.trigger()
+                                } label: {
+                                    Label(shareURL, systemImage: "doc.on.doc")
+                                        .font(.caption2)
+                                        .foregroundColor(AppColors.greyText)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .buttonStyle(.plain)
+                            }
                             AdminLocalePickerField(
                                 title: "Language",
                                 value: selectedLanguageCode.isEmpty ? "Not specified" : LocaleOptionCatalog.languageLabel(for: selectedLanguageCode),
@@ -495,6 +523,7 @@ struct GuildSettingsView: View {
             name = guild.name
             description = guild.description ?? ""
             isOpen = guild.isOpen
+            publicLeaderboard = guild.publicLeaderboard ?? false
             selectedLanguageCode = LocaleOptionCatalog.languageCode(from: guild.language)
             selectedCountryCode = LocaleOptionCatalog.countryCode(from: guild.location)
             crestSymbol = guild.crestSymbol ?? GuildCrestCatalog.defaultSymbolKey
@@ -534,6 +563,13 @@ struct GuildSettingsView: View {
     /// Manage the guild's named Discord webhook destinations. A webhook is
     /// channel-bound in Discord, so connecting more channels means adding one
     /// webhook per destination.
+    /// The address a published leaderboard lives at, so an owner can paste it
+    /// into their Discord without hunting for it.
+    private var publicLeaderboardURL: String? {
+        guard let slug = rlAppState.currentGuild?.slug, !slug.isEmpty else { return nil }
+        return "https://tradersguild.co/g/\(slug)/leaderboard"
+    }
+
     private var discordSection: some View {
         AdminSectionCard {
             HStack(spacing: 8) {
@@ -700,6 +736,21 @@ struct GuildSettingsView: View {
                     .foregroundColor(AppColors.statusWarning)
             }
 
+            // One dependable post a week, so a quiet stretch does not mean the
+            // guild's Discord hears nothing at all from Traders Guild.
+            Toggle(isOn: weeklyDigestBinding(for: channel)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Weekly standings")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText)
+                    Text("Post the guild's accuracy leaderboard here every Monday.")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(AppColors.guildReputationAccent)
+            .disabled(discordBusy || !channel.canPost)
         }
         .padding(12)
         .background(
@@ -782,6 +833,26 @@ struct GuildSettingsView: View {
             discordChannels[index] = updated
         } else {
             discordChannels.append(updated)
+        }
+    }
+
+    private func weeklyDigestBinding(for channel: RLGuildDiscordChannelDTO) -> Binding<Bool> {
+        Binding(
+            get: { channel.postWeeklyDigest ?? false },
+            set: { enabled in Task { await setWeeklyDigest(enabled, on: channel) } }
+        )
+    }
+
+    private func setWeeklyDigest(_ enabled: Bool, on channel: RLGuildDiscordChannelDTO) async {
+        guard let guildId = rlAppState.currentGuild?.id, !discordBusy else { return }
+        discordBusy = true
+        defer { discordBusy = false }
+        if let updated = try? await rlAppState.realApi.updateGuildDiscordChannel(
+            guildId: guildId,
+            channelId: channel.id,
+            postWeeklyDigest: enabled
+        ), let index = discordChannels.firstIndex(where: { $0.id == updated.id }) {
+            discordChannels[index] = updated
         }
     }
 
@@ -990,7 +1061,8 @@ struct GuildSettingsView: View {
                     language: selectedLanguageCode.isEmpty ? nil : selectedLanguageCode,
                     location: selectedCountryCode.isEmpty ? nil : selectedCountryCode,
                     crestSymbol: crestSymbol,
-                    crestColor: crestColor
+                    crestColor: crestColor,
+                    publicLeaderboard: publicLeaderboard
                 )
             }
 

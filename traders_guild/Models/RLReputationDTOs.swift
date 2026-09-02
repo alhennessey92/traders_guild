@@ -566,11 +566,57 @@ struct RLAccuracyLeaderboardMemberDTO: Codable, Identifiable, Equatable {
     }
 }
 
+/// The period a set of accuracy standings covers.
+///
+/// The raw values are the server's query-parameter vocabulary, so a case can
+/// go straight into a URL without a second mapping table drifting from it.
+enum LeaderboardWindow: String, CaseIterable, Identifiable, Equatable {
+    case week = "7d"
+    case month = "30d"
+    case all = "all"
+
+    var id: String { rawValue }
+
+    /// Short enough for a segmented control.
+    var title: String {
+        switch self {
+        case .week: return "Week"
+        case .month: return "Month"
+        case .all: return "All time"
+        }
+    }
+
+    /// Spelled out, for a card caption or a share message.
+    var caption: String {
+        switch self {
+        case .week: return "Last 7 days"
+        case .month: return "Last 30 days"
+        case .all: return "All time"
+        }
+    }
+
+    /// A rolling window covers far fewer resolutions than a lifetime, so the
+    /// bar for appearing has to drop with it or a small guild's week is empty.
+    var minimumPredictions: Int {
+        switch self {
+        case .week: return 1
+        case .month: return 2
+        case .all: return 10
+        }
+    }
+}
+
 /// Guild accuracy leaderboard response.
 struct RLAccuracyLeaderboardDTO: Codable {
     let members: [RLAccuracyLeaderboardMemberDTO]
     let totalMembers: Int
     let minPredictionsThreshold: Int
+    /// The period these standings cover — `7d`, `30d` or `all`. Echoed by the
+    /// server so a screen showing "Last 7 days" can be sure that is what it
+    /// received. Optional: a server predating windows omits it.
+    let window: String?
+    /// Set when the board was scoped to a single instrument.
+    let symbolId: UUID?
 }
 
 struct RLGlobalUserLeaderboardMemberDTO: Codable, Identifiable, Equatable {

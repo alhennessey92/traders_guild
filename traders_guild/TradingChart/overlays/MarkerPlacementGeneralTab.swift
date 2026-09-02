@@ -110,6 +110,11 @@ struct MarkerPlacementGeneralTab: View {
 
                 requirementsSection
                 generalSection
+
+                MarkerDiscordOptInSection(
+                    placementState: placementState,
+                    guildId: rlAppState.currentGuild?.id
+                )
             }
             .padding(.trailing, 2)
             .padding(.bottom, max(keyboardInset + 24, 24))
@@ -122,6 +127,9 @@ struct MarkerPlacementGeneralTab: View {
                 placementState.alertSeverity = inferredAlertSeverity(from: placementState.note)
             }
             placementState.isTextInputFocused = focusedInput != nil
+        }
+        .task(id: rlAppState.currentGuild?.id) {
+            await loadDiscordChannels()
         }
         .onChange(of: focusedInput) { _, newValue in
             placementState.isTextInputFocused = newValue != nil
@@ -961,6 +969,24 @@ struct MarkerPlacementGeneralTab: View {
             return nil
         }
         return payload.emoji
+    }
+
+    /// Destinations the author could post this marker to.
+    ///
+    /// Best-effort and silent: Discord being unreachable must not stop anyone
+    /// placing a marker, so a failure just leaves the section hidden.
+    private func loadDiscordChannels() async {
+        guard let guildId = rlAppState.currentGuild?.id else {
+            placementState.discordChannels = []
+            return
+        }
+        if let response = try? await rlAppState.realApi.getGuildDiscordChannels(
+            guildId: guildId
+        ) {
+            placementState.discordChannels = response.channels
+        } else {
+            placementState.discordChannels = []
+        }
     }
 
     private func syncNewsURLFromComponent() {
