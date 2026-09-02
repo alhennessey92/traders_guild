@@ -209,3 +209,74 @@ struct LeaderboardWindowSharingTests {
         #expect(url?.absoluteString.contains("text=standings") == true)
     }
 }
+
+struct DiscordSetupReminderTests {
+
+    private let guildId = UUID(uuidString: "6C4F0F14-2B4E-4C0E-9E9F-9A1B2C3D4E5F")!
+
+    private func clear() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "discord.setup.remindedAt.\(guildId.uuidString)")
+        defaults.removeObject(forKey: "discord.setup.remindedVersion.\(guildId.uuidString)")
+    }
+
+    @Test @MainActor func aNewGuildOwnerIsAskedStraightAway() {
+        clear()
+        #expect(DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: true, hasChannel: false
+        ))
+        clear()
+    }
+
+    @Test @MainActor func aConnectedGuildIsNeverNagged() {
+        clear()
+        // Nothing to remind anyone about once a channel exists.
+        #expect(!DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: true, hasChannel: true
+        ))
+        clear()
+    }
+
+    @Test @MainActor func onlyTheOwnerIsAsked() {
+        clear()
+        // An admin cannot be held responsible for the guild's reach, and a
+        // member has nothing to act on.
+        #expect(!DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: false, hasChannel: false
+        ))
+        clear()
+    }
+
+    @Test @MainActor func sayingNotNowIsRespectedForAMonth() {
+        clear()
+        let now = Date()
+        DiscordSetupReminder.recordShown(guildId: guildId, now: now)
+
+        #expect(!DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: true, hasChannel: false,
+            now: now.addingTimeInterval(29 * 24 * 60 * 60)
+        ))
+        #expect(DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: true, hasChannel: false,
+            now: now.addingTimeInterval(DiscordSetupReminder.interval + 1)
+        ))
+        clear()
+    }
+
+    @Test @MainActor func aNewBuildEarnsOneMoreAsk() {
+        clear()
+        let now = Date()
+        DiscordSetupReminder.recordShown(guildId: guildId, now: now)
+        // Simulate the app having been updated since the last reminder.
+        UserDefaults.standard.set(
+            "0.0.0-previous",
+            forKey: "discord.setup.remindedVersion.\(guildId.uuidString)"
+        )
+
+        #expect(DiscordSetupReminder.shouldRemind(
+            guildId: guildId, isOwner: true, hasChannel: false,
+            now: now.addingTimeInterval(60)
+        ))
+        clear()
+    }
+}

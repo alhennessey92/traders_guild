@@ -116,6 +116,7 @@ struct MainView: View {
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
     /// Presented (above the persistent chart bottom sheet) after a guild-visible marker is placed.
     @State private var markerSharePromptContext: MarkerShareContext?
+    @State private var showDiscordSetupReminder = false
 
     // MARK: - Tutorial Auto-Start Gate
     @State private var didScheduleTutorialAutoStart: Bool = false
@@ -852,12 +853,49 @@ struct MainView: View {
             .sheet(item: $markerSharePromptContext) { context in
                 MarkerSharePromptSheet(context: context, appState: rlAppState)
             }
+            .sheet(isPresented: $showDiscordSetupReminder) {
+                DiscordSetupReminderSheet(
+                    guildName: rlAppState.currentGuild?.name ?? "your guild"
+                ) {
+                    // The drawer is where guild settings live; opening it beats
+                    // describing a path the owner then has to retrace.
+                    withAnimation { showLeftDrawer = true }
+                }
+            }
+            .task(id: rlAppState.currentGuild?.id) {
+                await maybeRemindAboutDiscord()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .presentMarkerSharePrompt)) { note in
                 if let context = note.userInfo?[MarkerSharePromptNotification.contextKey] as? MarkerShareContext {
                     markerSharePromptContext = context
                 }
             }
         }
+    }
+
+    /// Ask the owner about Discord — after they create a guild, then rarely.
+    ///
+    /// Silent on every failure: an unreachable channel list is not a reason to
+    /// interrupt somebody, and the reminder will come round again anyway.
+    private func maybeRemindAboutDiscord() async {
+        guard
+            let guild = rlAppState.currentGuild,
+            guild.ownerId == rlAppState.currentUser?.id,
+            !(guild.isOnboardingSystemGuild ?? false)
+        else { return }
+
+        guard let response = try? await rlAppState.realApi.getGuildDiscordChannels(
+            guildId: guild.id
+        ) else { return }
+
+        guard DiscordSetupReminder.shouldRemind(
+            guildId: guild.id,
+            isOwner: true,
+            hasChannel: response.channels.contains(where: \.canPost)
+        ) else { return }
+
+        DiscordSetupReminder.recordShown(guildId: guild.id)
+        showDiscordSetupReminder = true
     }
 
     private var mainChartContentLayer: some View {

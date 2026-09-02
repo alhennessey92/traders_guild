@@ -2887,10 +2887,18 @@ struct TradingChartView: View {
                 if let created, created.visibility == "guild" {
                     // Presented by MainView (above the persistent chart bottom sheet);
                     // a sheet from here would contend with that one and flood the log.
+                    // Carry the composer's Discord choice through, so the
+                    // prompt shows the post already went rather than offering
+                    // to send a second copy of it.
+                    let postedTo = placementState.selectedDiscordChannelId.flatMap { id in
+                        placementState.discordChannels
+                            .first { $0.id == id }?.displayLabel
+                    }
                     let shareContext = MarkerShareContext(
                         marker: created,
                         symbolTicker: chartViewModel.currentSymbol?.ticker,
-                        isCurrentUserMarker: true
+                        isCurrentUserMarker: true,
+                        postedToDiscord: postedTo
                     )
                     NotificationCenter.default.post(
                         name: .presentMarkerSharePrompt,

@@ -132,6 +132,7 @@ struct LeaderboardListView: View {
     @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
     @State private var showLeaderboardShare = false
     @State private var showMyStatsShare = false
+    @State private var isSettingPublicLeaderboard = false
     @State private var globalUsersRefreshHint: String? = nil
     @State private var globalGuildsRefreshHint: String? = nil
 
@@ -671,6 +672,7 @@ private extension LeaderboardListView {
                         )
                         .padding(.top, 20)
                         discordConnectNudge
+                        publicLeaderboardRow
                     }
                 } else {
                     VStack(spacing: 10) {
@@ -693,10 +695,99 @@ private extension LeaderboardListView {
                             }
                         }
                         discordConnectNudge
+                        publicLeaderboardRow
                     }
                 }
             }
         }
+    }
+
+    /// Where the public standings live, said on the screen they describe.
+    ///
+    /// The toggle itself is in guild settings under the access options, which
+    /// is a reasonable home and a terrible place to discover it from. Owners
+    /// were finding neither the setting nor, once it was on, the address —
+    /// so both live here, one tap from the board they publish.
+    @ViewBuilder
+    private var publicLeaderboardRow: some View {
+        if canManageGuild, let guild = rlAppState.currentGuild {
+            let isPublished = guild.publicLeaderboard ?? false
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: isPublished ? "globe" : "eye.slash.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(
+                            isPublished ? AppColors.guildReputationAccent : AppColors.greyText
+                        )
+                    Text(isPublished ? "Standings are public" : "Standings are private")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.whiteText)
+                    Spacer()
+                    Button {
+                        Task { await setPublicLeaderboard(!isPublished) }
+                    } label: {
+                        Text(isPublished ? "Make private" : "Publish")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(AppColors.guildReputationAccent)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().stroke(
+                                    AppColors.guildReputationAccent.opacity(0.45), lineWidth: 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSettingPublicLeaderboard)
+                }
+
+                if isPublished, let url = LeaderboardShare.publicURL(
+                    slug: guild.slug, window: .all
+                ) {
+                    Button {
+                        UIPasteboard.general.string = url.absoluteString
+                        HapticFeedback.success.trigger()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(url.absoluteString.replacingOccurrences(of: "https://", with: ""))
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .foregroundColor(AppColors.greyText)
+                    }
+                    .buttonStyle(.plain)
+                } else if !isPublished {
+                    Text("Publish to get a link anyone can open — no app needed.")
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.insetPanelBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private func setPublicLeaderboard(_ enabled: Bool) async {
+        guard !isSettingPublicLeaderboard else { return }
+        isSettingPublicLeaderboard = true
+        defer { isSettingPublicLeaderboard = false }
+        _ = try? await rlAppState.updateGuild(
+            name: nil,
+            description: nil,
+            isOpen: nil,
+            publicLeaderboard: enabled
+        )
     }
 
     /// Week / Month / All time.

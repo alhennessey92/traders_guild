@@ -31,17 +31,26 @@ struct MarkerShareContext: Identifiable {
     let symbolTicker: String?
     let isNewPlacement: Bool
     let isCurrentUserMarker: Bool
+    /// Set when the author already chose a Discord channel in the composer, so
+    /// this marker has *just* been posted there.
+    ///
+    /// Without it the sheet offers Discord again a second after the fact, and
+    /// taking that offer posts the same embed twice — which is exactly what
+    /// happens, because nothing on screen says the first one already went.
+    let postedToDiscord: String?
 
     init(
         marker: RLChartMarkerDTO,
         symbolTicker: String?,
         isNewPlacement: Bool = true,
-        isCurrentUserMarker: Bool? = nil
+        isCurrentUserMarker: Bool? = nil,
+        postedToDiscord: String? = nil
     ) {
         self.marker = marker
         self.symbolTicker = symbolTicker
         self.isNewPlacement = isNewPlacement
         self.isCurrentUserMarker = isCurrentUserMarker ?? marker.isCurrentUserMarker
+        self.postedToDiscord = postedToDiscord
     }
 
     var canShareWithinGuild: Bool {
@@ -58,6 +67,9 @@ struct MarkerShareContext: Identifiable {
     var sheetTitle: String { isNewPlacement ? "Marker placed" : "Share marker" }
 
     var sheetSubtitle: String {
+        if let postedToDiscord {
+            return "Already posted to \(postedToDiscord). Share it anywhere else too."
+        }
         if isNewPlacement {
             return "Keep it in your guild or choose an external destination."
         }
@@ -215,12 +227,18 @@ struct MarkerSharePromptSheet: View {
                 kind: .discord,
                 label: discordLabel,
                 spec: kind.spec,
-                badge: discordChannels.contains(where: \.needsAttention)
-                    ? "exclamationmark.circle.fill"
-                    : nil
+                badge: context.postedToDiscord != nil
+                    ? "checkmark.circle.fill"
+                    : (discordChannels.contains(where: \.needsAttention)
+                        ? "exclamationmark.circle.fill"
+                        : nil)
             ) {
+                // Already sent from the composer a moment ago. Tapping again
+                // would put a second identical embed in the same channel.
+                guard context.postedToDiscord == nil else { return }
                 Task { await prepareDiscordShare() }
             }
+            .disabled(context.postedToDiscord != nil)
         case .telegram:
             channel(kind: .telegram, label: kind.title, spec: kind.spec) {
                 Task { await shareToTelegram() }
@@ -274,7 +292,8 @@ struct MarkerSharePromptSheet: View {
 
     /// "Discord" once we know a webhook is connected; the generic label until then.
     private var discordLabel: String {
-        discordChannels.contains(where: \.canPost) ? "Guild Discord" : "Discord"
+        if context.postedToDiscord != nil { return "Posted" }
+        return discordChannels.contains(where: \.canPost) ? "Guild Discord" : "Discord"
     }
 
     /// A channel tile. The mark comes from `ShareChannelStyle` so this sheet and
