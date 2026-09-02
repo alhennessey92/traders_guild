@@ -901,7 +901,8 @@ private extension LeaderboardListView {
                         isPublished: guild.publicLeaderboard ?? false,
                         window: leftDrawerViewModel.accuracyLeaderboardWindow,
                         profile: profile,
-                        rank: profile.rankInGuild
+                        rank: profile.rankInGuild,
+                        username: rlAppState.currentUser?.username
                     )
                 }
             }

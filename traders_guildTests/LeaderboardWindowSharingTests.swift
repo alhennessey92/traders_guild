@@ -174,6 +174,35 @@ struct LeaderboardWindowSharingTests {
         #expect(url?.absoluteString == "https://tradersguild.co/g/nocturne/leaderboard")
     }
 
+    @Test func aPersonalShareLinkPointsAtTheSharersOwnRow() {
+        // Without this the page renders the highlight it supports and no
+        // client ever asks for it, so "share your standing" lands a reader at
+        // the top of a board the sharer may be well down.
+        let url = LeaderboardShare.publicURL(slug: "nocturne", window: .all, trader: "@mika")
+
+        #expect(url?.absoluteString == "https://tradersguild.co/g/nocturne/leaderboard?trader=mika")
+    }
+
+    @Test func aPersonalShareKeepsBothTheWindowAndTheTrader() {
+        let url = LeaderboardShare.publicURL(slug: "nocturne", window: .week, trader: "mika")
+        let raw = url?.absoluteString ?? ""
+
+        #expect(raw.contains("window=7d"))
+        #expect(raw.contains("trader=mika"))
+    }
+
+    @Test func aBoardShareCarriesNoTraderAtAll() {
+        let url = LeaderboardShare.publicURL(slug: "nocturne", window: .all)
+
+        #expect(url?.absoluteString == "https://tradersguild.co/g/nocturne/leaderboard")
+    }
+
+    @Test func aBlankHandleIsOmittedRatherThanSentEmpty() {
+        let url = LeaderboardShare.publicURL(slug: "nocturne", window: .all, trader: "  @ ")
+
+        #expect(url?.absoluteString == "https://tradersguild.co/g/nocturne/leaderboard")
+    }
+
     @Test func aGuildWithoutAHandleHasNoPublicStandingsLink() {
         #expect(LeaderboardShare.publicURL(slug: nil, window: .week) == nil)
         #expect(LeaderboardShare.publicURL(slug: "", window: .week) == nil)

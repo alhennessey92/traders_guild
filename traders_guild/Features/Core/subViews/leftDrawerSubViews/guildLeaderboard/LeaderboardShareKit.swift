@@ -19,13 +19,26 @@ enum LeaderboardShare {
     ///
     /// Without it there is nothing an outsider could open, so the share sheet
     /// offers the guild's own page instead of a link that would 404.
-    static func publicURL(slug: String?, window: LeaderboardWindow) -> URL? {
+    /// `trader` highlights and anchors that member's row on the page, which is
+    /// what makes a personal share land on the person rather than the board.
+    static func publicURL(
+        slug: String?, window: LeaderboardWindow, trader: String? = nil
+    ) -> URL? {
         guard let slug, !slug.isEmpty else { return nil }
-        var path = "https://tradersguild.co/g/\(slug)/leaderboard"
+        var components = URLComponents(
+            string: "https://tradersguild.co/g/\(slug)/leaderboard"
+        )
+        var items: [URLQueryItem] = []
         if window != .all {
-            path += "?window=\(window.rawValue)"
+            items.append(URLQueryItem(name: "window", value: window.rawValue))
         }
-        return URL(string: path)
+        let handle = (trader ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "@", with: "")
+        if !handle.isEmpty {
+            items.append(URLQueryItem(name: "trader", value: handle))
+        }
+        components?.queryItems = items.isEmpty ? nil : items
+        return components?.url
     }
 
     /// One line naming who is ahead — the whole reason to post standings.
@@ -137,12 +150,17 @@ struct MemberStatsShareSheet: View {
     let window: LeaderboardWindow
     let profile: RLAccuracyProfileDTO
     let rank: Int?
+    /// The sharer's handle, so the link opens on their row rather than the
+    /// top of a board they may be well down.
+    let username: String?
 
     @Environment(\.dismiss) private var dismiss
 
     private var shareURL: URL? {
         isPublished
-            ? LeaderboardShare.publicURL(slug: guildSlug, window: window)
+            ? LeaderboardShare.publicURL(
+                slug: guildSlug, window: window, trader: username
+            )
             : guildSlug.flatMap { URL(string: "https://tradersguild.co/g/\($0)") }
     }
 
