@@ -200,6 +200,16 @@ enum RealtimeCandleStreamReducer {
         maxRealtimeFallbackInsert: Int
     ) -> [RLCandleDTO] {
         let step = max(1, timeframe.seconds)
+
+        // A gap wider than we are willing to synthesise is not a gap — it is two
+        // different eras of the chart, which is what holding a historical window
+        // (after navigating to an old marker) and then receiving a live tick
+        // looks like. Emitting the first 120 flat bars of a months-long gap is
+        // strictly worse than emitting none: it fabricates a plausible-looking
+        // run of no-change candles and hands the y-axis a spike to scale to.
+        let requiredCount = Int(newTimestamp.timeIntervalSince(lastCandle.timestamp) / step) - 1
+        guard requiredCount <= maxRealtimeFallbackInsert else { return [] }
+
         var nextTimestamp = lastCandle.timestamp.addingTimeInterval(step)
         var generated: [RLCandleDTO] = []
 

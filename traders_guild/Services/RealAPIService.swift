@@ -1046,6 +1046,21 @@ extension RealAPIService {
         )
     }
 
+    /// Delete a guild. Owner only.
+    ///
+    /// A soft delete server-side: the guild is archived and hidden everywhere,
+    /// its members are moved to another guild of theirs (or the system guild),
+    /// and its name and `/g/{slug}` handle are released for reuse. Nothing is
+    /// destroyed, so an admin can still reverse it.
+    func deleteGuild(guildId: UUID) async throws -> RLDeleteGuildResponseDTO {
+        try await request(
+            "/guilds/\(guildId.uuidString)/delete",
+            service: .core,
+            method: "POST",
+            auth: true
+        )
+    }
+
     func getGuildJoinQuestions(guildId: UUID) async throws -> RLGuildJoinQuestionsListDTO {
         try await request(
             "/guilds/\(guildId.uuidString)/join-questions",

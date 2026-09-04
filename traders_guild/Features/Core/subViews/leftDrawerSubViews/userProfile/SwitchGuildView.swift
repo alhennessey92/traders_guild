@@ -1468,7 +1468,11 @@ struct CreateGuildFlowView: View {
         NavigationStack {
             CreateGuildView(
                 onCancel: { dismiss() },
-                onComplete: { dismiss() }
+                // Cancel is a real back-out and animates. Completion does not:
+                // the invite hub is already sliding away over the top of this
+                // cover, and letting this one animate too shows the owner the
+                // create form again on the way out.
+                onComplete: { withoutAnimation { dismiss() } }
             )
             .environmentObject(rlAppState)
         }
@@ -1487,11 +1491,18 @@ struct CreateGuildView: View {
     @State private var isCreating: Bool = false
     @State private var joinQuestions: [String] = [""]
     @State private var visibleSections: Set<Int> = []
+    /// Every stagger-revealed card in this form, by index. Kept beside
+    /// `visibleSections` because the reveal loop and the `.opacity` gates have
+    /// to agree — they silently disagreed once already, and the Access &
+    /// Moderation card sat at `opacity 0` for months.
+    private let sectionCount = 3
     @State private var selectedCrestSymbol: String = GuildCrestCatalog.defaultSymbolKey
     @State private var selectedCrestColor: String = GuildCrestCatalog.defaultColorKey
     @State private var pickedCrestImage: UIImage?
     @State private var showCrestImagePicker = false
     @State private var showInviteHubAfterCreate = false
+    /// The guild just created, so the flow can announce which one it finished.
+    @State private var createdGuildId: UUID?
 
     private var normalizedJoinQuestions: [RLGuildJoinQuestionInputDTO] {
         joinQuestions
@@ -1866,9 +1877,9 @@ struct CreateGuildView: View {
                         }
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isOpen)
-                    .opacity(visibleSections.contains(3) ? 1 : 0)
-                    .offset(y: visibleSections.contains(3) ? 0 : 12)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
+                    .opacity(visibleSections.contains(2) ? 1 : 0)
+                    .offset(y: visibleSections.contains(2) ? 0 : 12)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(2))
 
                     // Sets expectations for the checklist that appears straight
                     // after, so dropping the old required fields doesn't read as
@@ -1877,15 +1888,15 @@ struct CreateGuildView: View {
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
                         .padding(.horizontal, 4)
-                        .opacity(visibleSections.contains(3) ? 1 : 0)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(3))
+                        .opacity(visibleSections.contains(2) ? 1 : 0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15), value: visibleSections.contains(2))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     // The pinned-footer modifier already insets by the footer height.
                     .padding(.bottom, 24)
                     .onAppear {
-                        for i in 0...1 {
+                        for i in 0..<sectionCount {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
                                 visibleSections.insert(i)
                             }
@@ -1901,15 +1912,29 @@ struct CreateGuildView: View {
                 pickedCrestImage = image
             }
         }
-        .fullScreenCover(isPresented: $showInviteHubAfterCreate) {
+        // Everything that ends the create flow happens here, in `onDismiss`,
+        // and Done does nothing but lower the flag.
+        //
+        // It used to call `onComplete()` itself, which dismisses this whole
+        // view in the same turn the cover starts closing — so the presenter was
+        // gone before SwiftUI ran `onDismiss`, the finished notification was
+        // never posted, and the Discord prompt stayed deferred forever.
+        .fullScreenCover(isPresented: $showInviteHubAfterCreate, onDismiss: {
+            if let guildId = createdGuildId {
+                createdGuildId = nil
+                NotificationCenter.default.post(
+                    name: .guildCreationDidFinish,
+                    object: nil,
+                    userInfo: [GuildCreationNotification.guildIdKey: guildId]
+                )
+            }
+            onComplete()
+        }) {
             GuildInviteHubView(
                 headline: "Your guild is live 🎉",
                 subheadline: "Now bring your community in. Share your guild on X, Discord, or with your contacts to get your first members.",
                 primaryButtonTitle: "Done",
-                onPrimaryAction: {
-                    showInviteHubAfterCreate = false
-                    onComplete()
-                },
+                onPrimaryAction: { showInviteHubAfterCreate = false },
                 shareMode: .guildVanity
             )
             .environmentObject(rlAppState)
@@ -1965,7 +1990,7 @@ struct CreateGuildView: View {
         }
 
         do {
-            let _ = try await rlAppState.createGuild(
+            let created = try await rlAppState.createGuild(
                 name: trimmedName,
                 // Everything below comes later, via the checklist. Locale is
                 // omitted entirely: the backend falls back to the owner's
@@ -1985,6 +2010,12 @@ struct CreateGuildView: View {
                let data = image.jpegData(compressionQuality: 0.85) {
                 _ = try? await rlAppState.uploadGuildAvatar(imageData: data)
             }
+            // Creating a guild selects it, and MainView asks about Discord when
+            // the current guild changes. Hold that off until this flow is off
+            // screen — otherwise the prompt presents itself on top of the invite
+            // hub and arrives inert.
+            createdGuildId = created.guild.id
+            DiscordSetupReminder.deferWhileCreating(guildId: created.guild.id)
             // Present the invite hub so the owner can immediately bring their
             // community in. "Done" then completes (dismisses) the create flow.
             showInviteHubAfterCreate = true

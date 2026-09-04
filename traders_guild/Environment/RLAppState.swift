@@ -4468,6 +4468,8 @@ class RLAppState: ObservableObject {
                 switch type {
                 case .guildUpdated:
                     self.handleGuildUpdatedEvent(message)
+                case .guildDeleted:
+                    self.handleGuildDeletedEvent(message)
                 case .memberRoleChanged:
                     self.handleMemberRoleChangedEvent(message)
                 case .memberMuted:
@@ -4479,6 +4481,51 @@ class RLAppState: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// The guild the user is standing in has been deleted by its owner.
+    ///
+    /// The server has already moved them somewhere and deactivated the
+    /// membership, so every subsequent request would 404. Without this they sit
+    /// on a shell that quietly fails until the next cold start.
+    private func handleGuildDeletedEvent(_ message: WSIncomingMessage) {
+        guard let payload = message.payload(as: WSGuildDeletedPayload.self) else { return }
+        guard let guildId = UUID(uuidString: payload.guildId) else { return }
+        guard currentGuild?.id == guildId else { return }
+
+        let deletedName = currentGuild?.name
+        Task { @MainActor in
+            // Re-read memberships first: the deleted guild is filtered out
+            // server-side, so this is what tells us where we now stand.
+            try? await self.fetchUserGuilds()
+            await self.moveOffDeletedGuild()
+            self.showInfo(
+                deletedName.map { "\($0) was closed by its owner." }
+                    ?? "That guild was closed by its owner.",
+                title: "Guild Closed"
+            )
+        }
+    }
+
+    /// Leave a guild that no longer exists, landing somewhere valid.
+    ///
+    /// Clearing `currentGuild` matters even when there is nowhere to go: it is
+    /// what makes the app ask for a guild rather than keep pointing at one the
+    /// server will refuse.
+    ///
+    /// The server does not say where it put us and does not need to — the
+    /// re-read membership list already reflects the relocation, so the first
+    /// entry *is* the landing guild.
+    @MainActor
+    func moveOffDeletedGuild() async {
+        if let next = userGuilds.first {
+            selectGuild(next, showTransition: true)
+            return
+        }
+        currentGuild = nil
+        // No memberships left at all — same situation as a fresh sign-in, and
+        // the same recovery.
+        try? await completePostAuthGuildSetup(context: "GuildDeleted")
     }
 
     private func handleGuildUpdatedEvent(_ message: WSIncomingMessage) {

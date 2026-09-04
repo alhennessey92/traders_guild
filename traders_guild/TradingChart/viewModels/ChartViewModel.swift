@@ -1421,6 +1421,21 @@ class ChartViewModel: ObservableObject {
         chartRetryAttempt = 0
     }
 
+    /// How far past the last loaded candle a "now" snapshot may be before it is
+    /// treated as belonging to a different era of the chart rather than to the
+    /// candle in progress.
+    ///
+    /// The realtime reducer fills any gap between the last candle and an
+    /// incoming tick with flat `open == high == low == close` bars — up to 120
+    /// of them. That is right for a few missed buckets on a live chart. It is
+    /// catastrophic after navigating to a marker from weeks ago: the window is
+    /// historical, `symbol.currentPrice` is today's, and reconciling the two
+    /// manufactures 120 flat candles and one enormous spike. The y-axis then
+    /// scales to include the spike (gap-fills are excluded from the range only
+    /// while a real candle exists), flattening the actual history into a
+    /// hairline. That is the "all flat with a massive last candle" chart.
+    private static let maxReconcileBucketsAhead = 3
+
     private func reconcileCurrentCandleWithSymbolSnapshot(_ symbol: RLTradingSymbolDTO) {
         guard let snapshotPrice = symbol.currentPrice else { return }
         guard let snapshotTimestamp = symbol.marketStatusUpdatedAt else {
@@ -1428,9 +1443,19 @@ class ChartViewModel: ObservableObject {
             return
         }
 
-        if let lastCandleTimestamp = dataManager.candles.last?.timestamp,
-           snapshotTimestamp < lastCandleTimestamp {
-            return
+        if let lastCandleTimestamp = dataManager.candles.last?.timestamp {
+            // Older than what we hold: nothing to reconcile.
+            if snapshotTimestamp < lastCandleTimestamp { return }
+
+            // Far newer than what we hold: this window is history, not the live
+            // tail. Take the price for the readout but do not let it become a
+            // candle — see `maxReconcileBucketsAhead`.
+            let step = max(1, currentTimeframe.seconds)
+            let bucketsAhead = snapshotTimestamp.timeIntervalSince(lastCandleTimestamp) / step
+            if bucketsAhead > Double(Self.maxReconcileBucketsAhead) {
+                dataManager.currentPrice = snapshotPrice
+                return
+            }
         }
 
         dataManager.processRealTick(

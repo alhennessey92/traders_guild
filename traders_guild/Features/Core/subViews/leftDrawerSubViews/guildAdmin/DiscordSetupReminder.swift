@@ -16,8 +16,54 @@
 
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted once the create-a-guild flow is completely off screen — the
+    /// invite hub included. The drawer closes its own sheet stack on it, and
+    /// MainView waits a beat before asking about Discord.
+    static let guildCreationDidFinish = Notification.Name("guildCreationDidFinish")
+}
+
+/// userInfo key carrying the new guild's `UUID` on `.guildCreationDidFinish`.
+enum GuildCreationNotification {
+    static let guildIdKey = "guildId"
+}
+
 @MainActor
 enum DiscordSetupReminder {
+    /// How long to let a new owner look at their guild before asking them to
+    /// connect a channel. Straight after creation they are still reading the
+    /// invite hub, and a prompt on top of it is an interruption, not a nudge.
+    static let postCreationDelay: Duration = .seconds(10)
+
+    /// Guilds whose creation flow is still on screen.
+    ///
+    /// Creating a guild makes it current, which trips the same `task(id:)` that
+    /// drives the reminder — so the prompt tried to present itself on top of the
+    /// invite hub's full-screen cover. UIKit renders that sheet but never puts
+    /// it in the window hierarchy, so it appears with every control dead.
+    /// Held with the time it was taken, because a deferral is a courtesy and
+    /// not a lock: if the end of the create flow is ever missed, the prompt has
+    /// to come round again rather than be stranded for the life of the process.
+    private static var guildsBeingCreated: [UUID: Date] = [:]
+    private static let creationDeferralLifetime: TimeInterval = 60
+
+    static func deferWhileCreating(guildId: UUID, now: Date = Date()) {
+        guildsBeingCreated[guildId] = now
+    }
+
+    static func endCreationDeferral(guildId: UUID) {
+        guildsBeingCreated.removeValue(forKey: guildId)
+    }
+
+    static func isDeferredForCreation(guildId: UUID, now: Date = Date()) -> Bool {
+        guard let deferredAt = guildsBeingCreated[guildId] else { return false }
+        guard now.timeIntervalSince(deferredAt) < creationDeferralLifetime else {
+            guildsBeingCreated.removeValue(forKey: guildId)
+            return false
+        }
+        return true
+    }
+
     /// Slow enough that an owner who said "not now" is not asked again this
     /// month, frequent enough that it does not simply get forgotten.
     static let interval: TimeInterval = 30 * 24 * 60 * 60
@@ -62,11 +108,33 @@ enum DiscordSetupReminder {
 }
 
 /// The prompt itself — what connecting a channel actually buys the owner.
+///
+/// Built around the guild rather than around Discord. The ask is "put *your*
+/// community's results in *your* channel", and a sheet that opened on a generic
+/// logo and three bullet points read as an integration to configure rather than
+/// something to want. So the guild's own banner, crest and colour lead, and an
+/// example of the post it produces sits above the benefits — the payoff is the
+/// argument, and it is the one thing a list of features cannot show.
+///
+/// Ported from Android's `DiscordSetupReminderSheet.kt`, which the user signed
+/// off on. Copy is shared verbatim with `strings.xml:876-890`; only the
+/// example-post lines are new here.
 struct DiscordSetupReminderSheet: View {
+    /// The whole guild, not just its name: the hero and the example post are
+    /// built from its banner, crest and colour.
+    let guild: RLGuildDTO?
     let guildName: String
     let onConnect: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+
+    private enum Metrics {
+        static let bannerHeight: CGFloat = 88
+        static let crestSize: CGFloat = 56
+        static let crestOverlap: CGFloat = 26
+    }
+
+    private var accent: Color { GuildTheme.accent(for: guild) }
 
     private let benefits: [(icon: String, title: String, detail: String)] = [
         (
@@ -87,33 +155,33 @@ struct DiscordSetupReminderSheet: View {
     ]
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 10) {
-                        Image("DiscordLogo")
-                            .resizable()
-                            .renderingMode(.template)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 26, height: 26)
-                            .foregroundColor(AppColors.guildReputationAccent)
-                        Text("Connect \(guildName) to Discord")
-                            .font(.title3.weight(.bold))
-                            .foregroundColor(AppColors.whiteText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    hero
+                        .padding(.bottom, 4)
+
+                    Text("Connect \(guildName) to Discord")
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(AppColors.whiteText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
 
                     Text("Your community doesn't have to move. Paste one webhook and Traders Guild starts posting into the channel you already use.")
                         .font(.subheadline)
                         .foregroundColor(AppColors.greyText)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
+
+                    examplePost
+                        .padding(.horizontal, 24)
 
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(benefits, id: \.title) { benefit in
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: benefit.icon)
                                     .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(AppColors.guildReputationAccent)
+                                    .foregroundColor(accent)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(benefit.title)
@@ -127,39 +195,175 @@ struct DiscordSetupReminderSheet: View {
                             }
                         }
                     }
+                    .padding(.horizontal, 24)
 
                     Text("Takes about a minute: Discord → Channel Settings → Integrations → Webhooks.")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Button {
-                        dismiss()
-                        onConnect()
-                    } label: {
-                        Text("Connect a channel")
-                            .font(.headline)
-                            .foregroundColor(AppColors.onAccentForeground)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(AppColors.tgAccent))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("Not now")
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(AppColors.whiteText.opacity(0.05))
+                        )
+                        .padding(.horizontal, 24)
                 }
-                .padding(24)
+                .padding(.bottom, 20)
             }
-            .background(AppColors.sheetBackground.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
+
+            // Pinned, not scrolled. The hero pushed "Connect a channel" below the
+            // fold, and a call to action you have to scroll for on a prompt you
+            // did not ask for is one nobody takes.
+            footer
         }
+        .background(AppColors.sheetBackground.ignoresSafeArea())
+    }
+
+    /// The guild's own artwork, with Discord joined onto it.
+    ///
+    /// Two circles and the line between them say "these become one thing" faster
+    /// than any sentence in the sheet does, and the left-hand one is the owner's.
+    private var hero: some View {
+        ZStack(alignment: .bottomLeading) {
+            Group {
+                if let guild {
+                    GuildBannerView(guild: guild, height: Metrics.bannerHeight, cornerRadius: 0)
+                } else {
+                    Rectangle().fill(accent.opacity(0.18))
+                        .frame(height: Metrics.bannerHeight)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(height: Metrics.bannerHeight, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            HStack(spacing: 0) {
+                ringedBadge {
+                    Group {
+                        if let guild {
+                            GuildCrestView(guild: guild, size: Metrics.crestSize - 4)
+                        } else {
+                            Circle().fill(accent.opacity(0.16))
+                                .frame(width: Metrics.crestSize - 4, height: Metrics.crestSize - 4)
+                        }
+                    }
+                }
+                Rectangle()
+                    .fill(accent.opacity(0.55))
+                    .frame(width: 18, height: 2)
+                ringedBadge {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.16))
+                            .overlay(Circle().stroke(accent.opacity(0.45), lineWidth: 1))
+                        Image("DiscordLogo")
+                            .resizable()
+                            .renderingMode(.template)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 26, height: 26)
+                            .foregroundColor(accent)
+                    }
+                    .frame(width: Metrics.crestSize - 4, height: Metrics.crestSize - 4)
+                }
+            }
+            .padding(.leading, 14)
+        }
+        .frame(height: Metrics.bannerHeight + Metrics.crestSize - Metrics.crestOverlap)
+    }
+
+    /// A badge punched out of the banner, so the artwork behind it does not touch it.
+    private func ringedBadge<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Circle().fill(AppColors.gradientBackgroundDark)
+            content()
+        }
+        .frame(width: Metrics.crestSize, height: Metrics.crestSize)
+    }
+
+    /// Deliberately fictional and labelled as such: a card that looked like a
+    /// live post would be worse than no card.
+    private var examplePost: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("EXAMPLE POST")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(AppColors.greyText)
+
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(accent)
+                    .frame(width: 4)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 7) {
+                        if let guild {
+                            GuildCrestView(guild: guild, size: 18)
+                        }
+                        Text(guildName)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppColors.greyText)
+                    }
+                    Text("EURUSD · Long · 1H")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(AppColors.whiteText)
+                    Text("Target hit · +1.8R")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppColors.statusPositive)
+                    Text("@trader · 62% tracked accuracy · #3 in \(guildName)")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.greyText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                Spacer(minLength: 0)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.whiteText.opacity(0.055))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(AppColors.whiteText.opacity(0.09), lineWidth: 1)
+            )
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 10) {
+            Button {
+                dismiss()
+                onConnect()
+            } label: {
+                HStack(spacing: 8) {
+                    Image("DiscordLogo")
+                        .resizable()
+                        .renderingMode(.template)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 21, height: 21)
+                    Text("Connect a channel")
+                        .font(.headline)
+                }
+                .foregroundColor(AppColors.onAccentForeground)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(RoundedRectangle(cornerRadius: 26).fill(accent))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Not now")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(AppColors.sheetBackground)
     }
 }

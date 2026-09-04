@@ -42,19 +42,32 @@ class ToastWindowManager: ObservableObject {
     func showToast(_ alert: RLAppAlert, onDismiss: @escaping () -> Void) {
         activeAlertId = alert.id
 
-        // Create window if needed (passthrough so touches outside the bar still
-        // reach the app underneath).
-        if toastWindow == nil {
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                let window = ToastPassthroughWindow(windowScene: windowScene)
-                window.windowLevel = .alert + 1
-                window.backgroundColor = .clear
-                window.isUserInteractionEnabled = true
-                toastWindow = window
-            }
+        // Resolve the scene on *every* show, not just the first.
+        //
+        // `connectedScenes` is a Set, so the old `.first as? UIWindowScene` took
+        // an arbitrary element with no `activationState` filter — and if that
+        // element was not a window scene at all, the cast failed, `toastWindow`
+        // stayed nil, and the toast was dropped silently. Cached forever, one
+        // bad resolution at launch meant every later toast was misplaced too:
+        // the bar would render behind modals instead of above them.
+        //
+        // `TutorialWindowManager` and `keyWindowBottomInset()` below both
+        // already do this correctly; this was the odd one out.
+        guard let scene = Self.foregroundWindowScene() else {
+            print("🍞 [Toast] dropped — no foreground window scene: \(alert.title)")
+            return
         }
 
-        guard let window = toastWindow else { return }
+        // Create window if needed (passthrough so touches outside the bar still
+        // reach the app underneath).
+        let window = toastWindow ?? ToastPassthroughWindow(windowScene: scene)
+        toastWindow = window
+        // Re-asserted every time: the window outlives any single scene, and the
+        // level is what keeps the bar above sheets and full-screen covers.
+        if window.windowScene !== scene { window.windowScene = scene }
+        window.windowLevel = .alert + 1
+        window.backgroundColor = .clear
+        window.isUserInteractionEnabled = true
 
         // Bottom safe-area inset (home indicator). Read from the app's key
         // window — already laid out, so reliable — and shared by this device.
@@ -107,6 +120,13 @@ class ToastWindowManager: ObservableObject {
             window.alpha = 1
             host.view.transform = .identity
         }
+    }
+
+    /// The scene the user is actually looking at, with a fallback for the
+    /// moments where nothing is `.foregroundActive` yet (cold start).
+    private static func foregroundWindowScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
     }
 
     /// Bottom safe-area inset from the app's current key window (already laid

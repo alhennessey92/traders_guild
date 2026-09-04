@@ -866,6 +866,7 @@ enum WSMessageType: String, Codable {
     case accuracyUpdate = "accuracy_update"
     // Guild events
     case guildUpdated = "guild_updated"
+    case guildDeleted = "guild_deleted"
     case memberRoleChanged = "member_role_changed"
     case memberMuted = "member_muted"
     case memberSuspended = "member_suspended"
@@ -873,6 +874,17 @@ enum WSMessageType: String, Codable {
 }
 
 // MARK: - Guild Event Payloads
+
+/// Payload for the `guild_deleted` WebSocket event.
+///
+/// Deliberately just the id. The server used to broadcast a
+/// `{user_id: guild_id}` relocation map, which told every member where every
+/// *other* member had been moved — and Swift's uppercase `UUID.uuidString`
+/// never matched Python's lowercase keys anyway, so the lookup always missed.
+/// Re-reading the membership list gives the same answer without either problem.
+struct WSGuildDeletedPayload: Codable {
+    let guildId: String
+}
 
 /// Payload for guild_updated WebSocket event
 struct WSGuildUpdatedPayload: Codable {

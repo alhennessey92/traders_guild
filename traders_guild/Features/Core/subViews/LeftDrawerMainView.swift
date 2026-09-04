@@ -333,6 +333,22 @@ struct LeftDrawerMainView: View {
             .onChange(of: navigationState) { _, newValue in
                 _ = enforceNavigationAccess(for: newValue)
             }
+            // Creating a guild starts three sheets deep — profile, switch guild,
+            // create — and finishing it used to unwind only the top two, landing
+            // the owner back on their profile. The new guild is the destination;
+            // close the stack and show it to them.
+            .onReceive(NotificationCenter.default.publisher(for: .guildCreationDidFinish)) { _ in
+                Task { @MainActor in
+                    // The create flow is closing its own covers as this fires.
+                    // Pulling their ancestor out from under them mid-animation
+                    // is how sheets end up presented onto nothing — so still
+                    // wait for the covers, but then go instantly. Animating the
+                    // profile sheet out here just replays a stack the owner
+                    // already thinks they have left.
+                    try? await Task.sleep(for: .milliseconds(400))
+                    withoutAnimation { dismissAllSheets() }
+                }
+            }
             .onChange(of: dismissSheetsSignal) { oldValue, newValue in
                 if newValue {
                     dismissAllSheets()
@@ -442,6 +458,15 @@ struct LeftDrawerMainView: View {
             case .currentUserProfile:
                 navigationState = .main
                 bottomSheetContent = .profile
+
+            case .guildDiscordSettings:
+                guard enforceNavigationAccess(for: .adminPanel) else { return }
+                // Latched rather than passed: `BottomSheetContent` is compared
+                // and keyed by case, so an associated focus value would change
+                // sheet identity and re-present the editor on every read.
+                GuildSettingsFocus.pending = .discord
+                navigationState = .adminPanel
+                bottomSheetContent = .guildSettings
 
             case .guildMemberProfile(let userId):
                 guard let guildId = rlAppState.currentGuild?.id else {

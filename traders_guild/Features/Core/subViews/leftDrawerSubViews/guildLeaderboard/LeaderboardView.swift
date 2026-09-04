@@ -114,7 +114,12 @@ struct LeaderboardListView: View {
     @EnvironmentObject var rlAppState: RLAppState
 
     @State private var selectedTab: LeaderboardTab = .guild
-    @State private var selectedGuildMode: GuildLeaderboardMode = .reputation
+    // Accuracy, not reputation. The tracked record is what the guild page
+    // publishes, what the Discord posts quote and what the share sheets carry —
+    // and every one of those controls lives on this sub-tab. Defaulting to
+    // reputation put the whole sharing loop one undiscovered tap away, so the
+    // feature read as missing rather than as a tab away.
+    @State private var selectedGuildMode: GuildLeaderboardMode = .accuracy
     @State private var selectedGlobalScope: GlobalLeaderboardScope = .users
     @State private var selectedGlobalMode: GlobalLeaderboardMode = .reputation
     @State private var discoveredGuilds: [RLGuildDTO] = []

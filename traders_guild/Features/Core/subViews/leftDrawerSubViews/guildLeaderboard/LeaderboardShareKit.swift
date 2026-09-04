@@ -102,14 +102,50 @@ enum LeaderboardShare {
         return components?.url
     }
 
+    /// Native X composer, tried before the web one — same fallback pair the
+    /// invite hub and the marker sheet use.
+    static func xAppURL(text: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "twitter"
+        components.host = "post"
+        components.queryItems = [URLQueryItem(name: "message", value: text)]
+        return components.url
+    }
+
     static func telegramURL(text: String, url: URL?) -> URL? {
         var components = URLComponents(string: "https://t.me/share/url")
+        components?.queryItems = telegramQueryItems(text: text, url: url)
+        return components?.url
+    }
+
+    static func telegramAppURL(text: String, url: URL?) -> URL? {
+        var components = URLComponents()
+        components.scheme = "tg"
+        components.host = "msg_url"
+        components.queryItems = telegramQueryItems(text: text, url: url)
+        return components.url
+    }
+
+    private static func telegramQueryItems(text: String, url: URL?) -> [URLQueryItem] {
         var items = [URLQueryItem(name: "text", value: text)]
         // Telegram wants the link in `url`; without one it still posts the text.
         if let url {
             items.insert(URLQueryItem(name: "url", value: url.absoluteString), at: 0)
         }
-        components?.queryItems = items
+        return items
+    }
+
+    /// A link post is a title plus a URL, so the headline doubles as the title.
+    /// Nothing to post without a link — Reddit has no text-only submit URL.
+    static func redditSubmitURL(title: String, url: URL?) -> URL? {
+        guard let url else { return nil }
+        var components = URLComponents(string: "https://www.reddit.com/submit")
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: url.absoluteString),
+            URLQueryItem(
+                name: "title", value: String(title.prefix(MarkerShare.redditTitleLimit))
+            ),
+        ]
         return components?.url
     }
 
@@ -139,12 +175,11 @@ enum LeaderboardShare {
 
 extension LeaderboardShare {
     /// One trader's own record, phrased as they would post it.
-    static func personalMessage(
+    /// The record on one line — Reddit takes a title, not a body.
+    static func personalHeadline(
         guildName: String,
-        window: LeaderboardWindow,
         profile: RLAccuracyProfileDTO,
-        rank: Int?,
-        url: URL?
+        rank: Int?
     ) -> String {
         let accuracy = Int((profile.accuracyRate * 100).rounded())
         let losses = max(0, profile.totalPredictions - profile.successfulPredictions)
@@ -153,7 +188,17 @@ extension LeaderboardShare {
         if let rank {
             line += " Ranked #\(rank)."
         }
-        var parts = [line]
+        return line
+    }
+
+    static func personalMessage(
+        guildName: String,
+        window: LeaderboardWindow,
+        profile: RLAccuracyProfileDTO,
+        rank: Int?,
+        url: URL?
+    ) -> String {
+        var parts = [personalHeadline(guildName: guildName, profile: profile, rank: rank)]
         parts.append("Every call is scored automatically when it hits its target or stop — no cherry-picking.")
         if let url {
             parts.append(url.absoluteString)
@@ -161,6 +206,61 @@ extension LeaderboardShare {
         return parts.joined(separator: "\n\n")
     }
 }
+
+// MARK: - Share surfaces
+//
+// Both sheets below are the app's standard share surface: a four-column grid of
+// round channel tiles drawn from `ShareChannelStyle`, in `ShareChannel`'s
+// canonical order, over a preview of what is about to be posted. They used to
+// be a vertical list of their own invention, which meant X sat in a different
+// place — and looked like a different app — depending on whether you were
+// sharing a marker, an invite or the standings.
+
+/// One channel tile. Identical geometry to `MarkerSharePromptSheet`'s, which is
+/// the surface people meet first.
+private struct LeaderboardShareTile: View {
+    let kind: ShareChannel
+    var label: String?
+    let isBusy: Bool
+    var badge: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(AppColors.surfaceWhite08)
+                        .frame(width: 58, height: 58)
+                    if isBusy {
+                        ProgressView().tint(AppColors.primaryForeground)
+                    } else {
+                        ShareChannelMark(spec: kind.spec)
+                    }
+                    if let badge, !isBusy {
+                        Image(systemName: badge)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppColors.statusPositive70)
+                            .background(Circle().fill(AppColors.sheetBackground))
+                            .offset(x: 20, y: -20)
+                    }
+                }
+                Text(label ?? kind.title)
+                    .font(.caption)
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(InvitePressStyle())
+    }
+}
+
+private let leaderboardShareGridColumns = [
+    GridItem(.flexible()), GridItem(.flexible()),
+    GridItem(.flexible()), GridItem(.flexible()),
+]
 
 /// "Share my record" — the same destinations as the standings sheet, minus
 /// Discord, which posts the guild's board rather than one person's card.
@@ -176,6 +276,12 @@ struct MemberStatsShareSheet: View {
     let username: String?
 
     @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+
+    /// Reddit needs a link and Discord posts the guild's board, not one card.
+    private static let channels: [ShareChannel] = [
+        .x, .reddit, .telegram, .copyLink, .more,
+    ]
 
     private var shareURL: URL? {
         isPublished
@@ -192,77 +298,128 @@ struct MemberStatsShareSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text(messageText)
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.whiteText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.insetPanelBackground)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(AppColors.surfaceWhite12, lineWidth: 1)
-                                )
-                        )
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(AppColors.surfaceWhite20)
+                .frame(width: 40, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 18)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        row("Post on X", icon: "arrow.up.forward.app") {
-                            open(LeaderboardShare.xComposeURL(text: messageText))
-                        }
-                        row("Send on Telegram", icon: "paperplane.fill") {
-                            open(LeaderboardShare.telegramURL(text: messageText, url: shareURL))
-                        }
-                        row("Copy", icon: "doc.on.doc") {
-                            UIPasteboard.general.string = messageText
-                            HapticFeedback.light.trigger()
-                        }
-                        row("More…", icon: "square.and.arrow.up") {
-                            LeaderboardShare.presentSystemShareSheet(
-                                text: messageText, url: shareURL
-                            )
-                        }
-                    }
-                }
-                .padding(20)
+            VStack(spacing: 6) {
+                Text("Share your record")
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text("Tracked automatically — which is the only reason anyone should believe it.")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .multilineTextAlignment(.center)
             }
-            .background(AppColors.sheetBackground.ignoresSafeArea())
-            .navigationTitle("Share your record")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
+
+            LeaderboardSharePreview(text: messageText)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+
+            LazyVGrid(columns: leaderboardShareGridColumns, spacing: 12) {
+                ForEach(Self.channels, id: \.self) { kind in
+                    tile(kind)
                 }
             }
+            .padding(.horizontal, 18)
+
+            Spacer(minLength: 12)
+
+            Button { dismiss() } label: {
+                Text("Done")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .buttonStyle(InvitePressStyle())
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
         }
+        .frame(maxWidth: .infinity)
+        .background(AppColors.sheetBackground.ignoresSafeArea())
+        .presentationDetents([.height(560)])
+        .presentationDragIndicator(.hidden)
     }
 
-    private func row(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppColors.guildReputationAccent)
-                    .frame(width: 22)
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.whiteText)
-                Spacer()
+    @ViewBuilder
+    private func tile(_ kind: ShareChannel) -> some View {
+        switch kind {
+        case .x:
+            LeaderboardShareTile(kind: .x, isBusy: false) {
+                GuildInviteShare.openAppOrWeb(
+                    LeaderboardShare.xAppURL(text: messageText),
+                    fallback: LeaderboardShare.xComposeURL(text: messageText)
+                )
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(AppColors.insetPanelBackground))
+        case .reddit:
+            LeaderboardShareTile(kind: .reddit, isBusy: false) {
+                open(
+                    LeaderboardShare.redditSubmitURL(
+                        title: LeaderboardShare.personalHeadline(
+                            guildName: guildName, profile: profile, rank: rank
+                        ),
+                        url: shareURL
+                    )
+                )
+            }
+        case .telegram:
+            LeaderboardShareTile(kind: .telegram, isBusy: false) {
+                GuildInviteShare.openAppOrWeb(
+                    LeaderboardShare.telegramAppURL(text: messageText, url: shareURL),
+                    fallback: LeaderboardShare.telegramURL(text: messageText, url: shareURL)
+                )
+            }
+        case .copyLink:
+            LeaderboardShareTile(
+                kind: .copyLink,
+                label: copied ? "Copied" : "Copy",
+                isBusy: false,
+                badge: copied ? "checkmark.circle.fill" : nil
+            ) {
+                UIPasteboard.general.string = messageText
+                HapticFeedback.success.trigger()
+                copied = true
+            }
+        case .more:
+            LeaderboardShareTile(kind: .more, isBusy: false) {
+                LeaderboardShare.presentSystemShareSheet(text: messageText, url: shareURL)
+            }
+        case .discord, .guildDM, .messages, .qrCode:
+            EmptyView()
         }
-        .buttonStyle(.plain)
     }
 
     private func open(_ url: URL?) {
         guard let url else { return }
         UIApplication.shared.open(url)
+    }
+}
+
+/// What is about to be posted, shown before it is.
+private struct LeaderboardSharePreview: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundColor(AppColors.whiteText)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppColors.insetPanelBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppColors.surfaceWhite12, lineWidth: 1)
+                    )
+            )
     }
 }
 
@@ -279,8 +436,15 @@ struct LeaderboardShareSheet: View {
     @EnvironmentObject private var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
     @State private var selectedChannelId: UUID?
-    @State private var isPosting = false
+    @State private var showDiscordDestination = false
+    @State private var busyChannel: ShareChannel?
     @State private var postedLabel: String?
+    @State private var copied = false
+
+    /// The canonical top row, then the utilities.
+    private static let shareChannels: [ShareChannel] = [
+        .x, .discord, .reddit, .telegram, .copyLink, .more,
+    ]
 
     private var usableChannels: [RLGuildDiscordChannelDTO] {
         channels.filter(\.canPost)
@@ -306,44 +470,150 @@ struct LeaderboardShareSheet: View {
         )
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    preview
+    private var headline: String {
+        LeaderboardShare.headline(guildName: guildName, window: window, leader: leader)
+    }
 
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(AppColors.surfaceWhite20)
+                .frame(width: 40, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 18)
+
+            VStack(spacing: 6) {
+                Text("Share standings")
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text(window.caption)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.secondaryForeground)
+            }
+            .padding(.bottom, 16)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 14) {
+                    standingsPreview
                     if !isPublished {
                         privateStandingsNote
                     }
-
-                    if !usableChannels.isEmpty {
-                        discordSection
-                    }
-
-                    elsewhereSection
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
             }
-            .background(AppColors.sheetBackground.ignoresSafeArea())
-            .navigationTitle("Share standings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+            .frame(maxHeight: 220)
+            .padding(.bottom, 18)
+
+            LazyVGrid(columns: leaderboardShareGridColumns, spacing: 12) {
+                ForEach(Self.shareChannels, id: \.self) { kind in
+                    tile(kind)
                 }
             }
+            .padding(.horizontal, 18)
+
+            Spacer(minLength: 12)
+
+            Button { dismiss() } label: {
+                Text("Done")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .buttonStyle(InvitePressStyle())
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
         }
+        .frame(maxWidth: .infinity)
+        .background(AppColors.sheetBackground.ignoresSafeArea())
+        // Sized to the content: title, a capped preview, two rows of tiles and
+        // Done. 640 overshot it and left dead space on a small phone.
+        .presentationDetents([.height(600)])
+        .presentationDragIndicator(.hidden)
         .onAppear {
             selectedChannelId = (usableChannels.first(where: \.isDefault) ?? usableChannels.first)?.id
         }
+        .sheet(isPresented: $showDiscordDestination) {
+            DiscordDestinationSheet(
+                title: "Share standings",
+                channels: channels,
+                selectedChannelId: $selectedChannelId,
+                isPosting: busyChannel == .discord,
+                preview: { standingsPreview },
+                onPost: { Task { await postToDiscord() } },
+                onCopyAndOpen: {
+                    UIPasteboard.general.string = messageText
+                    HapticFeedback.success.trigger()
+                    GuildInviteShare.openAppOrWeb(
+                        GuildInviteShare.discordAppURL,
+                        fallback: GuildInviteShare.discordWebURL
+                    )
+                }
+            )
+            .environmentObject(rlAppState)
+        }
     }
 
-    private var preview: some View {
+    @ViewBuilder
+    private func tile(_ kind: ShareChannel) -> some View {
+        switch kind {
+        case .x:
+            LeaderboardShareTile(kind: .x, isBusy: false) {
+                GuildInviteShare.openAppOrWeb(
+                    LeaderboardShare.xAppURL(text: messageText),
+                    fallback: LeaderboardShare.xComposeURL(text: messageText)
+                )
+            }
+        case .discord:
+            LeaderboardShareTile(
+                kind: .discord,
+                label: postedLabel.map { _ in "Posted" }
+                    ?? (usableChannels.isEmpty ? "Discord" : "Guild Discord"),
+                isBusy: busyChannel == .discord,
+                badge: postedLabel != nil ? "checkmark.circle.fill" : nil
+            ) {
+                // Posting the same board twice into one channel is noise, not
+                // reach — the tile stays as its own receipt instead.
+                guard postedLabel == nil else { return }
+                showDiscordDestination = true
+            }
+        case .reddit:
+            LeaderboardShareTile(kind: .reddit, isBusy: false) {
+                open(LeaderboardShare.redditSubmitURL(title: headline, url: shareURL))
+            }
+        case .telegram:
+            LeaderboardShareTile(kind: .telegram, isBusy: false) {
+                GuildInviteShare.openAppOrWeb(
+                    LeaderboardShare.telegramAppURL(text: messageText, url: shareURL),
+                    fallback: LeaderboardShare.telegramURL(text: messageText, url: shareURL)
+                )
+            }
+        case .copyLink:
+            LeaderboardShareTile(
+                kind: .copyLink,
+                label: copied ? "Copied" : kind.title,
+                isBusy: false,
+                badge: copied ? "checkmark.circle.fill" : nil
+            ) {
+                UIPasteboard.general.string = (shareURL?.absoluteString ?? messageText)
+                HapticFeedback.success.trigger()
+                copied = true
+            }
+        case .more:
+            LeaderboardShareTile(kind: .more, isBusy: false) {
+                LeaderboardShare.presentSystemShareSheet(text: messageText, url: shareURL)
+            }
+        case .guildDM, .messages, .qrCode:
+            EmptyView()
+        }
+    }
+
+    private var standingsPreview: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(window.caption.uppercased())
                 .font(.caption2.weight(.bold))
                 .foregroundColor(AppColors.guildReputationAccent)
-            Text(LeaderboardShare.headline(guildName: guildName, window: window, leader: leader))
+            Text(headline)
                 .font(.subheadline)
                 .foregroundColor(AppColors.whiteText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -391,117 +661,24 @@ struct LeaderboardShareSheet: View {
         }
     }
 
-    private var discordSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Post to Discord")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
-
-            if usableChannels.count > 1 {
-                Picker("Channel", selection: $selectedChannelId) {
-                    ForEach(usableChannels) { channel in
-                        Text(channel.displayLabel).tag(Optional(channel.id))
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(AppColors.whiteText)
-            }
-
-            Button {
-                Task { await postToDiscord() }
-            } label: {
-                Group {
-                    if isPosting {
-                        ProgressView().tint(AppColors.onAccentForeground)
-                    } else if let postedLabel {
-                        Label("Posted to \(postedLabel)", systemImage: "checkmark")
-                            .font(.headline)
-                    } else {
-                        Text(selectedLabel.map { "Post to \($0)" } ?? "Choose a channel")
-                            .font(.headline)
-                    }
-                }
-                .foregroundColor(AppColors.onAccentForeground)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(selectedChannelId == nil ? AppColors.surfaceWhite12 : AppColors.tgAccent)
-                )
-            }
-            .disabled(isPosting || selectedChannelId == nil || postedLabel != nil)
-        }
-    }
-
-    private var selectedLabel: String? {
-        usableChannels.first { $0.id == selectedChannelId }?.displayLabel
-    }
-
-    private var elsewhereSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Share elsewhere")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
-
-            shareRow("Post on X", icon: "arrow.up.forward.app") {
-                open(LeaderboardShare.xComposeURL(text: messageText))
-            }
-            shareRow("Send on Telegram", icon: "paperplane.fill") {
-                open(LeaderboardShare.telegramURL(text: messageText, url: shareURL))
-            }
-            if let shareURL {
-                shareRow("Copy link", icon: "doc.on.doc") {
-                    UIPasteboard.general.string = shareURL.absoluteString
-                    HapticFeedback.light.trigger()
-                }
-            }
-            shareRow("More…", icon: "square.and.arrow.up") {
-                LeaderboardShare.presentSystemShareSheet(text: messageText, url: shareURL)
-            }
-        }
-    }
-
-    private func shareRow(
-        _ title: String, icon: String, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppColors.guildReputationAccent)
-                    .frame(width: 22)
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.whiteText)
-                Spacer()
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.insetPanelBackground)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     private func open(_ url: URL?) {
         guard let url else { return }
         UIApplication.shared.open(url)
     }
 
     private func postToDiscord() async {
-        guard let channelId = selectedChannelId, !isPosting else { return }
-        isPosting = true
-        defer { isPosting = false }
+        guard let channelId = selectedChannelId, busyChannel == nil else { return }
+        busyChannel = .discord
+        defer { busyChannel = nil }
         do {
             _ = try await rlAppState.realApi.shareGuildLeaderboardToDiscord(
                 guildId: guildId,
                 channelId: channelId,
                 window: window
             )
-            postedLabel = selectedLabel
+            postedLabel = usableChannels.first { $0.id == channelId }?.displayLabel
             HapticFeedback.success.trigger()
+            showDiscordDestination = false
         } catch {
             rlAppState.showError(error, title: "Couldn't post standings", style: .toast)
         }

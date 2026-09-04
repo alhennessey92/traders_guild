@@ -23,6 +23,19 @@ enum AnimationConstants {
     static let quick = Animation.spring(response: 0.3, dampingFraction: 0.9)
 }
 
+/// Applies `changes` with every implicit animation suppressed.
+///
+/// Used for teardown that the user should never watch — closing the drawer and
+/// its sheet stack after a guild is created, for instance. Those views are not
+/// the destination and animating them out just shows the user a stack they
+/// thought they had already left.
+@MainActor
+func withoutAnimation(_ changes: () -> Void) {
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction, changes)
+}
+
 private enum MarkerAuthorProfileRoute: Identifiable {
     case currentUser
     case guildMember(RLGuildMemberDTO)
@@ -533,7 +546,7 @@ struct MainView: View {
             // and queued ("Currently, only presenting a single sheet is supported", logged
             // hundreds of times), then shown only once this one goes away. Standing the
             // bottom sheet down for them is the same thing already done for the drawers.
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -664,10 +677,13 @@ struct MainView: View {
                     }
                 )
 
-                await handlePendingPushNotificationTapIfNeeded()
-
                 // Use rlAppState guild ID for all data loading
-                guard let rlGuildId = rlAppState.currentGuild?.id else { return }
+                guard let rlGuildId = rlAppState.currentGuild?.id else {
+                    // No guild yet, so nothing below can run — but a pending tap
+                    // still deserves its answer rather than being dropped.
+                    await handlePendingPushNotificationTapIfNeeded()
+                    return
+                }
                 
                 // leftDrawerViewModel uses rlGuildId for all data via rlAppState
                 await leftDrawerViewModel.preloadData(for: rlGuildId, rlAppState: rlAppState)
@@ -683,6 +699,16 @@ struct MainView: View {
                 )
                 
                 rlAppState.chartDidBecomeReady()
+
+                // Drained *after* the chart bootstrap, not before it.
+                //
+                // Marker navigation returns as soon as it spawns its own task, so
+                // nothing here awaited it — and `initialize()` finishes by
+                // replacing the whole candle array, wiping the historical window
+                // the navigation had just fetched. On a cold start from a
+                // notification that is a coin flip between landing on the marker
+                // and landing on "now" with no explanation.
+                await handlePendingPushNotificationTapIfNeeded()
 
                 // Configure tutorial manager with drawer control closures
                 configureTutorialManager()
@@ -855,15 +881,43 @@ struct MainView: View {
             }
             .sheet(isPresented: $showDiscordSetupReminder) {
                 DiscordSetupReminderSheet(
+                    guild: rlAppState.currentGuild,
                     guildName: rlAppState.currentGuild?.name ?? "your guild"
                 ) {
-                    // The drawer is where guild settings live; opening it beats
-                    // describing a path the owner then has to retrace.
+                    // Straight to the Discord section of guild settings, add
+                    // form open. Opening the drawer alone left the owner to find
+                    // Admin → Guild Settings → the bottom of a long scroll, which
+                    // is the same as not helping.
                     withAnimation { showLeftDrawer = true }
+                    pendingNotificationDrawerRoute = .guildDiscordSettings
                 }
             }
             .task(id: rlAppState.currentGuild?.id) {
-                await maybeRemindAboutDiscord()
+                await maybeRemindAboutDiscord(trigger: "guild_changed")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .guildCreationDidFinish)) { note in
+                guard let guildId = note.userInfo?[GuildCreationNotification.guildIdKey] as? UUID
+                else { return }
+                Task {
+                    print("🎉 [Guild] creation flow finished — Discord prompt queued")
+                    // The drawer was never closed by anything on this path, so
+                    // the owner landed back on the stack they created from. The
+                    // new guild is on the chart behind it — that is the
+                    // destination, so get out of the way without a show of it.
+                    // Matched to the drawer's own 400ms wait for the covers.
+                    try? await Task.sleep(for: .milliseconds(400))
+                    withoutAnimation {
+                        showLeftDrawer = false
+                        showOverlay = false
+                        showSheetOverlay = false
+                        leftDragTranslation = 0
+                    }
+                    DiscordSetupReminder.endCreationDeferral(guildId: guildId)
+                    // Let the create flow's covers finish unwinding, and let the
+                    // owner see the guild they just made, before asking anything.
+                    try? await Task.sleep(for: DiscordSetupReminder.postCreationDelay)
+                    await maybeRemindAboutDiscord(trigger: "after_creation")
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .presentMarkerSharePrompt)) { note in
                 if let context = note.userInfo?[MarkerSharePromptNotification.contextKey] as? MarkerShareContext {
@@ -873,27 +927,75 @@ struct MainView: View {
         }
     }
 
+    /// Whether something else already owns this view's single sheet slot.
+    ///
+    /// This deliberately reads **our own SwiftUI state** rather than sampling
+    /// `rootViewController.presentedViewController`. The chart bottom sheet is
+    /// presented essentially always (`showBottomSheet` is set once and never
+    /// cleared), so a UIKit probe answered "yes, a sheet is up" every single
+    /// time — while the bottom sheet, in turn, only stands down once
+    /// `showDiscordSetupReminder` is already true. That was a deadlock: the
+    /// prompt could never be shown, on any trigger.
+    ///
+    /// Setting `showDiscordSetupReminder` is what *makes* the slot free, exactly
+    /// as `markerSharePromptContext` and `selectedViewingMarkerAuthorRoute` do
+    /// — see the `.sheet` condition on the bottom sheet. So the only real
+    /// conflicts are those two peers, an open drawer (whose own covers would be
+    /// presented over us, and whose `.disabled` would make us inert anyway) and
+    /// the guild transition.
+    private var discordReminderSlotIsOccupied: Bool {
+        showLeftDrawer
+            || showRightDrawer
+            || markerSharePromptContext != nil
+            || selectedViewingMarkerAuthorRoute != nil
+            || rlAppState.showingTransition
+    }
+
     /// Ask the owner about Discord — after they create a guild, then rarely.
     ///
     /// Silent on every failure: an unreachable channel list is not a reason to
     /// interrupt somebody, and the reminder will come round again anyway.
-    private func maybeRemindAboutDiscord() async {
-        guard
-            let guild = rlAppState.currentGuild,
-            guild.ownerId == rlAppState.currentUser?.id,
-            !(guild.isOnboardingSystemGuild ?? false)
+    private func maybeRemindAboutDiscord(trigger: String) async {
+        guard let guild = rlAppState.currentGuild else { return }
+        guard guild.ownerId == rlAppState.currentUser?.id,
+              !(guild.isOnboardingSystemGuild ?? false)
         else { return }
+
+        // Creating a guild selects it, which trips this task while the invite
+        // hub is still up. That run is handed to `.guildCreationDidFinish`.
+        if DiscordSetupReminder.isDeferredForCreation(guildId: guild.id) {
+            print("🔗 [Discord] reminder deferred (\(trigger)) — creation flow still open")
+            return
+        }
+        if discordReminderSlotIsOccupied {
+            print("🔗 [Discord] reminder skipped (\(trigger)) — the sheet slot is taken")
+            return
+        }
 
         guard let response = try? await rlAppState.realApi.getGuildDiscordChannels(
             guildId: guild.id
-        ) else { return }
+        ) else {
+            print("🔗 [Discord] reminder skipped (\(trigger)) — channel list unavailable")
+            return
+        }
 
         guard DiscordSetupReminder.shouldRemind(
             guildId: guild.id,
             isOwner: true,
             hasChannel: response.channels.contains(where: \.canPost)
-        ) else { return }
+        ) else {
+            print("🔗 [Discord] reminder not due (\(trigger)) for \(guild.name)")
+            return
+        }
 
+        // Re-checked after the await: something may have claimed the slot while
+        // the channel list was in flight, and this prompt must never be second.
+        guard !discordReminderSlotIsOccupied else {
+            print("🔗 [Discord] reminder skipped (\(trigger)) — slot taken mid-fetch")
+            return
+        }
+
+        print("🔗 [Discord] showing setup reminder (\(trigger)) for \(guild.name)")
         DiscordSetupReminder.recordShown(guildId: guild.id)
         showDiscordSetupReminder = true
     }
@@ -1625,13 +1727,57 @@ struct MainView: View {
 
     private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
         guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
-        await switchToMarkerGuildIfNeeded(
+        switch await switchToMarkerGuildIfNeeded(
             userInfo[NotificationNavigationManager.markerGuildKey] as? UUID
-        )
+        ) {
+        case .ready:
+            break
+        case .notAMember:
+            // Opening anyway searches the *current* guild for a marker that
+            // lives in another one: candles load, no marker is found, and the
+            // user is left on an unexplained chart. Say so instead.
+            let copy = MarkerDeepLinkFailureCopy.terminalFailure(forHTTPStatus: 403)
+            rlAppState.showError(
+                title: copy?.title ?? "Marker Access Required",
+                message: copy?.message ?? "Join the marker’s guild to view it.",
+                severity: .warning,
+                style: .toast
+            )
+            return
+        case .switchTimedOut:
+            rlAppState.showError(
+                title: "Couldn’t Open Marker",
+                message: "Switching to that marker’s guild took too long. Try opening it again.",
+                severity: .warning,
+                style: .toast
+            )
+            return
+        }
         let opened = await openSharedMarker(payload)
-        guard opened,
-              userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true else { return }
+        guard opened else {
+            // `openSharedMarker` only reports false when the symbol could not be
+            // resolved — previously swallowed, which looked identical to
+            // arriving on a chart with nothing on it.
+            rlAppState.showError(
+                title: "Couldn’t Open Marker",
+                message: "That marker’s chart could not be loaded. Try again in a moment.",
+                severity: .warning,
+                style: .toast
+            )
+            return
+        }
+        guard userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true else { return }
         await presentSharePromptForNavigatedMarker()
+    }
+
+    /// Why a marker deep link did or did not get somewhere it could be opened.
+    private enum MarkerGuildSwitchOutcome {
+        /// Already in the right guild, or moved to it successfully.
+        case ready
+        /// The marker belongs to a guild this account has not joined.
+        case notAMember
+        /// The switch was started but the app never settled on the new guild.
+        case switchTimedOut
     }
 
     /// Move to the guild a marker lives in before going looking for it.
@@ -1641,21 +1787,24 @@ struct MainView: View {
     /// is in a different guild. Navigating without this searched the wrong guild, came back
     /// with nothing, and told the author their own marker was unavailable.
     ///
-    /// Does nothing when they are not a member: the fetch would 403, and the existing
-    /// unavailable message is then the honest answer.
-    private func switchToMarkerGuildIfNeeded(_ guildId: UUID?) async {
-        guard let guildId,
-              rlAppState.currentGuild?.id != guildId,
-              rlAppState.userGuilds.contains(where: { $0.guild.id == guildId }) else { return }
+    /// Reports non-membership rather than silently carrying on: the caller used to
+    /// open the marker anyway, against whichever guild happened to be current, and
+    /// the user landed on a chart with no marker and no explanation.
+    private func switchToMarkerGuildIfNeeded(_ guildId: UUID?) async -> MarkerGuildSwitchOutcome {
+        guard let guildId, rlAppState.currentGuild?.id != guildId else { return .ready }
+        guard rlAppState.userGuilds.contains(where: { $0.guild.id == guildId }) else {
+            return .notAMember
+        }
 
         rlAppState.selectGuild(id: guildId)
 
         // Selection fans out asynchronously; give it a moment to settle so the marker fetch
         // that follows is scoped to the guild we just moved to.
         for _ in 0..<30 {
-            if rlAppState.currentGuild?.id == guildId { return }
+            if rlAppState.currentGuild?.id == guildId { return .ready }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
+        return .switchTimedOut
     }
 
     /// Raise the share sheet for a marker we were sent to by a result notification.

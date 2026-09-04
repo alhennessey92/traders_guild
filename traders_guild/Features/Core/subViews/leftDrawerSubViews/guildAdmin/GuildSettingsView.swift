@@ -7,6 +7,23 @@
 
 import SwiftUI
 
+/// Which section the editor should open on, set by whoever opens it.
+///
+/// A latch rather than an argument: the editor is presented from a
+/// `BottomSheetContent` case that is compared and keyed by case alone, so
+/// carrying the focus as an associated value would change the sheet's identity
+/// and re-present it. Consumed once, on appear.
+enum GuildSettingsFocus {
+    case discord
+
+    static var pending: GuildSettingsFocus?
+
+    static func take() -> GuildSettingsFocus? {
+        defer { pending = nil }
+        return pending
+    }
+}
+
 struct GuildSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var rlAppState: RLAppState
@@ -38,6 +55,7 @@ struct GuildSettingsView: View {
 
     // Discord destinations act immediately rather than waiting for "Save
     // Details". Webhook URLs remain write-only bearer secrets.
+    @State private var showDeleteGuild = false
     @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
     @State private var discordLabelInput = ""
     @State private var discordWebhookInput = ""
@@ -49,6 +67,9 @@ struct GuildSettingsView: View {
     @State private var discordPendingRename: RLGuildDiscordChannelDTO?
     @State private var discordRenameInput = ""
     @State private var showDiscordRenamePrompt = false
+
+    /// Scroll target for `GuildSettingsFocus.discord`.
+    private static let discordAnchor = "guild-settings-discord"
 
     private var isValid: Bool {
         !trimmedName.isEmpty && trimmedName.count >= 3
@@ -147,6 +168,7 @@ struct GuildSettingsView: View {
                 .padding(.bottom, 12)
                 .adminSheetChrome(edge: .top)
 
+                ScrollViewReader { scrollProxy in
                 ScrollView {
                     VStack(spacing: 12) {
                         if let guild = rlAppState.currentGuild {
@@ -489,12 +511,29 @@ struct GuildSettingsView: View {
                         }
 
                         discordSection
+                            .id(Self.discordAnchor)
+
+                        dangerSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 32)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                // Whoever opened the editor may have asked for a section. The
+                // Discord one is the last thing in a long scroll, so arriving at
+                // the top of it is the difference between "here it is" and
+                // "somewhere below, keep going".
+                .task {
+                    guard GuildSettingsFocus.take() == .discord else { return }
+                    showDiscordAddForm = true
+                    // One frame, so the section exists before it is scrolled to.
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        scrollProxy.scrollTo(Self.discordAnchor, anchor: .top)
+                    }
+                }
+                }
 
                 AdminFooterActions(
                     primaryTitle: "Save Details",
@@ -536,6 +575,14 @@ struct GuildSettingsView: View {
             guard !newValue, joinQuestions.isEmpty else { return }
             joinQuestions = initialJoinQuestionPrompts.isEmpty ? [""] : initialJoinQuestionPrompts
         }
+        // The same switch is on the leaderboard, one tap from the board it
+        // publishes. Whichever one was used last is the truth: without this the
+        // editor keeps whatever it read on appear, and saving any *other*
+        // setting writes that stale copy back — which reads as the toggle
+        // reverting on its own.
+        .onChange(of: rlAppState.currentGuild?.publicLeaderboard) { _, newValue in
+            publicLeaderboard = newValue ?? false
+        }
         // One sheet, not two. SwiftUI presents a single sheet per view: chaining a second
         // `.sheet` here meant the banner picker silently never appeared, so no image was
         // ever picked, nothing counted as a change, and Save had nothing to upload.
@@ -568,6 +615,43 @@ struct GuildSettingsView: View {
     private var publicLeaderboardURL: String? {
         guard let slug = rlAppState.currentGuild?.slug, !slug.isEmpty else { return nil }
         return "https://tradersguild.co/g/\(slug)/leaderboard"
+    }
+
+    /// Owner-only, and last: deleting is the one action here that other admins
+    /// must not have, and the only one that cannot be undone from the app.
+    @ViewBuilder
+    private var dangerSection: some View {
+        if let guild = rlAppState.currentGuild,
+           guild.ownerId == rlAppState.currentUser?.id,
+           !(guild.isOnboardingSystemGuild ?? false) {
+            GuildSectionCard(title: "Danger Zone") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Deleting **\(guild.name)** removes it from search, invites and every shared link. Members are moved to another guild automatically. The name and its link become free for someone else to take.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        showDeleteGuild = true
+                    } label: {
+                        Label("Delete guild", systemImage: "trash.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(AppColors.statusNegative80)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppColors.statusNegative80.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .sheet(isPresented: $showDeleteGuild) {
+                DeleteGuildConfirmationView(guild: guild) { dismiss() }
+                    .environmentObject(rlAppState)
+            }
+        }
     }
 
     private var discordSection: some View {

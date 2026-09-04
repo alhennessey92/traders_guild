@@ -703,6 +703,15 @@ struct RLGuildJoinQuestionDTO: Codable, Identifiable {
     let isActive: Bool
 }
 
+/// `POST /guilds/{id}/delete`.
+struct RLDeleteGuildResponseDTO: Codable {
+    let detail: String
+    let guildId: UUID          // backend: guild_id
+    /// How many *other* members the server moved somewhere else. The owner is
+    /// not counted — they chose this.
+    let membersRelocated: Int  // backend: members_relocated
+}
+
 struct RLGuildJoinQuestionsListDTO: Codable {
     let questions: [RLGuildJoinQuestionDTO]
 }

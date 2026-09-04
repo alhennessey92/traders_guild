@@ -13,6 +13,10 @@ enum NotificationDrawerRoute: Equatable, Identifiable {
     case guildMemberProfile(userId: UUID)
     case adminReports(guildId: UUID?, reportId: UUID?)
     case reportResolution(summary: RLReportResolutionSummary)
+    /// Guild settings, opened on the Discord section with the add form ready.
+    /// The setup reminder used to just open the drawer, which left the owner to
+    /// find Admin → Guild Settings → scroll to the bottom on their own.
+    case guildDiscordSettings
 
     var id: String {
         switch self {
@@ -28,6 +32,8 @@ enum NotificationDrawerRoute: Equatable, Identifiable {
             return "admin-reports-\(guildId?.uuidString ?? "none")-\(reportId?.uuidString ?? "none")"
         case .reportResolution(let summary):
             return "report-resolution-\(summary.reportId.uuidString)"
+        case .guildDiscordSettings:
+            return "guild-discord-settings"
         }
     }
 }

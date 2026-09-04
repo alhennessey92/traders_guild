@@ -39,12 +39,41 @@ struct ChartGapFillRealtimeFallbackTests {
         #expect(!manager.candles[3].isGapFill)
     }
 
+    /// A gap that lands exactly on the cap is still filled.
     @Test
-    func realtimeFallbackCapIsRespected() async throws {
+    func realtimeFallbackFillsUpToTheCap() async throws {
         let manager = ChartDataManager()
         manager.currentTimeframe = .m1
         manager.updateWithMarketData([makeCandle("2026-01-01T00:00:00Z", close: 100)])
 
+        // 02:01 is 121 buckets on, i.e. exactly 120 missing ones.
+        manager.processRealTick(
+            price: 101,
+            volume: 1,
+            timestamp: try date("2026-01-01T02:01:00Z")
+        )
+        try await waitForTickFlush()
+
+        #expect(manager.candles.filter(\.isGapFill).count == 120)
+        #expect(manager.candles.count == 122)
+    }
+
+    /// A gap wider than the cap fills *nothing* — it used to fill the first 120.
+    ///
+    /// This is the "all candles flat with one massive spike" chart. Navigating to
+    /// a marker weeks old leaves the chart holding a historical window; the first
+    /// live tick then sits months past the last candle. Synthesising the leading
+    /// 120 flat `o==h==l==c` bars invented a run of no-change candles that never
+    /// happened, and handed the y-axis a spike to scale to — which squashed the
+    /// real history into a hairline. Refusing the fill leaves a visible
+    /// discontinuity, which is at least true.
+    @Test
+    func realtimeFallbackRefusesGapsWiderThanTheCap() async throws {
+        let manager = ChartDataManager()
+        manager.currentTimeframe = .m1
+        manager.updateWithMarketData([makeCandle("2026-01-01T00:00:00Z", close: 100)])
+
+        // 03:30 is 210 buckets on — well past the 120 the reducer will invent.
         manager.processRealTick(
             price: 101,
             volume: 1,
@@ -52,9 +81,8 @@ struct ChartGapFillRealtimeFallbackTests {
         )
         try await waitForTickFlush()
 
-        let gapCount = manager.candles.filter(\.isGapFill).count
-        #expect(gapCount == 120)
-        #expect(manager.candles.count == 122)
+        #expect(manager.candles.filter(\.isGapFill).isEmpty)
+        #expect(manager.candles.count == 2)
     }
 
     @Test

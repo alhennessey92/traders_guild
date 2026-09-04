@@ -97,4 +97,20 @@ final class ShareChannelOrderTests: XCTestCase {
             "the guild invite hub"
         )
     }
+
+    func testStandingsShareSheetFollowsCanonicalOrder() {
+        assertIsSubsequenceOfCanonical(
+            [.x, .discord, .reddit, .telegram, .copyLink, .more],
+            "the standings share sheet"
+        )
+    }
+
+    /// No Discord: that tile posts the guild's board, which is not what "share
+    /// my record" means. Reddit stays — it takes the record as a link post.
+    func testMemberRecordShareSheetFollowsCanonicalOrder() {
+        assertIsSubsequenceOfCanonical(
+            [.x, .reddit, .telegram, .copyLink, .more],
+            "the personal record share sheet"
+        )
+    }
 }
