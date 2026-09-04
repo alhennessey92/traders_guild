@@ -101,6 +101,25 @@ struct MarkerSharePromptSheet: View {
         .guildDM, .copyLink, .more,
     ]
 
+    /// `alert_severity` is not a backend field — it survives as a `[Prefix] `
+    /// on the note (and the title derived from it), which is why this resolves
+    /// the same way `MarkerListItemData` does rather than reading a column.
+    private var markerSeverity: MarkerAlertSeverity? {
+        guard context.marker.intentEnum == .alert else { return nil }
+        return MarkerAlertSeverity.resolved(
+            rawValue: context.marker.alertSeverity,
+            title: context.marker.title,
+            notePreview: context.marker.note
+        )
+    }
+
+    /// The marker's own guild, not just the selected one: a marker opened from
+    /// a shared link can belong somewhere else.
+    private var shareGuild: RLGuildDTO? {
+        appState.userGuilds.first { $0.guild.id == context.marker.guildId }?.guild
+            ?? appState.currentGuild
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -109,14 +128,34 @@ struct MarkerSharePromptSheet: View {
                 .padding(.top, 10)
                 .padding(.bottom, 20)
 
-            VStack(spacing: 6) {
-                Text(context.sheetTitle)
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text(context.sheetSubtitle)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.secondaryForeground)
-                    .multilineTextAlignment(.center)
+            Group {
+                if let shareGuild {
+                    GuildSheetHeader(
+                        guild: shareGuild,
+                        title: context.sheetTitle,
+                        subtitle: context.sheetSubtitle,
+                        // What kind of marker this is belongs next to the
+                        // title: the rest of the sheet is destinations, and by
+                        // the time you are choosing one the chart is covered.
+                        titleBadge: {
+                            MarkerTypeBadge(
+                                intent: context.marker.intentEnum,
+                                severity: markerSeverity
+                            )
+                        }
+                    )
+                    .padding(.horizontal, 20)
+                } else {
+                    VStack(spacing: 6) {
+                        Text(context.sheetTitle)
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                        Text(context.sheetSubtitle)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.secondaryForeground)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
             .padding(.bottom, 16)
 

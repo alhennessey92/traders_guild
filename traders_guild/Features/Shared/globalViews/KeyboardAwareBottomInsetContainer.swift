@@ -40,7 +40,20 @@ struct KeyboardPinnedFooterLayout: Equatable {
     }
 }
 
-private enum KeyboardPinnedBottomInsetWindowInsets {
+enum KeyboardPinnedBottomInsetWindowInsets {
+    /// How much of the screen the keyboard covers, from a keyboard notification.
+    ///
+    /// Reported in screen coordinates, so an off-screen end frame (the keyboard
+    /// dismissing, or a hardware keyboard's shortcut bar sliding away) yields 0
+    /// rather than a negative inset.
+    static func keyboardInset(from notification: Notification) -> CGFloat {
+        guard let endFrame = notification.userInfo?[
+            UIResponder.keyboardFrameEndUserInfoKey
+        ] as? CGRect else { return 0 }
+        let screenHeight = UIScreen.main.bounds.height
+        return max(screenHeight - endFrame.minY, 0)
+    }
+
     static var bottomSafeAreaInset: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { scene in
@@ -65,13 +78,43 @@ private struct KeyboardPinnedBottomInsetModifier<Footer: View>: ViewModifier {
     let footerBackground: AnyView
 
     @State private var footerHeight: CGFloat = 0
+    /// How far the keyboard reaches up the screen, 0 when it is down.
+    ///
+    /// Not read from the `GeometryReader`'s proxy, which is where this used to
+    /// come from: the reader below spans the container, and a view that ignores
+    /// a safe area is *given the region and reports the inset as zero*. So the
+    /// proxy answered 0 whether or not a keyboard was up — measured — and
+    /// `keyboardVisible` below could never be true. The notification is the
+    /// only signal that survives ignoring the safe area.
+    @State private var keyboardInset: CGFloat = 0
 
     func body(content: Content) -> some View {
-        GeometryReader { proxy in
+        // `.container, .bottom` is load-bearing, not decoration.
+        //
+        // A plain `GeometryReader` is laid out *inside* the safe area, so on a
+        // notched phone its frame stopped 34pt short of the screen and
+        // `proxy.safeAreaInsets.bottom` read 0 — measured at
+        // `reader=(0, 54, 393, 764)` in an 852pt window. Two things followed:
+        // the footer's `footerBottomPadding` was applied to a container that
+        // had *already* been inset, lifting the button 34pt clear of the home
+        // indicator and stealing the same 34pt from the content; and
+        // `keyboardVisible` (`geometryBottomInset > hardwareInset + 1`) could
+        // never be true, so the keyboard branch below was dead and a form at
+        // its tallest ran its last field under the pinned footer.
+        //
+        // Spanning the container restores what the rest of this file assumes:
+        // the reader reaches the screen edge, and the proxy reports the real
+        // bottom inset — the home indicator's, or the keyboard's when it is up.
+        GeometryReader { _ in
+            let hardwareInset = KeyboardPinnedBottomInsetWindowInsets.bottomSafeAreaInset
             let layout = KeyboardPinnedFooterLayout.resolve(
                 mode: mode,
-                geometryBottomInset: proxy.safeAreaInsets.bottom,
-                hardwareBottomInset: KeyboardPinnedBottomInsetWindowInsets.bottomSafeAreaInset
+                // With the keyboard down this is the home-indicator inset, so
+                // `resolve` reads "not visible"; with it up it is the
+                // keyboard's own height. Same contract the proxy was meant to
+                // satisfy, from a source that still works.
+                geometryBottomInset: max(keyboardInset, hardwareInset),
+                hardwareBottomInset: hardwareInset
             )
 
             ZStack(alignment: .bottom) {
@@ -104,9 +147,22 @@ private struct KeyboardPinnedBottomInsetModifier<Footer: View>: ViewModifier {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .ignoresSafeArea(.container, edges: .bottom)
         .onPreferenceChange(KeyboardPinnedFooterHeightPreferenceKey.self) { newValue in
             guard abs(footerHeight - newValue) > 0.5 else { return }
             footerHeight = newValue
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillChangeFrameNotification
+            )
+        ) { note in
+            keyboardInset = KeyboardPinnedBottomInsetWindowInsets.keyboardInset(from: note)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+        ) { _ in
+            keyboardInset = 0
         }
     }
 }

@@ -105,35 +105,44 @@ struct GuildInviteHubView: View {
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.friendAccent.opacity(0.95), AppColors.statusPositive70.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        if let guild {
+            // The guild's own banner and crest, as on the share and Discord
+            // sheets. The generic gradient circle this replaced said nothing
+            // about which guild was being invited to — the weakest header of
+            // the set, on the screen whose entire subject is one guild.
+            GuildSheetHeader(guild: guild, title: headline, subtitle: subheadline)
+        } else {
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppColors.friendAccent.opacity(0.95), AppColors.statusPositive70.opacity(0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 64, height: 64)
-                Image(systemName: "person.crop.circle.badge.plus")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(AppColors.onAccentForeground)
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(AppColors.onAccentForeground)
+                }
+
+                Text(headline)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.whiteText)
+                    .multilineTextAlignment(.center)
+
+                Text(subheadline)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Text(headline)
-                .font(.title3.weight(.bold))
-                .foregroundColor(AppColors.whiteText)
-                .multilineTextAlignment(.center)
-
-            Text(subheadline)
-                .font(.subheadline)
-                .foregroundColor(AppColors.greyText)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Guild + link card

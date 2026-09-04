@@ -58,6 +58,21 @@ enum MarkerAlertSeverity: String, Codable, CaseIterable {
         }
     }
 
+    /// The word a reader sees — "Informational", not "Mild".
+    ///
+    /// The same four words the placement picker offers and the `[Prefix] ` in
+    /// the note carries, and the same as Android's `AlertSeverity.pickerLabel`.
+    /// Added for the marker share sheet's type badge; the existing call sites
+    /// still spell these out inline and are left alone.
+    var displayLabel: String {
+        switch self {
+        case .mild:     return "Informational"
+        case .moderate: return "Warning"
+        case .severe:   return "Severe"
+        case .critical: return "Critical"
+        }
+    }
+
     /// SF Symbol used when rendering alert markers in marker-badge contexts.
     var markerIcon: String {
         switch self {

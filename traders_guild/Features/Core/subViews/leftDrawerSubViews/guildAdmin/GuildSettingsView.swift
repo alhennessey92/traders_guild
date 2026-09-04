@@ -257,6 +257,9 @@ struct GuildSettingsView: View {
                                 Button {
                                     UIPasteboard.general.string = shareURL
                                     HapticFeedback.light.trigger()
+                                    // The other half of the same defect — this is
+                                    // the second place the standings link is copied.
+                                    rlAppState.showSuccess("Standings link copied")
                                 } label: {
                                     Label(shareURL, systemImage: "doc.on.doc")
                                         .font(.caption2)

@@ -128,12 +128,6 @@ struct DiscordSetupReminderSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private enum Metrics {
-        static let bannerHeight: CGFloat = 88
-        static let crestSize: CGFloat = 56
-        static let crestOverlap: CGFloat = 26
-    }
-
     private var accent: Color { GuildTheme.accent(for: guild) }
 
     private let benefits: [(icon: String, title: String, detail: String)] = [
@@ -158,20 +152,15 @@ struct DiscordSetupReminderSheet: View {
         VStack(spacing: 0) {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    hero
-                        .padding(.bottom, 4)
-
-                    Text("Connect \(guildName) to Discord")
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(AppColors.whiteText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 24)
-
-                    Text("Your community doesn't have to move. Paste one webhook and Traders Guild starts posting into the channel you already use.")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 24)
+                    GuildSheetHeader(
+                        guild: guild,
+                        title: "Connect \(guildName) to Discord",
+                        subtitle: "Your community doesn't have to move. Paste one webhook and Traders Guild starts posting into the channel you already use.",
+                        accent: accent,
+                        trailingBadge: { discordBadge }
+                    )
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 4)
 
                     examplePost
                         .padding(.horizontal, 24)
@@ -220,65 +209,23 @@ struct DiscordSetupReminderSheet: View {
         .background(AppColors.sheetBackground.ignoresSafeArea())
     }
 
-    /// The guild's own artwork, with Discord joined onto it.
-    ///
-    /// Two circles and the line between them say "these become one thing" faster
-    /// than any sentence in the sheet does, and the left-hand one is the owner's.
-    private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            Group {
-                if let guild {
-                    GuildBannerView(guild: guild, height: Metrics.bannerHeight, cornerRadius: 0)
-                } else {
-                    Rectangle().fill(accent.opacity(0.18))
-                        .frame(height: Metrics.bannerHeight)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .frame(height: Metrics.bannerHeight, alignment: .top)
-            .frame(maxHeight: .infinity, alignment: .top)
-
-            HStack(spacing: 0) {
-                ringedBadge {
-                    Group {
-                        if let guild {
-                            GuildCrestView(guild: guild, size: Metrics.crestSize - 4)
-                        } else {
-                            Circle().fill(accent.opacity(0.16))
-                                .frame(width: Metrics.crestSize - 4, height: Metrics.crestSize - 4)
-                        }
-                    }
-                }
-                Rectangle()
-                    .fill(accent.opacity(0.55))
-                    .frame(width: 18, height: 2)
-                ringedBadge {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(0.16))
-                            .overlay(Circle().stroke(accent.opacity(0.45), lineWidth: 1))
-                        Image("DiscordLogo")
-                            .resizable()
-                            .renderingMode(.template)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 26, height: 26)
-                            .foregroundColor(accent)
-                    }
-                    .frame(width: Metrics.crestSize - 4, height: Metrics.crestSize - 4)
-                }
-            }
-            .padding(.leading, 14)
-        }
-        .frame(height: Metrics.bannerHeight + Metrics.crestSize - Metrics.crestOverlap)
-    }
-
-    /// A badge punched out of the banner, so the artwork behind it does not touch it.
-    private func ringedBadge<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    /// The Discord half of the header's paired badges.
+    private var discordBadge: some View {
         ZStack {
-            Circle().fill(AppColors.gradientBackgroundDark)
-            content()
+            Circle()
+                .fill(accent.opacity(0.16))
+                .overlay(Circle().stroke(accent.opacity(0.45), lineWidth: 1))
+            Image("DiscordLogo")
+                .resizable()
+                .renderingMode(.template)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 26, height: 26)
+                .foregroundColor(accent)
         }
-        .frame(width: Metrics.crestSize, height: Metrics.crestSize)
+        .frame(
+            width: GuildSheetHeaderMetrics.crestSize - 4,
+            height: GuildSheetHeaderMetrics.crestSize - 4
+        )
     }
 
     /// Deliberately fictional and labelled as such: a card that looked like a

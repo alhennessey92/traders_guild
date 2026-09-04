@@ -752,6 +752,11 @@ private extension LeaderboardListView {
                     Button {
                         UIPasteboard.general.string = url.absoluteString
                         HapticFeedback.success.trigger()
+                        // A haptic alone is not confirmation — it fires whether or
+                        // not the link went anywhere, and it is invisible to anyone
+                        // who has haptics off. Every other copy in the app either
+                        // toasts or relabels itself; this one did neither.
+                        rlAppState.showSuccess("Standings link copied")
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "doc.on.doc")
@@ -901,6 +906,7 @@ private extension LeaderboardListView {
             .sheet(isPresented: $showMyStatsShare) {
                 if let guild = rlAppState.currentGuild {
                     MemberStatsShareSheet(
+                        guild: guild,
                         guildName: guild.name,
                         guildSlug: guild.slug,
                         isPublished: guild.publicLeaderboard ?? false,
@@ -909,6 +915,7 @@ private extension LeaderboardListView {
                         rank: profile.rankInGuild,
                         username: rlAppState.currentUser?.username
                     )
+                    .environmentObject(rlAppState)
                 }
             }
         }
@@ -936,6 +943,7 @@ private extension LeaderboardListView {
             .sheet(isPresented: $showLeaderboardShare) {
                 if let guild = rlAppState.currentGuild {
                     LeaderboardShareSheet(
+                        guild: guild,
                         guildId: guild.id,
                         guildName: guild.name,
                         guildSlug: guild.slug,

@@ -262,9 +262,46 @@ private let leaderboardShareGridColumns = [
     GridItem(.flexible()), GridItem(.flexible()),
 ]
 
-/// "Share my record" — the same destinations as the standings sheet, minus
-/// Discord, which posts the guild's board rather than one person's card.
+/// "Share my record" — the same destinations as the standings sheet.
+///
+/// Discord here is deliberately the copy-and-open path, not a native post. The
+/// standings tile calls `share-leaderboard`, which posts the guild's *board*;
+/// there is no server route that posts one member's record, so offering a
+/// "Post" button would be a lie. `DiscordDestinationSheet` already treats
+/// "Copy message and open Discord" as a first-class primary action when nothing
+/// can be posted to, so this reads as intended rather than as a broken tile.
+/// The guild's banner-and-crest header, falling back to the old centred heading
+/// while the guild isn't known.
+///
+/// Which guild you are about to post to is the thing a member of several most
+/// needs to see, and none of the share sheets used to say it.
+private struct GuildShareHeading: View {
+    let guild: RLGuildDTO?
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        if let guild {
+            GuildSheetHeader(guild: guild, title: title, subtitle: subtitle)
+        } else {
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.secondaryForeground)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
 struct MemberStatsShareSheet: View {
+    /// Leads the sheet with the guild's own artwork. Nil falls back to the
+    /// plain centred heading.
+    let guild: RLGuildDTO?
     let guildName: String
     let guildSlug: String?
     let isPublished: Bool
@@ -275,12 +312,13 @@ struct MemberStatsShareSheet: View {
     /// top of a board they may be well down.
     let username: String?
 
+    @EnvironmentObject private var rlAppState: RLAppState
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
+    @State private var showDiscordDestination = false
 
-    /// Reddit needs a link and Discord posts the guild's board, not one card.
     private static let channels: [ShareChannel] = [
-        .x, .reddit, .telegram, .copyLink, .more,
+        .x, .discord, .reddit, .telegram, .copyLink, .more,
     ]
 
     private var shareURL: URL? {
@@ -305,16 +343,12 @@ struct MemberStatsShareSheet: View {
                 .padding(.top, 10)
                 .padding(.bottom, 18)
 
-            VStack(spacing: 6) {
-                Text("Share your record")
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text("Tracked automatically — which is the only reason anyone should believe it.")
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.secondaryForeground)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 24)
+            GuildShareHeading(
+                guild: guild,
+                title: "Share your record",
+                subtitle: "Tracked automatically — which is the only reason anyone should believe it."
+            )
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
 
             LeaderboardSharePreview(text: messageText)
@@ -345,6 +379,47 @@ struct MemberStatsShareSheet: View {
         .background(AppColors.sheetBackground.ignoresSafeArea())
         .presentationDetents([.height(560)])
         .presentationDragIndicator(.hidden)
+        .sheet(isPresented: $showDiscordDestination) {
+            // No channels passed: there is no route that posts one member's
+            // record, so the sheet renders its copy-and-open path as the primary
+            // action rather than offering a Post button that cannot work.
+            DiscordDestinationSheet(
+                title: "Share your record",
+                channels: [],
+                selectedChannelId: .constant(nil),
+                isPosting: false,
+                preview: { recordPreview },
+                onPost: {},
+                onCopyAndOpen: {
+                    UIPasteboard.general.string = messageText
+                    HapticFeedback.success.trigger()
+                    GuildInviteShare.openAppOrWeb(
+                        GuildInviteShare.discordAppURL,
+                        fallback: GuildInviteShare.discordWebURL
+                    )
+                }
+            )
+            .environmentObject(rlAppState)
+        }
+    }
+
+    /// What the pasted message will say, so the sharer can see it before it
+    /// leaves the app.
+    private var recordPreview: some View {
+        Text(messageText)
+            .font(.caption)
+            .foregroundColor(AppColors.whiteText)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppColors.whiteText.opacity(0.055))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppColors.whiteText.opacity(0.09), lineWidth: 1)
+                    )
+            )
     }
 
     @ViewBuilder
@@ -390,7 +465,11 @@ struct MemberStatsShareSheet: View {
             LeaderboardShareTile(kind: .more, isBusy: false) {
                 LeaderboardShare.presentSystemShareSheet(text: messageText, url: shareURL)
             }
-        case .discord, .guildDM, .messages, .qrCode:
+        case .discord:
+            LeaderboardShareTile(kind: .discord, isBusy: false) {
+                showDiscordDestination = true
+            }
+        case .guildDM, .messages, .qrCode:
             EmptyView()
         }
     }
@@ -425,6 +504,8 @@ private struct LeaderboardSharePreview: View {
 
 /// The share sheet the leaderboard's Share button opens.
 struct LeaderboardShareSheet: View {
+    /// See `MemberStatsShareSheet.guild`.
+    let guild: RLGuildDTO?
     let guildId: UUID
     let guildName: String
     let guildSlug: String?
@@ -482,15 +563,9 @@ struct LeaderboardShareSheet: View {
                 .padding(.top, 10)
                 .padding(.bottom, 18)
 
-            VStack(spacing: 6) {
-                Text("Share standings")
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Text(window.caption)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.secondaryForeground)
-            }
-            .padding(.bottom, 16)
+            GuildShareHeading(guild: guild, title: "Share standings", subtitle: window.caption)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 14) {

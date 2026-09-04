@@ -105,11 +105,13 @@ final class ShareChannelOrderTests: XCTestCase {
         )
     }
 
-    /// No Discord: that tile posts the guild's board, which is not what "share
-    /// my record" means. Reddit stays — it takes the record as a link post.
+    /// Discord is present, but it is the copy-and-open path rather than a native
+    /// post: `share-leaderboard` posts the guild's *board*, and no route exists
+    /// that posts one member's record. Members asked for a Discord route, so
+    /// they get the one that actually works.
     func testMemberRecordShareSheetFollowsCanonicalOrder() {
         assertIsSubsequenceOfCanonical(
-            [.x, .reddit, .telegram, .copyLink, .more],
+            [.x, .discord, .reddit, .telegram, .copyLink, .more],
             "the personal record share sheet"
         )
     }
