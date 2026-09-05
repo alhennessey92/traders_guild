@@ -307,6 +307,7 @@ struct ManageReportsView: View {
 
     private var headerView: some View {
         AdminSheetHeader(
+            guild: rlAppState.currentGuild,
             icon: "flag.fill",
             iconColor: .red,
             title: "Manage Reports",

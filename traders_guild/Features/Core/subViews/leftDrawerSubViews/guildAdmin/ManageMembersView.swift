@@ -145,6 +145,7 @@ struct ManageMembersView: View {
 
     private var headerView: some View {
         AdminSheetHeader(
+            guild: rlAppState.currentGuild,
             icon: "person.2.fill",
             iconColor: .purple,
             title: "Manage Members",

@@ -56,6 +56,13 @@ extension View {
 }
 
 struct AdminSheetHeader: View {
+    /// Set on guild-scoped sheets to lead with the guild's own artwork.
+    ///
+    /// The sheet's icon does not disappear — it becomes the second ringed
+    /// badge beside the crest, the way the Discord glyph does on the setup
+    /// sheet this header came from. A sheet that is entirely about one guild
+    /// should say which guild, and the icon-and-title row alone never did.
+    var guild: RLGuildDTO? = nil
     let icon: String
     let iconColor: Color
     let title: String
@@ -63,6 +70,27 @@ struct AdminSheetHeader: View {
     var trailing: AnyView? = nil
 
     var body: some View {
+        if let guild {
+            GuildSheetHeader(
+                guild: guild,
+                title: title,
+                subtitle: subtitle,
+                trailingBadge: {
+                    UnifiedIconBadge(
+                        icon: icon,
+                        color: iconColor,
+                        size: GuildSheetHeaderMetrics.crestSize - 4,
+                        iconSize: 22,
+                        backgroundOpacity: 0.2
+                    )
+                }
+            )
+        } else {
+            iconRow
+        }
+    }
+
+    private var iconRow: some View {
         HStack(spacing: 12) {
             UnifiedIconBadge(
                 icon: icon,

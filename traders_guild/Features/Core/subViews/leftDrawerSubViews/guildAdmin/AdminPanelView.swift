@@ -311,6 +311,7 @@ struct CreateAnnouncementView: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "megaphone.fill",
                     iconColor: AppColors.accentColor,
                     title: "Create Announcement",
@@ -466,6 +467,7 @@ struct CreateEventView: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "calendar.badge.plus",
                     iconColor: AppColors.statusPositive,
                     title: "Create Event",

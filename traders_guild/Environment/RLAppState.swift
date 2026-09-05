@@ -435,10 +435,19 @@ class RLAppState: ObservableObject {
         transitionMinimumDismissAt = nil
     }
     
+    /// Bumped whenever the shell is about to re-point at a different guild.
+    ///
+    /// Anything modal on screen is about to be describing a guild the user is
+    /// leaving. Joining one from the guild browser was the clearest case: the
+    /// transition covered the swap, lifted, and left the browser sheet still
+    /// sitting over the new guild's chart.
+    @Published private(set) var closeSheetsToken = UUID()
+
     func showTransitionForChartLoad(minimumDuration: TimeInterval = 0) {
         isChartReady = false
         showingTransition = true
         transitionMinimumDismissAt = minimumDuration > 0 ? Date().addingTimeInterval(minimumDuration) : nil
+        closeSheetsToken = UUID()
     }
 
     func transitionMinimumRemaining() -> TimeInterval {
@@ -470,10 +479,20 @@ class RLAppState: ObservableObject {
         return false
     }
     
+    /// - Parameter style: `.toast` by default.
+    ///
+    ///   It used to be `.alert`, which routes through `currentAlert` and the
+    ///   single `.alert(...)` bound at the app root. That alert cannot present
+    ///   over a sheet — the root view controller is already presenting one — so
+    ///   thirteen call sites, all of them reachable from inside a sheet or
+    ///   drawer, reported their failure to nobody. Everything else in the app
+    ///   already passed `.toast` explicitly (211 call sites against 12), and
+    ///   the toast window sits at `.alert + 1`, above any sheet. Pass `.alert`
+    ///   deliberately for something that must block.
     func showError(
         _ error: Error,
         title: String = "Error",
-        style: RLAlertDisplayStyle = .alert,
+        style: RLAlertDisplayStyle = .toast,
         context: RLUserFacingErrorContext = .default
     ) {
         if isCancellationLikeError(error) {
@@ -501,7 +520,8 @@ class RLAppState: ObservableObject {
         RLUserFacingErrorMapper.message(from: error, context: context)
     }
     
-    func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .alert) {
+    /// - Parameter style: `.toast` by default; see the overload above.
+    func showError(title: String, message: String, severity: RLAlertSeverity = .error, style: RLAlertDisplayStyle = .toast) {
         let alert = RLAppAlert(
             title: title,
             message: message,

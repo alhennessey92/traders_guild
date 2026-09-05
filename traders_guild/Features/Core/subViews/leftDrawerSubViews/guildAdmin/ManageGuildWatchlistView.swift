@@ -84,6 +84,7 @@ struct ManageGuildWatchlistView: View {
 
     private var header: some View {
         AdminSheetHeader(
+            guild: rlAppState.currentGuild,
             icon: "list.bullet.rectangle",
             iconColor: .blue,
             title: "Guild Watchlist",

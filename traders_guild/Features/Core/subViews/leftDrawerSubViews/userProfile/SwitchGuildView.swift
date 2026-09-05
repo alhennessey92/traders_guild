@@ -1121,7 +1121,7 @@ struct GuildDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 // The pinned-footer modifier already insets by the footer height.
-                .padding(.bottom, 24)
+                .padding(.bottom, GuildFormMetrics.scrollTailRoom)
                 .onAppear {
                     for i in 0...1 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {
@@ -1395,7 +1395,7 @@ struct JoinGuildFormView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
                         // The pinned-footer modifier already insets by the footer height.
-                        .padding(.bottom, 24)
+                        .padding(.bottom, GuildFormMetrics.scrollTailRoom)
                     }
                 }
             }
@@ -1480,6 +1480,17 @@ struct CreateGuildFlowView: View {
 }
 
 // MARK: - Create Guild View
+
+/// Shared layout numbers for the guild forms in this file.
+enum GuildFormMetrics {
+    /// Empty space after the last field, inside the scroll.
+    ///
+    /// Separate from the footer's own height, which
+    /// `keyboardPinnedBottomInset` already accounts for: this is how far past
+    /// the last control the form can be scrolled, and it is what decides
+    /// whether the tallest state of the create-guild form can be reached.
+    static let scrollTailRoom: CGFloat = 72
+}
 
 struct CreateGuildView: View {
     let onCancel: () -> Void
@@ -1894,7 +1905,12 @@ struct CreateGuildView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     // The pinned-footer modifier already insets by the footer height.
-                    .padding(.bottom, 24)
+                    // Scroll room past the pinned footer, not clearance for it —
+                    // `keyboardPinnedBottomInset` already insets by the footer's own
+                    // height. This is the gap that lets a field near the bottom come up
+                    // clear of the keyboard, and 24 was not enough once a private
+                    // guild's three join questions were in the form.
+                    .padding(.bottom, GuildFormMetrics.scrollTailRoom)
                     .onAppear {
                         for i in 0..<sectionCount {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 + Double(i) * 0.08) {

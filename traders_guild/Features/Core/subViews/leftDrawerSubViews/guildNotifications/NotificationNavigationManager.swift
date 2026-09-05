@@ -91,7 +91,8 @@ class NotificationNavigationManager: ObservableObject {
         let reportResolutionSummary = notification.contentReportResolutionSummary
         let requestedProfileTab: ProfileTab? = notification.type == .awardEarned ? .awards : nil
 
-        let shareResultOnOpen = notification.type == .markerResult
+        // Deliberately never true: see `shareOnOpenKey`.
+        let shareResultOnOpen = false
         let markerGuildId = notification.markerGuildId
         if let payload = notification.markerNavigationPayload {
             openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
@@ -126,8 +127,8 @@ class NotificationNavigationManager: ObservableObject {
         let reportResolutionSummary = pushPayload.contentReportResolutionSummary
         let requestedProfileTab: ProfileTab? = pushPayload.notificationType == RLNotificationType.awardEarned.rawValue ? .awards : nil
 
-        let shareResultOnOpen =
-            pushPayload.notificationType == RLNotificationType.markerResult.rawValue
+        // Deliberately never true: see `shareOnOpenKey`.
+        let shareResultOnOpen = false
         let markerGuildId = pushPayload.markerGuildId
         if let payload = pushPayload.markerNavigationPayload {
             openMarker(payload, shareOnOpen: shareResultOnOpen, guildId: markerGuildId)
@@ -258,7 +259,15 @@ class NotificationNavigationManager: ObservableObject {
     }
 
     /// Key carried alongside the marker payload when the marker should land with its share
-    /// sheet already up. See `shareOnOpen` below.
+    /// sheet already up.
+    ///
+    /// Nothing sets it any more. Opening a result notification used to raise the
+    /// share sheet on arrival, on the theory that "take me to the thing I can
+    /// post" is why you tapped — but in practice you tap a notification to *see*
+    /// the result, and coming back to the app to a share sheet you did not ask
+    /// for is an interruption. The marker's own share action is one tap away.
+    /// The key stays so an in-flight payload from an older build is still read
+    /// correctly rather than being treated as an unknown field.
     static let shareOnOpenKey = "tg.marker.shareOnOpen"
 
     /// The guild the marker belongs to. A marker is guild-scoped, but a notification can
@@ -266,10 +275,8 @@ class NotificationNavigationManager: ObservableObject {
     /// travel with it or the chart looks for the marker somewhere it was never going to be.
     static let markerGuildKey = "tg.marker.guildId"
 
-    /// - Parameter shareOnOpen: set for `marker_result` only. A tracked setup usually
-    ///   resolves while the app is closed, so the push is the only moment the author hears
-    ///   about it — and "take me to the thing I can post" is why they tapped. A like or a
-    ///   comment gets the marker and nothing more.
+    /// - Parameter shareOnOpen: no caller passes true any more; see `shareOnOpenKey`.
+    ///   Every notification now lands on the marker and nothing more.
     private func openMarker(
         _ payload: MarkerSharePayloadV1,
         shareOnOpen: Bool = false,

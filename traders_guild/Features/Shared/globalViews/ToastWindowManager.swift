@@ -58,9 +58,17 @@ class ToastWindowManager: ObservableObject {
             return
         }
 
-        // Create window if needed (passthrough so touches outside the bar still
-        // reach the app underneath).
-        let window = toastWindow ?? ToastPassthroughWindow(windowScene: scene)
+        // A *fresh* window whenever there is no toast on screen, rather than
+        // reviving the cached one.
+        //
+        // Windows at the same level are ordered by when they were added, and
+        // this one shares `.alert + 1` with the tutorial overlay. Re-showing a
+        // long-lived hidden window left it wherever it had been, which is how a
+        // confirmation raised from inside a sheet could end up underneath one.
+        // Reusing it only while a toast is already up keeps the slide-in/out
+        // animation continuous for back-to-back messages.
+        let window = (activeBarHost != nil ? toastWindow : nil)
+            ?? ToastPassthroughWindow(windowScene: scene)
         toastWindow = window
         // Re-asserted every time: the window outlives any single scene, and the
         // level is what keeps the bar above sheets and full-screen covers.
@@ -148,7 +156,11 @@ class ToastWindowManager: ObservableObject {
         UIView.animate(withDuration: 0.28, animations: {
             window.alpha = 0
             if let host { host.view.transform = CGAffineTransform(translationX: 0, y: host.view.bounds.height + 20) }
-        }) { _ in
+        }) { [weak self] _ in
+            // A toast raised during the 0.28s slide-out would otherwise be torn
+            // down by this completion the instant it appeared — the second of
+            // two messages in quick succession simply never showed.
+            guard self?.activeBarHost == nil else { return }
             window.isHidden = true
             window.rootViewController = nil
             host?.view.transform = .identity

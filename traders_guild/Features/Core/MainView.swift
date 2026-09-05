@@ -924,6 +924,26 @@ struct MainView: View {
                     markerSharePromptContext = context
                 }
             }
+            // Everything modal goes away when the shell re-points at another
+            // guild. The transition covers the swap; without this it lifts to
+            // reveal the sheet you joined *from*, still describing the guild
+            // you have just left.
+            .onChange(of: rlAppState.closeSheetsToken) { _, _ in
+                dismissKeyboard()
+                markerSharePromptContext = nil
+                selectedViewingMarkerAuthorRoute = nil
+                showDiscordSetupReminder = false
+                dismissLeftSheetsSignal = true
+                dismissRightSheetsSignal = true
+                withAnimation(AnimationConstants.standard) {
+                    showLeftDrawer = false
+                    showRightDrawer = false
+                    showOverlay = false
+                    showSheetOverlay = false
+                    leftDragTranslation = 0
+                    rightDragTranslation = 0
+                }
+            }
         }
     }
 

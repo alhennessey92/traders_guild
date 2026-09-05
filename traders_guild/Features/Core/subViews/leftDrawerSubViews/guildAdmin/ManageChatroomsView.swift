@@ -22,6 +22,7 @@ struct ManageChatroomsView: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "bubble.left.and.bubble.right.fill",
                     iconColor: .cyan,
                     title: "Manage Chatrooms",

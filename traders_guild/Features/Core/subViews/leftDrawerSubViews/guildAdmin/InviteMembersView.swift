@@ -25,6 +25,7 @@ struct InviteMembersView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "person.badge.plus",
                     iconColor: AppColors.statusInfo,
                     title: "Invite Members",

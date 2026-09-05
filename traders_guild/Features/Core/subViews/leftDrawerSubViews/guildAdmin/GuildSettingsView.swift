@@ -158,6 +158,7 @@ struct GuildSettingsView: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "gearshape.fill",
                     iconColor: .blue,
                     title: "Guild Details",

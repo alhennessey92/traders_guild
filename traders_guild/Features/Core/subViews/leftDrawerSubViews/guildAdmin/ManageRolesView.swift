@@ -34,6 +34,7 @@ struct ManageRolesView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header
                 AdminSheetHeader(
+                    guild: rlAppState.currentGuild,
                     icon: "person.badge.shield.checkmark",
                     iconColor: .orange,
                     title: "Manage Roles",
