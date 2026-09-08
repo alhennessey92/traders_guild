@@ -42,6 +42,32 @@ struct MarkerLinkRenderContext {
     }
 }
 
+/// How the connector/ring reveal behaves, extracted so Reduce Motion is a
+/// tested rule rather than an inspected one.
+enum MarkerLinkRevealPolicy {
+    /// Faster out than in, matching the chart's existing selection feel.
+    static let inDuration: Double = 0.22
+    static let outDuration: Double = 0.14
+
+    /// Where the reveal should end up.
+    static func target(focused: Bool) -> CGFloat {
+        focused ? 1 : 0
+    }
+
+    /// How long to take getting there. Zero means "no animation" — under
+    /// Reduce Motion focus still appears, it simply does not draw itself in.
+    static func duration(focused: Bool, reduceMotion: Bool) -> Double {
+        guard !reduceMotion else { return 0 }
+        return focused ? inDuration : outDuration
+    }
+
+    /// Whether the reveal should restart from zero before animating. Only the
+    /// inward direction does, so the line draws from the parent outward.
+    static func restartsFromZero(focused: Bool, reduceMotion: Bool) -> Bool {
+        focused && !reduceMotion
+    }
+}
+
 enum MarkerLinkRenderer {
 
     // MARK: - Constants

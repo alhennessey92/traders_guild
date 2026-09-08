@@ -7807,16 +7807,20 @@ struct TradingChartView: View {
     /// Motion the value snaps, so focus still appears — it simply does not
     /// animate.
     private func animateLinkReveal(focused: Bool) {
-        guard !reduceMotion else {
-            linkRevealProgress = focused ? 1 : 0
+        let target = MarkerLinkRevealPolicy.target(focused: focused)
+        let duration = MarkerLinkRevealPolicy.duration(focused: focused, reduceMotion: reduceMotion)
+
+        guard duration > 0 else {
+            linkRevealProgress = target
             return
         }
-        if focused {
+        if MarkerLinkRevealPolicy.restartsFromZero(focused: focused, reduceMotion: reduceMotion) {
             linkRevealProgress = 0
-            withAnimation(.easeOut(duration: 0.22)) { linkRevealProgress = 1 }
-        } else {
-            withAnimation(.easeIn(duration: 0.14)) { linkRevealProgress = 0 }
         }
+        let curve: Animation = focused
+            ? .easeOut(duration: duration)
+            : .easeIn(duration: duration)
+        withAnimation(curve) { linkRevealProgress = target }
     }
 
     /// Focus context for the marker layer, or nil when no thesis is focused.
