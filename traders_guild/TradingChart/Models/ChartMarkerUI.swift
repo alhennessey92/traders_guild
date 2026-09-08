@@ -162,6 +162,28 @@ struct ChartMarkerUI: Identifiable, Hashable {
     }
     var pollOptions: [RLPollOptionDTO]? { marker.pollOptions }
     var userPollVote: UUID? { marker.userPollVote }
+
+    // MARK: - Linked markers
+
+    var parentMarkerId: UUID? { marker.parentMarkerId }
+    var linkRelationship: MarkerLinkRelationshipValue? { marker.linkRelationshipValue }
+    var parentPreview: RLMarkerLinkPreviewDTO? { marker.parentPreview }
+    var responseCount: Int { marker.responseCount }
+    var responsesRevision: Date? { marker.responsesRevision }
+    var isLinkedResponse: Bool { marker.isLinkedResponse }
+    var participatesInThesis: Bool { marker.participatesInThesis }
+    var hasUnavailableParent: Bool { marker.hasUnavailableParent }
+
+    /// Topology projection used by `MarkerLinkGraph`. Keeping the conversion
+    /// here means the graph never needs to know about chart wrappers.
+    var linkNode: MarkerLinkNode {
+        MarkerLinkNode(
+            id: id,
+            parentId: marker.parentMarkerId,
+            relationship: marker.linkRelationshipValue,
+            directResponseCount: marker.responseCount
+        )
+    }
     var totalPollVotes: Int {
         pollOptions?.reduce(0) { $0 + $1.voteCount } ?? 0
     }
@@ -282,7 +304,9 @@ extension RLChartMarkerDTO {
         commentCount: Int? = nil,
         pollQuestion: String? = nil,
         pollOptions: [RLPollOptionDTO]? = nil,
-        userPollVote: UUID? = nil
+        userPollVote: UUID? = nil,
+        directResponseCount: Int? = nil,
+        responsesRevision: Date? = nil
     ) -> RLChartMarkerDTO {
         guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
             return self
@@ -315,6 +339,14 @@ extension RLChartMarkerDTO {
             dict["pollOptions"] = pollOptionsArray
         }
         if let userPollVote = userPollVote { dict["userPollVote"] = userPollVote.uuidString }
+        if let directResponseCount = directResponseCount {
+            dict["directResponseCount"] = directResponseCount
+        }
+        // This round-trip uses a plain encoder/decoder pair, whose default date
+        // strategy is `timeIntervalSinceReferenceDate` on both sides.
+        if let responsesRevision = responsesRevision {
+            dict["responsesRevision"] = responsesRevision.timeIntervalSinceReferenceDate
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let updated = try? JSONDecoder().decode(RLChartMarkerDTO.self, from: data) else {
             return self

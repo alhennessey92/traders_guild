@@ -280,20 +280,13 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
     }
 }
 
-/// Server-driven feature capability. Defaults to **off**: a build that cannot
-/// reach the endpoint, or reaches an older server, must behave exactly like
-/// 1.2.1 and show no linked-marker affordances.
-struct RLRuntimeFlagsDTO: Codable, Equatable {
-    let linkedMarkersEnabled: Bool
+/// Raised when the server has linked markers switched off. The feature is
+/// capability-gated and defaults to off, so this is an expected state rather
+/// than an error worth surfacing as a failure.
+struct MarkerLinkUnavailableError: LocalizedError, Equatable {
+    static let detail = "linked_markers_unavailable"
 
-    init(linkedMarkersEnabled: Bool = false) {
-        self.linkedMarkersEnabled = linkedMarkersEnabled
+    var errorDescription: String? {
+        "Linked markers aren't available yet."
     }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        linkedMarkersEnabled = try c.decodeIfPresent(Bool.self, forKey: .linkedMarkersEnabled) ?? false
-    }
-
-    static let disabled = RLRuntimeFlagsDTO(linkedMarkersEnabled: false)
 }

@@ -3859,7 +3859,11 @@ extension RealAPIService {
 
     /// Delete a chart marker
     /// DELETE /chart/guilds/{guild_id}/markers/{marker_id}
-    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+    ///
+    /// The 1.3.0 acknowledgement retains `detail` and adds the parent's
+    /// authoritative post-delete response count, so deleting a response
+    /// corrects its parent's badge without a synthetic update event.
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLMarkerDeleteResponseDTO {
         return try await request(
             "/chart/guilds/\(guildId.uuidString)/markers/\(markerId.uuidString)",
             service: .chart,
@@ -3867,7 +3871,23 @@ extension RealAPIService {
             auth: true
         )
     }
-    
+
+    /// One bounded window onto a thesis.
+    /// GET /chart/markers/{marker_id}/thread
+    ///
+    /// `cursor` continues whichever traversal it came from — the window's
+    /// `ancestorCursor` walks further up, a branch cursor pages more responses
+    /// at that structural node.
+    func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
+        var path = "/chart/markers/\(markerId.uuidString)/thread"
+        if let cursor, !cursor.isEmpty,
+           let encoded = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            path += "?cursor=\(encoded)"
+        }
+        return try await request(path, service: .chart, auth: true)
+    }
+
+
     
     // =============================================================================================
     // MARK: - Marker Likes

@@ -118,7 +118,13 @@ protocol MarkerAPIClient: AnyObject {
     ) async throws -> RLMarkersListDTO
     func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO
     func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO
-    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO
+    /// Returns the richer 1.3.0 acknowledgement, which still carries `detail`
+    /// and adds the parent reconciliation metadata. Older servers omit the new
+    /// fields and decode to nil.
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLMarkerDeleteResponseDTO
+    /// One bounded window onto a thesis. `cursor` continues either ancestry or a
+    /// branch, depending on which cursor it came from.
+    func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO
     func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO
     func voteOnPoll(guildId: UUID, markerId: UUID, optionId: UUID) async throws -> RLVotePollDTO
     func addMarkerComment(

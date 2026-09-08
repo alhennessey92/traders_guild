@@ -1959,21 +1959,28 @@ struct RLRuntimeFlagsDTO: Codable, Equatable {
     let betaWelcomeEnabled: Bool
     let betaFeedbackEnabled: Bool
     let awardsEnabled: Bool
+    /// Linked / branching markers. Defaults to **off**, so a build talking to a
+    /// server that predates the capability behaves exactly like 1.2.1: existing
+    /// links still render as ordinary markers, and no link affordances appear.
+    let linkedMarkersEnabled: Bool
 
     static let disabled = RLRuntimeFlagsDTO(
         betaWelcomeEnabled: false,
         betaFeedbackEnabled: false,
-        awardsEnabled: false
+        awardsEnabled: false,
+        linkedMarkersEnabled: false
     )
 
     init(
         betaWelcomeEnabled: Bool = false,
         betaFeedbackEnabled: Bool = false,
-        awardsEnabled: Bool = false
+        awardsEnabled: Bool = false,
+        linkedMarkersEnabled: Bool = false
     ) {
         self.betaWelcomeEnabled = betaWelcomeEnabled
         self.betaFeedbackEnabled = betaFeedbackEnabled
         self.awardsEnabled = awardsEnabled
+        self.linkedMarkersEnabled = linkedMarkersEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -1981,6 +1988,7 @@ struct RLRuntimeFlagsDTO: Codable, Equatable {
         betaWelcomeEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaWelcomeEnabled) ?? false
         betaFeedbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaFeedbackEnabled) ?? false
         awardsEnabled = try container.decodeIfPresent(Bool.self, forKey: .awardsEnabled) ?? false
+        linkedMarkersEnabled = try container.decodeIfPresent(Bool.self, forKey: .linkedMarkersEnabled) ?? false
     }
 }
 

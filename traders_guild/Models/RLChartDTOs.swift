@@ -1390,6 +1390,159 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     // Prediction outcome (tracked setups only)
     let predictionResult: RLPredictionResultDTO?
 
+    // MARK: - Linked markers (1.3.0)
+    //
+    // Every field here is optional even where the contract gives a default, so a
+    // payload from a pre-1.3.0 server — or a cached one — still decodes. The
+    // non-optional reading is exposed through the accessors below.
+
+    /// The marker this one answers, when it is a response.
+    let parentMarkerId: UUID?
+    /// Raw relationship string. Deliberately not decoded into an enum: a value
+    /// added server-side after this build shipped must render as an ordinary
+    /// linked marker rather than failing the whole marker's decode.
+    let linkRelationship: String?
+    /// Inline description of the answered marker. `nil` means *not hydrated* —
+    /// which is not the same as known-unavailable, for which the server sends a
+    /// preview with `isUnavailable` set.
+    let parentPreview: RLMarkerLinkPreviewDTO?
+    /// Direct responses to this marker.
+    let directResponseCount: Int?
+    /// Server revision for `directResponseCount`, advanced monotonically.
+    let responsesRevision: Date?
+    /// Authoritative count for the *parent*, carried on create/delete payloads
+    /// so a response can correct its parent's badge without a synthetic event.
+    let parentDirectResponseCount: Int?
+    let parentResponsesRevision: Date?
+
+    /// Explicit stand-in for the synthesized memberwise initializer.
+    ///
+    /// Spelled out so the 1.3.0 link fields can default, leaving every existing
+    /// construction site — the optimistic marker in `MarkerManager.addMarkerV2`
+    /// and the test fixtures — untouched. `Decodable` synthesis is unaffected.
+    init(
+        id: UUID,
+        symbolId: UUID,
+        guildId: UUID,
+        author: RLGuildMemberDTO,
+        candleTimestamp: Date,
+        timeframe: String,
+        price: Double,
+        intent: String,
+        title: String?,
+        note: String?,
+        visibility: String,
+        confidence: Int?,
+        trackingEnabled: Bool,
+        trackingState: String?,
+        alertSeverity: String?,
+        createdAt: Date,
+        createdAtFormatted: String,
+        isVisible: Bool,
+        likeCount: Int,
+        isLikedByCurrentUser: Bool,
+        commentCount: Int,
+        comments: [RLMarkerCommentDTO],
+        isCurrentUserMarker: Bool,
+        canEdit: Bool,
+        canDelete: Bool,
+        components: [RLMarkerComponentDTO],
+        primaryComponentId: UUID?,
+        pollQuestion: String?,
+        pollOptions: [RLPollOptionDTO]?,
+        userPollVote: UUID?,
+        predictionResult: RLPredictionResultDTO?,
+        parentMarkerId: UUID? = nil,
+        linkRelationship: String? = nil,
+        parentPreview: RLMarkerLinkPreviewDTO? = nil,
+        directResponseCount: Int? = nil,
+        responsesRevision: Date? = nil,
+        parentDirectResponseCount: Int? = nil,
+        parentResponsesRevision: Date? = nil
+    ) {
+        self.id = id
+        self.symbolId = symbolId
+        self.guildId = guildId
+        self.author = author
+        self.candleTimestamp = candleTimestamp
+        self.timeframe = timeframe
+        self.price = price
+        self.intent = intent
+        self.title = title
+        self.note = note
+        self.visibility = visibility
+        self.confidence = confidence
+        self.trackingEnabled = trackingEnabled
+        self.trackingState = trackingState
+        self.alertSeverity = alertSeverity
+        self.createdAt = createdAt
+        self.createdAtFormatted = createdAtFormatted
+        self.isVisible = isVisible
+        self.likeCount = likeCount
+        self.isLikedByCurrentUser = isLikedByCurrentUser
+        self.commentCount = commentCount
+        self.comments = comments
+        self.isCurrentUserMarker = isCurrentUserMarker
+        self.canEdit = canEdit
+        self.canDelete = canDelete
+        self.components = components
+        self.primaryComponentId = primaryComponentId
+        self.pollQuestion = pollQuestion
+        self.pollOptions = pollOptions
+        self.userPollVote = userPollVote
+        self.predictionResult = predictionResult
+        self.parentMarkerId = parentMarkerId
+        self.linkRelationship = linkRelationship
+        self.parentPreview = parentPreview
+        self.directResponseCount = directResponseCount
+        self.responsesRevision = responsesRevision
+        self.parentDirectResponseCount = parentDirectResponseCount
+        self.parentResponsesRevision = parentResponsesRevision
+    }
+
+    // MARK: - Linked marker accessors
+
+    /// Direct responses to this marker, defaulting to none when the server did
+    /// not say — which is what a pre-1.3.0 payload looks like.
+    var responseCount: Int { directResponseCount ?? 0 }
+
+    /// Relationship to the answered marker, tolerant of unknown values.
+    var linkRelationshipValue: MarkerLinkRelationshipValue? {
+        MarkerLinkRelationshipValue.make(linkRelationship)
+    }
+
+    /// Answers another marker.
+    var isLinkedResponse: Bool { parentMarkerId != nil }
+
+    /// Takes part in a thesis at all, in either direction.
+    var participatesInThesis: Bool { isLinkedResponse || responseCount > 0 }
+
+    /// The parent is known to be gone or hidden from this viewer, as opposed to
+    /// simply not hydrated on this payload.
+    var hasUnavailableParent: Bool {
+        parentPreview?.isUnavailable ?? false
+    }
+
+    /// The parent reconciliation carried on a create/delete payload, if any.
+    var parentCountUpdate: MarkerResponseCountUpdate? {
+        guard let parentMarkerId, let parentDirectResponseCount else { return nil }
+        return MarkerResponseCountUpdate(
+            markerId: parentMarkerId,
+            directResponseCount: parentDirectResponseCount,
+            revision: parentResponsesRevision
+        )
+    }
+
+    /// This marker's own count as a reconcilable observation.
+    var ownCountUpdate: MarkerResponseCountUpdate? {
+        guard let directResponseCount else { return nil }
+        return MarkerResponseCountUpdate(
+            markerId: id,
+            directResponseCount: directResponseCount,
+            revision: responsesRevision
+        )
+    }
+
     // MARK: - Hashable
     
     func hash(into hasher: inout Hasher) {
@@ -2315,6 +2468,12 @@ struct RLCreateMarkerRequest: Codable {
     /// per-marker decision, never a standing one.
     var discordChannelId: UUID? = nil
 
+    /// The marker this one answers. Sent only together with
+    /// `linkRelationship` — the server rejects one without the other.
+    var parentMarkerId: UUID? = nil
+    /// One of `supports`, `challenges`, `builds_on`.
+    var linkRelationship: String? = nil
+
     enum CodingKeys: String, CodingKey {
         case symbolId = "symbol_id"
         case timeframe
@@ -2328,6 +2487,18 @@ struct RLCreateMarkerRequest: Codable {
         case pollQuestion = "poll_question"
         case pollOptions = "poll_options"
         case discordChannelId = "discord_channel_id"
+        case parentMarkerId = "parent_marker_id"
+        case linkRelationship = "link_relationship"
+    }
+
+    /// Attaches a link to an otherwise-built request. Keeping this here means
+    /// the pairing rule — both fields or neither — is expressed once.
+    func withLink(_ context: MarkerLinkContext?) -> RLCreateMarkerRequest {
+        guard let context else { return self }
+        var copy = self
+        copy.parentMarkerId = context.parentMarkerId
+        copy.linkRelationship = context.relationship.rawValue
+        return copy
     }
 }
 
