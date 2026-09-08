@@ -239,6 +239,14 @@ class RLAppState: ObservableObject {
     @Published var biometricUnlockErrorMessage: String?
     @Published private(set) var biometricUnlockRequestID: UUID?
     @Published private(set) var runtimeFlags: RLRuntimeFlagsDTO = .disabled
+
+    /// Thesis cache.
+    ///
+    /// Lives here rather than on the chart because `MarkerManager` tears its
+    /// markers down on every symbol *and timeframe* change, which would
+    /// otherwise discard a thesis the moment a user follows a response onto
+    /// another timeframe.
+    let markerThreadStore = MarkerThreadStore()
     @Published private(set) var reportedUserStateVersion: Int = 0
     @Published private(set) var reportedContentStateVersion: Int = 0
 
@@ -3534,6 +3542,8 @@ class RLAppState: ObservableObject {
         isLoggingOut = false
         isOnboardingFlowActive = false
         runtimeFlags = .disabled
+        // A cached thesis must never survive into another account's session.
+        markerThreadStore.invalidateAll(reason: .logout)
         reportedUserStateVersion = 0
         reportedContentStateVersion = 0
         clearBiometricAppLock()

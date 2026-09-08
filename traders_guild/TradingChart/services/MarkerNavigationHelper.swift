@@ -88,6 +88,32 @@ struct MarkerNavigationTarget: Identifiable {
         self.alertSeverity = MarkerAlertSeverity.resolved(rawValue: marker.alertSeverity)
     }
 
+    /// Travel to another node in a thesis.
+    ///
+    /// Fails for a node that cannot be navigated — a tombstone, or a preview the
+    /// server did not hydrate — so an unreachable row can never produce a
+    /// navigation that silently goes nowhere.
+    init?(linkPreview preview: RLMarkerLinkPreviewDTO) {
+        guard let markerId = preview.markerId,
+              let symbolId = preview.symbolId,
+              let timeframe = preview.timeframe,
+              let candleTimestamp = preview.candleTimestamp,
+              !preview.isUnavailable else {
+            return nil
+        }
+        self.markerId = markerId
+        self.symbolId = symbolId
+        self.symbolTicker = preview.ticker
+        self.symbolBrandColor = nil
+        self.symbolAssetClass = nil
+        self.timeframeRaw = timeframe
+        self.candleTimestamp = candleTimestamp
+        self.price = preview.price
+        self.intent = preview.intentEnum ?? .analysis
+        self.selectedEmoji = nil
+        self.alertSeverity = nil
+    }
+
     init(sharedPayload payload: MarkerSharePayloadV1) {
         self.markerId = payload.markerId
         self.symbolId = payload.symbolId

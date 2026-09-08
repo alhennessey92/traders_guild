@@ -14,6 +14,14 @@ struct MarkerViewingGeneralTab: View {
     var canEditMarker: Bool = false
     var onEditMarker: ((ChartMarkerUI) -> Void)? = nil
     var onShareMarker: (() -> Void)? = nil
+    /// Thesis cache. Optional so the tab still previews and tests without one.
+    var threadStore: MarkerThreadStore? = nil
+    /// Begin composing a response with the chosen relationship.
+    var onRespondToMarker: ((MarkerLinkRelationship) -> Void)? = nil
+    /// Jump to another marker in the same thesis.
+    var onOpenLinkedMarker: ((RLMarkerLinkPreviewDTO) -> Void)? = nil
+
+    @State private var showRelationshipPicker: Bool = false
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -53,10 +61,15 @@ struct MarkerViewingGeneralTab: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 heroPanel
+                linkRelationshipRow
                 markerSpecificsBox
                 generalDisclosure
                 symbolInfoDisclosure
                 authorDisclosure
+                thesisDisclosure
+                if canShowRespondAction {
+                    respondToMarkerButton
+                }
                 if canShowShareAction {
                     shareMarkerButton
                 }
@@ -77,6 +90,92 @@ struct MarkerViewingGeneralTab: View {
                 onCancel: { showReportReasonSheet = false }
             )
         }
+    }
+
+    // MARK: - Linked markers
+
+    /// "Supports Alex's BTC breakout", directly under the hero panel.
+    ///
+    /// Shown whenever the marker answers another one — including when the
+    /// parent is gone, where it degrades to a non-tappable "removed marker"
+    /// rather than silently dropping the relationship.
+    @ViewBuilder
+    private var linkRelationshipRow: some View {
+        if markerManager.linkedMarkersEnabled, liveMarker.isLinkedResponse {
+            MarkerLinkRelationshipRow(
+                relationship: liveMarker.linkRelationship,
+                preview: liveMarker.parentPreview,
+                onOpenParent: liveMarker.parentPreview.flatMap { preview in
+                    preview.canNavigate ? { onOpenLinkedMarker?(preview) } : nil
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var thesisDisclosure: some View {
+        if markerManager.linkedMarkersEnabled,
+           liveMarker.participatesInThesis,
+           let threadStore {
+            MarkerThesisDisclosure(
+                marker: liveMarker,
+                markerManager: markerManager,
+                store: threadStore,
+                onOpenMarker: { preview in onOpenLinkedMarker?(preview) }
+            )
+        }
+    }
+
+    /// Only guild-visible markers can be answered: a private marker has no
+    /// audience, and the server refuses a link to one.
+    private var canShowRespondAction: Bool {
+        markerManager.linkedMarkersEnabled
+            && onRespondToMarker != nil
+            && liveMarker.visibility == "guild"
+    }
+
+    private var respondToMarkerButton: some View {
+        Button {
+            showRelationshipPicker = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Respond with marker")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(AppColors.primaryForeground)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppColors.accentColor.opacity(0.16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppColors.accentColor.opacity(0.35), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showRelationshipPicker) {
+            MarkerLinkRelationshipPicker(
+                parentSummary: respondPickerSummary,
+                onSelect: { relationship in
+                    showRelationshipPicker = false
+                    onRespondToMarker?(relationship)
+                },
+                onCancel: { showRelationshipPicker = false }
+            )
+            .presentationDetents([.height(360)])
+        }
+    }
+
+    private var respondPickerSummary: String? {
+        let author = liveMarker.author.username
+        if let title = liveMarker.title, !title.isEmpty {
+            return "\(author)'s \(title)"
+        }
+        return "\(author)'s \(liveMarker.intent.displayName)"
     }
 
     private var heroColor: Color {

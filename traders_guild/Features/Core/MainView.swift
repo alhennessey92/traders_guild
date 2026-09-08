@@ -99,6 +99,56 @@ struct MainView: View {
 
     @StateObject private var leftDrawerViewModel = LeftDrawerViewModel()
     @StateObject private var rightDrawerViewModel = RLRightDrawerViewModel()  // NEW: Uses RLAppState
+
+    /// The chart's persistent bottom sheet.
+    ///
+    /// Extracted from the `.sheet` closure: built inline it exceeded the
+    /// type-checker's practical limit once the linked-marker callback joined
+    /// the other three.
+    private var chartBottomSheet: ChartBottomSheet {
+        ChartBottomSheet(
+            controlViewModel: chartControlVM,
+            chartViewModel: chartViewModel,
+            placementState: placementState,
+            markerOverlayState: markerOverlayState,
+            timeframePanelManager: timeframePanelManager,
+            selectedDetent: $selectedDetent,
+            onNavigateToMarker: { marker in
+                leftDrawerViewModel.requestNavigationToMarker(marker)
+            },
+            onPlaceMarker: {
+                NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
+            },
+            onViewingAuthorTap: { marker in
+                if marker.author.userId == rlAppState.currentUser?.id {
+                    markerAuthorProfileDetent = .fraction(0.6)
+                    selectedViewingMarkerAuthorRoute = .currentUser
+                } else {
+                    selectedViewingMarkerAuthorRoute = .guildMember(marker.author)
+                }
+            },
+            onNavigateToLinkedMarker: { target in
+                navigateToLinkedMarker(target)
+            }
+        )
+    }
+
+    /// Travel to a thesis node that is not on the current chart.
+    ///
+    /// Links are same-guild and same-symbol by contract, so only the timeframe
+    /// and the loaded history window can differ — the helper already handles
+    /// both, and no symbol needs resolving. A named method rather than an
+    /// inline closure because the sheet's construction expression is already at
+    /// the type-checker's practical limit.
+    @discardableResult
+    private func navigateToLinkedMarker(_ target: MarkerNavigationTarget) -> Bool {
+        let helper = MarkerNavigationHelper(
+            chartViewModel: chartViewModel,
+            gestureState: chartGestureState
+        )
+        return helper.navigateToMarker(target, resolvedSymbol: nil)
+    }
+
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     @Environment(\.scenePhase) private var scenePhase
     /// Matches `ThemeManager` / `ChartBottomSheet` — forces the chart sheet subtree to rebuild on theme change (`.sheet` often skips `ObservableObject` updates).
@@ -603,28 +653,7 @@ struct MainView: View {
             // hundreds of times), then shown only once this one goes away. Standing the
             // bottom sheet down for them is the same thing already done for the drawers.
             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder && !guildArrivalReservesSheetSlot)) {
-                ChartBottomSheet(
-                    controlViewModel: chartControlVM,
-                    chartViewModel: chartViewModel,
-                    placementState: placementState,
-                    markerOverlayState: markerOverlayState,
-                    timeframePanelManager: timeframePanelManager,
-                    selectedDetent: $selectedDetent,
-                    onNavigateToMarker: { marker in
-                        leftDrawerViewModel.requestNavigationToMarker(marker)
-                    },
-                    onPlaceMarker: {
-                        NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
-                    },
-                    onViewingAuthorTap: { marker in
-                        if marker.author.userId == rlAppState.currentUser?.id {
-                            markerAuthorProfileDetent = .fraction(0.6)
-                            selectedViewingMarkerAuthorRoute = .currentUser
-                        } else {
-                            selectedViewingMarkerAuthorRoute = .guildMember(marker.author)
-                        }
-                    }
-                )
+                chartBottomSheet
                 .environmentObject(rlAppState)
                 .environmentObject(tutorialManager)
                 .id(appThemeStorage)
@@ -823,6 +852,12 @@ struct MainView: View {
                     }
                 }
             }
+            .modifier(
+                MarkerLinkCapabilityObserver(
+                    appState: rlAppState,
+                    chartViewModel: chartViewModel
+                )
+            )
             .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     if isPlacing {
@@ -2745,6 +2780,9 @@ struct ChartBottomSheet: View {
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
     var onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
+    /// Travel to a thesis node that is not on the current chart. Owned by
+    /// `MainView`, which holds the drawer view model that performs navigation.
+    var onNavigateToLinkedMarker: ((MarkerNavigationTarget) -> Void)? = nil
 
     // Chat state - managed here since parent handles input
     @StateObject private var chartChatManager: ChartChatManager
@@ -2765,8 +2803,10 @@ struct ChartBottomSheet: View {
         selectedDetent: Binding<PresentationDetent>,
         onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
         onPlaceMarker: (() -> Void)? = nil,
-        onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
+        onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil,
+        onNavigateToLinkedMarker: ((MarkerNavigationTarget) -> Void)? = nil
     ) {
+        self.onNavigateToLinkedMarker = onNavigateToLinkedMarker
         self.controlViewModel = controlViewModel
         self.chartViewModel = chartViewModel
         self.placementState = placementState
@@ -3490,7 +3530,14 @@ struct ChartBottomSheet: View {
                 onEditMarker: { liveMarker in
                     beginEditingSelectedMarker(liveMarker)
                 },
-                onShareMarker: shareSelectedMarker
+                onShareMarker: shareSelectedMarker,
+                threadStore: rlAppState.markerThreadStore,
+                onRespondToMarker: { relationship in
+                    beginRespondingToSelectedMarker(marker, relationship: relationship)
+                },
+                onOpenLinkedMarker: { preview in
+                    openLinkedMarker(preview)
+                }
             )
             .environmentObject(rlAppState)
         case .chat:
@@ -3530,6 +3577,65 @@ struct ChartBottomSheet: View {
             chartViewModel.markerManager?.selectedMarker = nil
             controlViewModel.startMarkerPlacement(intent: marker.intent)
         }
+    }
+
+    /// Leave the detail sheet and start composing a response.
+    ///
+    /// Deliberately mirrors `beginEditingSelectedMarker`: seed placement state,
+    /// clear the selection, enter placement mode. The parent's intent is the
+    /// editable default — answering a setup with a setup is the common case,
+    /// and the author can still change it.
+    private func beginRespondingToSelectedMarker(
+        _ sourceMarker: ChartMarkerUI,
+        relationship: MarkerLinkRelationship
+    ) {
+        let marker = chartViewModel.markerManager?.markers
+            .first(where: { $0.id == sourceMarker.id }) ?? sourceMarker
+
+        // A private marker has no audience to answer, and the server rejects a
+        // link to one.
+        guard marker.visibility == "guild" else { return }
+
+        placementState.beginRespondingTo(
+            MarkerLinkContext(
+                parentMarkerId: marker.id,
+                parentGuildId: marker.guildId,
+                parentSymbolId: marker.symbolId,
+                parentCandleTimestamp: marker.candleTimestamp,
+                parentAuthorDisplayText: marker.author.username,
+                parentTitle: marker.title,
+                parentIntent: marker.intent,
+                relationship: relationship
+            )
+        )
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            chartViewModel.markerManager?.selectedMarker = nil
+            controlViewModel.startMarkerPlacement(intent: marker.intent)
+        }
+    }
+
+    /// Jump to another marker in the same thesis.
+    ///
+    /// Already-loaded markers are selected in place, which re-focuses the
+    /// thesis around them without dismissing the sheet. Anything else — another
+    /// timeframe, or history not yet paged in — goes through the existing
+    /// navigation helper, with the selection staged so it survives the reload.
+    private func openLinkedMarker(_ preview: RLMarkerLinkPreviewDTO) {
+        guard let markerId = preview.markerId,
+              let markerManager = chartViewModel.markerManager else { return }
+
+        if let loaded = markerManager.markers.first(where: { $0.id == markerId }) {
+            HapticFeedback.selection.trigger()
+            markerManager.selectedMarker = loaded
+            return
+        }
+
+        guard let target = MarkerNavigationTarget(linkPreview: preview) else { return }
+        // Staged so the selection survives the marker teardown that a symbol or
+        // timeframe change performs.
+        rlAppState.markerThreadStore.stagePendingNavigation(markerId: markerId)
+        onNavigateToLinkedMarker?(target)
     }
 
     private func resolvedMarkerForEditing(_ sourceMarker: ChartMarkerUI?) -> ChartMarkerUI? {
