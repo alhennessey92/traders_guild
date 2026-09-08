@@ -2142,6 +2142,35 @@ struct RLMarkerNavigationDTO: Codable {
 struct MarkerDeletedPayload: Codable {
     let markerId: String
     let guildId: String
+    /// 1.3.0 additions. A deleted response carries its parent's authoritative
+    /// post-delete count so the parent's badge corrects itself without a
+    /// synthetic marker update — old servers omit all three.
+    let symbolId: String?
+    let parentMarkerId: String?
+    let parentDirectResponseCount: Int?
+    let parentResponsesRevision: Date?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        markerId = try c.decode(String.self, forKey: .markerId)
+        guildId = try c.decode(String.self, forKey: .guildId)
+        symbolId = try c.decodeIfPresent(String.self, forKey: .symbolId)
+        parentMarkerId = try c.decodeIfPresent(String.self, forKey: .parentMarkerId)
+        parentDirectResponseCount = try c.decodeIfPresent(Int.self, forKey: .parentDirectResponseCount)
+        parentResponsesRevision = try c.decodeIfPresent(Date.self, forKey: .parentResponsesRevision)
+    }
+
+    /// The parent reconciliation carried by this event, if any.
+    var parentCountUpdate: MarkerResponseCountUpdate? {
+        guard let parentMarkerId,
+              let parentId = UUID(uuidString: parentMarkerId),
+              let parentDirectResponseCount else { return nil }
+        return MarkerResponseCountUpdate(
+            markerId: parentId,
+            directResponseCount: parentDirectResponseCount,
+            revision: parentResponsesRevision
+        )
+    }
 }
 
 /// Payload for marker_liked WebSocket event

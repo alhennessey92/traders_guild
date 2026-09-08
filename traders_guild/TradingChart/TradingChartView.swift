@@ -367,7 +367,15 @@ struct TradingChartView: View {
     
     /// Track if marker is actively being dragged (for scale animation)
     @State private var isMarkerBeingDragged = false
-    
+
+    /// 0…1 reveal for thesis connectors and rings. Driven on selection change
+    /// and read by the Canvas, which cannot consult the environment itself.
+    @State private var linkRevealProgress: CGFloat = 0
+
+    /// Honoured for every animation this feature introduces. When set, focus
+    /// snaps to its final state instead of drawing itself in.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Haptic feedback generator for marker interactions
     private let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
     
@@ -1102,6 +1110,11 @@ struct TradingChartView: View {
             }
             .onChange(of: markerManager.selectedMarker?.id) { _, newId in
                 syncSelectedMarkerGuideState(geometry: geometry, coordinateSystem: coordinateSystem)
+                // Focus is derived synchronously in the selection's didSet, so
+                // `linkFocus` is already settled by the time this runs. Driven
+                // from here rather than its own `.onChange` because this
+                // modifier chain is at the type-checker's practical limit.
+                animateLinkReveal(focused: markerManager.linkFocus != nil)
                 if newId == nil {
                     settleHistoricalPriceRangeAfterMarkerExit(
                         chartWidth: geometry.size.width,
@@ -7756,7 +7769,50 @@ struct TradingChartView: View {
             selectedMarkerScale: selectionScale,
             selectedMarkerRotation: selectionRotation,
             dimmed: controlViewModel.isMarkerPlacementMode,
-            editingEmojiOverride: editingEmojiOverrideForMarkers
+            editingEmojiOverride: editingEmojiOverrideForMarkers,
+            linkRender: linkRenderContext(size: size)
+        )
+    }
+
+    /// Drive the connector/ring reveal.
+    ///
+    /// Faster out than in, matching the existing selection feel. Under Reduce
+    /// Motion the value snaps, so focus still appears — it simply does not
+    /// animate.
+    private func animateLinkReveal(focused: Bool) {
+        guard !reduceMotion else {
+            linkRevealProgress = focused ? 1 : 0
+            return
+        }
+        if focused {
+            linkRevealProgress = 0
+            withAnimation(.easeOut(duration: 0.22)) { linkRevealProgress = 1 }
+        } else {
+            withAnimation(.easeIn(duration: 0.14)) { linkRevealProgress = 0 }
+        }
+    }
+
+    /// Focus context for the marker layer, or nil when no thesis is focused.
+    ///
+    /// Reduce Motion is resolved here rather than inside the Canvas: a static
+    /// draw function cannot read the environment, so the reveal is handed in
+    /// already settled — 1 immediately when the user has asked for less motion.
+    private func linkRenderContext(size: CGSize) -> MarkerLinkRenderContext? {
+        guard let focus = markerManager.linkFocus else { return nil }
+
+        var ringStyles: [UUID: MarkerLinkRingStyle] = [:]
+        let graph = markerManager.linkGraph
+        for markerId in focus.memberIds {
+            if let style = graph.ringStyle(for: markerId) {
+                ringStyles[markerId] = style
+            }
+        }
+
+        return MarkerLinkRenderContext(
+            focus: focus,
+            ringStyles: ringStyles,
+            revealProgress: reduceMotion ? 1 : linkRevealProgress,
+            plotRect: CGRect(origin: .zero, size: size)
         )
     }
 

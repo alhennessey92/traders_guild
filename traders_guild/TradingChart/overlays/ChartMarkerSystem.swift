@@ -259,14 +259,77 @@ class MarkerManager: ObservableObject {
     }
 
     @Published var markers: [ChartMarkerUI] = []
-    @Published var selectedMarker: ChartMarkerUI?
-    @Published var visibleIntents: Set<RLMarkerIntent> = Set(RLMarkerIntent.allCases)
-    @Published var visibilityMode: MarkerVisibilityMode = .all
+    @Published var selectedMarker: ChartMarkerUI? {
+        didSet {
+            // Focus is a pure function of the selection and what is loaded, so
+            // it is recomputed here rather than at every call site that can
+            // change the selection.
+            guard oldValue?.id != selectedMarker?.id else { return }
+            refreshLinkFocus()
+        }
+    }
+    // Changing a filter is a deliberate act, not a race, so the fade latch is
+    // dropped and the ">= 2 visible members" rule re-applies. Progressive page
+    // arrivals deliberately do *not* do this — that is what the latch prevents.
+    @Published var visibleIntents: Set<RLMarkerIntent> = Set(RLMarkerIntent.allCases) {
+        didSet {
+            clearFadeLatch()
+            refreshLinkFocus()
+        }
+    }
+    @Published var visibilityMode: MarkerVisibilityMode = .all {
+        didSet {
+            clearFadeLatch()
+            refreshLinkFocus()
+        }
+    }
     
     /// Tracks if we should show a "like existing marker" prompt
     @Published var duplicateMarkerToLike: ChartMarkerUI?
     @Published var showDuplicateAlert: Bool = false
-    
+
+    // MARK: - Linked markers
+
+    /// The synchronously-derived focus decision for the current selection.
+    /// `nil` whenever nothing is selected or the selection is standalone.
+    ///
+    /// Derived state: assign it only from `refreshLinkFocus()`, which lives in
+    /// `MarkerManager+Links.swift` and therefore needs an internal setter.
+    @Published var linkFocus: MarkerFocusState?
+
+    /// Server capability. While false the chart behaves exactly as 1.2.1 did:
+    /// existing links still decode and render as ordinary markers, but no
+    /// rings, connectors, badges or respond affordances appear.
+    @Published var linkedMarkersEnabled: Bool = false {
+        didSet {
+            guard oldValue != linkedMarkersEnabled else { return }
+            refreshLinkFocus()
+        }
+    }
+
+    /// Newest absolute response counts, applied monotonically and *before* any
+    /// symbol/timeframe filtering.
+    var responseCounts = MarkerResponseCountReconciler()
+
+    /// Latched for the life of one selection so the chart cannot flicker
+    /// between dimmed and undimmed as progressive pages arrive.
+    private var latchedFadeDecision: (selectionId: UUID, shouldFade: Bool)?
+
+    var fadeLatch: (selectionId: UUID, shouldFade: Bool)? { latchedFadeDecision }
+
+    func setFadeLatch(selectionId: UUID, shouldFade: Bool) {
+        latchedFadeDecision = (selectionId, shouldFade)
+    }
+
+    func clearFadeLatch() {
+        latchedFadeDecision = nil
+    }
+
+    /// Internal accessor so the linked-marker extension, which lives in its own
+    /// file, can reach the client without widening `api` itself.
+    var markerAPI: (any MarkerAPIClient)? { api }
+
+
     private var currentUserId: UUID
     private var currentGuildId: UUID
     private var currentUserMember: RLGuildMemberDTO
@@ -560,7 +623,14 @@ class MarkerManager: ObservableObject {
         layoutContext = context
         markers.removeAll()
         selectedMarker = nil
+        linkFocus = nil
+        clearFadeLatch()
+        // Counts survive a symbol or timeframe move — they are absolute and
+        // keyed by marker id, so returning to a chart must not roll a badge
+        // back to whatever a cached list payload happens to say. A guild change
+        // is a different scope entirely and clears them.
         if guildChanged {
+            responseCounts.removeAll()
             unsubscribeFromMarkerChannel()
         }
         return false
@@ -718,6 +788,13 @@ class MarkerManager: ObservableObject {
 
     private func handleMarkerCreated(_ message: WSIncomingMessage) {
         guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+
+        // Absolute counts are reconciled BEFORE any symbol/timeframe filtering.
+        // A response placed on another timeframe still changes the badge on a
+        // parent the viewer is looking at here, and every guard below would
+        // otherwise discard that correction.
+        applyLinkCounts(from: markerDTO)
+
         guard canRenderMarker(markerDTO) else { return }
 
         // Filter to current symbol and timeframe
@@ -802,12 +879,18 @@ class MarkerManager: ObservableObject {
         guard let payload = message.payload(as: MarkerDeletedPayload.self),
               let markerId = UUID(uuidString: payload.markerId) else { return }
 
+        // As with creation, the parent's post-delete count is absolute and is
+        // applied regardless of which chart the deleted marker belonged to.
+        applyLinkCounts(fromDeletion: payload)
+
         markers.removeAll { $0.id == markerId }
+        responseCounts.forget(markerId)
         if selectedMarker?.id == markerId {
             selectedMarker = nil
         }
 
         recalculateAllPositions()
+        refreshLinkFocus()
     }
 
     private func handleMarkerLiked(_ message: WSIncomingMessage) {
@@ -940,10 +1023,16 @@ class MarkerManager: ObservableObject {
             }
         }
         markers = MarkerPositionCalculator.assignStablePositions(markers: markers, candles: candles)
+        // A list payload can be older than a count we already reconciled, so
+        // known-newer values are written back before focus is derived.
+        reconcileLoadedCounts()
+        refreshLinkFocus()
     }
 
     func clearMarkers() {
         markers.removeAll()
+        linkFocus = nil
+        clearFadeLatch()
         selectedMarker = nil
         unsubscribeFromMarkerChannel()
     }
@@ -1084,6 +1173,10 @@ class MarkerManager: ObservableObject {
 
         do {
             let created = try await api.createMarkerV2(guildId: currentGuildId, request: request)
+            // HTTP create is authoritative for the creator: the realtime echo
+            // of their own marker is suppressed server-side, so this is the
+            // only place the author learns their parent's new count.
+            applyLinkCounts(from: created)
             if let idx = markers.firstIndex(where: { $0.id == tempId }),
                let newCandleIndex = findCandleIndex(timestamp: created.candleTimestamp, in: candles) {
                 let resolvedCreated = patchPollFields(
@@ -1122,7 +1215,12 @@ class MarkerManager: ObservableObject {
         guard let api = api else { return }
         
         do {
-            _ = try await api.deleteMarker(guildId: currentGuildId, markerId: id)
+            let acknowledgement = try await api.deleteMarker(guildId: currentGuildId, markerId: id)
+            // Same reasoning as create: the author never receives their own
+            // delete event, so the parent's corrected count arrives here.
+            applyLinkCounts(fromDeletion: acknowledgement)
+            responseCounts.forget(id)
+            refreshLinkFocus()
         } catch {
             // Revert optimistic update on error
             if let marker = markerToDelete {
@@ -2425,7 +2523,8 @@ struct ChartMarkerSystem {
         selectedMarkerRotation: CGFloat = 0,
         chartData: ChartDataManager? = nil,
         dimmed: Bool = false,
-        editingEmojiOverride: (markerId: UUID, emoji: String)? = nil
+        editingEmojiOverride: (markerId: UUID, emoji: String)? = nil,
+        linkRender: MarkerLinkRenderContext? = nil
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2450,6 +2549,10 @@ struct ChartMarkerSystem {
         )
 
         var renderQueue: [RenderedMarker] = []
+        // Final rendered bounds, accumulated across candles so connectors can be
+        // routed once the whole frame's positions — including the selected
+        // marker's neighbour nudge — are known.
+        var linkGlyphBounds: [UUID: MarkerGlyphBounds] = [:]
         renderQueue.reserveCapacity(allVisibleMarkers.count)
 
         for candleIndex in sortedCandleIndices {
@@ -2502,6 +2605,27 @@ struct ChartMarkerSystem {
                 }
             }
             
+            // Captured after the nudge above, so connectors attach where the
+            // glyphs actually land rather than where they would have.
+            if linkRender != nil {
+                for entry in markerPositions {
+                    let isSelected = selectedMarkerId == entry.marker.id
+                    let radius = (MarkerVisualSpec.baseCanvasDiameter / 2)
+                        * (isSelected ? selectedMarkerScale : 1.0)
+                    linkGlyphBounds[entry.marker.id] = MarkerGlyphBounds(
+                        id: entry.marker.id,
+                        center: entry.position,
+                        radius: radius,
+                        badgeRects: MarkerLinkRenderer.badgeRects(
+                            center: entry.position,
+                            isBelow: entry.marker.positionedBelow,
+                            likeCount: entry.marker.likeCount,
+                            responseCount: entry.marker.responseCount
+                        )
+                    )
+                }
+            }
+
             let aboveMarkers = markerPositions.filter { !$0.marker.positionedBelow }.sorted { $0.position.y > $1.position.y }
             let belowMarkers = markerPositions.filter { $0.marker.positionedBelow }.sorted { $0.position.y < $1.position.y }
             
@@ -2528,9 +2652,33 @@ struct ChartMarkerSystem {
 
         // Username labels removed per todo 38 — author visible in marker detail view
 
+        // Connectors are routed and drawn here — after every position is final,
+        // and before any glyph — so they pass behind the glass rather than over
+        // it, and so they attach to post-nudge centres.
+        if let linkRender {
+            let plan = MarkerLinkGeometry.plan(
+                edges: linkRender.focus.candidateEdges,
+                glyphs: linkGlyphBounds,
+                plotRect: linkRender.plotRect,
+                selectedId: linkRender.focus.selectedId
+            )
+            MarkerLinkRenderer.drawConnectors(
+                context: context,
+                plan: plan,
+                revealProgress: linkRender.revealProgress
+            )
+        }
+
         let glyphQueue = renderQueue.sorted {
             if $0.isSelected != $1.isSelected {
                 return !$0.isSelected
+            }
+            // Focused thesis members paint above faded ones, mirroring the
+            // existing selected-above-everything rule.
+            if let linkRender {
+                let lhsFocused = linkRender.focus.memberIds.contains($0.marker.id)
+                let rhsFocused = linkRender.focus.memberIds.contains($1.marker.id)
+                if lhsFocused != rhsFocused { return !lhsFocused }
             }
             if $0.sortKey != $1.sortKey {
                 return $0.sortKey < $1.sortKey
@@ -2538,9 +2686,17 @@ struct ChartMarkerSystem {
             return $0.marker.id.uuidString < $1.marker.id.uuidString
         }
 
+        // A second, shallower dim used only for thesis focus. The placement dim
+        // above is a whole-layer effect; this one is per marker.
+        var focusDimmedContext = context
+        focusDimmedContext.opacity = MarkerLinkGraph.unrelatedOpacity
+
         for rendered in glyphQueue {
             // Use original undimmed context for selected markers so they stay at full opacity
-            let drawContext = (isDimmed && rendered.isSelected) ? context : markerContext
+            var drawContext = (isDimmed && rendered.isSelected) ? context : markerContext
+            if !isDimmed, linkRender?.isDimmed(rendered.marker.id) == true {
+                drawContext = focusDimmedContext
+            }
             let emojiOverride: String? = (editingEmojiOverride != nil && rendered.marker.id == editingEmojiOverride?.markerId)
                 ? editingEmojiOverride?.emoji : nil
             drawSingleMarker(
@@ -2551,7 +2707,9 @@ struct ChartMarkerSystem {
                 scale: rendered.scale,
                 isSelected: rendered.isSelected,
                 rotation: rendered.rotation,
-                emojiOverride: emojiOverride
+                emojiOverride: emojiOverride,
+                linkRing: linkRender?.ringStyles[rendered.marker.id],
+                linkRingProgress: linkRender?.revealProgress ?? 0
             )
         }
     }
@@ -2594,7 +2752,9 @@ struct ChartMarkerSystem {
         scale: CGFloat = 1.0,
         isSelected: Bool = false,
         rotation: CGFloat = 0,
-        emojiOverride: String? = nil
+        emojiOverride: String? = nil,
+        linkRing: MarkerLinkRingStyle? = nil,
+        linkRingProgress: CGFloat = 0
     ) {
         var drawContext = context
         if rotation != 0 {
@@ -2719,6 +2879,29 @@ struct ChartMarkerSystem {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(AppColors.onAccentForeground),
                 at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
+            )
+        }
+
+        // 7. Response count badge — the left-hand mirror of the like badge, so
+        // the two can never collide. Drawn in every state, not only in focus:
+        // this is the affordance that says a thesis exists before you tap.
+        MarkerLinkRenderer.drawResponseBadge(
+            context: drawContext,
+            center: position,
+            isBelow: isBelow,
+            count: marker.responseCount,
+            relationship: marker.linkRelationship
+        )
+
+        // 8. Thesis ring. Colour lives here and nowhere else in the resting
+        // chart, so deselecting restores the 1.2.1 appearance exactly.
+        if let linkRing {
+            MarkerLinkRenderer.drawRing(
+                context: drawContext,
+                center: position,
+                radius: scaledRadius,
+                style: linkRing,
+                progress: linkRingProgress
             )
         }
     }
