@@ -329,6 +329,14 @@ class MarkerManager: ObservableObject {
     /// file, can reach the client without widening `api` itself.
     var markerAPI: (any MarkerAPIClient)? { api }
 
+    /// Thesis cache, owned by app state so it outlives this manager's layout
+    /// teardown. Weak: the store belongs to the session, not to the chart.
+    weak var threadStore: MarkerThreadStore?
+
+    /// The first `.connected` is the initial connection, not a reconnect, and
+    /// must not throw away a cache that was just populated.
+    private var hasConnectedRealTimeOnce = false
+
 
     private var currentUserId: UUID
     private var currentGuildId: UUID
@@ -744,6 +752,28 @@ class MarkerManager: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Events missed while the socket was down may have changed, deleted or
+        // hidden nodes in a cached thesis, so every window is dropped on
+        // reconnect rather than trusted.
+        RealTimeService.shared.$connectionStatus
+            .removeDuplicates()
+            .sink { [weak self] status in
+                guard status == .connected else { return }
+                Task { @MainActor [weak self] in
+                    self?.handleRealTimeReconnected()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    @MainActor
+    private func handleRealTimeReconnected() {
+        guard hasConnectedRealTimeOnce else {
+            hasConnectedRealTimeOnce = true
+            return
+        }
+        threadStore?.invalidateAll(reason: .reconnect)
     }
 
     private func subscribeToMarkerChannel(guildId: UUID) {
@@ -882,6 +912,10 @@ class MarkerManager: ObservableObject {
         // As with creation, the parent's post-delete count is absolute and is
         // applied regardless of which chart the deleted marker belonged to.
         applyLinkCounts(fromDeletion: payload)
+
+        // The thesis this marker belonged to now has a hole in it; the server
+        // renders that as a tombstone, so the cached window is stale.
+        threadStore?.invalidateThesis(containing: markerId)
 
         markers.removeAll { $0.id == markerId }
         responseCounts.forget(markerId)
@@ -1026,6 +1060,9 @@ class MarkerManager: ObservableObject {
         // A list payload can be older than a count we already reconciled, so
         // known-newer values are written back before focus is derived.
         reconcileLoadedCounts()
+        // A cross-timeframe jump lands here: the marker it travelled to has
+        // just become available, so the staged selection can be honoured.
+        restorePendingLinkSelection()
         refreshLinkFocus()
     }
 

@@ -149,6 +149,26 @@ extension MarkerManager {
         }
     }
 
+    // MARK: - Pending navigation
+
+    /// Re-select a marker the user travelled to, once it has actually loaded.
+    ///
+    /// A symbol or timeframe change clears `markers` and `selectedMarker`
+    /// wholesale (`activateLayoutContext`), so following a response onto another
+    /// timeframe would otherwise centre the chart correctly and then leave
+    /// nothing selected and no thesis focused. The staged target is honoured
+    /// only within the generation that staged it.
+    func restorePendingLinkSelection() {
+        guard linkedMarkersEnabled, let store = threadStore else { return }
+        guard let pending = store.consumePendingNavigation() else { return }
+        guard let marker = markers.first(where: { $0.id == pending.markerId }) else {
+            // Not loaded yet — put it back for the next load to pick up.
+            store.stagePendingNavigation(markerId: pending.markerId)
+            return
+        }
+        selectedMarker = marker
+    }
+
     // MARK: - Thread paging
 
     /// Fetch one bounded window of a thesis.
