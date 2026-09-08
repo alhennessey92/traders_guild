@@ -51,6 +51,165 @@ struct MarkerPlanFixesTests {
     }
 
     @Test
+    func markerLayoutSurvivesAddDeleteAndHistoryPrepend() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalCandles = (0..<8).map {
+            makeTestCandle(timestamp: start.addingTimeInterval(Double($0) * 60), close: 100)
+        }
+        let anchorTime = originalCandles[4].timestamp
+
+        var first = makeMarkerUI(id: UUID(), intent: .analysis, candleTimestamp: anchorTime)
+        first.candleIndex = 4
+        var second = makeMarkerUI(id: UUID(), intent: .question, candleTimestamp: anchorTime)
+        second.candleIndex = 4
+
+        var laidOut = MarkerPositionCalculator.assignStablePositions(
+            markers: [first, second],
+            candles: originalCandles
+        )
+        for marker in laidOut {
+            #expect(marker.hasStableLayout)
+        }
+        #expect(Set(laidOut.map(\.stackIndex)) == [0, 1])
+
+        let survivorID = laidOut.first(where: { $0.stackIndex == 1 })!.id
+        let survivorBeforeDelete = laidOut.first(where: { $0.id == survivorID })!
+        laidOut.removeAll { $0.id != survivorID }
+        laidOut = MarkerPositionCalculator.assignStablePositions(
+            markers: laidOut,
+            candles: originalCandles
+        )
+        let survivorAfterDelete = laidOut[0]
+        #expect(survivorAfterDelete.positionedBelow == survivorBeforeDelete.positionedBelow)
+        #expect(survivorAfterDelete.proximityTier == survivorBeforeDelete.proximityTier)
+        #expect(survivorAfterDelete.stackIndex == 1)
+
+        var newcomer = makeMarkerUI(id: UUID(), intent: .news, candleTimestamp: anchorTime)
+        newcomer.candleIndex = 4
+        laidOut.append(newcomer)
+        laidOut = MarkerPositionCalculator.assignStablePositions(
+            markers: laidOut,
+            candles: originalCandles
+        )
+        #expect(laidOut.first(where: { $0.id == survivorID })?.stackIndex == 1)
+        #expect(laidOut.first(where: { $0.id == newcomer.id })?.stackIndex == 0)
+
+        let prepended = [
+            makeTestCandle(timestamp: start.addingTimeInterval(-120), close: 98),
+            makeTestCandle(timestamp: start.addingTimeInterval(-60), close: 99),
+        ] + originalCandles
+        for index in laidOut.indices {
+            laidOut[index].candleIndex += 2
+        }
+        let afterPrepend = MarkerPositionCalculator.assignStablePositions(
+            markers: laidOut,
+            candles: prepended
+        )
+        let survivorAfterPrepend = afterPrepend.first(where: { $0.id == survivorID })!
+        #expect(survivorAfterPrepend.positionedBelow == survivorBeforeDelete.positionedBelow)
+        #expect(survivorAfterPrepend.proximityTier == survivorBeforeDelete.proximityTier)
+        #expect(survivorAfterPrepend.stackIndex == 1)
+    }
+
+    @Test
+    func placementPreviewUsesFirstFreeStableStackSlot() {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let candles = [makeTestCandle(timestamp: timestamp, close: 100)]
+        var survivor = makeMarkerUI(
+            id: UUID(),
+            intent: .analysis,
+            candleTimestamp: timestamp
+        )
+        survivor.positionedBelow = false
+        survivor.stackIndex = 1
+        survivor.hasStableLayout = true
+
+        let firstSlot = MarkerPositionCalculator.calculatePreviewPosition(
+            candleIndex: 0,
+            existingMarkers: [],
+            candles: candles,
+            candleHighY: 100,
+            candleLowY: 110,
+            centerX: 40
+        ).position
+        let afterGap = MarkerPositionCalculator.calculatePreviewPosition(
+            candleIndex: 0,
+            existingMarkers: [survivor],
+            candles: candles,
+            candleHighY: 100,
+            candleLowY: 110,
+            centerX: 40
+        ).position
+
+        #expect(abs(afterGap.y - firstSlot.y) < 0.0001)
+    }
+
+    @Test
+    func sameContextRefreshRetainsLayoutByMarkerIDAndAnchorTimestamp() {
+        let markerID = UUID()
+        let anchor = Date(timeIntervalSince1970: 1_700_000_240)
+
+        var existing = makeMarkerUI(
+            id: markerID,
+            intent: .analysis,
+            candleTimestamp: anchor
+        )
+        existing.positionedBelow = true
+        existing.proximityTier = 3
+        existing.stackIndex = 2
+        existing.hasStableLayout = true
+
+        let refreshed = makeMarkerUI(
+            id: markerID,
+            intent: .analysis,
+            title: "Refreshed server title",
+            candleTimestamp: anchor
+        )
+        let retained = MarkerPositionCalculator.retainingStableAssignments(
+            in: [refreshed],
+            from: [existing]
+        )[0]
+
+        #expect(retained.title == "Refreshed server title")
+        #expect(retained.positionedBelow)
+        #expect(retained.proximityTier == 3)
+        #expect(retained.stackIndex == 2)
+        #expect(retained.hasStableLayout)
+    }
+
+    @Test
+    func movedAnchorDoesNotInheritTheOldLayoutSlot() {
+        let markerID = UUID()
+        let oldAnchor = Date(timeIntervalSince1970: 1_700_000_240)
+        let newAnchor = oldAnchor.addingTimeInterval(60)
+
+        var existing = makeMarkerUI(
+            id: markerID,
+            intent: .analysis,
+            candleTimestamp: oldAnchor
+        )
+        existing.positionedBelow = true
+        existing.proximityTier = 3
+        existing.stackIndex = 2
+        existing.hasStableLayout = true
+
+        let moved = makeMarkerUI(
+            id: markerID,
+            intent: .analysis,
+            candleTimestamp: newAnchor
+        )
+        let refreshed = MarkerPositionCalculator.retainingStableAssignments(
+            in: [moved],
+            from: [existing]
+        )[0]
+
+        #expect(!refreshed.hasStableLayout)
+        #expect(!refreshed.positionedBelow)
+        #expect(refreshed.proximityTier == 0)
+        #expect(refreshed.stackIndex == 0)
+    }
+
+    @Test
     func alertIntentDefaultsToNeutralWhenSeverityIsUnset() {
         let neutralExpected = Color(hex: "#8E959D") ?? .gray
         let neutralAlertColor = RLMarkerIntent.alert.color
@@ -2273,6 +2432,7 @@ private func makeMarkerUI(
     trackingEnabled: Bool = false,
     trackingState: RLTrackingState? = nil,
     author: RLGuildMemberDTO? = nil,
+    candleTimestamp: Date = Date(timeIntervalSince1970: 1_700_000_000),
     symbolId: UUID = UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!,
     guildId: UUID = UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!,
     timeframe: String = RLChartTimeframe.h1.toBackendString()
@@ -2292,6 +2452,7 @@ private func makeMarkerUI(
         alertSeverity: alertSeverity,
         pollQuestion: pollQuestion,
         pollOptions: pollOptions,
+        candleTimestamp: candleTimestamp,
         symbolId: symbolId,
         guildId: guildId,
         timeframe: timeframe,

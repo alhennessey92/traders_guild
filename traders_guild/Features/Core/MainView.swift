@@ -58,6 +58,39 @@ private struct PendingMarkerNavigationConsumptionKey: Equatable {
     let isInteractionUnlocked: Bool
 }
 
+/// Pure policy for the root's single SwiftUI sheet slot. Keeping pending work
+/// in the decision is essential: it lets the persistent chart sheet finish
+/// dismissing before the next presentation begins.
+enum GuildArrivalPresentationPolicy {
+    static func reservesSheetSlot(
+        hasPendingCelebration: Bool,
+        hasPresentedCelebration: Bool,
+        hasPendingWelcome: Bool,
+        hasPresentedWelcome: Bool,
+        hasPendingProfile: Bool
+    ) -> Bool {
+        hasPendingCelebration
+            || hasPresentedCelebration
+            || hasPendingWelcome
+            || hasPresentedWelcome
+            || hasPendingProfile
+    }
+
+    static func canPresentProfile(
+        hasPendingProfile: Bool,
+        hasPendingWelcome: Bool,
+        hasPresentedWelcome: Bool,
+        hasPendingCelebration: Bool,
+        hasPresentedCelebration: Bool
+    ) -> Bool {
+        hasPendingProfile
+            && !hasPendingWelcome
+            && !hasPresentedWelcome
+            && !hasPendingCelebration
+            && !hasPresentedCelebration
+    }
+}
+
 // MARK: - Main View
 struct MainView: View {
     // MARK: - Properties
@@ -130,6 +163,15 @@ struct MainView: View {
     /// Presented (above the persistent chart bottom sheet) after a guild-visible marker is placed.
     @State private var markerSharePromptContext: MarkerShareContext?
     @State private var showDiscordSetupReminder = false
+    /// The guild whose celebration / welcome is actually on screen.
+    ///
+    /// Separate from the pending values on `RLAppState`, because presentation
+    /// waits for the transition to lift: the app state says *which* guild, this
+    /// says *now*.
+    @State private var celebratedGuild: RLGuildDTO?
+    @State private var welcomedGuild: RLGuildDTO?
+    @State private var presentedCelebrationRequestID: UUID?
+    @State private var presentedWelcomeRequestID: UUID?
 
     // MARK: - Tutorial Auto-Start Gate
     @State private var didScheduleTutorialAutoStart: Bool = false
@@ -157,6 +199,20 @@ struct MainView: View {
             isChartReady: rlAppState.isChartReady,
             isTransitionVisible: rlAppState.showingTransition,
             isInteractionUnlocked: !rlAppState.shouldPresentBiometricAppLock
+        )
+    }
+
+    private var hasPendingCurrentUserProfile: Bool {
+        rlAppState.openCurrentUserProfileRequest != nil
+    }
+
+    private var guildArrivalReservesSheetSlot: Bool {
+        GuildArrivalPresentationPolicy.reservesSheetSlot(
+            hasPendingCelebration: rlAppState.pendingGuildCelebration != nil,
+            hasPresentedCelebration: celebratedGuild != nil,
+            hasPendingWelcome: rlAppState.pendingGuildWelcome != nil,
+            hasPresentedWelcome: welcomedGuild != nil,
+            hasPendingProfile: hasPendingCurrentUserProfile
         )
     }
 
@@ -546,7 +602,7 @@ struct MainView: View {
             // and queued ("Currently, only presenting a single sheet is supported", logged
             // hundreds of times), then shown only once this one goes away. Standing the
             // bottom sheet down for them is the same thing already done for the drawers.
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder && !guildArrivalReservesSheetSlot)) {
                 ChartBottomSheet(
                     controlViewModel: chartControlVM,
                     chartViewModel: chartViewModel,
@@ -684,6 +740,7 @@ struct MainView: View {
                     await handlePendingPushNotificationTapIfNeeded()
                     return
                 }
+                let transitionRequestID = rlAppState.transitionRequest.id
                 
                 // leftDrawerViewModel uses rlGuildId for all data via rlAppState
                 await leftDrawerViewModel.preloadData(for: rlGuildId, rlAppState: rlAppState)
@@ -698,7 +755,10 @@ struct MainView: View {
                     resetViewingSource: true
                 )
                 
-                rlAppState.chartDidBecomeReady()
+                rlAppState.chartDidBecomeReady(
+                    requestID: transitionRequestID,
+                    guildID: rlGuildId
+                )
 
                 // Drained *after* the chart bootstrap, not before it.
                 //
@@ -742,6 +802,7 @@ struct MainView: View {
             }
             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
                 if let guildId = newValue, oldValue != newValue {
+                    let transitionRequestID = rlAppState.transitionRequest.id
                     Task {
                         leftDrawerViewModel.clearCache()
                         rightDrawerViewModel.clearCache()
@@ -755,7 +816,10 @@ struct MainView: View {
                             resetPlacementSource: true,
                             resetViewingSource: true
                         )
-                        rlAppState.chartDidBecomeReady()
+                        rlAppState.chartDidBecomeReady(
+                            requestID: transitionRequestID,
+                            guildID: guildId
+                        )
                     }
                 }
             }
@@ -879,6 +943,73 @@ struct MainView: View {
             .sheet(item: $markerSharePromptContext) { context in
                 MarkerSharePromptSheet(context: context, appState: rlAppState)
             }
+            // Created and joined guilds are celebrated here, and only once the
+            // transition has lifted.
+            //
+            // The celebration used to be raised from inside the create form,
+            // which lives inside the drawer's sheet — and creating a guild
+            // selects it, which closes that drawer, taking the just-opened
+            // celebration with it. That is the flash the user reported. It lives
+            // on this view for the same reason the Discord prompt does: the
+            // chart bottom sheet owns the presentation slot, and standing it
+            // down (below) is the only thing that reliably frees it.
+            .fullScreenCover(item: $celebratedGuild, onDismiss: {
+                let requestID = presentedCelebrationRequestID
+                presentedCelebrationRequestID = nil
+                if let requestID,
+                   let pending = rlAppState.pendingGuildCelebration,
+                   pending.transitionRequestID == requestID {
+                    rlAppState.pendingGuildCelebration = nil
+                    NotificationCenter.default.post(
+                        name: .guildCreationDidFinish,
+                        object: nil,
+                        userInfo: [GuildCreationNotification.guildIdKey: pending.guild.id]
+                    )
+                }
+            }) { guild in
+                GuildInviteHubView(
+                    headline: "Your guild is live 🎉",
+                    subheadline: "Now bring your community in. Share your guild on X, Discord, or with your contacts to get your first members.",
+                    primaryButtonTitle: "Done",
+                    onPrimaryAction: { celebratedGuild = nil },
+                    shareMode: .guildVanity
+                )
+                .environmentObject(rlAppState)
+                .id(guild.id)
+            }
+            .sheet(item: $welcomedGuild, onDismiss: {
+                let requestID = presentedWelcomeRequestID
+                presentedWelcomeRequestID = nil
+                if let requestID,
+                   rlAppState.pendingGuildWelcome?.transitionRequestID == requestID {
+                    rlAppState.pendingGuildWelcome = nil
+                }
+                presentRequestedCurrentUserProfileIfReady()
+            }) { guild in
+                GuildJoinedSheet(
+                    guild: guild,
+                    onDismiss: { welcomedGuild = nil },
+                    onViewGuild: {
+                        welcomedGuild = nil
+                        rlAppState.requestGuildProfileAfterWelcome(guildID: guild.id)
+                    }
+                )
+                .environmentObject(rlAppState)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+            .onChange(of: rlAppState.showingTransition) { _, _ in
+                presentPendingGuildSheetsIfReady()
+            }
+            .onChange(of: rlAppState.pendingGuildCelebration) { _, _ in
+                presentPendingGuildSheetsIfReady()
+            }
+            .onChange(of: rlAppState.pendingGuildWelcome) { _, _ in
+                presentPendingGuildSheetsIfReady()
+            }
+            .onChange(of: rlAppState.openCurrentUserProfileRequest) { _, _ in
+                presentRequestedCurrentUserProfileIfReady()
+            }
             .sheet(isPresented: $showDiscordSetupReminder) {
                 DiscordSetupReminderSheet(
                     guild: rlAppState.currentGuild,
@@ -891,6 +1022,14 @@ struct MainView: View {
                     withAnimation { showLeftDrawer = true }
                     pendingNotificationDrawerRoute = .guildDiscordSettings
                 }
+                // The one sheet in the app that a stray swipe must not answer.
+                // `recordShown` is called before it presents, so a flick past it
+                // costs the owner the ask for thirty days — and the ask is the
+                // whole feature. "Not now" and "Connect a channel" both call
+                // `dismiss()`, which this does not block.
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .interactiveDismissDisabled(true)
             }
             .task(id: rlAppState.currentGuild?.id) {
                 await maybeRemindAboutDiscord(trigger: "guild_changed")
@@ -900,21 +1039,14 @@ struct MainView: View {
                 else { return }
                 Task {
                     print("🎉 [Guild] creation flow finished — Discord prompt queued")
-                    // The drawer was never closed by anything on this path, so
-                    // the owner landed back on the stack they created from. The
-                    // new guild is on the chart behind it — that is the
-                    // destination, so get out of the way without a show of it.
-                    // Matched to the drawer's own 400ms wait for the covers.
-                    try? await Task.sleep(for: .milliseconds(400))
-                    withoutAnimation {
-                        showLeftDrawer = false
-                        showOverlay = false
-                        showSheetOverlay = false
-                        leftDragTranslation = 0
-                    }
+                    // The drawer is already gone: creating a guild selects it,
+                    // and selecting bumps `closeSheetsToken`, which closes every
+                    // modal on this view. The pair of hand-tuned 400ms sleeps
+                    // that used to wait for covers nobody could observe went
+                    // with it.
                     DiscordSetupReminder.endCreationDeferral(guildId: guildId)
-                    // Let the create flow's covers finish unwinding, and let the
-                    // owner see the guild they just made, before asking anything.
+                    // Just long enough for the celebration's cover to finish
+                    // leaving, so the prompt is not presented into its dismissal.
                     try? await Task.sleep(for: DiscordSetupReminder.postCreationDelay)
                     await maybeRemindAboutDiscord(trigger: "after_creation")
                 }
@@ -933,6 +1065,8 @@ struct MainView: View {
                 markerSharePromptContext = nil
                 selectedViewingMarkerAuthorRoute = nil
                 showDiscordSetupReminder = false
+                celebratedGuild = nil
+                welcomedGuild = nil
                 dismissLeftSheetsSignal = true
                 dismissRightSheetsSignal = true
                 withAnimation(AnimationConstants.standard) {
@@ -944,6 +1078,71 @@ struct MainView: View {
                     rightDragTranslation = 0
                 }
             }
+        }
+    }
+
+    /// Show a queued guild celebration or welcome, once the shell is settled.
+    ///
+    /// Nothing modal may present while the transition is up: the overlay is
+    /// mounted inside the root hierarchy, so a sheet presented over it covers
+    /// it — and the arrival the sheet is meant to be is then revealed already
+    /// open, which is the opposite of arriving.
+    @MainActor
+    private func presentPendingGuildSheetsIfReady() {
+        guard !rlAppState.showingTransition else { return }
+        if celebratedGuild == nil, let arrival = rlAppState.pendingGuildCelebration {
+            guard arrival.transitionRequestID == rlAppState.transitionRequest.id,
+                  arrival.guild.id == rlAppState.currentGuild?.id else {
+                rlAppState.pendingGuildCelebration = nil
+                return
+            }
+            presentedCelebrationRequestID = arrival.transitionRequestID
+            celebratedGuild = arrival.guild
+            return
+        }
+        // Never both at once, and the celebration wins — you cannot create and
+        // join in the same breath, but a queued value could outlive its cover.
+        if celebratedGuild == nil, welcomedGuild == nil,
+           let arrival = rlAppState.pendingGuildWelcome {
+            guard arrival.transitionRequestID == rlAppState.transitionRequest.id,
+                  arrival.guild.id == rlAppState.currentGuild?.id else {
+                rlAppState.pendingGuildWelcome = nil
+                return
+            }
+            presentedWelcomeRequestID = arrival.transitionRequestID
+            welcomedGuild = arrival.guild
+        }
+    }
+
+    /// Route "View guild" to the same current-user profile sheet used by a
+    /// marker-author tap, but only after the welcome sheet has fully dismissed.
+    @MainActor
+    private func presentRequestedCurrentUserProfileIfReady() {
+        guard let request = rlAppState.openCurrentUserProfileRequest else { return }
+        guard request.guildID == rlAppState.currentGuild?.id else {
+            _ = rlAppState.consumeGuildProfileAfterWelcomeRequest(request.id)
+            return
+        }
+        guard selectedViewingMarkerAuthorRoute == nil else { return }
+        guard GuildArrivalPresentationPolicy.canPresentProfile(
+            hasPendingProfile: true,
+            hasPendingWelcome: rlAppState.pendingGuildWelcome != nil,
+            hasPresentedWelcome: welcomedGuild != nil,
+            hasPendingCelebration: rlAppState.pendingGuildCelebration != nil,
+            hasPresentedCelebration: celebratedGuild != nil
+        ) else { return }
+
+        // SwiftUI must observe the welcome dismissal before a peer sheet claims
+        // the slot. The token keeps the request reserved during this runloop hop.
+        DispatchQueue.main.async {
+            guard rlAppState.openCurrentUserProfileRequest == request,
+                  rlAppState.currentGuild?.id == request.guildID,
+                  welcomedGuild == nil,
+                  rlAppState.pendingGuildWelcome == nil else { return }
+            dismissKeyboard()
+            markerAuthorProfileDetent = .fraction(0.6)
+            selectedViewingMarkerAuthorRoute = .currentUser
+            _ = rlAppState.consumeGuildProfileAfterWelcomeRequest(request.id)
         }
     }
 
@@ -969,6 +1168,13 @@ struct MainView: View {
             || markerSharePromptContext != nil
             || selectedViewingMarkerAuthorRoute != nil
             || rlAppState.showingTransition
+            // The prompt follows the celebration; it must never race it. Both
+            // pending values count, not just what is on screen — the celebration
+            // is claimed the moment the guild is created and presented later.
+            || celebratedGuild != nil
+            || welcomedGuild != nil
+            || rlAppState.pendingGuildCelebration != nil
+            || rlAppState.pendingGuildWelcome != nil
     }
 
     /// Ask the owner about Discord — after they create a guild, then rarely.

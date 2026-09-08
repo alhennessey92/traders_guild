@@ -177,7 +177,7 @@ struct BetaRuntimeAndReportingTests {
         appState.showingTransition = true
 
         appState.queueBetaWelcomeIfNeeded()
-        appState.finishTransition()
+        appState.finishTransition(requestID: appState.transitionRequest.id)
 
         #expect(appState.showBetaWelcomeSheet)
     }

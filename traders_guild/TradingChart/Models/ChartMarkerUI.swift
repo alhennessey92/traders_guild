@@ -16,6 +16,9 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var positionedBelow: Bool = false
     var proximityTier: Int = 0
     var stackIndex: Int = 0
+    /// True once this marker has been assigned a slot in the current chart
+    /// session. Re-layout preserves that slot until its anchor timestamp changes.
+    var hasStableLayout: Bool = false
     var isVisible: Bool = true
     
     var id: UUID { marker.id }
@@ -181,7 +184,11 @@ struct ChartMarkerUI: Identifiable, Hashable {
 
     func withMarker(_ newMarker: RLChartMarkerDTO) -> ChartMarkerUI {
         var updated = self
+        let anchorChanged = updated.candleTimestamp != newMarker.candleTimestamp
         updated.marker = newMarker.normalizedAnnotationAnchors()
+        if anchorChanged {
+            updated.hasStableLayout = false
+        }
         return updated
     }
     

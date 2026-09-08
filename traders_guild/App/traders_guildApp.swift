@@ -54,9 +54,10 @@ struct traders_guildApp: App {
 
                     // TransitionView overlays on top until chart is ready
                     if rlAppState.showingTransition {
-                        TransitionView()
+                        TransitionView(request: rlAppState.transitionRequest)
                             .environmentObject(rlAppState)
                             .environmentObject(rlMessagingManager)
+                            .id(rlAppState.transitionRequest.id)
                             .transition(.opacity)
                             .zIndex(1) // Ensure it's on top
                     }

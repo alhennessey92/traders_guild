@@ -13,6 +13,29 @@ private enum SignupGuildMode {
     case assignedFallbackMode
 }
 
+/// Treats an ambiguous assignment response as recoverable when the membership
+/// is already visible on the account. The assign endpoint is idempotent, but a
+/// response can still be lost after the backend has committed the membership.
+enum OnboardingGuildAssignmentResolver {
+    @MainActor
+    static func resolve<Value>(
+        assignment: () async throws -> Value,
+        recovery: () async -> Value?
+    ) async throws -> Value {
+        do {
+            return try await assignment()
+        } catch {
+            if error is CancellationError {
+                throw error
+            }
+            if let recovered = await recovery() {
+                return recovered
+            }
+            throw error
+        }
+    }
+}
+
 struct SignupGuildView: View {
     @Binding var data: RLSignupData
     @Binding var path: [RLSignupStep]
@@ -476,15 +499,13 @@ struct SignupGuildView: View {
 
         do {
             try await ensureRegisteredIfNeeded()
-            let assignedGuild = try await rlAppState.assignOnboardingGuild(showTransition: false).guild
+            let assignedGuild = try await resolveAssignedFallbackGuild()
             selectedGuild = assignedGuild
             guildMode = .assignedFallbackMode
             assignmentErrorMessage = nil
+        } catch is CancellationError {
+            return
         } catch {
-            if await recoverAssignedGuildFromCurrentState() {
-                assignmentErrorMessage = nil
-                return
-            }
             selectedGuild = nil
             guildMode = .openSelectionMode
             assignmentErrorMessage = "Assignment failed. Retry assignment to continue."
@@ -541,20 +562,15 @@ struct SignupGuildView: View {
         try await ensureRegisteredIfNeeded()
 
         do {
-            let assignedGuild = try await rlAppState.assignOnboardingGuild(showTransition: false).guild
+            let assignedGuild = try await resolveAssignedFallbackGuild()
             selectedGuild = assignedGuild
             guildMode = .assignedFallbackMode
             assignmentErrorMessage = nil
             await applyProfileDraftIfNeeded()
             finishRegistrationAfterGuildSelection()
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            if await recoverAssignedGuildFromCurrentState() {
-                assignmentErrorMessage = nil
-                await applyProfileDraftIfNeeded()
-                finishRegistrationAfterGuildSelection()
-                return
-            }
-
             assignmentErrorMessage = "Assignment failed. Retry assignment to continue."
             throw error
         }
@@ -638,6 +654,21 @@ struct SignupGuildView: View {
         } catch {
             // Optional profile details should not block the user from entering their guild.
         }
+    }
+
+    private func resolveAssignedFallbackGuild() async throws -> RLGuildDTO {
+        try await OnboardingGuildAssignmentResolver.resolve(
+            assignment: {
+                try await rlAppState.assignOnboardingGuild(
+                    showTransition: false,
+                    presentFailure: false
+                ).guild
+            },
+            recovery: {
+                guard await recoverAssignedGuildFromCurrentState() else { return nil }
+                return selectedGuild
+            }
+        )
     }
 
     private func recoverAssignedGuildFromCurrentState() async -> Bool {
@@ -1105,4 +1136,3 @@ struct SignupProfileSetupView: View {
         LocaleOptionCatalog.countryCode(from: value)
     }
 }
-

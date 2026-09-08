@@ -206,6 +206,34 @@ class RLAppState: ObservableObject {
     
     @Published var showGuildSelectionSheet: Bool = false
     @Published var showBetaWelcomeSheet: Bool = false
+
+    /// The guild just created, waiting for the transition to lift before it is
+    /// celebrated. Presented at the app root — see the note in `createGuild`.
+    @Published var pendingGuildCelebration: GuildArrivalRequest?
+
+    /// The guild just joined, waiting for the transition to lift before the
+    /// welcome sheet greets the joiner. Android has had this since the invite
+    /// work; iOS dropped people onto a stranger's chart with a toast.
+    @Published var pendingGuildWelcome: GuildArrivalRequest?
+
+    /// Bumped when the welcome sheet's "View guild" is taken.
+    ///
+    /// The sheet is presented at the app root and the drawer is owned by
+    /// `MainView`, so this is the seam between them. A token rather than a
+    /// flag: asking twice has to open it twice.
+    @Published private(set) var openCurrentUserProfileRequest: GuildProfilePresentationRequest?
+
+    /// Take the joiner into the guild they have just landed in.
+    func requestGuildProfileAfterWelcome(guildID: UUID) {
+        openCurrentUserProfileRequest = GuildProfilePresentationRequest(guildID: guildID)
+    }
+
+    @discardableResult
+    func consumeGuildProfileAfterWelcomeRequest(_ token: UUID) -> Bool {
+        guard openCurrentUserProfileRequest?.id == token else { return false }
+        openCurrentUserProfileRequest = nil
+        return true
+    }
     @Published var isBiometricAppLockActive: Bool = false
     @Published var isBiometricUnlockInProgress: Bool = false
     @Published var biometricUnlockErrorMessage: String?
@@ -419,15 +447,46 @@ class RLAppState: ObservableObject {
     // MARK: - Transition Management
     // ================================================================================================
     
-    func finishTransition() {
+    @discardableResult
+    func finishTransition(requestID: UUID) -> Bool {
+        guard transitionRequest.id == requestID else {
+            return false
+        }
         showingTransition = false
         hasCompletedInitialLoad = true
         transitionMinimumDismissAt = nil
         presentPendingBetaWelcomeIfNeeded()
+        return true
+    }
+
+    /// Release the exact active transition when its chart-ready callback never
+    /// arrives. This is deliberately stricter than `finishTransition`: the
+    /// failsafe is only for a restored, authenticated shell that already has a
+    /// valid landing guild, and it may not shorten the operation's minimum.
+    ///
+    /// Keeping this in app state (rather than having the view mutate
+    /// `showingTransition` directly) makes the stale-request protection shared
+    /// by the normal and failsafe paths.
+    func canFinishTransitionAfterFailsafe(requestID: UUID) -> Bool {
+        transitionRequest.id == requestID
+            && showingTransition
+            && isSessionRestored
+            && isAuthenticated
+            && currentGuild != nil
+            && hasSatisfiedTransitionMinimum()
     }
     
-    func chartDidBecomeReady() {
+    /// Accept chart readiness only from the load that belongs to the active
+    /// transition and guild. A slower B load must not dismiss a newer C
+    /// transition after a rapid B → C switch.
+    @discardableResult
+    func chartDidBecomeReady(requestID: UUID, guildID: UUID?) -> Bool {
+        guard transitionRequest.id == requestID,
+              currentGuild?.id == guildID else {
+            return false
+        }
         isChartReady = true
+        return true
     }
     
     func resetChartReadyState() {
@@ -443,10 +502,46 @@ class RLAppState: ObservableObject {
     /// sitting over the new guild's chart.
     @Published private(set) var closeSheetsToken = UUID()
 
-    func showTransitionForChartLoad(minimumDuration: TimeInterval = 0) {
+    /// What the transition overlay says while it is up.
+    ///
+    /// It read "Welcome to / Traders Guild" whatever was happening behind it —
+    /// right exactly once, at launch, and wrong on every guild it has covered
+    /// since. Naming the act and its subject is what turns an unexplained
+    /// full-screen cover into a step the user is being walked through.
+    @Published private(set) var transitionRequest: GuildTransitionRequest = .launch()
+
+    /// How long a guild operation holds the transition, whatever the network does.
+    ///
+    /// Joining and deleting used to land instantly, which read as a glitch
+    /// rather than as something having happened. Matched to Android's
+    /// `AppTransitionScreen.minimumMillis`.
+    static let guildTransitionMinimum: TimeInterval = 2.2
+
+    func showTransitionForChartLoad(
+        minimumDuration: TimeInterval = 0,
+        request: GuildTransitionRequest? = nil
+    ) {
+        let nextRequest = request ?? .launch()
+        // A guild operation may never silently fall back to launch timing.
+        // Callers can ask for a longer hold (for example the existing 2.5s
+        // first-login selection), while launch and onboarding keep their
+        // original explicit timing.
+        let effectiveMinimumDuration = minimumDuration > 0
+            ? minimumDuration
+            : (nextRequest.action == .launch ? 0 : Self.guildTransitionMinimum)
+        if pendingGuildCelebration?.transitionRequestID != nextRequest.id {
+            pendingGuildCelebration = nil
+        }
+        if pendingGuildWelcome?.transitionRequestID != nextRequest.id {
+            pendingGuildWelcome = nil
+        }
+        openCurrentUserProfileRequest = nil
         isChartReady = false
+        transitionRequest = nextRequest
         showingTransition = true
-        transitionMinimumDismissAt = minimumDuration > 0 ? Date().addingTimeInterval(minimumDuration) : nil
+        transitionMinimumDismissAt = effectiveMinimumDuration > 0
+            ? Date().addingTimeInterval(effectiveMinimumDuration)
+            : nil
         closeSheetsToken = UUID()
     }
 
@@ -545,6 +640,31 @@ class RLAppState: ObservableObject {
         ToastWindowManager.shared.showToast(alert) { [weak self] in self?.clearAlert() }
     }
     
+    /// A success toast held until the transition overlay has lifted.
+    ///
+    /// Toasts live in their own window above everything, which is deliberate —
+    /// but it means a confirmation raised during a guild swap is read out over
+    /// a full-screen cover that is still describing the work in progress. The
+    /// wait is bounded: a transition that never lifts must not take the
+    /// confirmation with it.
+    func confirmAfterTransition(
+        _ message: String,
+        title: String = RLUserFacingCopy.text(.successTitle),
+        timeout: TimeInterval = 4.0
+    ) {
+        guard showingTransition else {
+            showSuccess(message, title: title)
+            return
+        }
+        Task { @MainActor [weak self] in
+            let deadline = Date().addingTimeInterval(timeout)
+            while let self, self.showingTransition, Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            self?.showSuccess(message, title: title)
+        }
+    }
+
     func showInfo(_ message: String, title: String = RLUserFacingCopy.text(.infoTitle)) {
         let alert = RLAppAlert(
             title: title,
@@ -1008,7 +1128,10 @@ class RLAppState: ObservableObject {
                 }
 
                 if currentGuild == nil {
-                    if let fallbackGuild = try? await assignOnboardingGuild(showTransition: false) {
+                    if let fallbackGuild = try? await assignOnboardingGuild(
+                        showTransition: false,
+                        presentFailure: false
+                    ) {
                         selectGuild(fallbackGuild, showTransition: false)
                     }
                 }
@@ -1033,7 +1156,7 @@ class RLAppState: ObservableObject {
             queueInitialTutorialAutoStartIfNeeded()
 
             // The beta welcome sheet is presented exclusively by
-            // finishTransition() once the chart is ready and the view
+            // finishTransition(requestID:) once the chart is ready and the view
             // tree has settled. Presenting it here as well caused the
             // fullScreenCover to flicker and re-present during the
             // ContentView→MainView reconciliation.
@@ -1687,18 +1810,35 @@ class RLAppState: ObservableObject {
         self.userGuilds = response.guilds  // Backend now returns already-combined data
     }
     
-    /// Select a guild by index
+    /// Select a guild by index — a deliberate switch, so it is covered.
+    ///
+    /// Used after leaving a guild, where the shell has to land somewhere. The
+    /// launch and session-restore paths do *not* come through here: they pass
+    /// `showTransition: false` and let the launch overlay cover them, so this
+    /// hold never lengthens a cold start.
     func selectGuild(at index: Int) {
         guard index < userGuilds.count else { return }
         
         let selected = userGuilds[index]
-        selectGuild(selected, showTransition: true)  // Show transition for auto-select (login)
+        selectGuild(
+            selected,
+            showTransition: true,
+            minimumTransitionDuration: Self.guildTransitionMinimum,
+            transitionRequest: .guild(.switching, guild: selected.guild)
+        )
     }
     
-    /// Select a guild by ID
+    /// Select a guild by ID — a deliberate switch, so it is covered.
+    ///
+    /// Used when opening a marker that lives in another guild the user belongs to.
     func selectGuild(id: UUID) {
         guard let selected = userGuilds.first(where: { $0.guild.id == id }) else { return }
-        selectGuild(selected, showTransition: true)  // Show transition for lookup select
+        selectGuild(
+            selected,
+            showTransition: true,
+            minimumTransitionDuration: Self.guildTransitionMinimum,
+            transitionRequest: .guild(.switching, guild: selected.guild)
+        )
     }
     
     /// Select a guild directly (primary method)
@@ -1706,10 +1846,14 @@ class RLAppState: ObservableObject {
     func selectGuild(
         _ guildWithMembership: RLGuildWithMembership,
         showTransition: Bool = false,
-        minimumTransitionDuration: TimeInterval = 0
+        minimumTransitionDuration: TimeInterval = 0,
+        transitionRequest: GuildTransitionRequest? = nil
     ) {
         if showTransition {
-            showTransitionForChartLoad(minimumDuration: minimumTransitionDuration)
+            showTransitionForChartLoad(
+                minimumDuration: minimumTransitionDuration,
+                request: transitionRequest ?? .guild(.switching, guild: guildWithMembership.guild)
+            )
         }
         
         self.currentGuild = guildWithMembership.guild
@@ -1728,6 +1872,17 @@ class RLAppState: ObservableObject {
         if !isOnboardingFlowActive && !isFinalizingOnboarding {
             offerBiometricEnrollmentIfNeeded()
         }
+    }
+
+    /// The single entry point for a switch initiated by a visible user action.
+    /// Restore and onboarding deliberately continue to select without it.
+    func selectGuildManually(_ guildWithMembership: RLGuildWithMembership) {
+        selectGuild(
+            guildWithMembership,
+            showTransition: true,
+            minimumTransitionDuration: Self.guildTransitionMinimum,
+            transitionRequest: .guild(.switching, guild: guildWithMembership.guild)
+        )
     }
     
     /// Refreshes current user's guild reputation and accuracy from reputation-service and updates currentMembership.
@@ -1862,9 +2017,28 @@ class RLAppState: ObservableObject {
             userGuilds.append(guildWithMembership)
             
             // Select the newly joined guild.
-            selectGuild(guildWithMembership, showTransition: showTransition)
-            
-            showSuccess(RLUserFacingCopy.format(.successJoinedGuildNamed, guildWithMembership.guild.name))
+            let transitionRequest = GuildTransitionRequest.guild(
+                .joining,
+                guild: guildWithMembership.guild
+            )
+            selectGuild(
+                guildWithMembership,
+                showTransition: showTransition,
+                minimumTransitionDuration: showTransition ? Self.guildTransitionMinimum : 0,
+                transitionRequest: transitionRequest
+            )
+
+            // The welcome sheet is the arrival; the toast would be saying the
+            // same thing twice, over the top of it. Onboarding joins have their
+            // own welcome and never raise a transition, so those keep the toast.
+            if showTransition {
+                pendingGuildWelcome = GuildArrivalRequest(
+                    transitionRequestID: transitionRequest.id,
+                    guild: guildWithMembership.guild
+                )
+            } else {
+                showSuccess(RLUserFacingCopy.format(.successJoinedGuildNamed, guildWithMembership.guild.name))
+            }
             return guildWithMembership
         } catch {
             if case APIError.badRequest(let detail) = error, detail == "approval_required" {
@@ -1911,7 +2085,10 @@ class RLAppState: ObservableObject {
     }
 
     /// Assign user to an onboarding fallback guild (no-open-guild signup path).
-    func assignOnboardingGuild(showTransition: Bool = false) async throws -> RLGuildWithMembership {
+    func assignOnboardingGuild(
+        showTransition: Bool = false,
+        presentFailure: Bool = true
+    ) async throws -> RLGuildWithMembership {
         do {
             let response = try await realApi.assignOnboardingGuild()
             let guildWithMembership = response.asGuildWithMembership
@@ -1925,7 +2102,9 @@ class RLAppState: ObservableObject {
             selectGuild(guildWithMembership, showTransition: showTransition)
             return guildWithMembership
         } catch {
-            showError(error, title: "Failed to Assign Onboarding Guild", style: .toast)
+            if presentFailure {
+                showError(error, title: "Failed to Assign Onboarding Guild", style: .toast)
+            }
             throw error
         }
     }
@@ -1998,9 +2177,27 @@ class RLAppState: ObservableObject {
             userGuilds.append(guildWithMembership)
             
             // Select the newly created guild (show transition)
-            selectGuild(guildWithMembership, showTransition: true)
-            
-            showSuccess(RLUserFacingCopy.format(.successCreatedGuildNamed, guildWithMembership.guild.name))
+            let transitionRequest = GuildTransitionRequest.guild(
+                .creating,
+                guild: guildWithMembership.guild
+            )
+            selectGuild(
+                guildWithMembership,
+                showTransition: true,
+                minimumTransitionDuration: Self.guildTransitionMinimum,
+                transitionRequest: transitionRequest
+            )
+
+            // Claimed here, presented once the transition lifts. It used to be
+            // a fullScreenCover raised from inside the create form — which
+            // lives inside the drawer's sheet — while this very call was
+            // bumping `closeSheetsToken`, so the drawer tore the celebration
+            // down a frame after it appeared. That flash is the "share sheet
+            // pops briefly before closing" report.
+            pendingGuildCelebration = GuildArrivalRequest(
+                transitionRequestID: transitionRequest.id,
+                guild: guildWithMembership.guild
+            )
             return guildWithMembership
         } catch {
             if case APIError.serverError(let statusCode, let detail) = error,
@@ -3330,6 +3527,9 @@ class RLAppState: ObservableObject {
         notificationStats = nil
         showGuildSelectionSheet = false
         showBetaWelcomeSheet = false
+        pendingGuildCelebration = nil
+        pendingGuildWelcome = nil
+        openCurrentUserProfileRequest = nil
         isHandlingAuthFlow = false
         isLoggingOut = false
         isOnboardingFlowActive = false
@@ -4513,14 +4713,14 @@ class RLAppState: ObservableObject {
         guard let guildId = UUID(uuidString: payload.guildId) else { return }
         guard currentGuild?.id == guildId else { return }
 
-        let deletedName = currentGuild?.name
+        let deletedGuild = currentGuild
         Task { @MainActor in
             // Re-read memberships first: the deleted guild is filtered out
             // server-side, so this is what tells us where we now stand.
             try? await self.fetchUserGuilds()
-            await self.moveOffDeletedGuild()
+            await self.moveOffDeletedGuild(deletedGuild: deletedGuild)
             self.showInfo(
-                deletedName.map { "\($0) was closed by its owner." }
+                deletedGuild.map { "\($0.name) was closed by its owner." }
                     ?? "That guild was closed by its owner.",
                 title: "Guild Closed"
             )
@@ -4537,10 +4737,34 @@ class RLAppState: ObservableObject {
     /// re-read membership list already reflects the relocation, so the first
     /// entry *is* the landing guild.
     @MainActor
-    func moveOffDeletedGuild() async {
-        if let next = userGuilds.first {
-            selectGuild(next, showTransition: true)
+    func moveOffDeletedGuild(deletedGuild: RLGuildDTO? = nil) async {
+        // The owner-initiated request and the guild_deleted WebSocket event can
+        // complete together. Whichever relocates first owns the transition;
+        // the second path must not replace it with a new request after the
+        // chart load has already captured the first request ID.
+        if let deletedGuild, currentGuild?.id != deletedGuild.id {
             return
+        }
+
+        if let next = userGuilds.first {
+            selectGuild(
+                next,
+                showTransition: true,
+                minimumTransitionDuration: Self.guildTransitionMinimum,
+                // Named after what the user did, not where they ended up. They
+                // pressed Delete; "Switching to <some other guild>" answers a
+                // question nobody asked.
+                transitionRequest: deletedGuild.map {
+                    .guild(.deleting, guild: $0)
+                } ?? .guild(.switching, guild: next.guild)
+            )
+            return
+        }
+        if let deletedGuild {
+            showTransitionForChartLoad(
+                minimumDuration: Self.guildTransitionMinimum,
+                request: .guild(.deleting, guild: deletedGuild)
+            )
         }
         currentGuild = nil
         // No memberships left at all — same situation as a fresh sign-in, and

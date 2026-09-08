@@ -30,10 +30,15 @@ enum GuildCreationNotification {
 
 @MainActor
 enum DiscordSetupReminder {
-    /// How long to let a new owner look at their guild before asking them to
-    /// connect a channel. Straight after creation they are still reading the
-    /// invite hub, and a prompt on top of it is an interruption, not a nudge.
-    static let postCreationDelay: Duration = .seconds(10)
+    /// The beat between closing the celebration and asking about Discord.
+    ///
+    /// This was ten seconds, on the reasoning that the owner was still reading
+    /// the invite hub — and they were, because the prompt was queued while the
+    /// hub was still open. The hub is now dismissed before this runs, so ten
+    /// seconds is just the owner sitting on a chart wondering whether anything
+    /// else was going to happen. Long enough for the cover to finish leaving,
+    /// and no longer.
+    static let postCreationDelay: Duration = .milliseconds(350)
 
     /// Guilds whose creation flow is still on screen.
     ///

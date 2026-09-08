@@ -157,14 +157,18 @@ struct DeleteGuildConfirmationView: View {
             // Shared with the `guild_deleted` WebSocket path, and it handles the
             // case this used to miss: deleting your *only* guild left
             // `currentGuild` pointing at a guild the server now refuses.
-            await rlAppState.moveOffDeletedGuild()
+            await rlAppState.moveOffDeletedGuild(deletedGuild: guild)
 
-            rlAppState.showSuccess(
+            // Close first, confirm after. The relocation above raises the
+            // transition, and a toast fired now is announcing a result behind a
+            // cover that is still saying "Deleting" — so it is held until the
+            // user is actually looking at the guild they have been moved to.
+            dismiss()
+            onDeleted()
+            rlAppState.confirmAfterTransition(
                 "\(guild.name) has been deleted.",
                 title: "Guild Deleted"
             )
-            dismiss()
-            onDeleted()
         } catch {
             rlAppState.showError(
                 error,

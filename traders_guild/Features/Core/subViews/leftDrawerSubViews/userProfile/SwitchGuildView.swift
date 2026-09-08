@@ -9,6 +9,19 @@
 
 import SwiftUI
 
+/// The two user-visible routes that can switch an existing membership.
+/// Keeping both on one coordinator prevents one button silently falling back
+/// to the transition-free restore path.
+enum ManualGuildSwitchRoute: CaseIterable {
+    case joinedList
+    case guildDetail
+
+    @MainActor
+    func select(_ entry: RLGuildWithMembership, in appState: RLAppState) {
+        appState.selectGuildManually(entry)
+    }
+}
+
 // MARK: - Shared Guild Background
 private struct GuildFlowBackground: View {
     var body: some View {
@@ -331,7 +344,7 @@ struct SwitchGuildView: View {
     // Select and switch to guild
     private func selectGuild(_ item: RLGuildWithMembership) {
         // Update current guild in RLAppState
-        rlAppState.selectGuild(item)
+        ManualGuildSwitchRoute.joinedList.select(item, in: rlAppState)
         
         // Clear drawer cache to force refresh for new guild
         leftDrawerViewModel.clearCache()
@@ -585,6 +598,12 @@ struct JoinGuildView: View {
                             }
                         }
                         .padding(.horizontal, 20)
+                        // The one guild scroll body in this file that had no
+                        // tail: unlike the create form and the guild detail it
+                        // has no pinned footer to inset it either, so the last
+                        // card ran straight into the home indicator with
+                        // nothing under it.
+                        .padding(.bottom, GuildFormMetrics.scrollTailRoom)
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onTapGesture {
@@ -1192,7 +1211,7 @@ struct GuildDetailView: View {
         guard let entry = joinedGuildEntry, !isCurrentGuild else {
             return
         }
-        rlAppState.selectGuild(entry)
+        ManualGuildSwitchRoute.guildDetail.select(entry, in: rlAppState)
         onJoin()
     }
 
@@ -1511,9 +1530,6 @@ struct CreateGuildView: View {
     @State private var selectedCrestColor: String = GuildCrestCatalog.defaultColorKey
     @State private var pickedCrestImage: UIImage?
     @State private var showCrestImagePicker = false
-    @State private var showInviteHubAfterCreate = false
-    /// The guild just created, so the flow can announce which one it finished.
-    @State private var createdGuildId: UUID?
 
     private var normalizedJoinQuestions: [RLGuildJoinQuestionInputDTO] {
         joinQuestions
@@ -1928,33 +1944,6 @@ struct CreateGuildView: View {
                 pickedCrestImage = image
             }
         }
-        // Everything that ends the create flow happens here, in `onDismiss`,
-        // and Done does nothing but lower the flag.
-        //
-        // It used to call `onComplete()` itself, which dismisses this whole
-        // view in the same turn the cover starts closing — so the presenter was
-        // gone before SwiftUI ran `onDismiss`, the finished notification was
-        // never posted, and the Discord prompt stayed deferred forever.
-        .fullScreenCover(isPresented: $showInviteHubAfterCreate, onDismiss: {
-            if let guildId = createdGuildId {
-                createdGuildId = nil
-                NotificationCenter.default.post(
-                    name: .guildCreationDidFinish,
-                    object: nil,
-                    userInfo: [GuildCreationNotification.guildIdKey: guildId]
-                )
-            }
-            onComplete()
-        }) {
-            GuildInviteHubView(
-                headline: "Your guild is live 🎉",
-                subheadline: "Now bring your community in. Share your guild on X, Discord, or with your contacts to get your first members.",
-                primaryButtonTitle: "Done",
-                onPrimaryAction: { showInviteHubAfterCreate = false },
-                shareMode: .guildVanity
-            )
-            .environmentObject(rlAppState)
-        }
         .toolbar(.hidden, for: .navigationBar)
         .keyboardPinnedBottomInset {
             VStack(spacing: 0) {
@@ -2019,6 +2008,12 @@ struct CreateGuildView: View {
                 crestSymbol: selectedCrestSymbol,
                 crestColor: selectedCrestColor
             )
+            // Creating a guild selects it, and MainView asks about Discord when
+            // the current guild changes. Claim the deferral before the avatar
+            // upload yields: if that upload is slow, the 2.2-second transition
+            // and celebration can otherwise both finish before the deferral
+            // exists, leaving one that no completion event will ever clear.
+            DiscordSetupReminder.deferWhileCreating(guildId: created.guild.id)
             // If the user picked a custom image, upload it to the new guild
             // (now the current guild). A failure here is non-fatal — the guild
             // still has its symbol crest.
@@ -2026,15 +2021,15 @@ struct CreateGuildView: View {
                let data = image.jpegData(compressionQuality: 0.85) {
                 _ = try? await rlAppState.uploadGuildAvatar(imageData: data)
             }
-            // Creating a guild selects it, and MainView asks about Discord when
-            // the current guild changes. Hold that off until this flow is off
-            // screen — otherwise the prompt presents itself on top of the invite
-            // hub and arrives inert.
-            createdGuildId = created.guild.id
-            DiscordSetupReminder.deferWhileCreating(guildId: created.guild.id)
-            // Present the invite hub so the owner can immediately bring their
-            // community in. "Done" then completes (dismisses) the create flow.
-            showInviteHubAfterCreate = true
+            // The celebration is claimed by `RLAppState.createGuild` and
+            // presented by `MainView` once the transition lifts — not here.
+            //
+            // It used to be a cover raised from this view, which lives inside
+            // the drawer's sheet. Creating a guild selects it, and selecting
+            // bumps `closeSheetsToken`, which closes that drawer — taking the
+            // just-opened celebration with it. That is the flash the user saw.
+            // Nothing left to do here but get out of the way.
+            onComplete()
         } catch is CancellationError {
             return
         } catch {

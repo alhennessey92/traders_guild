@@ -226,6 +226,12 @@ extension Color {
 
 @MainActor
 class MarkerManager: ObservableObject {
+    private struct LayoutContext: Equatable {
+        let guildId: UUID
+        let symbolId: UUID
+        let timeframe: RLChartTimeframe
+    }
+
     enum PollVoteError: LocalizedError {
         case markerNotFound
         case invalidPoll
@@ -267,6 +273,13 @@ class MarkerManager: ObservableObject {
 
     /// Current timeframe for API calls
     private var currentTimeframe: RLChartTimeframe?
+
+    /// The chart context that owns the current marker layout assignments.
+    ///
+    /// A refresh inside one context carries slots forward by marker ID and
+    /// anchor timestamp. Moving to another guild, symbol or timeframe starts a
+    /// clean allocation so layout state can never leak between charts.
+    private var layoutContext: LayoutContext?
 
     /// Real-time marker channel subscription
     private var currentMarkerChannel: String?
@@ -331,6 +344,13 @@ class MarkerManager: ObservableObject {
             return
         }
 
+        let requestedContext = LayoutContext(
+            guildId: guildId,
+            symbolId: symbolId,
+            timeframe: timeframe
+        )
+        let shouldPreserveAssignments = activateLayoutContext(requestedContext)
+
         // Configure MarkerManager with API for persistence
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
 
@@ -346,10 +366,23 @@ class MarkerManager: ObservableObject {
                 startTime: candles.first?.timestamp,
                 endTime: candles.last?.timestamp
             )
-            let positionedMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
-            
+            let convertedMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
+
+            // Another symbol/timeframe may have won the race while the request
+            // was in flight. Never publish markers (or their slots) into it.
+            guard layoutContext == requestedContext else { return }
+
             await MainActor.run {
-                self.markers = positionedMarkers
+                let markersWithPreservedAssignments = shouldPreserveAssignments
+                    ? MarkerPositionCalculator.retainingStableAssignments(
+                        in: convertedMarkers,
+                        from: self.markers
+                    )
+                    : convertedMarkers
+                self.markers = MarkerPositionCalculator.assignStablePositions(
+                    markers: markersWithPreservedAssignments,
+                    candles: candles
+                )
             }
 
             // Subscribe to real-time marker events for this guild
@@ -376,6 +409,12 @@ class MarkerManager: ObservableObject {
             return
         }
 
+        let requestedContext = LayoutContext(
+            guildId: guildId,
+            symbolId: symbolId,
+            timeframe: timeframe
+        )
+        _ = activateLayoutContext(requestedContext)
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
         self.currentGuildId = guildId
 
@@ -390,13 +429,23 @@ class MarkerManager: ObservableObject {
             )
             let newMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
 
+            guard layoutContext == requestedContext else { return }
+
             await MainActor.run {
                 var mergedById: [UUID: ChartMarkerUI] = [:]
                 for marker in self.markers {
                     mergedById[marker.id] = marker
                 }
                 for marker in newMarkers {
-                    mergedById[marker.id] = marker
+                    var refreshed = marker
+                    if let existing = mergedById[marker.id],
+                       existing.candleTimestamp == marker.candleTimestamp {
+                        refreshed.positionedBelow = existing.positionedBelow
+                        refreshed.proximityTier = existing.proximityTier
+                        refreshed.stackIndex = existing.stackIndex
+                        refreshed.hasStableLayout = existing.hasStableLayout
+                    }
+                    mergedById[marker.id] = refreshed
                 }
 
                 var mergedMarkers = Array(mergedById.values)
@@ -489,10 +538,26 @@ class MarkerManager: ObservableObject {
         }
 
         convertedMarkers.sort { $0.createdAt < $1.createdAt }
-        return MarkerPositionCalculator.assignStablePositions(
-            markers: convertedMarkers,
-            candles: candles
-        )
+        return convertedMarkers
+    }
+
+    /// Select the owner of all in-memory marker slots.
+    ///
+    /// The return value tells a full API refresh whether the existing wrappers
+    /// belong to the same chart and may safely donate their assignments.
+    @discardableResult
+    private func activateLayoutContext(_ context: LayoutContext) -> Bool {
+        let shouldPreserveAssignments = layoutContext == context
+        guard !shouldPreserveAssignments else { return true }
+
+        let guildChanged = layoutContext?.guildId != context.guildId
+        layoutContext = context
+        markers.removeAll()
+        selectedMarker = nil
+        if guildChanged {
+            unsubscribeFromMarkerChannel()
+        }
+        return false
     }
 
     private func candleIndexMap(for candles: [RLCandleDTO]) -> [Date: Int] {
@@ -674,6 +739,7 @@ class MarkerManager: ObservableObject {
         marker.positionedBelow = positioning.isBelow
         marker.proximityTier = positioning.tier
         marker.stackIndex = positioning.stackIndex
+        marker.hasStableLayout = true
 
         markers.append(marker)
     }
@@ -691,8 +757,37 @@ class MarkerManager: ObservableObject {
         }
         guard let index = markers.firstIndex(where: { $0.id == markerDTO.id }) else { return }
 
-        // Preserve positioning — only update the DTO
-        let updated = markers[index].withMarker(markerDTO)
+        // Preserve positioning while the anchor is unchanged. An anchor edit is
+        // a new ID+timestamp layout identity and takes the next free slot at its
+        // new candle instead of carrying a stale assignment across the chart.
+        var updated = markers[index].withMarker(markerDTO)
+        if !updated.hasStableLayout {
+            guard let candles = dataManager?.candles,
+                  let currentTf = currentTimeframe,
+                  candleArrayMatchesTimeframe(candles, currentTf),
+                  let newCandleIndex = findCandleIndex(
+                    timestamp: markerDTO.candleTimestamp,
+                    in: candles
+                  ) else {
+                markers.remove(at: index)
+                if selectedMarker?.id == markerDTO.id {
+                    selectedMarker = nil
+                }
+                return
+            }
+            updated.candleIndex = newCandleIndex
+            let assignment = MarkerPositionCalculator.calculatePositionForNewMarker(
+                marker: updated,
+                existingMarkers: markers.enumerated().compactMap { offset, marker in
+                    offset == index ? nil : marker
+                },
+                candles: candles
+            )
+            updated.positionedBelow = assignment.isBelow
+            updated.proximityTier = assignment.tier
+            updated.stackIndex = assignment.stackIndex
+            updated.hasStableLayout = true
+        }
         markers[index] = updated
         syncSelectedMarker(updated)
     }
@@ -974,6 +1069,7 @@ class MarkerManager: ObservableObject {
         marker.positionedBelow = positioning.isBelow
         marker.proximityTier = positioning.tier
         marker.stackIndex = positioning.stackIndex
+        marker.hasStableLayout = true
         markers.append(marker)
 
         guard let api else {
@@ -996,6 +1092,7 @@ class MarkerManager: ObservableObject {
                 updated.positionedBelow = marker.positionedBelow
                 updated.proximityTier = marker.proximityTier
                 updated.stackIndex = marker.stackIndex
+                updated.hasStableLayout = true
                 markers[idx] = updated
             }
             NotificationCenter.default.post(name: .markerCreatedSuccessfully, object: nil)
@@ -1034,6 +1131,7 @@ class MarkerManager: ObservableObject {
         let positionedBelow: Bool
         let proximityTier: Int
         let stackIndex: Int
+        let hasStableLayout: Bool
     }
 
     private func markerIndex(for id: UUID) -> Int? {
@@ -1045,7 +1143,8 @@ class MarkerManager: ObservableObject {
             candleIndex: marker.candleIndex,
             positionedBelow: marker.positionedBelow,
             proximityTier: marker.proximityTier,
-            stackIndex: marker.stackIndex
+            stackIndex: marker.stackIndex,
+            hasStableLayout: marker.hasStableLayout
         )
     }
 
@@ -1055,6 +1154,7 @@ class MarkerManager: ObservableObject {
         updated.positionedBelow = snapshot.positionedBelow
         updated.proximityTier = snapshot.proximityTier
         updated.stackIndex = snapshot.stackIndex
+        updated.hasStableLayout = snapshot.hasStableLayout
         return updated
     }
 
@@ -1968,7 +2068,19 @@ struct MarkerPositionCalculator {
             )
         }
         
-        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
+        // A deleted marker leaves a deliberate hole: survivors keep their
+        // stack indices, and the next marker claims the first free one. The
+        // preview must use the same allocator as commit or it can overlap a
+        // survivor before jumping somewhere else when placed.
+        let usedStackIndices = Set(
+            markersAtCandle
+                .filter { $0.positionedBelow == shouldBeBelow }
+                .map(\.stackIndex)
+        )
+        var stackIndex = 0
+        while usedStackIndices.contains(stackIndex) {
+            stackIndex += 1
+        }
         let baseY: CGFloat
         let stackDirection: CGFloat
         
@@ -1993,49 +2105,70 @@ struct MarkerPositionCalculator {
     // MARK: - Stable Position Assignment
     
     private static let closeProximityRange = 2
+
+    /// Copy layout only when both halves of a marker's layout identity match.
+    ///
+    /// API refreshes rebuild every `ChartMarkerUI`, so wrapper-local state is
+    /// otherwise lost even though the user is still looking at the same chart.
+    /// Matching the anchor timestamp as well as the marker ID ensures an edited
+    /// anchor is allocated afresh.
+    static func retainingStableAssignments(
+        in refreshedMarkers: [ChartMarkerUI],
+        from existingMarkers: [ChartMarkerUI]
+    ) -> [ChartMarkerUI] {
+        let existingByID = Dictionary(
+            existingMarkers.map { ($0.id, $0) },
+            uniquingKeysWith: { current, _ in current }
+        )
+
+        return refreshedMarkers.map { refreshed in
+            guard let existing = existingByID[refreshed.id],
+                  existing.candleTimestamp == refreshed.candleTimestamp,
+                  existing.hasStableLayout else {
+                return refreshed
+            }
+
+            var retained = refreshed
+            retained.positionedBelow = existing.positionedBelow
+            retained.proximityTier = existing.proximityTier
+            retained.stackIndex = existing.stackIndex
+            retained.hasStableLayout = true
+            return retained
+        }
+    }
     
     static func assignStablePositions(
         markers: [ChartMarkerUI],
         candles: [RLCandleDTO]
     ) -> [ChartMarkerUI] {
         var result = markers
-        
-        let grouped = Dictionary(grouping: result) { $0.candleIndex }
-        let sortedIndices = grouped.keys.sorted()
-        
-        var usedAboveTiers: [Int: Set<Int>] = [:]
-        var usedBelowTiers: [Int: Set<Int>] = [:]
-        var candleSideDecisions: [Int: Bool] = [:]
-        
-        for candleIndex in sortedIndices {
-            guard let markersAtCandle = grouped[candleIndex] else { continue }
-            
-            let sorted = markersAtCandle.sorted { $0.createdAt < $1.createdAt }
-            
-            let shouldBeBelow = determineSideForCandle(
-                candleIndex: candleIndex,
-                candles: candles,
-                existingDecisions: candleSideDecisions
+
+        // Existing markers own their slot for the lifetime of this chart
+        // context. Re-running the old global allocator after an add, delete or
+        // history prepend could flip every nearby marker to the other side.
+        var positioned = result.filter(\.hasStableLayout)
+        let unassignedIndices = result.indices
+            .filter { !result[$0].hasStableLayout }
+            .sorted {
+                if result[$0].createdAt == result[$1].createdAt {
+                    return result[$0].id.uuidString < result[$1].id.uuidString
+                }
+                return result[$0].createdAt < result[$1].createdAt
+            }
+
+        for index in unassignedIndices {
+            let assignment = calculatePositionForNewMarker(
+                marker: result[index],
+                existingMarkers: positioned,
+                candles: candles
             )
-            
-            candleSideDecisions[candleIndex] = shouldBeBelow
-            
-            let tier: Int
-            if shouldBeBelow {
-                tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedBelowTiers)
-            } else {
-                tier = calculateProximityTierInternal(candleIndex: candleIndex, usedTiers: &usedAboveTiers)
-            }
-            
-            for (stackIndex, markerInGroup) in sorted.enumerated() {
-                guard let globalIndex = result.firstIndex(where: { $0.id == markerInGroup.id }) else { continue }
-                
-                result[globalIndex].positionedBelow = shouldBeBelow
-                result[globalIndex].proximityTier = tier
-                result[globalIndex].stackIndex = stackIndex
-            }
+            result[index].positionedBelow = assignment.isBelow
+            result[index].proximityTier = assignment.tier
+            result[index].stackIndex = assignment.stackIndex
+            result[index].hasStableLayout = true
+            positioned.append(result[index])
         }
-        
+
         return result
     }
     
@@ -2074,7 +2207,15 @@ struct MarkerPositionCalculator {
             )
         }
         
-        let stackIndex = markersAtCandle.filter { $0.positionedBelow == shouldBeBelow }.count
+        let usedStackIndices = Set(
+            markersAtCandle
+                .filter { $0.positionedBelow == shouldBeBelow }
+                .map(\.stackIndex)
+        )
+        var stackIndex = 0
+        while usedStackIndices.contains(stackIndex) {
+            stackIndex += 1
+        }
         
         return (shouldBeBelow, tier, stackIndex)
     }
