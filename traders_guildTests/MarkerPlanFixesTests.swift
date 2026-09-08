@@ -2343,8 +2343,12 @@ private final class MarkerPlacementUpdateFakeAPI: MarkerAPIClient {
         return makeMarkerDTO(id: markerId, author: makeMember(userId: UUID(), username: "fallback"), intent: .analysis)
     }
 
-    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLMarkerDeleteResponseDTO {
         fatalError("deleteMarker should not be called in MarkerPlacementUpdateFakeAPI")
+    }
+
+    func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
+        fatalError("getMarkerThread should not be called in MarkerPlacementUpdateFakeAPI")
     }
 
     func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {

@@ -80,6 +80,16 @@ enum MarkerLinkGeometry {
     /// A chord shorter than this cannot be drawn as a legible curve.
     static let minimumChordLength: CGFloat = 24
 
+    /// The drawn span left after trimming to both glyph edges must be at least
+    /// this long, otherwise the connector is a stub rather than a line.
+    ///
+    /// This — not a straight-line clearance test — is what decides whether two
+    /// close glyphs can be joined. A selected marker is drawn at 1.5 scale
+    /// (radius 27), so an adjacent stack neighbour 40pt away has overlapping
+    /// discs on the chord while a curve bowed 26pt clear of the column still
+    /// has plenty of visible span.
+    static let minimumDrawnSpan: CGFloat = 10
+
     /// Samples used when testing a candidate path for collisions.
     static let collisionSamples = 28
 
@@ -161,8 +171,6 @@ enum MarkerLinkGeometry {
 
         let chord = distance(parent.center, child.center)
         guard chord >= minimumChordLength else { return nil }
-        // The two glyphs must not already overlap; there is no room for a curve.
-        guard chord > parent.radius + child.radius else { return nil }
 
         let isSameCandle = abs(parent.center.x - child.center.x) <= sameCandleXTolerance
         let magnitudes: [CGFloat] = isSameCandle
@@ -302,10 +310,12 @@ enum MarkerLinkGeometry {
         }
 
         guard let tS = tStart, let tE = tEnd, tE > tS else { return nil }
-        return (
-            quadraticPoint(start: start, control: control, end: end, t: tS),
-            quadraticPoint(start: start, control: control, end: end, t: tE)
-        )
+        let trimmedStart = quadraticPoint(start: start, control: control, end: end, t: tS)
+        let trimmedEnd = quadraticPoint(start: start, control: control, end: end, t: tE)
+        // Reject a stub: two glyphs can overlap on the chord and still leave a
+        // usable span once the path bows clear, but not always.
+        guard distance(trimmedStart, trimmedEnd) >= minimumDrawnSpan else { return nil }
+        return (trimmedStart, trimmedEnd)
     }
 
     /// Sample the drawn span and reject any path that grazes another glyph, a

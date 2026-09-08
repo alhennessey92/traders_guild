@@ -594,8 +594,12 @@ private final class MarkerAuditFakeAPI: MarkerAPIClient {
         fatalError("updateMarkerV2 should not be called in MarkerAuditFakeAPI")
     }
 
-    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLDetailResponseDTO {
+    func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLMarkerDeleteResponseDTO {
         fatalError("deleteMarker should not be called in MarkerAuditFakeAPI")
+    }
+
+    func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
+        fatalError("getMarkerThread should not be called in MarkerAuditFakeAPI")
     }
 
     func toggleMarkerLike(guildId: UUID, markerId: UUID) async throws -> RLLikeMarkerDTO {
