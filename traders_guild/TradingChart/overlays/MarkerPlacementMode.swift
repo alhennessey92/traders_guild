@@ -211,6 +211,14 @@ final class MarkerPlacementState: ObservableObject {
     @Published var editingMarkerId: UUID?
     @Published var isAnchorLocked: Bool = false
 
+    /// "I am answering this marker."
+    ///
+    /// Survives intent and tool changes, and survives a *failed* submission so
+    /// the author does not lose their work. Cleared only on success, cancel,
+    /// entering edit mode, logout, an unrelated chart context, or the author
+    /// removing it from the banner.
+    @Published var linkSession = MarkerLinkSession()
+
     var drawingInteractionPhase: DrawingInteractionPhase {
         get { drawingSession.drawingInteractionPhase }
         set {
@@ -806,13 +814,42 @@ final class MarkerPlacementState: ObservableObject {
     /// `visibility` constrained to what the backend accepts, so a stray value can never
     /// be submitted. Only `.personal` may be private; every other intent is a guild post.
     var submittedVisibility: String {
+        // A response is always guild-visible: a private one would notify an
+        // author who could never open it, and the server rejects it anyway.
+        if let locked = linkSession.lockedVisibility { return locked }
         guard intent == .personal else { return "guild" }
         return visibility == "private" ? "private" : "guild"
     }
 
     /// Whether the author gets to choose. Only personal markers do — the rest exist to be
-    /// seen by the guild.
-    var allowsVisibilityChoice: Bool { intent == .personal }
+    /// seen by the guild. A linked response never does.
+    var allowsVisibilityChoice: Bool { intent == .personal && !linkSession.isActive }
+
+    // MARK: - Link session
+
+    /// Begin answering a marker. Parent identity is fixed for the session; the
+    /// relationship can still be changed from the banner.
+    func beginRespondingTo(_ context: MarkerLinkContext) {
+        linkSession.begin(context, currentVisibility: visibility)
+    }
+
+    func changeLinkRelationship(_ relationship: MarkerLinkRelationship) {
+        linkSession.changeRelationship(relationship)
+    }
+
+    /// The author removed the link from the banner. Ordinary visibility
+    /// behaviour returns, including private-by-default personal markers.
+    func removeLink() {
+        if let restored = linkSession.end(.removedByAuthor) {
+            visibility = restored
+        }
+    }
+
+    func endLinkSession(_ reason: MarkerLinkSessionEnd) {
+        if let restored = linkSession.end(reason) {
+            visibility = restored
+        }
+    }
 
     func setIntent(_ newIntent: RLMarkerIntent) {
         intent = newIntent
@@ -1606,6 +1643,9 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func beginEditingMarker(_ marker: ChartMarkerUI) {
+        // Editing an existing marker is not answering one, and a link is
+        // immutable after creation, so any in-flight session ends here.
+        endLinkSession(.enteredEditMode)
         intent = marker.intent
         selectedPlacementTab = .components
         activeTool = .indicators
@@ -2062,6 +2102,8 @@ final class MarkerPlacementState: ObservableObject {
             // the server would refuse to post one anyway.
             discordChannelId: resolvedVisibility == "guild" ? selectedDiscordChannelId : nil
         )
+        // Both link fields or neither — the pairing rule lives in withLink.
+        .withLink(linkSession.context)
     }
 
     /// The chosen destination, but only if it is still one we could post to.

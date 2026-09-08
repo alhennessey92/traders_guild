@@ -2893,6 +2893,7 @@ struct TradingChartView: View {
 
             switch result {
             case .success(let created):
+                placementState.endLinkSession(.submitted)
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     controlViewModel.cancelMarkerPlacement()
                 }
@@ -2920,6 +2921,9 @@ struct TradingChartView: View {
                     )
                 }
             case .failure(let failure):
+                // The link survives a failed submission so the author can
+                // retry without rebuilding the response from scratch.
+                placementState.linkSession.recordFailure(failure.toastTitle)
                 presentPlacementFailure(failure)
             }
         }
@@ -3070,6 +3074,9 @@ struct TradingChartView: View {
             didEvaluateDrawingPanLockForCurrentDrag = false
             isSubmittingPlacement = false
             placementSubmitErrorMessage = nil
+            // Leaving placement without submitting ends the link. A successful
+            // submission already ended it, so this is a no-op in that case.
+            placementState.endLinkSession(.cancelled)
             if gestureState.markerPlacementGuide.source == .placement {
                 gestureState.markerPlacementGuide = MarkerPlacementGuideState()
             }
@@ -3105,7 +3112,7 @@ struct TradingChartView: View {
         let centerIdx = effectiveCandleIndex
         let candles = chartData.candles
 
-        let anchorTime: Date
+        var anchorTime: Date
         let anchorPrice: Double
         if centerIdx >= 0 && centerIdx < candles.count {
             let candle = candles[centerIdx]
@@ -3119,6 +3126,18 @@ struct TradingChartView: View {
             anchorPrice = 0
         }
 
+        // A response starts on its parent's candle, keeping the viewport's
+        // default price. Seeding the price too would place the response on the
+        // parent's exact point, where it simply stacks and reads as unrelated
+        // to what it is answering.
+        if let link = placementState.linkSession.context,
+           let parentCandle = Self.findCandleIndexForTimestamp(link.parentCandleTimestamp, in: candles),
+           parentCandle >= 0, parentCandle < candles.count {
+            anchorTime = candles[parentCandle].timestamp
+        }
+
+        // `reset` clears the edit session but deliberately not the link
+        // session: the link must survive this automatic initialization.
         placementState.reset(to: intent, anchorTime: anchorTime, anchorPrice: anchorPrice)
 
         // For setup markers, pre-populate Entry/TP/SL levels
