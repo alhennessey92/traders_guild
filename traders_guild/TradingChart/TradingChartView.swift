@@ -4093,6 +4093,14 @@ struct TradingChartView: View {
                         )
                         stageMarkerSelection(focusMarker)
                     }
+                } else if markerManager.linkFocus != nil {
+                    // Empty-tap exit, scoped strictly to focus mode and reached
+                    // only after the crosshair, placement and drawing handlers
+                    // above have declined the tap. Outside focus a miss still
+                    // does nothing, exactly as in 1.2.1.
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        markerManager.selectedMarker = nil
+                    }
                 }
             }
     }

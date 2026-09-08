@@ -118,6 +118,10 @@ enum RLNotificationType: String, Codable, CaseIterable {
     case markerResult = "marker_result"
     case markerLike = "marker_like"
     case markerComment = "marker_comment"
+    /// Someone answered your marker. Maps to the existing marker-engagement
+    /// preference, so no new setting is needed and an older client's
+    /// preference UI still governs it.
+    case markerResponse = "marker_response"
     case contentReaction = "content_reaction"
     case contentReport = "content_report"
     case reputationTierChange = "reputation_tier_change"
@@ -126,7 +130,7 @@ enum RLNotificationType: String, Codable, CaseIterable {
     /// Group for tab filtering
     var isPersonal: Bool {
         switch self {
-        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .markerLike, .markerComment, .contentReaction, .reputationTierChange, .awardEarned:
+        case .dm, .chatroom, .friendRequest, .friendAccept, .mention, .markerResult, .markerLike, .markerComment, .markerResponse, .contentReaction, .reputationTierChange, .awardEarned:
             return true
         case .announcement, .event, .guildInvite, .memberBanned, .memberUnbanned, .roleChanged, .memberKicked, .memberMuted, .memberUnmuted, .memberSuspended, .memberUnsuspended, .membershipRequestSubmitted, .membershipRequestDecision, .memberJoined, .contentReport:
             return false
@@ -434,6 +438,7 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
         case .markerResult:   return "chart.line.uptrend.xyaxis"
         case .markerLike:     return "heart.fill"
         case .markerComment:  return "text.bubble.fill"
+        case .markerResponse: return "arrow.triangle.branch"
         case .contentReaction: return "face.smiling.fill"
         case .contentReport:  return "exclamationmark.bubble.fill"
         case .reputationTierChange: return "star.fill"
@@ -470,6 +475,7 @@ struct RLNotificationDTO: Codable, Identifiable, Equatable {
             return markerResultType == "stop_loss" ? AppColors.statusNegative85 : AppColors.statusPositive90
         case .markerLike:                       return AppColors.themeAwarePink
         case .markerComment:                    return AppColors.statusWarning
+        case .markerResponse:                   return AppColors.accentColor
         case .contentReaction:                  return AppColors.themeAwareTeal
         case .contentReport:                    return AppColors.statusNegative
         case .reputationTierChange:             return AppColors.themeAwareYellow

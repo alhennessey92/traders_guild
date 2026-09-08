@@ -17,6 +17,7 @@ struct MarkerPlacementGeneralTab: View {
     @State private var intentChangeWarning: String?
     @State private var pendingIntentSwitch: PendingIntentSwitch?
     @State private var isIntentPickerExpanded = false
+    @State private var showLinkRelationshipPicker = false
     @State private var keyboardInset: CGFloat = 0
     @FocusState private var focusedInput: PlacementInputFocus?
 
@@ -95,10 +96,39 @@ struct MarkerPlacementGeneralTab: View {
         ]),
     ]
 
+    /// "Supports Alex's BTC breakout", while composing the response.
+    ///
+    /// Sits directly under the hero so the author can see what they are
+    /// answering at every step, and can change the relationship or drop the
+    /// link without leaving placement.
+    @ViewBuilder
+    private var linkBanner: some View {
+        if let context = placementState.linkSession.context {
+            MarkerLinkPlacementBanner(
+                context: context,
+                failureMessage: placementState.linkSession.lastFailureMessage,
+                onChangeRelationship: { showLinkRelationshipPicker = true },
+                onRemove: { placementState.removeLink() }
+            )
+            .sheet(isPresented: $showLinkRelationshipPicker) {
+                MarkerLinkRelationshipPicker(
+                    parentSummary: context.bannerSentence,
+                    onSelect: { relationship in
+                        showLinkRelationshipPicker = false
+                        placementState.changeLinkRelationship(relationship)
+                    },
+                    onCancel: { showLinkRelationshipPicker = false }
+                )
+                .presentationDetents([.height(360)])
+            }
+        }
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 heroPanel
+                linkBanner
 
                 if isIntentPickerExpanded {
                     intentPicker
