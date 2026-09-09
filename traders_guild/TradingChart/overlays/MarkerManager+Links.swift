@@ -234,27 +234,13 @@ extension MarkerManager {
 
     private func invalidateThreads(markerId: UUID?, parentMarkerId: UUID?, symbolId: UUID?) {
         guard let store = threadStore else { return }
-
-        var matched = false
-        if let markerId {
-            matched = store.invalidateThesis(containing: markerId)
-        }
-        if let parentMarkerId {
-            // Deliberately not short-circuited: a marker and its parent can sit
-            // in two separately cached windows, and both are now stale.
-            matched = store.invalidateThesis(containing: parentMarkerId) || matched
-        }
-        // Matching one endpoint is not proof the rest of the cache is current.
-        // The store deliberately allows two provisional windows onto the same
-        // unresolved thesis, so an event can land in one while the other — the
-        // one actually on screen — never held that endpoint and is now stale
-        // with nothing in it to say so. Unresolved windows on the symbol are
-        // swept either way; a root-resolved window that matched nothing knows
-        // its own extent and is genuinely unaffected, so it survives.
-        store.invalidateUnresolvedTheses(onSymbolId: symbolId)
-        guard !matched else { return }
-
-        store.invalidateTheses(onSymbolId: symbolId)
+        // One call, one generation bump. The store decides what an event of this
+        // shape could have staled; doing it in steps here published several
+        // changes for a single event and made the disclosure re-read each time.
+        store.invalidateForEvent(
+            markerIds: [markerId, parentMarkerId].compactMap { $0 },
+            symbolId: symbolId
+        )
     }
 
     /// Merge a realtime marker without adopting somebody else's identity.

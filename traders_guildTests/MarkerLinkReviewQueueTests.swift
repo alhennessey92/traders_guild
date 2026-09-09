@@ -309,6 +309,85 @@ struct MarkerLinkReviewQueueTests {
         )
     }
 
+    /// One event, one generation change.
+    ///
+    /// Invalidating in steps — the marker's thesis, then the parent's, then a
+    /// symbol sweep — published up to four changes for a single event. The
+    /// disclosure clears and re-reads on each, so a single create could provoke
+    /// several redundant requests for the same thesis.
+    @Test
+    func oneEventAdvancesTheGenerationExactlyOnce() {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+
+        // Two windows that both match, plus an unresolved one that does not name
+        // either endpoint — the shape that previously took three separate bumps.
+        for (requested, root, marker, resolved) in [
+            (60, "a", 60, true), (61, "b", 61, true), (62, "c", 62, false)
+        ] as [(Int, String, Int, Bool)] {
+            store.ingest(
+                page: page(
+                    requested: requested, windowRoot: root,
+                    nodes: [node(root, marker: marker, symbol: symbolId)],
+                    rootMarker: resolved ? marker : nil,
+                    rootResolved: resolved
+                ),
+                requestedMarkerId: id(requested),
+                expectedGeneration: store.generation
+            )
+        }
+
+        let manager = manager()
+        manager.threadStore = store
+        let before = store.generation
+
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(60), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(61), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.generation == before &+ 1, "one event must publish one change")
+        #expect(store.window(forMarkerId: id(60)) == nil)
+        #expect(store.window(forMarkerId: id(61)) == nil)
+        #expect(
+            store.window(forMarkerId: id(62)) == nil,
+            "the unresolved bystander goes too — it cannot rule the event out"
+        )
+    }
+
+    /// And an event that changes nothing must not advance the generation at all,
+    /// or every unrelated marker on another symbol would clear the disclosure.
+    @Test
+    func anEventTouchingNothingLeavesTheGenerationAlone() {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+        store.ingest(
+            page: page(
+                requested: 65, windowRoot: "far",
+                nodes: [node("far", marker: 65, symbol: otherSymbolId)],
+                rootMarker: 65, rootResolved: true
+            ),
+            requestedMarkerId: id(65),
+            expectedGeneration: store.generation
+        )
+
+        let manager = manager()
+        manager.threadStore = store
+        let before = store.generation
+
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(66), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(67), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.generation == before, "nothing matched, so nothing is published")
+        #expect(store.window(forMarkerId: id(65)) != nil)
+    }
+
     // MARK: - neutralMerge derives permissions locally
 
     /// A realtime payload is serialised with the *creator's* viewer context and

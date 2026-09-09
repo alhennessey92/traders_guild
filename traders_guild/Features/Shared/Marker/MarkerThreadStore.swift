@@ -121,76 +121,49 @@ final class MarkerThreadStore: ObservableObject {
 
     /// Drop only the thesis containing a marker — used when one marker is
     /// deleted, hidden, or becomes invisible to this viewer.
-    /// - Returns: whether a cached thesis was actually dropped, so a caller can
-    ///   tell "invalidated" from "this marker was never indexed" and escalate.
-    @discardableResult
-    func invalidateThesis(containing markerId: UUID) -> Bool {
-        guard let key = keysByMarkerId[markerId] else { return false }
-        windows[key] = nil
-        expandedKeys.remove(key)
-        for (id, existing) in keysByMarkerId where existing == key {
-            keysByMarkerId[id] = nil
-        }
-        if pendingNavigation?.cacheKey == key {
-            pendingNavigation = nil
-        }
+    func invalidateThesis(containing markerId: UUID) {
+        guard let key = keysByMarkerId[markerId] else { return }
+        forget(key)
         generation &+= 1
-        return true
     }
 
-    /// Drop every cached thesis on one symbol.
+    /// Invalidate everything one marker event could have staled, in a single
+    /// pass with a single generation bump.
     ///
-    /// The escalation for an event whose marker and parent are both unknown to
-    /// the cache. That is not the same as harmless: a thesis is same-guild and
-    /// same-symbol by contract, so a node created deep in a branch this viewer
-    /// has never paged into still changes the counts, tombstones and
-    /// `has_more` flags the server would render for a window they *are*
-    /// holding. Doing nothing there leaves a window that can never self-correct,
-    /// because nothing in it names the marker that changed.
+    /// One pass matters. Each `generation` change is published, and the thesis
+    /// disclosure reacts by clearing and re-reading; invalidating in several
+    /// steps meant one event could publish up to four changes and provoke
+    /// several redundant requests for the same thesis.
     ///
-    /// Scoped by symbol rather than dropping everything: a thesis cannot span
-    /// symbols, so windows on other symbols are provably unaffected. A window
-    /// whose nodes carry no symbol at all is dropped, because unknown is not
-    /// evidence of being unaffected.
+    /// What gets dropped:
+    ///
+    /// - Any thesis holding the event's marker or its parent. The common case.
+    /// - Every **unresolved** thesis on the symbol, whether or not one of those
+    ///   matched. An unresolved window does not know its own extent, so it
+    ///   cannot rule the event out — and the store deliberately allows two
+    ///   provisional windows onto one thesis, so an event can land in the one
+    ///   that is not on screen.
+    /// - If **nothing** matched, every thesis on the symbol, resolved included:
+    ///   an event the cache cannot place anywhere may belong to any of them.
+    ///
+    /// A resolved window survives only when something else did match, because
+    /// then it genuinely knows the event is not its own. Theses on other symbols
+    /// always survive: a thesis cannot span symbols.
     ///
     /// - Returns: whether anything was dropped.
     @discardableResult
-    func invalidateTheses(onSymbolId symbolId: UUID?) -> Bool {
-        let doomed = windows.filter { _, window in
-            guard let symbolId else { return true }
-            let symbols = window.nodes.compactMap(\.symbolId)
-            return symbols.isEmpty || symbols.contains(symbolId)
-        }.map(\.key)
+    func invalidateForEvent(markerIds: [UUID], symbolId: UUID?) -> Bool {
+        var doomed: Set<MarkerThreadCacheKey> = []
+        for markerId in markerIds {
+            if let key = keysByMarkerId[markerId] { doomed.insert(key) }
+        }
+        let matchedAnEndpoint = !doomed.isEmpty
 
-        guard !doomed.isEmpty else { return false }
-
-        for key in doomed { forget(key) }
-        generation &+= 1
-        return true
-    }
-
-    /// Drop every *unresolved* cached thesis on one symbol.
-    ///
-    /// A window whose root is still unresolved is a partial view: it does not
-    /// know its own extent, so it cannot rule out that an event belongs to it.
-    /// Two provisional windows of the same thesis can be cached side by side —
-    /// the store permits that deliberately, since neither knows it is the other
-    /// — and matching an event by id then invalidates only the one that happens
-    /// to hold the endpoint, leaving the other stale with no way to notice.
-    ///
-    /// Root-resolved windows on the same symbol are deliberately spared. One of
-    /// those does know its extent, so if the event's marker and parent are both
-    /// absent from it, it genuinely does not contain them.
-    ///
-    /// - Returns: whether anything was dropped.
-    @discardableResult
-    func invalidateUnresolvedTheses(onSymbolId symbolId: UUID?) -> Bool {
-        let doomed = windows.filter { _, window in
-            guard !window.rootResolved else { return false }
-            guard let symbolId else { return true }
-            let symbols = window.nodes.compactMap(\.symbolId)
-            return symbols.isEmpty || symbols.contains(symbolId)
-        }.map(\.key)
+        for (key, window) in windows where onSymbol(window, symbolId) {
+            if !window.rootResolved || !matchedAnEndpoint {
+                doomed.insert(key)
+            }
+        }
 
         guard !doomed.isEmpty else { return false }
         for key in doomed { forget(key) }
@@ -198,7 +171,8 @@ final class MarkerThreadStore: ObservableObject {
         return true
     }
 
-    /// Remove one cache entry and everything pointing at it.
+    /// Remove one cache entry and everything pointing at it. Does not touch the
+    /// generation — callers batch that, so one event publishes one change.
     private func forget(_ key: MarkerThreadCacheKey) {
         windows[key] = nil
         expandedKeys.remove(key)
@@ -208,6 +182,14 @@ final class MarkerThreadStore: ObservableObject {
         if pendingNavigation?.cacheKey == key {
             pendingNavigation = nil
         }
+    }
+
+    /// Whether a window could belong to a symbol. Unknown counts as could:
+    /// absence of evidence is not evidence of being unaffected.
+    private func onSymbol(_ window: MarkerThreadWindow, _ symbolId: UUID?) -> Bool {
+        guard let symbolId else { return true }
+        let symbols = window.nodes.compactMap(\.symbolId)
+        return symbols.isEmpty || symbols.contains(symbolId)
     }
 
     /// Drop one thesis's cached window so the next read is authoritative,
