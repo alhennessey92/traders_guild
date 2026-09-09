@@ -5,7 +5,7 @@ Worktree: `.worktrees/linked-markers-claude`
 Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 
 Status: **complete and buildable**. Clean Debug *and Release* builds, full unit
-suite green (**474 passing, 0 failures**), app installs and launches, and the
+suite green (**481 passing, 0 failures**), app installs and launches, and the
 linked-marker visuals reviewed against a DEBUG fixture harness on two devices.
 
 ---
@@ -20,7 +20,7 @@ and adds the fixture harness plus the visual review it enabled. See
 
 ## What is here
 
-Twelve commits, each buildable:
+Fifteen commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -36,6 +36,8 @@ Twelve commits, each buildable:
 | `07a7df3` | Selection restored after reload; reconnect invalidation |
 | `08b7652` | Sibling order, cursor retirement, failure classification |
 | `a0b720a` | DEBUG fixture harness + two defects it exposed |
+| `66d413f` | Handover: review pass, privacy wiring, visual review |
+| `267661a` | Self-audit: converging windows, lagging counts, stale nav |
 
 ### New files (all auto-join the target — the project uses synchronized groups)
 
@@ -175,11 +177,29 @@ faded like badge reads as a colour smudge. 0.22 is a locked decision so it was
 implemented as specified; the recommendation is a theme-aware floor of roughly
 0.35 for `lightGrey` only. Owner's call.
 
+## Self-audit pass — five further defects found and fixed
+
+Found by auditing my own implementation rather than working from the contract,
+so none of these were in Codex's review either.
+
+| Defect | Failure it caused |
+|---|---|
+| **Converging thesis windows clobbered each other** | A thesis opened from two different responses makes two provisional windows that later resolve the same root. Promotion wrote straight to the confirmed key, so the second arrival replaced the first — discarding its pages and its **live branch cursors**, making a branch the reader had started paging silently unreachable. Fixed: destination key resolved before the window is built, and `MarkerThreadWindow.absorb` folds them together |
+| **Cursor collision during absorb** | Two windows can hold different cursors for one node. Absorb keeps the **less advanced** one: a redundant page dedupes harmlessly, an over-advanced one skips siblings permanently |
+| **Focus trusted a lagging count** | The gate read `directResponseCount`, which lags by design — the reconciler exists because of it — so a stale zero suppressed focus on a marker whose responses were already on screen. Loaded topology now counts too |
+| **Pending navigation could hijack a later selection** | A target that never loaded was re-staged on every attempt, renewing itself indefinitely, so a marker appearing minutes later could yank the selection. Now expires 30s from the *original* tap; re-staging preserves that instant |
+| **Stale-cursor recovery left a dead button** | On 409 I reloaded the thread, but an initial page spends no cursor and therefore cannot retire one, so the dead cursor survived and left a "More responses" button that could never succeed. The cursor is now dropped first; a fresh page restores it if the branch is still live |
+
+Also removed `linkRingStyle` and `isDimmedByLinkFocus` — dead duplicates of
+decisions the renderer already derives from `MarkerLinkRenderContext` — and the
+loader's unused `reset()`, since a capability flip already re-mounts the
+disclosure and the generation check forces a re-read.
+
 ## Verification performed
 
 - **Clean Debug build**, iOS Simulator (iPhone 16 Pro, iOS 18.2), scheme
   `traders_guild Compose Dev`.
-- **Full unit suite: 474 passing, 0 failures.** No pre-existing test changed
+- **Full unit suite: 481 passing, 0 failures.** No pre-existing test changed
   behaviour; two test fakes gained the new `MarkerAPIClient` members. One of my
   own earlier tests was corrected: it encoded the count-based cursor-retirement
   rule that review showed to be wrong.

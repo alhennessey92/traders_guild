@@ -168,23 +168,11 @@ final class MarkerThreadLoader: ObservableObject {
         }
     }
 
-    /// Drop everything this loader holds so the next open re-reads from the
-    /// server.
-    ///
-    /// Used when the capability is switched back on: a window cached while it
-    /// was off predates whatever the server now considers authoritative.
-    func reset() {
-        cancelAllRequests()
-        markerId = nil
-        rows = []
-        window = nil
-        state = .idle
-        generation = -1
-        expandingNodeKeys.removeAll()
-        isLoadingAncestry = false
-        branchFailures.removeAll()
-        ancestryFailure = nil
-    }
+    // No explicit reset for a capability flip: switching the feature off hides
+    // the disclosure entirely, and switching it on re-mounts it, so `onAppear`
+    // re-runs `load` — which re-reads because the store's generation has moved
+    // past this loader's. A separate reset path would only be a second way to
+    // do the same thing.
 
     /// Page more responses under one structural node.
     ///
@@ -246,9 +234,13 @@ final class MarkerThreadLoader: ObservableObject {
     ) {
         switch MarkerThreadRequestFailure.classify(error) {
         case .staleCursor:
-            // The cursor no longer addresses anything. Re-reading the thread
-            // from the requested marker restores an accessible branch cursor
-            // rather than stranding the branch.
+            // The cursor no longer addresses anything. Drop it first, then
+            // re-read the thread: a fresh initial page restores the cursor if
+            // the branch is still live, and leaves it absent if the branch is
+            // now exhausted. Keeping the dead cursor would leave a "More
+            // responses" button that can never succeed, since an initial page
+            // spends no cursor and so cannot retire one.
+            store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
             branchFailures[nodeKey] = "That moved — reloading."
             load(markerId: markerId, manager: manager, store: store, force: true)
 
