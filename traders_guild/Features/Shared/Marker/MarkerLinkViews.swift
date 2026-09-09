@@ -40,11 +40,19 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
 
     private func apply(enabled: Bool) {
         let manager = chartViewModel.markerManager
+        let wasEnabled = manager?.linkedMarkersEnabled ?? false
         manager?.linkedMarkersEnabled = enabled
         // Held weakly by the manager: the store belongs to the session, not to
         // the chart, which is the whole reason a thesis survives a timeframe
         // change.
         manager?.threadStore = appState.markerThreadStore
+
+        // Anything cached across a capability flip predates the server's
+        // current answer — a thesis read while the feature was off, or one that
+        // is now off-limits — so it is dropped rather than shown again.
+        if wasEnabled != enabled {
+            appState.markerThreadStore.invalidateAll(reason: .capabilityChanged)
+        }
     }
 
     /// Re-scoping clears the cache, so one guild's thesis can never be read in

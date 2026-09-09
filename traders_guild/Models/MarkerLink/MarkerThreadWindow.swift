@@ -95,7 +95,7 @@ struct MarkerThreadWindow: Equatable {
 
     // MARK: - Construction
 
-    init(page: RLMarkerThreadResponseDTO) {
+    init(page: RLMarkerThreadResponseDTO, consumedBranchKey: String? = nil) {
         requestedMarkerId = page.requestedMarkerId
         windowRootKey = page.windowRootKey
         rootMarkerId = nil
@@ -108,17 +108,25 @@ struct MarkerThreadWindow: Equatable {
         branchCursors = [:]
         serverTotalCount = nil
         truncated = false
-        merge(page: page)
+        merge(page: page, consumedBranchKey: consumedBranchKey)
     }
 
     // MARK: - Merging
 
     /// Fold another bounded page into this window.
     ///
-    /// Safe to call with the initial page, an ancestry continuation, or a branch
-    /// continuation; the page itself carries everything needed to tell them
-    /// apart.
-    mutating func merge(page: RLMarkerThreadResponseDTO) {
+    /// - Parameter consumedBranchKey: the branch whose cursor was spent to
+    ///   fetch this page, when it was a branch continuation. This is the only
+    ///   reliable way to know a branch is exhausted: the server includes the
+    ///   anchor plus its direct children in a branch window, so the *absence*
+    ///   of a replacement cursor for that anchor means there is no more to
+    ///   read. Counting rows cannot substitute — `directResponseCount` excludes
+    ///   deleted children while the returned rows include their tombstones, so
+    ///   the two never reconcile and the cursor would live forever.
+    mutating func merge(
+        page: RLMarkerThreadResponseDTO,
+        consumedBranchKey: String? = nil
+    ) {
         // Root identity latches. An ancestry continuation may resolve the root;
         // a later branch page that does not know about it must not clear it.
         if page.rootResolved {
@@ -136,9 +144,14 @@ struct MarkerThreadWindow: Equatable {
             windowRootKey = page.windowRootKey
         }
 
+        // Nodes first, then sibling order. Order is merged per parent from the
+        // page's own sequence rather than appended, so a page that arrives
+        // carrying earlier siblings than ones already held still lands in the
+        // server's chronological order.
         for node in page.nodes {
             insert(node)
         }
+        mergeSiblingOrder(from: page.nodes)
 
         // Ancestry cursor is authoritative per ancestry page. A branch page
         // never speaks about ancestry, and sends nil, so only adopt nil from a
@@ -151,18 +164,18 @@ struct MarkerThreadWindow: Equatable {
             ancestorCursor = nil
         }
 
-        // Branch cursors: a returned entry replaces (it represents the
-        // *remaining* siblings). An entry the server stops sending for a node we
-        // just paged is exhausted and must be dropped.
+        // A returned entry replaces the stored one: it represents the
+        // *remaining* siblings, not the whole set.
         let returnedKeys = Set(page.branches.map(\.nodeKey))
         for branch in page.branches {
             branchCursors[branch.nodeKey] = branch.cursor
         }
-        for node in page.nodes where !returnedKeys.contains(node.nodeKey) {
-            // Only clear a cursor for a node this page actually spoke about.
-            if node.directResponseCount == loadedChildCount(of: node.nodeKey) {
-                branchCursors[node.nodeKey] = nil
-            }
+
+        // Exhaustion is decided by consumed-branch identity alone. If this page
+        // was fetched by spending a branch's cursor and the server did not hand
+        // back a replacement for that same branch, that branch is finished.
+        if let consumedBranchKey, !returnedKeys.contains(consumedBranchKey) {
+            branchCursors[consumedBranchKey] = nil
         }
 
         if let total = page.totalCount {
@@ -177,22 +190,68 @@ struct MarkerThreadWindow: Equatable {
         branchCursors[nodeKey] = nil
     }
 
+    /// Store the node. Sibling *position* is decided separately, by
+    /// `mergeSiblingOrder`, so a re-sent node keeps its place.
     private mutating func insert(_ node: RLMarkerLinkPreviewDTO) {
-        let key = node.nodeKey
-        let existed = nodesByKey[key] != nil
-        nodesByKey[key] = node
+        nodesByKey[node.nodeKey] = node
+    }
 
-        guard !existed else { return }  // keep sibling position on replacement
+    /// Splice each page's sibling sequences into the ones already held, using
+    /// shared keys as anchors.
+    ///
+    /// Append-only merging was wrong. A deep-link opens on a node the server
+    /// must include, so the initial window can carry a *late* sibling; paging
+    /// that branch afterwards returns its *earlier* siblings, which appending
+    /// would file after the late one and reverse the order the contract
+    /// promises. Tombstones carry no `createdAt`, so sorting by timestamp is
+    /// not available either — the server's per-page sequence is the only
+    /// authority, and this preserves it.
+    private mutating func mergeSiblingOrder(from nodes: [RLMarkerLinkPreviewDTO]) {
+        var sequences: [String: [String]] = [:]
+        var rootSequence: [String] = []
 
-        if let parentKey = node.parentKey {
-            childKeysByParent[parentKey, default: []].append(key)
-        } else if !orphanRootKeys.contains(key) {
-            orphanRootKeys.append(key)
+        for node in nodes {
+            if let parentKey = node.parentKey {
+                sequences[parentKey, default: []].append(node.nodeKey)
+            } else {
+                rootSequence.append(node.nodeKey)
+            }
+        }
+
+        for (parentKey, incoming) in sequences {
+            childKeysByParent[parentKey] = Self.anchoredMerge(
+                existing: childKeysByParent[parentKey] ?? [],
+                incoming: incoming
+            )
+        }
+        if !rootSequence.isEmpty {
+            orphanRootKeys = Self.anchoredMerge(existing: orphanRootKeys, incoming: rootSequence)
         }
     }
 
-    private func loadedChildCount(of nodeKey: String) -> Int {
-        childKeysByParent[nodeKey]?.count ?? 0
+    /// Merge two orderings of the same sibling set, preserving both.
+    ///
+    /// Keys present in `existing` act as anchors: the cursor jumps to just past
+    /// each one, so new keys arriving before an anchor are inserted before it,
+    /// and new keys after an anchor follow it. With no overlap at all, the
+    /// incoming sequence lands ahead of what is held — which is the deep-link
+    /// case, where everything already held is later than what just arrived.
+    static func anchoredMerge(existing: [String], incoming: [String]) -> [String] {
+        guard !incoming.isEmpty else { return existing }
+        guard !existing.isEmpty else { return incoming }
+
+        var result = existing
+        var cursor = 0
+
+        for key in incoming {
+            if let index = result.firstIndex(of: key) {
+                cursor = index + 1
+            } else {
+                result.insert(key, at: min(cursor, result.count))
+                cursor += 1
+            }
+        }
+        return result
     }
 
     /// A page introduces a higher window root when it contains a node that is an
@@ -228,7 +287,20 @@ struct MarkerThreadWindow: Equatable {
 
     static let maxAncestryWalk = 512
 
+    /// Every structural row this window holds, tombstones included. This is a
+    /// *structural* figure — never present it as a contribution count.
     var loadedCount: Int { nodesByKey.count }
+
+    /// Rows that represent an actual, visible contribution.
+    ///
+    /// Deleted intermediates occupy a structural row so descendants stay
+    /// readable, but they are not contributions, so they must not inflate any
+    /// number shown to the reader.
+    var activeLoadedCount: Int {
+        nodesByKey.values.reduce(into: 0) { total, node in
+            if !node.isUnavailable { total += 1 }
+        }
+    }
 
     var hasMoreAncestry: Bool { ancestorCursor != nil }
 
@@ -240,13 +312,18 @@ struct MarkerThreadWindow: Equatable {
         return rootResolved ? .complete : .ancestryPending
     }
 
-    /// Whole-thesis size, only exact when the server said the thread is complete
-    /// **and** nothing is still pending locally.
+    /// Whole-thesis size.
+    ///
+    /// Exact only when the server itself supplied a total *and* nothing is
+    /// still pending locally. The server sends no total on a partial page —
+    /// including the last continuation page — so on every other path this
+    /// reports a floor built from active rows only. A total is never inferred
+    /// from the loaded or tombstone row count.
     var totalCount: MarkerThreadCount {
         if let total = serverTotalCount, completeness == .complete, !truncated {
             return .exact(total)
         }
-        return .atLeast(loadedCount)
+        return .atLeast(activeLoadedCount)
     }
 
     /// The node the sheet is showing, if this window holds it.

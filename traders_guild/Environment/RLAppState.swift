@@ -2244,6 +2244,8 @@ class RLAppState: ObservableObject {
         
         do {
             try await realApi.leaveGuild(guildId: guild.id)
+            // Membership is what granted access to every thesis in this guild.
+            markerThreadStore.invalidateAll(reason: .membershipLost)
             currentGuild = nil
             currentMembership = nil
             
@@ -3495,6 +3497,11 @@ class RLAppState: ObservableObject {
     func blockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.blockUser(membershipId: membershipId)
+            // Blocks are bilateral and enforced server-side on every read, so
+            // any cached thesis may now contain a node this viewer must no
+            // longer see. Dropped rather than filtered: the cache holds no
+            // author identity for tombstones, so it cannot be filtered safely.
+            markerThreadStore.invalidateAll(reason: .privacyChanged)
             showSuccess(RLUserFacingCopy.text(.successUserBlocked))
             return response
         } catch {
@@ -3502,11 +3509,14 @@ class RLAppState: ObservableObject {
             throw error
         }
     }
-    
+
     /// Unblock a user
     func unblockUser(membershipId: UUID) async throws -> RLDetailResponseDTO {
         do {
             let response = try await realApi.unblockUser(membershipId: membershipId)
+            // Unblocking widens what may be seen, so a cached window is now
+            // missing nodes rather than showing forbidden ones. Still stale.
+            markerThreadStore.invalidateAll(reason: .privacyChanged)
             showSuccess(RLUserFacingCopy.text(.successUserUnblocked))
             return response
         } catch {
@@ -3813,6 +3823,8 @@ class RLAppState: ObservableObject {
             namespace: AppConfig.sessionStorageNamespace
         )
         reportedUserStateVersion += 1
+        // Reporting a member can hide their contributions from this viewer.
+        markerThreadStore.invalidateAll(reason: .moderation)
     }
 
     func hasReportedMarker(guildId: UUID, markerId: UUID) -> Bool {
@@ -3876,6 +3888,9 @@ class RLAppState: ObservableObject {
             contentNamespace: contentNamespace
         )
         reportedContentStateVersion += 1
+        // Reported content can be withdrawn from this viewer at any moment, so
+        // a cached thesis containing it is no longer trustworthy.
+        markerThreadStore.invalidateAll(reason: .moderation)
     }
 
     private func isDuplicateUserReportError(_ error: Error) -> Bool {
@@ -4699,12 +4714,19 @@ class RLAppState: ObservableObject {
                 case .guildUpdated:
                     self.handleGuildUpdatedEvent(message)
                 case .guildDeleted:
+                    // Membership is gone with the guild.
+                    self.markerThreadStore.invalidateAll(reason: .membershipLost)
                     self.handleGuildDeletedEvent(message)
                 case .memberRoleChanged:
+                    // Role decides what a viewer may see, so cached windows
+                    // may now be too permissive or too narrow.
+                    self.markerThreadStore.invalidateAll(reason: .moderation)
                     self.handleMemberRoleChangedEvent(message)
                 case .memberMuted:
+                    self.markerThreadStore.invalidateAll(reason: .moderation)
                     self.handleMemberMutedEvent(message)
                 case .memberSuspended:
+                    self.markerThreadStore.invalidateAll(reason: .moderation)
                     self.handleMemberSuspendedEvent(message)
                 default:
                     break

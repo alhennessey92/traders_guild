@@ -305,18 +305,23 @@ struct MarkerThreadWindowTests {
                 windowRoot: "a",
                 nodes: [node("b", parent: "a", marker: 2, depth: 1)],
                 branches: [RLMarkerThreadBranchDTO(nodeKey: "a", cursor: "page-2")]
-            )
+            ),
+            consumedBranchKey: "a"
         )
         #expect(window.branchCursor(for: "a") == "page-2", "a replacement cursor means remaining siblings")
 
-        // Final continuation delivers the rest and omits the cursor.
+        // Final continuation delivers the rest and omits the cursor. Retirement
+        // is decided by the consumed branch's identity, not by comparing row
+        // counts — direct counts exclude deleted children while returned rows
+        // include their tombstones, so counts never reconcile.
         window.merge(
             page: page(
                 requested: 1,
                 windowRoot: "a",
                 nodes: [node("a", marker: 1, relationship: nil, responses: 2),
                         node("c", parent: "a", marker: 3, depth: 1)]
-            )
+            ),
+            consumedBranchKey: "a"
         )
         #expect(window.branchCursor(for: "a") == nil, "an omitted cursor means the branch is exhausted")
         #expect(!window.hasMoreBranches)

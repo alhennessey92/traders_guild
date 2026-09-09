@@ -75,13 +75,30 @@ final class MarkerThreadStore: ObservableObject {
         case scopeChanged
         case logout
         case reconnect
+        /// A block was added or removed, in either direction, or guild-content
+        /// visibility changed for this viewer.
         case privacyChanged
+        /// The viewer reported content or a member, or a moderation action
+        /// landed that can change what they are shown.
         case moderation
+        /// The viewer is no longer a member of the guild the thesis belongs to.
+        case membershipLost
+        /// The server capability was switched on or off. A window cached while
+        /// it was off predates whatever the server now considers authoritative.
+        case capabilityChanged
         case markerRemoved(UUID)
     }
 
+    /// The last reason the cache was dropped, for diagnostics and tests.
+    private(set) var lastInvalidationReason: InvalidationReason?
+
     /// Drop everything and advance the generation so in-flight work is ignored.
+    ///
+    /// Advancing the generation is the load-bearing half: a page already on the
+    /// wire when this runs is refused by `ingest`, so an invalidation cannot be
+    /// undone a moment later by a request that predates it.
     func invalidateAll(reason: InvalidationReason) {
+        lastInvalidationReason = reason
         windows.removeAll()
         keysByMarkerId.removeAll()
         expandedKeys.removeAll()
@@ -129,17 +146,30 @@ final class MarkerThreadStore: ObservableObject {
 
     /// Fold a page into the cache, promoting the entry once a real root appears.
     ///
-    /// - Returns: the key the thesis now lives under.
+    /// - Parameter expectedGeneration: the generation the request was issued
+    ///   under. A page from an earlier generation is refused: the cache was
+    ///   invalidated while it was in flight, which is exactly the case where
+    ///   accepting it could resurrect content the viewer may no longer see.
+    ///   Enforced here so no caller can forget it.
+    /// - Returns: the key the thesis lives under, or nil if the page was refused.
     @discardableResult
-    func ingest(page: RLMarkerThreadResponseDTO, requestedMarkerId: UUID) -> MarkerThreadCacheKey {
+    func ingest(
+        page: RLMarkerThreadResponseDTO,
+        requestedMarkerId: UUID,
+        expectedGeneration: Int? = nil,
+        consumedBranchKey: String? = nil
+    ) -> MarkerThreadCacheKey? {
+        if let expectedGeneration, expectedGeneration != generation {
+            return nil
+        }
         var key = cacheKey(forMarkerId: requestedMarkerId)
 
         var window: MarkerThreadWindow
         if var existing = windows[key] {
-            existing.merge(page: page)
+            existing.merge(page: page, consumedBranchKey: consumedBranchKey)
             window = existing
         } else {
-            window = MarkerThreadWindow(page: page)
+            window = MarkerThreadWindow(page: page, consumedBranchKey: consumedBranchKey)
         }
 
         // Promote provisional -> confirmed once ancestry reached a real root.

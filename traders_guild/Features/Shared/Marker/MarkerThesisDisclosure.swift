@@ -8,11 +8,57 @@
 
 import SwiftUI
 
+/// How a thread request failed, and therefore what to do with the cursor.
+///
+/// The distinction matters: retiring a branch cursor on a transient failure
+/// silently loses every remaining response under that node, with no way back.
+enum MarkerThreadRequestFailure: Equatable {
+    /// Offline, timeout, 5xx, rate limited — keep the cursor, allow a retry.
+    case transient
+    /// The cursor no longer addresses anything (409). Re-read the thread.
+    case staleCursor
+    /// The node or thread is gone for good (404/410). Retire the cursor.
+    case gone
+    /// The capability is switched off server-side (503).
+    case unavailable
+
+    static func classify(_ error: Error) -> MarkerThreadRequestFailure {
+        if error is MarkerLinkUnavailableError { return .unavailable }
+
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .serverError(let status, let detail):
+                if status == 503 || detail.contains(MarkerLinkUnavailableError.detail) {
+                    return .unavailable
+                }
+                switch status {
+                case 409: return .staleCursor
+                case 404, 410: return .gone
+                // 5xx, 429 and anything else are worth another attempt, so the
+                // cursor must survive them.
+                default: return .transient
+                }
+            case .badRequest(let detail):
+                // A cursor the server no longer recognises comes back as a bad
+                // request on some paths; re-reading the thread recovers it.
+                return detail.localizedCaseInsensitiveContains("cursor") ? .staleCursor : .transient
+            default:
+                return .transient
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return .transient }
+        return .transient
+    }
+}
+
 /// Fetches and merges thread pages for one marker.
 ///
-/// Owns exactly one in-flight request. Changing the marker cancels the previous
-/// one, so a slow page for a marker the user has already left can never land on
-/// top of the current thesis.
+/// Every request is tracked and cancelled when the marker changes, and every
+/// completion re-checks both the marker identity and the store generation, so a
+/// slow page or a late error can never mutate a selection the user has moved on
+/// from.
 @MainActor
 final class MarkerThreadLoader: ObservableObject {
 
@@ -30,13 +76,34 @@ final class MarkerThreadLoader: ObservableObject {
     /// Branch node keys with a page currently in flight.
     @Published private(set) var expandingNodeKeys: Set<String> = []
     @Published private(set) var isLoadingAncestry = false
+    /// Per-branch retry messages. A branch with a message here still has its
+    /// cursor, so the button remains live.
+    @Published private(set) var branchFailures: [String: String] = [:]
+    @Published private(set) var ancestryFailure: String?
 
     private var markerId: UUID?
     private var task: Task<Void, Never>?
+    private var branchTasks: [String: Task<Void, Never>] = [:]
+    private var ancestryTask: Task<Void, Never>?
     /// Store generation this loader's content belongs to.
     private var generation: Int = -1
 
-    deinit { task?.cancel() }
+    deinit {
+        task?.cancel()
+        ancestryTask?.cancel()
+        for task in branchTasks.values { task.cancel() }
+    }
+
+    /// Cancel everything in flight. Called when the marker changes so no
+    /// continuation can land on the wrong thesis.
+    private func cancelAllRequests() {
+        task?.cancel()
+        task = nil
+        ancestryTask?.cancel()
+        ancestryTask = nil
+        for task in branchTasks.values { task.cancel() }
+        branchTasks.removeAll()
+    }
 
     /// Load the initial window, reusing anything the store already holds.
     func load(
@@ -46,24 +113,22 @@ final class MarkerThreadLoader: ObservableObject {
         force: Bool = false
     ) {
         if self.markerId != markerId {
-            task?.cancel()
-            task = nil
+            cancelAllRequests()
             rows = []
             window = nil
             state = .idle
             expandingNodeKeys.removeAll()
             isLoadingAncestry = false
+            branchFailures.removeAll()
+            ancestryFailure = nil
         }
         self.markerId = markerId
 
-        // A cached window from another timeframe — or another marker in the
-        // same thesis — is immediately usable.
+        // A cached window is immediately usable — the same thesis reached from
+        // another marker, or the same marker after a timeframe change — but
+        // only while it belongs to the current generation. A window from an
+        // older generation was invalidated and must be re-read.
         if !force, store.generation == generation, let cached = store.window(forMarkerId: markerId) {
-            adopt(cached)
-            return
-        }
-        if !force, let cached = store.window(forMarkerId: markerId) {
-            generation = store.generation
             adopt(cached)
             return
         }
@@ -73,30 +138,60 @@ final class MarkerThreadLoader: ObservableObject {
         let requestGeneration = store.generation
         generation = requestGeneration
 
-        task?.cancel()
+        cancelAllRequests()
         task = Task { [weak self] in
             guard let self else { return }
             do {
                 let page = try await manager.fetchThreadPage(markerId: markerId, cursor: nil)
-                guard !Task.isCancelled else { return }
-                // The store may have been invalidated while we waited.
-                guard store.generation == requestGeneration else { return }
-                guard self.markerId == markerId else { return }
-                store.ingest(page: page, requestedMarkerId: markerId)
-                if let merged = store.window(forMarkerId: markerId) {
-                    self.adopt(merged)
-                }
-            } catch is MarkerLinkUnavailableError {
                 guard !Task.isCancelled, self.markerId == markerId else { return }
-                self.state = .unavailable
+                // The store refuses a page from a superseded generation, so an
+                // invalidation that landed while this was in flight wins.
+                let key = store.ingest(
+                    page: page,
+                    requestedMarkerId: markerId,
+                    expectedGeneration: requestGeneration
+                )
+                guard key != nil, let merged = store.window(forMarkerId: markerId) else {
+                    self.state = .idle
+                    return
+                }
+                self.adopt(merged)
             } catch {
                 guard !Task.isCancelled, self.markerId == markerId else { return }
-                self.state = .failed("Couldn't load this thesis.")
+                switch MarkerThreadRequestFailure.classify(error) {
+                case .unavailable:
+                    self.state = .unavailable
+                default:
+                    self.state = .failed("Couldn't load this thesis.")
+                }
             }
         }
     }
 
+    /// Drop everything this loader holds so the next open re-reads from the
+    /// server.
+    ///
+    /// Used when the capability is switched back on: a window cached while it
+    /// was off predates whatever the server now considers authoritative.
+    func reset() {
+        cancelAllRequests()
+        markerId = nil
+        rows = []
+        window = nil
+        state = .idle
+        generation = -1
+        expandingNodeKeys.removeAll()
+        isLoadingAncestry = false
+        branchFailures.removeAll()
+        ancestryFailure = nil
+    }
+
     /// Page more responses under one structural node.
+    ///
+    /// A failure here must not cost the reader the rest of the branch. Only a
+    /// server saying the cursor is *gone* retires it; anything transient keeps
+    /// the cursor so the button can be pressed again, and a stale cursor
+    /// re-reads the branch from its anchor.
     func expandBranch(
         nodeKey: String,
         manager: MarkerManager,
@@ -109,24 +204,70 @@ final class MarkerThreadLoader: ObservableObject {
         expandingNodeKeys.insert(nodeKey)
         let requestGeneration = store.generation
 
-        Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
             defer { self.expandingNodeKeys.remove(nodeKey) }
             do {
                 let page = try await manager.fetchThreadPage(markerId: markerId, cursor: cursor)
-                guard !Task.isCancelled, store.generation == requestGeneration else { return }
-                store.ingest(page: page, requestedMarkerId: markerId)
-                if let merged = store.window(forMarkerId: markerId) {
-                    self.adopt(merged)
-                }
+                // Identity as well as generation: a page for a marker the user
+                // has already left must never mutate the current selection.
+                guard !Task.isCancelled, self.markerId == markerId else { return }
+                let key = store.ingest(
+                    page: page,
+                    requestedMarkerId: markerId,
+                    expectedGeneration: requestGeneration,
+                    consumedBranchKey: nodeKey
+                )
+                guard key != nil, let merged = store.window(forMarkerId: markerId) else { return }
+                self.adopt(merged)
+                self.branchFailures[nodeKey] = nil
             } catch {
-                // Stop offering a branch we cannot page, rather than leaving a
-                // button that fails every time it is pressed.
-                store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
-                if let merged = store.window(forMarkerId: markerId) {
-                    self.adopt(merged)
-                }
+                guard !Task.isCancelled, self.markerId == markerId else { return }
+                self.handleBranchFailure(
+                    error,
+                    nodeKey: nodeKey,
+                    markerId: markerId,
+                    manager: manager,
+                    store: store,
+                    requestGeneration: requestGeneration
+                )
             }
+        }
+        branchTasks[nodeKey] = task
+    }
+
+    private func handleBranchFailure(
+        _ error: Error,
+        nodeKey: String,
+        markerId: UUID,
+        manager: MarkerManager,
+        store: MarkerThreadStore,
+        requestGeneration: Int
+    ) {
+        switch MarkerThreadRequestFailure.classify(error) {
+        case .staleCursor:
+            // The cursor no longer addresses anything. Re-reading the thread
+            // from the requested marker restores an accessible branch cursor
+            // rather than stranding the branch.
+            branchFailures[nodeKey] = "That moved — reloading."
+            load(markerId: markerId, manager: manager, store: store, force: true)
+
+        case .gone:
+            // The branch really is unreachable; stop offering a button that
+            // can only ever fail.
+            store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
+            if let merged = store.window(forMarkerId: markerId) {
+                adopt(merged)
+            }
+
+        case .unavailable:
+            branchFailures[nodeKey] = "Not available right now."
+
+        case .transient:
+            // Cursor deliberately preserved: offline, timeout, 5xx and rate
+            // limiting are all retryable, and discarding the cursor would lose
+            // every remaining response under this node permanently.
+            branchFailures[nodeKey] = "Couldn't load. Tap to retry."
         }
     }
 
@@ -139,18 +280,24 @@ final class MarkerThreadLoader: ObservableObject {
         isLoadingAncestry = true
         let requestGeneration = store.generation
 
-        Task { [weak self] in
+        ancestryTask = Task { [weak self] in
             guard let self else { return }
             defer { self.isLoadingAncestry = false }
             do {
                 let page = try await manager.fetchThreadPage(markerId: markerId, cursor: cursor)
-                guard !Task.isCancelled, store.generation == requestGeneration else { return }
-                store.ingest(page: page, requestedMarkerId: markerId)
-                if let merged = store.window(forMarkerId: markerId) {
-                    self.adopt(merged)
-                }
+                guard !Task.isCancelled, self.markerId == markerId else { return }
+                let key = store.ingest(
+                    page: page,
+                    requestedMarkerId: markerId,
+                    expectedGeneration: requestGeneration
+                )
+                guard key != nil, let merged = store.window(forMarkerId: markerId) else { return }
+                self.adopt(merged)
+                self.ancestryFailure = nil
             } catch {
-                self.state = .failed("Couldn't load earlier responses.")
+                guard !Task.isCancelled, self.markerId == markerId else { return }
+                // The ancestor cursor is untouched, so this stays retryable.
+                self.ancestryFailure = "Couldn't load earlier responses."
             }
         }
     }
@@ -288,13 +435,18 @@ struct MarkerThesisDisclosure: View {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 11, weight: .semibold))
                         }
-                        Text("Load earlier responses")
+                        // The cursor survives a failure, so the button stays
+                        // live and simply says so.
+                        Text(loader.ancestryFailure ?? "Load earlier responses")
                             .font(.caption2.weight(.semibold))
                     }
-                    .foregroundColor(AppColors.accentColor)
+                    .foregroundColor(
+                        loader.ancestryFailure == nil ? AppColors.accentColor : AppColors.statusWarning
+                    )
                     .padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(loader.ancestryFailure ?? "Load earlier responses")
             }
 
             ForEach(loader.rows) { row in
@@ -303,6 +455,7 @@ struct MarkerThesisDisclosure: View {
                 }
 
                 if row.hasMoreResponses {
+                    let failure = loader.branchFailures[row.node.nodeKey]
                     Button {
                         loader.expandBranch(
                             nodeKey: row.node.nodeKey,
@@ -314,17 +467,20 @@ struct MarkerThesisDisclosure: View {
                             if loader.expandingNodeKeys.contains(row.node.nodeKey) {
                                 ProgressView().scaleEffect(0.6)
                             } else {
-                                Image(systemName: "plus.circle")
+                                Image(systemName: failure == nil ? "plus.circle" : "arrow.clockwise")
                                     .font(.system(size: 11, weight: .semibold))
                             }
-                            Text("More responses")
+                            // A failed branch keeps its cursor, so this stays a
+                            // working retry rather than a dead end.
+                            Text(failure ?? "More responses")
                                 .font(.caption2.weight(.semibold))
                         }
-                        .foregroundColor(AppColors.accentColor)
+                        .foregroundColor(failure == nil ? AppColors.accentColor : AppColors.statusWarning)
                         .padding(.leading, CGFloat(min(row.depth, 2)) * 14 + 34)
                         .padding(.vertical, 4)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(failure ?? "More responses")
                 }
             }
 
