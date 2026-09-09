@@ -194,7 +194,13 @@ struct MarkerLinkGraph: Equatable {
     ///   - visibleIds: markers actually being rendered — already through
     ///     `filteredMarkers`, the current timeframe and viewport culling.
     func focusState(selectedId: UUID, visibleIds: Set<UUID>) -> MarkerFocusState {
-        guard let selected = nodesById[selectedId], selected.isLinked else {
+        // Loaded topology counts as well as the reported figure. A marker's
+        // `directResponseCount` can lag — that is the whole reason the count
+        // reconciler exists — and a stale zero must not suppress focus on a
+        // marker whose responses are visibly on screen.
+        let hasLoadedChildren = !(childIdsByParent[selectedId] ?? []).isEmpty
+        guard let selected = nodesById[selectedId],
+              selected.isLinked || hasLoadedChildren else {
             return .standalone(selectedId: selectedId)
         }
 

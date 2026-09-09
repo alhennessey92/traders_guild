@@ -190,6 +190,83 @@ struct MarkerThreadWindow: Equatable {
         branchCursors[nodeKey] = nil
     }
 
+    /// Fold another window for the same thesis into this one.
+    ///
+    /// Two windows converge when a thesis is opened from two different nodes:
+    /// the first is filed under its own provisional key, the second under a
+    /// different one, and both later resolve the same real root. Without this
+    /// the second promotion would overwrite the first, discarding its
+    /// accumulated pages and — worse — its live branch cursors, so a branch the
+    /// reader had already started paging would silently become unreachable.
+    mutating func absorb(_ other: MarkerThreadWindow) {
+        for (key, node) in other.nodesByKey where nodesByKey[key] == nil {
+            nodesByKey[key] = node
+        }
+
+        for (parentKey, incoming) in other.childKeysByParent {
+            childKeysByParent[parentKey] = Self.anchoredMerge(
+                existing: childKeysByParent[parentKey] ?? [],
+                incoming: incoming
+            )
+        }
+        orphanRootKeys = Self.anchoredMerge(existing: orphanRootKeys, incoming: other.orphanRootKeys)
+
+        if other.rootResolved {
+            rootResolved = true
+            if let id = other.rootMarkerId { rootMarkerId = id }
+            if let key = other.rootKey { rootKey = key }
+        } else {
+            if rootMarkerId == nil { rootMarkerId = other.rootMarkerId }
+            if rootKey == nil { rootKey = other.rootKey }
+        }
+
+        // Ancestry: whichever window still has further to walk decides, because
+        // claiming ancestry is settled when it is not would hide real nodes.
+        if ancestorCursor == nil, other.ancestorCursor != nil {
+            ancestorCursor = other.ancestorCursor
+        }
+
+        // Cursors: when both windows hold one for the same node, keep the *less*
+        // advanced — the one whose window has read fewer children there. A
+        // redundant page is harmless because merging dedupes by node key, while
+        // an over-advanced cursor would skip siblings for good.
+        for (nodeKey, cursor) in other.branchCursors {
+            guard let mine = branchCursors[nodeKey] else {
+                branchCursors[nodeKey] = cursor
+                continue
+            }
+            guard mine != cursor else { continue }
+            let myProgress = childKeysByParent[nodeKey]?.count ?? 0
+            let theirProgress = other.childKeysByParent[nodeKey]?.count ?? 0
+            if theirProgress < myProgress {
+                branchCursors[nodeKey] = cursor
+            }
+        }
+
+        if serverTotalCount == nil { serverTotalCount = other.serverTotalCount }
+        truncated = truncated || other.truncated
+
+        // The window root only moves upward.
+        if nodesByKey[windowRootKey] == nil || isAncestorOfCurrentRoot(other.windowRootKey) {
+            if nodesByKey[other.windowRootKey] != nil {
+                windowRootKey = other.windowRootKey
+            }
+        }
+    }
+
+    /// Whether `candidate` sits above the current window root in the merged tree.
+    private func isAncestorOfCurrentRoot(_ candidate: String) -> Bool {
+        guard candidate != windowRootKey else { return false }
+        var cursor: String? = windowRootKey
+        var steps = 0
+        while let key = cursor, steps < Self.maxAncestryWalk {
+            if key == candidate { return true }
+            cursor = nodesByKey[key]?.parentKey
+            steps += 1
+        }
+        return false
+    }
+
     /// Store the node. Sibling *position* is decided separately, by
     /// `mergeSiblingOrder`, so a re-sent node keeps its place.
     private mutating func insert(_ node: RLMarkerLinkPreviewDTO) {

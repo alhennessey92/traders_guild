@@ -31,6 +31,19 @@ struct MarkerThreadPendingNavigation: Equatable {
     let generation: Int
     let markerId: UUID
     let cacheKey: MarkerThreadCacheKey
+    /// When it was staged, so a target that never arrives cannot sit waiting
+    /// and then hijack the selection much later.
+    let stagedAt: Date
+
+    /// A cross-timeframe load that has not produced the marker within this
+    /// window is treated as abandoned. Generous enough for a history page on a
+    /// slow connection, short enough that the user has not moved on.
+    static let expiry: TimeInterval = 30
+
+    func isValid(generation currentGeneration: Int, now: Date = Date()) -> Bool {
+        generation == currentGeneration
+            && now.timeIntervalSince(stagedAt) <= Self.expiry
+    }
 }
 
 /// The scope a cached thesis belongs to. Changing either half invalidates
@@ -162,31 +175,52 @@ final class MarkerThreadStore: ObservableObject {
         if let expectedGeneration, expectedGeneration != generation {
             return nil
         }
-        var key = cacheKey(forMarkerId: requestedMarkerId)
+        let currentKey = cacheKey(forMarkerId: requestedMarkerId)
 
-        var window: MarkerThreadWindow
-        if var existing = windows[key] {
+        // The destination is decided *before* the window is built. A window
+        // filed provisionally has by definition never resolved a root — it
+        // would have been promoted at the time — so the page alone determines
+        // whether this belongs under a confirmed root.
+        let key: MarkerThreadCacheKey = {
+            if page.rootResolved, let rootId = page.rootMarkerId {
+                return .confirmedRoot(rootId)
+            }
+            return currentKey
+        }()
+
+        var window = windows[key]
+
+        // Promotion. Fold the provisional window into whatever already lives
+        // at the confirmed key rather than overwriting it: a thesis opened from
+        // two different nodes produces two provisional windows that later
+        // resolve the same root, and clobbering would throw away the first
+        // one's pages and its live branch cursors.
+        if key != currentKey {
+            if let provisional = windows[currentKey] {
+                if var existing = window {
+                    existing.absorb(provisional)
+                    window = existing
+                } else {
+                    window = provisional
+                }
+                windows[currentKey] = nil
+            }
+            // Carry an open disclosure across the promotion so the sheet does
+            // not collapse the moment ancestry resolves.
+            if expandedKeys.remove(currentKey) != nil {
+                expandedKeys.insert(key)
+            }
+            repoint(from: currentKey, to: key)
+        }
+
+        if var existing = window {
             existing.merge(page: page, consumedBranchKey: consumedBranchKey)
             window = existing
         } else {
             window = MarkerThreadWindow(page: page, consumedBranchKey: consumedBranchKey)
         }
 
-        // Promote provisional -> confirmed once ancestry reached a real root.
-        if window.rootResolved, let rootId = window.rootMarkerId {
-            let confirmed = MarkerThreadCacheKey.confirmedRoot(rootId)
-            if confirmed != key {
-                windows[key] = nil
-                // Carry an open disclosure across the promotion so the sheet
-                // does not collapse the moment ancestry resolves.
-                if expandedKeys.remove(key) != nil {
-                    expandedKeys.insert(confirmed)
-                }
-                repoint(from: key, to: confirmed)
-                key = confirmed
-            }
-        }
-
+        guard let window else { return nil }
         windows[key] = window
 
         // Index every marker this window mentions so opening any of them later
@@ -208,7 +242,8 @@ final class MarkerThreadStore: ObservableObject {
             pendingNavigation = MarkerThreadPendingNavigation(
                 generation: pending.generation,
                 markerId: pending.markerId,
-                cacheKey: new
+                cacheKey: new,
+                stagedAt: pending.stagedAt
             )
         }
     }
@@ -240,19 +275,31 @@ final class MarkerThreadStore: ObservableObject {
 
     /// Stage a selection to restore once the chart finishes reloading — the
     /// cross-timeframe case, where `MarkerManager` clears `selectedMarker`.
-    func stagePendingNavigation(markerId: UUID) {
+    ///
+    /// `stagedAt` is preserved across re-staging so the expiry measures from
+    /// the user's original tap, not from the last load attempt; otherwise a
+    /// target that never arrives would renew itself forever.
+    func stagePendingNavigation(markerId: UUID, now: Date = Date()) {
+        let stagedAt: Date = {
+            if let existing = pendingNavigation, existing.markerId == markerId {
+                return existing.stagedAt
+            }
+            return now
+        }()
         pendingNavigation = MarkerThreadPendingNavigation(
             generation: generation,
             markerId: markerId,
-            cacheKey: cacheKey(forMarkerId: markerId)
+            cacheKey: cacheKey(forMarkerId: markerId),
+            stagedAt: stagedAt
         )
     }
 
-    /// Take the staged selection if it is still valid for this generation.
-    func consumePendingNavigation() -> MarkerThreadPendingNavigation? {
+    /// Take the staged selection if it is still valid for this generation and
+    /// has not expired.
+    func consumePendingNavigation(now: Date = Date()) -> MarkerThreadPendingNavigation? {
         guard let pending = pendingNavigation else { return nil }
         pendingNavigation = nil
-        guard pending.generation == generation else { return nil }
+        guard pending.isValid(generation: generation, now: now) else { return nil }
         return pending
     }
 

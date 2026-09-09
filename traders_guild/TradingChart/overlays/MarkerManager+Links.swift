@@ -62,19 +62,9 @@ extension MarkerManager {
         )
     }
 
-    /// Ring treatment for one marker, or nil when it wears none.
-    func linkRingStyle(for markerId: UUID) -> MarkerLinkRingStyle? {
-        guard linkedMarkersEnabled, let focus = linkFocus, focus.memberIds.contains(markerId) else {
-            return nil
-        }
-        return linkGraph.ringStyle(for: markerId)
-    }
-
-    /// Whether a marker should be drawn at the reduced opacity.
-    func isDimmedByLinkFocus(_ markerId: UUID) -> Bool {
-        guard let focus = linkFocus, focus.shouldFadeUnrelated else { return false }
-        return !focus.memberIds.contains(markerId)
-    }
+    // Ring style and dim state are deliberately *not* exposed here. The
+    // renderer derives both from `MarkerLinkRenderContext`, and a second copy
+    // of the same decision on the manager is how the two drift apart.
 
     // MARK: - Count reconciliation
 
