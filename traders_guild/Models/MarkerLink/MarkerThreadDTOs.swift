@@ -259,7 +259,7 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
     let symbolId: UUID?
     let parentMarkerId: UUID?
     let parentDirectResponseCount: Int?
-    let parentResponsesRevision: Date?
+    let parentResponsesRevision: String?
 
     init(
         detail: String? = nil,
@@ -268,7 +268,7 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
         symbolId: UUID? = nil,
         parentMarkerId: UUID? = nil,
         parentDirectResponseCount: Int? = nil,
-        parentResponsesRevision: Date? = nil
+        parentResponsesRevision: String? = nil
     ) {
         self.detail = detail
         self.markerId = markerId

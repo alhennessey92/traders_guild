@@ -169,7 +169,8 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var linkRelationship: MarkerLinkRelationshipValue? { marker.linkRelationshipValue }
     var parentPreview: RLMarkerLinkPreviewDTO? { marker.parentPreview }
     var responseCount: Int { marker.responseCount }
-    var responsesRevision: Date? { marker.responsesRevision }
+    var responsesRevision: String? { marker.responsesRevision }
+    var responsesRevisionValue: MarkerRevision? { marker.responsesRevisionValue }
     var isLinkedResponse: Bool { marker.isLinkedResponse }
     var participatesInThesis: Bool { marker.participatesInThesis }
     var hasUnavailableParent: Bool { marker.hasUnavailableParent }
@@ -306,7 +307,7 @@ extension RLChartMarkerDTO {
         pollOptions: [RLPollOptionDTO]? = nil,
         userPollVote: UUID? = nil,
         directResponseCount: Int? = nil,
-        responsesRevision: Date? = nil
+        responsesRevision: String? = nil
     ) -> RLChartMarkerDTO {
         guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
             return self
@@ -342,10 +343,11 @@ extension RLChartMarkerDTO {
         if let directResponseCount = directResponseCount {
             dict["directResponseCount"] = directResponseCount
         }
-        // This round-trip uses a plain encoder/decoder pair, whose default date
-        // strategy is `timeIntervalSinceReferenceDate` on both sides.
+        // Stored verbatim as the wire string. Encoding it as a date here would
+        // reintroduce exactly the millisecond rounding MarkerRevision exists to
+        // avoid, silently collapsing microsecond-separated revisions.
         if let responsesRevision = responsesRevision {
-            dict["responsesRevision"] = responsesRevision.timeIntervalSinceReferenceDate
+            dict["responsesRevision"] = responsesRevision
         }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let updated = try? JSONDecoder().decode(RLChartMarkerDTO.self, from: data) else {

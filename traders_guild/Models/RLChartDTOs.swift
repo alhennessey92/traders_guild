@@ -1409,11 +1409,15 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     /// Direct responses to this marker.
     let directResponseCount: Int?
     /// Server revision for `directResponseCount`, advanced monotonically.
-    let responsesRevision: Date?
+    ///
+    /// Held as the raw wire string, not a `Date`: these advance by microseconds
+    /// and every Foundation date decoder on this path rounds to milliseconds.
+    /// Order them through `responsesRevisionValue`.
+    let responsesRevision: String?
     /// Authoritative count for the *parent*, carried on create/delete payloads
     /// so a response can correct its parent's badge without a synthetic event.
     let parentDirectResponseCount: Int?
-    let parentResponsesRevision: Date?
+    let parentResponsesRevision: String?
 
     /// Explicit stand-in for the synthesized memberwise initializer.
     ///
@@ -1456,9 +1460,9 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         linkRelationship: String? = nil,
         parentPreview: RLMarkerLinkPreviewDTO? = nil,
         directResponseCount: Int? = nil,
-        responsesRevision: Date? = nil,
+        responsesRevision: String? = nil,
         parentDirectResponseCount: Int? = nil,
-        parentResponsesRevision: Date? = nil
+        parentResponsesRevision: String? = nil
     ) {
         self.id = id
         self.symbolId = symbolId
@@ -1523,13 +1527,19 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         parentPreview?.isUnavailable ?? false
     }
 
+    /// Microsecond-exact ordering value for this marker's own revision.
+    var responsesRevisionValue: MarkerRevision? { MarkerRevision.make(responsesRevision) }
+
+    /// Microsecond-exact ordering value for the parent's revision.
+    var parentResponsesRevisionValue: MarkerRevision? { MarkerRevision.make(parentResponsesRevision) }
+
     /// The parent reconciliation carried on a create/delete payload, if any.
     var parentCountUpdate: MarkerResponseCountUpdate? {
         guard let parentMarkerId, let parentDirectResponseCount else { return nil }
         return MarkerResponseCountUpdate(
             markerId: parentMarkerId,
             directResponseCount: parentDirectResponseCount,
-            revision: parentResponsesRevision
+            revision: parentResponsesRevisionValue
         )
     }
 
@@ -1539,7 +1549,7 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         return MarkerResponseCountUpdate(
             markerId: id,
             directResponseCount: directResponseCount,
-            revision: responsesRevision
+            revision: responsesRevisionValue
         )
     }
 
@@ -2148,7 +2158,7 @@ struct MarkerDeletedPayload: Codable {
     let symbolId: String?
     let parentMarkerId: String?
     let parentDirectResponseCount: Int?
-    let parentResponsesRevision: Date?
+    let parentResponsesRevision: String?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -2157,7 +2167,7 @@ struct MarkerDeletedPayload: Codable {
         symbolId = try c.decodeIfPresent(String.self, forKey: .symbolId)
         parentMarkerId = try c.decodeIfPresent(String.self, forKey: .parentMarkerId)
         parentDirectResponseCount = try c.decodeIfPresent(Int.self, forKey: .parentDirectResponseCount)
-        parentResponsesRevision = try c.decodeIfPresent(Date.self, forKey: .parentResponsesRevision)
+        parentResponsesRevision = try c.decodeIfPresent(String.self, forKey: .parentResponsesRevision)
     }
 
     /// The parent reconciliation carried by this event, if any.
@@ -2168,7 +2178,7 @@ struct MarkerDeletedPayload: Codable {
         return MarkerResponseCountUpdate(
             markerId: parentId,
             directResponseCount: parentDirectResponseCount,
-            revision: parentResponsesRevision
+            revision: MarkerRevision.make(parentResponsesRevision)
         )
     }
 }

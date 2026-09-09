@@ -95,7 +95,7 @@ extension MarkerManager {
             MarkerResponseCountUpdate(
                 markerId: parentId,
                 directResponseCount: count,
-                revision: response.parentResponsesRevision
+                revision: MarkerRevision.make(response.parentResponsesRevision)
             )
         )
     }
@@ -113,7 +113,7 @@ extension MarkerManager {
         markers[index] = markers[index].withMarker(
             markers[index].marker.updating(
                 directResponseCount: count,
-                responsesRevision: update.revision
+                responsesRevision: update.revision?.wireText
             )
         )
         if selectedMarker?.id == update.markerId {
@@ -122,18 +122,30 @@ extension MarkerManager {
         refreshLinkFocus()
     }
 
-    /// Reconcile a freshly loaded marker against counts we already know to be
-    /// newer, so a stale list payload cannot roll a badge backwards.
+    /// Reconcile freshly loaded markers with the reconciler, in both directions.
+    ///
+    /// An HTTP list is an observation like any other, so it is *offered* rather
+    /// than overwritten: a list newer than anything cached must win, and only a
+    /// genuinely newer cached value may correct the list. Blindly writing the
+    /// cache over the list rolled a newer server count backwards.
     func reconcileLoadedCounts() {
-        guard !responseCounts.isEmpty else { return }
         for index in markers.indices {
-            let markerId = markers[index].id
+            let marker = markers[index].marker
+            let markerId = marker.id
+
+            // Offer the list's own value first, with its revision, so a newer
+            // list advances the reconciler instead of being discarded by it.
+            if let listUpdate = marker.ownCountUpdate {
+                responseCounts.apply(listUpdate)
+            }
+
+            // Then correct the row only if the reconciler now knows better.
             guard let known = responseCounts.count(for: markerId),
                   known != markers[index].responseCount else { continue }
             markers[index] = markers[index].withMarker(
-                markers[index].marker.updating(
+                marker.updating(
                     directResponseCount: known,
-                    responsesRevision: responseCounts.revision(for: markerId)
+                    responsesRevision: responseCounts.revision(for: markerId)?.wireText
                 )
             )
         }

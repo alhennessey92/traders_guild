@@ -21,10 +21,15 @@ import Foundation
 struct MarkerResponseCountUpdate: Equatable {
     let markerId: UUID
     let directResponseCount: Int
-    /// Server-advanced revision. Nil means the server did not supply one.
-    let revision: Date?
+    /// Server-advanced revision, exact to the microsecond.
+    ///
+    /// Deliberately not a `Date`: the backend advances this by microseconds
+    /// under a row lock, and every Foundation date formatter on this path
+    /// rounds to milliseconds, which would make two genuinely different
+    /// revisions compare equal and silently drop a real count change.
+    let revision: MarkerRevision?
 
-    init(markerId: UUID, directResponseCount: Int, revision: Date? = nil) {
+    init(markerId: UUID, directResponseCount: Int, revision: MarkerRevision? = nil) {
         self.markerId = markerId
         self.directResponseCount = directResponseCount
         self.revision = revision
@@ -49,7 +54,7 @@ struct MarkerResponseCountReconciler: Equatable {
 
     private struct Entry: Equatable {
         var count: Int
-        var revision: Date?
+        var revision: MarkerRevision?
     }
 
     private var entries: [UUID: Entry] = [:]
@@ -110,7 +115,7 @@ struct MarkerResponseCountReconciler: Equatable {
         entries[markerId]?.count
     }
 
-    func revision(for markerId: UUID) -> Date? {
+    func revision(for markerId: UUID) -> MarkerRevision? {
         entries[markerId]?.revision
     }
 

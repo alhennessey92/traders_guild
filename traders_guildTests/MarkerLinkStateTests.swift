@@ -251,15 +251,17 @@ struct MarkerLinkStateTests {
     @Test
     func outOfOrderCountsAreRejected() {
         var reconciler = MarkerResponseCountReconciler()
-        let early = Date(timeIntervalSinceReferenceDate: 100)
-        let late = Date(timeIntervalSinceReferenceDate: 200)
+        // Microsecond-exact revisions, not Dates: Foundation rounds these to
+        // milliseconds and would collapse adjacent server revisions.
+        let early = MarkerRevision(microsecondsSinceEpoch: 100_000_000)
+        let late = MarkerRevision(microsecondsSinceEpoch: 200_000_000)
 
         #expect(reconciler.apply(.init(markerId: id(1), directResponseCount: 5, revision: late)) == .applied(5))
         #expect(reconciler.apply(.init(markerId: id(1), directResponseCount: 4, revision: early)) == .stale)
         #expect(reconciler.count(for: id(1)) == 5)
 
         // A newer revision wins.
-        let later = Date(timeIntervalSinceReferenceDate: 300)
+        let later = MarkerRevision(microsecondsSinceEpoch: 300_000_000)
         #expect(reconciler.apply(.init(markerId: id(1), directResponseCount: 6, revision: later)) == .applied(6))
         #expect(reconciler.count(for: id(1)) == 6)
     }
@@ -267,7 +269,7 @@ struct MarkerLinkStateTests {
     @Test
     func repeatedRevisionCannotFlipAValue() {
         var reconciler = MarkerResponseCountReconciler()
-        let revision = Date(timeIntervalSinceReferenceDate: 100)
+        let revision = MarkerRevision(microsecondsSinceEpoch: 100_000_000)
         _ = reconciler.apply(.init(markerId: id(1), directResponseCount: 3, revision: revision))
         #expect(reconciler.apply(.init(markerId: id(1), directResponseCount: 9, revision: revision)) == .unchanged(3))
         #expect(reconciler.count(for: id(1)) == 3)
@@ -277,7 +279,7 @@ struct MarkerLinkStateTests {
     func unversionedCannotSupersedeVersioned() {
         var reconciler = MarkerResponseCountReconciler()
         _ = reconciler.apply(
-            .init(markerId: id(1), directResponseCount: 3, revision: Date(timeIntervalSinceReferenceDate: 100))
+            .init(markerId: id(1), directResponseCount: 3, revision: MarkerRevision(microsecondsSinceEpoch: 100_000_000))
         )
         #expect(reconciler.apply(.init(markerId: id(1), directResponseCount: 1, revision: nil)) == .stale)
         #expect(reconciler.count(for: id(1)) == 3)
@@ -289,7 +291,7 @@ struct MarkerLinkStateTests {
         _ = reconciler.apply(.init(markerId: id(1), directResponseCount: 1, revision: nil))
         #expect(
             reconciler.apply(
-                .init(markerId: id(1), directResponseCount: 7, revision: Date(timeIntervalSinceReferenceDate: 100))
+                .init(markerId: id(1), directResponseCount: 7, revision: MarkerRevision(microsecondsSinceEpoch: 100_000_000))
             ) == .applied(7)
         )
     }
