@@ -225,9 +225,16 @@ struct MarkerThreadRowView: View {
     let row: MarkerThreadRow
     let onOpen: (() -> Void)?
 
+    /// At accessibility sizes the trailing chip and count cannot share a line
+    /// with the title without squeezing it to a few characters, so the row
+    /// reflows into a column instead.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var relationship: MarkerLinkRelationshipValue? {
         row.node.relationship
     }
+
+    private var isAccessibilitySize: Bool { dynamicTypeSize.isAccessibilitySize }
 
     private var indent: CGFloat {
         // Capped at two levels: deeper nesting would eat the row's width on a
@@ -269,7 +276,7 @@ struct MarkerThreadRowView: View {
                     Text(row.node.titleDisplayText ?? "Marker")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.primaryForeground)
-                        .lineLimit(1)
+                        .lineLimit(isAccessibilitySize ? 3 : 1)
                     if let author = row.node.authorDisplayText {
                         Text(author)
                             .font(.caption2)
@@ -277,25 +284,15 @@ struct MarkerThreadRowView: View {
                             .lineLimit(1)
                     }
                 }
+                if isAccessibilitySize {
+                    trailingMetadata
+                }
             }
 
             Spacer(minLength: 0)
 
-            if let relationship {
-                Text(relationship.displayName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(relationship.accentColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(relationship.accentColor.opacity(0.14))
-                    )
-            }
-
-            if row.node.directResponseCount > 0 {
-                Text("\(row.node.directResponseCount)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(AppColors.greyText)
+            if !isAccessibilitySize {
+                trailingMetadata
             }
         }
         .padding(.vertical, 6)
@@ -309,6 +306,35 @@ struct MarkerThreadRowView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(canOpen ? .isButton : [])
+    }
+
+    /// Relationship chip and response count, placed inline at normal sizes and
+    /// beneath the title at accessibility sizes.
+    @ViewBuilder
+    private var trailingMetadata: some View {
+        HStack(spacing: 6) {
+            // Both of these carry meaning, so they use a text style that
+            // scales with Dynamic Type. A fixed point size would leave the
+            // relationship label at 10pt beside body text several times its
+            // height at accessibility sizes.
+            if let relationship {
+                Text(relationship.displayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(relationship.accentColor)
+                    .lineLimit(1)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule().fill(relationship.accentColor.opacity(0.14))
+                    )
+            }
+
+            if row.node.directResponseCount > 0 {
+                Text("\(row.node.directResponseCount)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(AppColors.greyText)
+            }
+        }
     }
 
     /// Relationship is spoken, never carried by colour alone.

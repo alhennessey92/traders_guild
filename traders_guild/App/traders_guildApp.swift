@@ -200,8 +200,32 @@ struct traders_guildApp: App {
         AppDeepLinkRouter.route(url, to: rlAppState)
     }
     
+    /// Visual harness for linked markers, gated on a launch argument.
+    ///
+    /// DEBUG only, opt-in, and never linked from a shipping surface: it exists
+    /// so the marker canvas and linked-detail views can be looked at without a
+    /// backend or an account. Launch with `-MarkerLinkFixtures`.
+    #if DEBUG
+    private var wantsMarkerLinkFixtures: Bool {
+        ProcessInfo.processInfo.arguments.contains("-MarkerLinkFixtures")
+    }
+    #endif
+
     @ViewBuilder
     private var mainContent: some View {
+        #if DEBUG
+        if wantsMarkerLinkFixtures {
+            MarkerLinkFixtureGallery()
+        } else {
+            authenticatedContent
+        }
+        #else
+        authenticatedContent
+        #endif
+    }
+
+    @ViewBuilder
+    private var authenticatedContent: some View {
         #if DEBUG
         let _ = print("📱 mainContent: isAuthenticated=\(rlAppState.isAuthenticated), currentGuild=\(rlAppState.currentGuild?.name ?? "nil"), showSheet=\(rlAppState.showGuildSelectionSheet)")
         #endif

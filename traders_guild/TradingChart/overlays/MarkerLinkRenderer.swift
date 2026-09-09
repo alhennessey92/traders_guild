@@ -75,8 +75,15 @@ enum MarkerLinkRenderer {
     /// Ring weight. The resting glyph stroke is 0.8pt, so this reads as a
     /// deliberate addition rather than a thicker border.
     static let ringWidth: CGFloat = 1.5
-    /// Drawn just outside the glass edge.
-    static let ringInset: CGFloat = 1.5
+
+    /// Drawn just *inside* the glass edge.
+    ///
+    /// Outside, it encroached on the neighbouring glyph: stack spacing is 40pt
+    /// and a 36pt disc leaves only 4pt between edges, so an outward ring put
+    /// two stacked members ~1pt apart and a focused stack read as one
+    /// continuous coloured tube instead of separate markers. Inside the edge
+    /// the 4pt gap survives and each member stays distinct.
+    static let ringInset: CGFloat = -1.25
     static let ringOpacity: Double = 0.9
 
     static let connectorWidth: CGFloat = 1.5
