@@ -86,6 +86,12 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `a90aba0` | Bring the handover current |
 | `ffacc66` | Keep the fade rule off the pan path, and per selection |
 | `e288398` | Device profiling plan, isolation first |
+| `6f45f56` | Assert instead of skipping, and correct this table |
+
+The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
+immediately after it, is yours — the isolated local-development schemes — and is
+excluded here. A final documentation commit updates this table and so cannot
+appear in it; `git log --oneline 74c772c..HEAD` is the authority.
 
 ### New files (all auto-join the target — the project uses synchronized groups)
 
