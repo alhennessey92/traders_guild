@@ -505,10 +505,25 @@ count, because that is what soft deletion means.
    57 fps figure from the gesture-perf work: different build, different
    hardware, unrecorded dataset. The number that decides this is a matched pair
    measured in one sitting, per `docs/DEVICE_PROFILING_PLAN.md`.
-3. **VoiceOver not driven.** Labels, traits and hints are set throughout and
-   relationship is always spoken rather than carried by colour, but the rotor was
-   not stepped. Chart glyphs remain Canvas pixels with no accessibility elements —
-   unchanged from 1.2.1 — so the thesis list is the accessible path.
+3. **VoiceOver still not driven by hand**, but no longer unchecked.
+   `MarkerLinkAccessibilityTests` runs against the DEBUG fixture gallery and
+   asserts the three claims that regress silently: relationship is reachable as
+   a word rather than carried by colour, unavailable tombstones are not offered
+   as destinations, and nothing actionable reads as an SF Symbol name. It
+   attaches the element tree to the result bundle as a record.
+
+   What it cannot prove is rotor order or how speech sounds — that still needs a
+   person. And one thing it deliberately does **not** assert: XCUITest's
+   descendant enumeration is not VoiceOver's element order, so a row using
+   `children: .combine` exposes child images to the query that VoiceOver never
+   stops on. Asserting on those would have meant changing production code to
+   satisfy a surface no user reaches. `UnifiedMarkerBadge`'s intent symbols
+   (`waveform.path.ecg.magnifyingglass` and friends) carry no label of their
+   own; that is app-wide chrome predating linked markers, is counted in the
+   attached snapshot, and is worth a separate look outside this branch.
+
+   Chart glyphs remain Canvas pixels with no accessibility elements — unchanged
+   from 1.2.1 — so the thesis list is still the accessible path.
 4. **0.22 unchanged**, as instructed. The light-grey observation stands: unrelated
    markers there are closer to invisible than recessive, and a theme-aware floor
    near 0.35 would read better. Owner's call.
