@@ -87,6 +87,12 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `ffacc66` | Keep the fade rule off the pan path, and per selection |
 | `e288398` | Device profiling plan, isolation first |
 | `6f45f56` | Assert instead of skipping, and correct this table |
+| `e2ebddd` | Close the commit table honestly |
+| `8e462bb` | Isolated device DEV and profiling configuration |
+| `7beffb0` | The queued integration-review findings |
+| `382bbda` | Make the isolated build fail closed and reachable |
+| `bb770df` | Wire the realtime repairs into the handlers that need them |
+| `f1f5191` | Deterministic chart-pan driver for device profiling |
 
 The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
 immediately after it, is yours — the isolated local-development schemes — and is
@@ -302,7 +308,10 @@ The tests the owner asked for, and where they live:
    thesis list is the accessible path and must stay reachable without focus mode.
 3. **No physical-device Instruments run.** Connector routing is
    O(edges × samples) per frame with a 12-edge cap; membership is computed on
-   selection change, not per frame. Unmeasured against the 57 fps baseline.
+   selection change, not per frame. Unmeasured. The 57 fps figure from the
+   gesture-perf work is context from another build on other hardware, not a
+   baseline — see `docs/DEVICE_PROFILING_PLAN.md` for the matched-pair method
+   that replaces it.
 4. **Reduce Motion cannot be toggled by `simctl`.** I set it via the
    accessibility defaults and the connector renders at full length on first
    paint, which together with `reduceMotionSnapsInsteadOfHidingFocus` is good
@@ -325,10 +334,106 @@ The tests the owner asked for, and where they live:
   action — while existing links still decode and display as ordinary markers.
 - `MarkerManager.linkFocus` is derived state; assign it only from
   `refreshLinkFocus()`.
-- The fade decision is **latched per selection** so progressive pages cannot
-  flicker the dim on and off; a deliberate filter change clears the latch and
-  re-applies the rule.
+- The fade decision is latched per selection so progressive pages cannot flicker
+  the dim on and off — but the latch is **subordinate to the visibility rule**,
+  not a substitute for it. "Suppress the fade below two visible members" is an
+  invariant: `reportRenderedMarkers` drops the latch whenever the painted member
+  set changes, and `refreshLinkFocus` floors any latched decision by the current
+  threshold, so panning a second member off screen undims and panning it back
+  re-dims. The latch protects against topology churn between paints; a filter
+  change clears it outright. Deferred renderer reports carry their selection id,
+  because the report is dispatched from inside a draw pass and the selection can
+  move before it lands.
 
+
+---
+
+## Test counts and evidence paths
+
+Recorded exactly, from the run that produced them.
+
+| | |
+|---|---|
+| Full suite | **546 passed, 0 failed**, 0 warnings in linked-marker files |
+| Full-suite log | `scratchpad/full.log` |
+| Device build log | `scratchpad/b-iso.log` (`** BUILD SUCCEEDED **`) |
+| Simulator build log | `scratchpad/b-normal.log` |
+| Live HTTP ancestry probe | `scratchpad/live-ancestry.json` |
+| App console during the UI walk | `scratchpad/console2.txt` |
+| UI walk screenshots | `scratchpad/w3.png` … `w8.png` |
+
+Scratchpad root:
+`/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/`
+
+Signed device artifact (built, **not installed**):
+`<scratchpad>/dd-device/Build/Products/DevProfile-iphoneos/traders_guild.app`
+with `traders_guild.app.dSYM` beside it.
+
+These are session-scoped temp paths — treat them as provenance for this
+report, not as durable locations.
+
+---
+
+## Live acceptance — deep/wide fixture
+
+Driven in the simulator against the owner's seeded fixture
+(`/tmp/linked-navigation-fixture.json`: an 81-node chain including one deleted
+intermediate, and a 226-node wide thesis), signed in as the disposable QA
+account, routed to the local gateway. No production endpoint was contacted.
+
+**Ancestry, three windows, in the UI.** Opening the Thesis disclosure on the
+deep leaf (`QA Deep Thesis Step 80`, a linked leaf with zero responses) issued
+`GET /chart/markers/{leaf}/thread`, then two more carrying Fernet cursors:
+
+| Page | Header | Rows begin at | "Load earlier responses" |
+|---|---|---|---|
+| initial | `32+ in this thesis` | Step 49 | shown |
+| +1 | `62+ in this thesis` | Step 18 | shown |
+| +2 | `80+ in this thesis` | **QA Deep Thesis Root** | **gone** |
+
+The affordance retires exactly when the root resolves. This matches the HTTP
+behaviour measured directly against the backend the same day — 32 + 32 + 19
+nodes, `root_resolved` only on the third, one tombstone in the second window —
+so the client's paging agrees with the server's own windowing.
+
+**The header fix, visible.** At the first page the tally read
+`11 supports · 10 challenges · 11 builds on`, which sums to exactly 32. Before
+this change the tally *replaced* the count, so an 81-node thesis would have
+presented "32" as though it were the whole of it. The count now always shows,
+carries its `+`, and the breakdown sits beneath it.
+
+**Badges on the chart.** Relationship-coloured left badges render in the resting
+state, and a linked leaf shows the relationship **glyph** rather than a count —
+the case that previously rendered nothing at all, leaving a response
+indistinguishable from an ordinary marker until tapped.
+
+**Cross-timeframe.** Tapping the root (1h) from the 4h chart switched the chart
+to 1h and carried the selection across.
+
+**Not proven here:** the wide thesis's branch continuation was exercised over
+HTTP (200 nodes + `truncated`, then a 27-node branch page) but not through the
+UI list; and a branch cursor replayed against a different marker returned
+`409 marker_thread_refresh_required`, confirming provenance binding on this
+fixture too.
+
+---
+
+## Isolated device configuration
+
+Built and signed, **not installed** — awaiting owner verification.
+
+- Artifact: `DevProfile-iphoneos/traders_guild.app`, bundle id
+  `co.tradersguild.app.linkeddev`, display name `TG LinkedDev`, signed
+  `Apple Development` on team `B4WE2NR99U`, `.dSYM` retained.
+- Entitlements as signed: `aps-environment development`, keychain group
+  `B4WE2NR99U.co.tradersguild.app.linkeddev` **only** — it cannot read or
+  overwrite the production session.
+- Routing fails closed: under `TG_ISOLATED_DEV` there is no production endpoint,
+  and a missing, unexpanded or non-local baked URL resolves to loopback rather
+  than to `api.tradersguild.co`.
+- `MARKETING_VERSION` reads 1.3.0 in **both** the feature and baseline
+  DevProfile builds, so identify a measurement by commit and artifact path, never
+  by the displayed version.
 
 ---
 
@@ -393,8 +498,13 @@ count, because that is what soft deletion means.
 ## Not done
 
 1. **Physical device.** Nothing installed on the iPhone 14 Pro, as instructed.
-   An isolated DEV build/profile plan is still to be agreed.
-2. **No Instruments run**, so no FPS figure against the 57 fps baseline.
+   The isolated DEV/profiling configuration is built and signed — see
+   *Isolated device configuration* below — and is waiting on the owner's
+   verification before any install.
+2. **No Instruments run**, so no FPS figure at all. Do not compare against the
+   57 fps figure from the gesture-perf work: different build, different
+   hardware, unrecorded dataset. The number that decides this is a matched pair
+   measured in one sitting, per `docs/DEVICE_PROFILING_PLAN.md`.
 3. **VoiceOver not driven.** Labels, traits and hints are set throughout and
    relationship is always spoken rather than carried by colour, but the rotor was
    not stepped. Chart glyphs remain Canvas pixels with no accessibility elements —
@@ -402,5 +512,5 @@ count, because that is what soft deletion means.
 4. **0.22 unchanged**, as instructed. The light-grey observation stands: unrelated
    markers there are closer to invisible than recessive, and a theme-aware floor
    near 0.35 would read better. Owner's call.
-5. **Ancestry paging never exercised live.** The QA thesis is shallow, so no
-   ancestry cursor was ever issued. Branch cursors were, and are proven.
+5. ~~Ancestry paging never exercised live.~~ **Now exercised**, against the
+   owner's deep/wide fixture — see *Live acceptance* below.
