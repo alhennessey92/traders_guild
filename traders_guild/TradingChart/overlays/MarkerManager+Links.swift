@@ -52,12 +52,18 @@ extension MarkerManager {
             return
         }
 
+        // The latch exists so progressive pages cannot flicker the dim, but it
+        // must not capture a guess. Until the renderer has reported which
+        // members it painted for THIS selection, the visible set is a fallback,
+        // and latching it would freeze the wrong answer for the whole selection.
         let shouldFade: Bool
         if let latch = fadeLatch, latch.selectionId == selected.id {
             shouldFade = latch.shouldFade
         } else {
             shouldFade = state.shouldFadeUnrelated
-            setFadeLatch(selectionId: selected.id, shouldFade: shouldFade)
+            if renderedMarkerIds != nil {
+                setFadeLatch(selectionId: selected.id, shouldFade: shouldFade)
+            }
         }
 
         linkFocus = MarkerFocusState(

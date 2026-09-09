@@ -223,6 +223,63 @@ struct MarkerLinkIntegrationRepairTests {
         #expect(bothPainted.shouldFadeUnrelated)
     }
 
+    // MARK: - Painted-member truth is per selection
+
+    /// The fade latch must not capture a guess.
+    ///
+    /// Painted members describe one selection. Until the renderer reports for
+    /// the *current* one, the visible set is a fallback, and latching it would
+    /// freeze the wrong answer for the whole selection — so a second thesis
+    /// opened after a first would never fade.
+    @Test
+    func fadeDecisionDiffersBetweenFallbackAndPaintedTruth() {
+        let graph = MarkerLinkGraph(nodes: [
+            MarkerLinkNode(id: id(1), directResponseCount: 1),
+            MarkerLinkNode(
+                id: id(2),
+                parentId: id(1),
+                relationship: MarkerLinkRelationshipValue(.supports)
+            ),
+        ])
+
+        // Fallback: both loaded, so the rule says fade.
+        let fallback = graph.focusState(selectedId: id(2), visibleIds: [id(1), id(2)])
+        #expect(fallback.shouldFadeUnrelated)
+
+        // Painted truth: the parent is off screen, so it must not.
+        let painted = graph.focusState(selectedId: id(2), visibleIds: [id(2)])
+        #expect(!painted.shouldFadeUnrelated)
+
+        // The two disagree, which is exactly why the latch must wait for the
+        // renderer rather than freezing the fallback.
+        #expect(fallback.shouldFadeUnrelated != painted.shouldFadeUnrelated)
+    }
+
+    /// Members from a previous thesis must not satisfy the rule for a new one.
+    @Test
+    func membersOfAnotherThesisDoNotCountAsVisibleCompanions() {
+        let graph = MarkerLinkGraph(nodes: [
+            MarkerLinkNode(id: id(1), directResponseCount: 1),
+            MarkerLinkNode(
+                id: id(2),
+                parentId: id(1),
+                relationship: MarkerLinkRelationshipValue(.supports)
+            ),
+            MarkerLinkNode(id: id(10), directResponseCount: 1),
+            MarkerLinkNode(
+                id: id(11),
+                parentId: id(10),
+                relationship: MarkerLinkRelationshipValue(.challenges)
+            ),
+        ])
+
+        // Painted set still describes the FIRST thesis while the second is
+        // selected: no member of the second is visible, so no fade.
+        let stale = graph.focusState(selectedId: id(11), visibleIds: [id(1), id(2)])
+        #expect(stale.visibleMemberIds.isEmpty)
+        #expect(!stale.shouldFadeUnrelated)
+    }
+
     // MARK: - Fixture
 
     private static func marker(liked: Bool, vote: UUID?, likes: Int) -> RLChartMarkerDTO {

@@ -265,6 +265,11 @@ class MarkerManager: ObservableObject {
             // it is recomputed here rather than at every call site that can
             // change the selection.
             guard oldValue?.id != selectedMarker?.id else { return }
+            // Painted members describe the *previous* thesis until the next
+            // frame reports. Carrying them into a new selection would derive
+            // focus from the wrong set — and the fade latch would then hold
+            // that wrong answer for the life of the selection.
+            renderedMarkerIds = nil
             refreshLinkFocus()
         }
     }
@@ -337,15 +342,20 @@ class MarkerManager: ObservableObject {
     /// must not throw away a cache that was just populated.
     private var hasConnectedRealTimeOnce = false
 
-    /// Markers the renderer actually painted, reported back after viewport
-    /// culling. Nil before the first frame, when `filteredMarkers` is the best
-    /// available answer.
+    /// Thesis members the renderer actually painted, reported after viewport
+    /// culling.
+    ///
+    /// Deliberately members only, not every painted marker: the fade rule asks
+    /// how many *related* glyphs are visible, so anything else would be
+    /// collected and compared for nothing on the pan path. Nil before the first
+    /// focused frame, when `filteredMarkers` is the best available answer.
     private(set) var renderedMarkerIds: Set<UUID>?
 
-    /// Called by the chart once per frame with what it drew.
+    /// Called by the chart when the painted member set changes.
     ///
-    /// Only a *change* re-derives focus: this runs every frame, and rebuilding
-    /// the graph each time would put the whole link topology on the pan path.
+    /// The renderer only calls this on an actual change, and this guards again:
+    /// re-deriving focus rebuilds the whole link topology, which must never sit
+    /// on the pan path.
     func reportRenderedMarkers(_ ids: Set<UUID>) {
         guard renderedMarkerIds != ids else { return }
         renderedMarkerIds = ids
@@ -2758,9 +2768,20 @@ struct ChartMarkerSystem {
         // What was actually painted this frame, after viewport culling. The
         // fade rule needs this rather than the loaded set: a member scrolled a
         // thousand candles away is not a visible companion.
-        if let markerManager {
-            let painted = Set(renderQueue.map(\.marker.id))
-            Task { @MainActor in markerManager.reportRenderedMarkers(painted) }
+        //
+        // Cost is kept off the pan path deliberately. Nothing happens unless a
+        // thesis is focused; only *members* are collected, which is a handful
+        // rather than every marker on screen; and the result is compared against
+        // what the manager already derived, so the steady state — panning with a
+        // stable set of members visible — allocates no Task at all.
+        if let linkRender, let markerManager {
+            var paintedMembers: Set<UUID> = []
+            for rendered in renderQueue where linkRender.focus.memberIds.contains(rendered.marker.id) {
+                paintedMembers.insert(rendered.marker.id)
+            }
+            if paintedMembers != linkRender.focus.visibleMemberIds {
+                Task { @MainActor in markerManager.reportRenderedMarkers(paintedMembers) }
+            }
         }
 
         let glyphQueue = renderQueue.sorted {
