@@ -119,6 +119,7 @@ struct MarkerLinkRelationshipPicker: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(relationship.accentColor)
                             .frame(width: 28)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(relationship.displayName)
                                 .font(.subheadline.weight(.semibold))
@@ -196,6 +197,7 @@ struct MarkerLinkRelationshipRow: View {
                 Image(systemName: relationship?.icon ?? "link")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(sentence)
@@ -220,6 +222,7 @@ struct MarkerLinkRelationshipRow: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(AppColors.greyText)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.vertical, 8)
@@ -283,11 +286,13 @@ struct MarkerThreadRowView: View {
                     .font(.system(size: 16))
                     .foregroundColor(AppColors.greyText)
                     .frame(width: 26, height: 26)
+                    .accessibilityHidden(true)
             } else {
                 UnifiedMarkerBadge(
                     intent: row.node.intentEnum ?? .analysis,
                     size: 26
                 )
+                .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -389,6 +394,7 @@ struct MarkerLinkPlacementBanner: View {
                 Image(systemName: context.relationship.icon)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(context.relationship.accentColor)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(context.bannerSentence)
