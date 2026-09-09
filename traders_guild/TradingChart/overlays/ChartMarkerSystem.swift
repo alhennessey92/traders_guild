@@ -337,6 +337,21 @@ class MarkerManager: ObservableObject {
     /// must not throw away a cache that was just populated.
     private var hasConnectedRealTimeOnce = false
 
+    /// Markers the renderer actually painted, reported back after viewport
+    /// culling. Nil before the first frame, when `filteredMarkers` is the best
+    /// available answer.
+    private(set) var renderedMarkerIds: Set<UUID>?
+
+    /// Called by the chart once per frame with what it drew.
+    ///
+    /// Only a *change* re-derives focus: this runs every frame, and rebuilding
+    /// the graph each time would put the whole link topology on the pan path.
+    func reportRenderedMarkers(_ ids: Set<UUID>) {
+        guard renderedMarkerIds != ids else { return }
+        renderedMarkerIds = ids
+        refreshLinkFocus()
+    }
+
 
     private var currentUserId: UUID
     private var currentGuildId: UUID
@@ -774,6 +789,31 @@ class MarkerManager: ObservableObject {
             return
         }
         threadStore?.invalidateAll(reason: .reconnect)
+        // Counts observed before the socket dropped may have moved while it was
+        // down, and nothing will re-announce them. The loaded chart is
+        // refreshed from the server rather than trusted.
+        responseCounts.removeAll()
+        Task { @MainActor [weak self] in
+            await self?.refreshMarkersAfterReconnect()
+        }
+    }
+
+    /// Re-read the current chart's markers so counts reflect what was missed.
+    @MainActor
+    private func refreshMarkersAfterReconnect() async {
+        guard let api,
+              let symbolId = currentSymbolId,
+              let timeframe = currentTimeframe,
+              let candles = dataManager?.candles,
+              !candles.isEmpty else { return }
+        await loadMarkersFromAPI(
+            api: api,
+            symbolId: symbolId,
+            symbol: "",
+            guildId: currentGuildId,
+            timeframe: timeframe,
+            candles: candles
+        )
     }
 
     private func subscribeToMarkerChannel(guildId: UUID) {
@@ -824,6 +864,9 @@ class MarkerManager: ObservableObject {
         // parent the viewer is looking at here, and every guard below would
         // otherwise discard that correction.
         applyLinkCounts(from: markerDTO)
+        // A new response changes how the server would render its thesis —
+        // including branches not yet loaded — so the cached window is dropped.
+        invalidateThreadsTouched(by: markerDTO)
 
         guard canRenderMarker(markerDTO) else { return }
 
@@ -859,6 +902,12 @@ class MarkerManager: ObservableObject {
 
     private func handleMarkerUpdated(_ message: WSIncomingMessage) {
         guard let markerDTO = message.payload(as: RLChartMarkerDTO.self) else { return }
+
+        // Counts ride on updates too, not only creations, and are absolute — so
+        // they are applied before any render guard can discard the payload.
+        applyLinkCounts(from: markerDTO)
+        invalidateThreadsTouched(by: markerDTO)
+
         guard canRenderMarker(markerDTO) else {
             let markerId = markerDTO.id
             markers.removeAll { $0.id == markerId }
@@ -2704,6 +2753,14 @@ struct ChartMarkerSystem {
                 plan: plan,
                 revealProgress: linkRender.revealProgress
             )
+        }
+
+        // What was actually painted this frame, after viewport culling. The
+        // fade rule needs this rather than the loaded set: a member scrolled a
+        // thousand candles away is not a visible companion.
+        if let markerManager {
+            let painted = Set(renderQueue.map(\.marker.id))
+            Task { @MainActor in markerManager.reportRenderedMarkers(painted) }
         }
 
         let glyphQueue = renderQueue.sorted {

@@ -170,7 +170,7 @@ struct MarkerLinkReviewFixTests {
                 branches: [RLMarkerThreadBranchDTO(nodeKey: "root", cursor: "b1")]
             )
         )
-        #expect(window.branchCursor(for: "root") == "b1")
+        #expect(window.branchCursor(for: "root")?.cursor == "b1")
 
         window.merge(
             page: page(
@@ -213,7 +213,7 @@ struct MarkerLinkReviewFixTests {
             ),
             consumedBranchKey: "root"
         )
-        #expect(window.branchCursor(for: "root") == "b2")
+        #expect(window.branchCursor(for: "root")?.cursor == "b2")
     }
 
     /// A page that was not fetched by spending a cursor must not retire one.
@@ -231,7 +231,7 @@ struct MarkerLinkReviewFixTests {
         window.merge(
             page: page(requested: 1, windowRoot: "up", nodes: [node("up", marker: 99, responses: 1)])
         )
-        #expect(window.branchCursor(for: "root") == "b1")
+        #expect(window.branchCursor(for: "root")?.cursor == "b1")
     }
 
     // MARK: - (1) Failure classification

@@ -152,7 +152,7 @@ struct MarkerLinkRelationshipRow: View {
     /// is gone. Never invents a name for a marker it cannot see.
     private var sentence: String {
         let name = relationship?.displayName ?? "Linked to"
-        guard !isUnavailable else { return "\(name) a removed marker" }
+        guard !isUnavailable else { return "\(name) an unavailable marker" }
         guard let subject = preview?.possessiveSummary else { return "\(name) another marker" }
         return "\(name) \(subject)"
     }
@@ -181,7 +181,7 @@ struct MarkerLinkRelationshipRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if isUnavailable {
-                        Text("The marker this answers is no longer available")
+                        Text("The marker this answers isn't available to you")
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText)
                     } else if preview == nil {
@@ -269,7 +269,7 @@ struct MarkerThreadRowView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 if row.node.isUnavailable {
-                    Text("Removed marker")
+                    Text("Unavailable marker")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.greyText)
                 } else {
@@ -340,7 +340,7 @@ struct MarkerThreadRowView: View {
     /// Relationship is spoken, never carried by colour alone.
     private var accessibilityText: String {
         if row.node.isUnavailable {
-            return "Removed marker, depth \(row.depth)"
+            return "Unavailable marker, depth \(row.depth)"
         }
         var parts: [String] = []
         if let relationship { parts.append(relationship.displayName) }

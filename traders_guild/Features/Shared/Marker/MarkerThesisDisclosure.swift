@@ -143,7 +143,9 @@ final class MarkerThreadLoader: ObservableObject {
             guard let self else { return }
             do {
                 let page = try await manager.fetchThreadPage(markerId: markerId, cursor: nil)
-                guard !Task.isCancelled, self.markerId == markerId else { return }
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
                 // The store refuses a page from a superseded generation, so an
                 // invalidation that landed while this was in flight wins.
                 let key = store.ingest(
@@ -157,15 +159,37 @@ final class MarkerThreadLoader: ObservableObject {
                 }
                 self.adopt(merged)
             } catch {
-                guard !Task.isCancelled, self.markerId == markerId else { return }
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
                 switch MarkerThreadRequestFailure.classify(error) {
                 case .unavailable:
                     self.state = .unavailable
                 default:
+                    // Retriable, including an initial 409: the disclosure offers
+                    // a Retry action for this state.
                     self.state = .failed("Couldn't load this thesis.")
                 }
             }
         }
+    }
+
+    /// Drop every row and window this loader is holding.
+    ///
+    /// Called when the store's generation moves — a block, a report, a
+    /// moderation action, a reconnect. Content already on screen was authorised
+    /// under the previous generation, so it is cleared immediately rather than
+    /// left visible until the next reload.
+    func clearForInvalidation() {
+        cancelAllRequests()
+        rows = []
+        window = nil
+        state = .idle
+        generation = -1
+        expandingNodeKeys.removeAll()
+        isLoadingAncestry = false
+        branchFailures.removeAll()
+        ancestryFailure = nil
     }
 
     // No explicit reset for a capability flip: switching the feature off hides
@@ -194,12 +218,27 @@ final class MarkerThreadLoader: ObservableObject {
 
         let task = Task { [weak self] in
             guard let self else { return }
-            defer { self.expandingNodeKeys.remove(nodeKey) }
+            // Even the cleanup is guarded: a task that outlived its selection
+            // or generation must not touch newer loader state on its way out.
+            defer {
+                if self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) {
+                    self.expandingNodeKeys.remove(nodeKey)
+                }
+            }
             do {
-                let page = try await manager.fetchThreadPage(markerId: markerId, cursor: cursor)
-                // Identity as well as generation: a page for a marker the user
-                // has already left must never mutate the current selection.
-                guard !Task.isCancelled, self.markerId == markerId else { return }
+                // Fetched against the marker the cursor was ISSUED for, not the
+                // one currently selected. Cursors are encrypted and bound to
+                // their issuing `requested_marker_id`, so replaying one against
+                // a marker reached by navigating within the thesis 409s.
+                let page = try await manager.fetchThreadPage(
+                    markerId: cursor.issuedFor,
+                    cursor: cursor.cursor
+                )
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
+                // Ingested under the SELECTED marker's identity: provenance
+                // governs the fetch, selection governs the cache entry.
                 let key = store.ingest(
                     page: page,
                     requestedMarkerId: markerId,
@@ -210,18 +249,32 @@ final class MarkerThreadLoader: ObservableObject {
                 self.adopt(merged)
                 self.branchFailures[nodeKey] = nil
             } catch {
-                guard !Task.isCancelled, self.markerId == markerId else { return }
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
                 self.handleBranchFailure(
                     error,
                     nodeKey: nodeKey,
                     markerId: markerId,
                     manager: manager,
-                    store: store,
-                    requestGeneration: requestGeneration
+                    store: store
                 )
             }
         }
         branchTasks[nodeKey] = task
+    }
+
+    /// True only while this loader still belongs to the marker and generation a
+    /// request was issued under.
+    ///
+    /// Cancellation alone is not enough: a task can complete between the store
+    /// being invalidated and the loader being torn down, and a stale *failure*
+    /// could otherwise retire a cursor or overwrite a newer loader's state.
+    private func isCurrent(markerId: UUID, generation requestGeneration: Int, store: MarkerThreadStore) -> Bool {
+        !Task.isCancelled
+            && self.markerId == markerId
+            && store.generation == requestGeneration
+            && self.generation == requestGeneration
     }
 
     private func handleBranchFailure(
@@ -229,8 +282,7 @@ final class MarkerThreadLoader: ObservableObject {
         nodeKey: String,
         markerId: UUID,
         manager: MarkerManager,
-        store: MarkerThreadStore,
-        requestGeneration: Int
+        store: MarkerThreadStore
     ) {
         switch MarkerThreadRequestFailure.classify(error) {
         case .staleCursor:
@@ -245,15 +297,16 @@ final class MarkerThreadLoader: ObservableObject {
             load(markerId: markerId, manager: manager, store: store, force: true)
 
         case .gone:
-            // The branch really is unreachable; stop offering a button that
-            // can only ever fail.
+            // The issuing marker was hard-deleted while paging, or the branch is
+            // genuinely unreachable. Either way a re-read from the selected
+            // marker is the safe recovery: it re-issues cursors bound to a
+            // marker that still exists.
             store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
-            if let merged = store.window(forMarkerId: markerId) {
-                adopt(merged)
-            }
+            branchFailures[nodeKey] = nil
+            load(markerId: markerId, manager: manager, store: store, force: true)
 
         case .unavailable:
-            branchFailures[nodeKey] = "Not available right now."
+            branchFailures[nodeKey] = "Linked markers are temporarily unavailable."
 
         case .transient:
             // Cursor deliberately preserved: offline, timeout, 5xx and rate
@@ -274,10 +327,21 @@ final class MarkerThreadLoader: ObservableObject {
 
         ancestryTask = Task { [weak self] in
             guard let self else { return }
-            defer { self.isLoadingAncestry = false }
+            defer {
+                if self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) {
+                    self.isLoadingAncestry = false
+                }
+            }
             do {
-                let page = try await manager.fetchThreadPage(markerId: markerId, cursor: cursor)
-                guard !Task.isCancelled, self.markerId == markerId else { return }
+                // Same provenance rule as branches: the ancestry cursor belongs
+                // to the marker whose response minted it.
+                let page = try await manager.fetchThreadPage(
+                    markerId: cursor.issuedFor,
+                    cursor: cursor.cursor
+                )
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
                 let key = store.ingest(
                     page: page,
                     requestedMarkerId: markerId,
@@ -287,9 +351,22 @@ final class MarkerThreadLoader: ObservableObject {
                 self.adopt(merged)
                 self.ancestryFailure = nil
             } catch {
-                guard !Task.isCancelled, self.markerId == markerId else { return }
-                // The ancestor cursor is untouched, so this stays retryable.
-                self.ancestryFailure = "Couldn't load earlier responses."
+                guard self.isCurrent(markerId: markerId, generation: requestGeneration, store: store) else {
+                    return
+                }
+                // Ancestry needs the same classification as branches: treating
+                // every failure as transient left a stale 409 cursor retrying
+                // forever against a cursor the server will never accept again.
+                switch MarkerThreadRequestFailure.classify(error) {
+                case .staleCursor, .gone:
+                    self.ancestryFailure = nil
+                    self.load(markerId: markerId, manager: manager, store: store, force: true)
+                case .unavailable:
+                    self.ancestryFailure = "Linked markers are temporarily unavailable."
+                case .transient:
+                    // The cursor is untouched, so this stays retryable.
+                    self.ancestryFailure = "Couldn't load earlier responses."
+                }
             }
         }
     }
@@ -353,9 +430,9 @@ struct MarkerThesisDisclosure: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 12)
                 case .unavailable:
-                    message("Linked markers aren't available yet.")
+                    message("Linked markers are temporarily unavailable.")
                 case .failed(let text):
-                    message(text)
+                    retry(text)
                 case .loaded:
                     threadList
                 }
@@ -373,6 +450,15 @@ struct MarkerThesisDisclosure: View {
         .onAppear {
             isExpanded = store.isExpanded(forMarkerId: marker.id)
             if isExpanded { loader.load(markerId: marker.id, manager: markerManager, store: store) }
+        }
+        .onChange(of: store.generation) { _, _ in
+            // Privacy, moderation and reconnect all advance the generation.
+            // Anything held here was authorised under the old one, so it goes
+            // immediately; if the section is open it re-reads under the new one.
+            loader.clearForInvalidation()
+            if isExpanded {
+                loader.load(markerId: marker.id, manager: markerManager, store: store)
+            }
         }
         .onChange(of: marker.id) { _, newId in
             // Moving within the same thesis keeps the disclosure open; leaving
@@ -484,6 +570,27 @@ struct MarkerThesisDisclosure: View {
                     .padding(.top, 6)
             }
         }
+    }
+
+    /// A failed initial load is retriable — including an initial 409, which a
+    /// re-read resolves by re-issuing cursors.
+    private func retry(_ text: String) -> some View {
+        Button {
+            loader.load(markerId: marker.id, manager: markerManager, store: store, force: true)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("\(text) Tap to retry.")
+                    .font(.caption)
+                    .multilineTextAlignment(.leading)
+            }
+            .foregroundColor(AppColors.statusWarning)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(text) Tap to retry.")
     }
 
     private func message(_ text: String) -> some View {

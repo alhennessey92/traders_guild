@@ -287,6 +287,6 @@ struct MarkerLinkUnavailableError: LocalizedError, Equatable {
     static let detail = "linked_markers_unavailable"
 
     var errorDescription: String? {
-        "Linked markers aren't available yet."
+        "Linked markers are temporarily unavailable."
     }
 }

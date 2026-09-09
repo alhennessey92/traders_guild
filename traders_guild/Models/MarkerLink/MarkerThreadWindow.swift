@@ -23,6 +23,19 @@ enum MarkerThreadCompleteness: Equatable {
     case complete
 }
 
+/// A resumable cursor together with the marker whose request issued it.
+///
+/// Backend cursors are encrypted and bound to the `requested_marker_id` they
+/// were minted for. A window accumulates cursors from several requests — an
+/// initial load here, a branch page there, and more still after two windows for
+/// one thesis are merged — so replaying one against whichever marker happens to
+/// be selected now returns 409. Provenance travels with the cursor.
+struct MarkerThreadCursor: Equatable, Hashable {
+    let cursor: String
+    /// The `requested_marker_id` of the response that issued this cursor.
+    let issuedFor: UUID
+}
+
 /// A count the UI may render. `atLeast` must be shown with a "+" or equivalent.
 enum MarkerThreadCount: Equatable {
     case exact(Int)
@@ -88,8 +101,8 @@ struct MarkerThreadWindow: Equatable {
     private(set) var childKeysByParent: [String: [String]]
     private(set) var orphanRootKeys: [String]
 
-    private(set) var ancestorCursor: String?
-    private(set) var branchCursors: [String: String]
+    private(set) var ancestorCursor: MarkerThreadCursor?
+    private(set) var branchCursors: [String: MarkerThreadCursor]
     private(set) var serverTotalCount: Int?
     private(set) var truncated: Bool
 
@@ -158,8 +171,11 @@ struct MarkerThreadWindow: Equatable {
         // page that actually carried ancestry (one whose nodes include the
         // current window root's parent chain) — otherwise a branch page would
         // falsely declare ancestry complete.
-        if page.ancestorCursor != nil {
-            ancestorCursor = page.ancestorCursor
+        //
+        // The issuing marker is taken from the page, not from whatever is
+        // selected: that is what the server bound the cursor to.
+        if let cursor = page.ancestorCursor {
+            ancestorCursor = MarkerThreadCursor(cursor: cursor, issuedFor: page.requestedMarkerId)
         } else if pageCarriesAncestry(page) {
             ancestorCursor = nil
         }
@@ -168,7 +184,10 @@ struct MarkerThreadWindow: Equatable {
         // *remaining* siblings, not the whole set.
         let returnedKeys = Set(page.branches.map(\.nodeKey))
         for branch in page.branches {
-            branchCursors[branch.nodeKey] = branch.cursor
+            branchCursors[branch.nodeKey] = MarkerThreadCursor(
+                cursor: branch.cursor,
+                issuedFor: page.requestedMarkerId
+            )
         }
 
         // Exhaustion is decided by consumed-branch identity alone. If this page
@@ -236,6 +255,8 @@ struct MarkerThreadWindow: Equatable {
                 continue
             }
             guard mine != cursor else { continue }
+            // Whichever is kept keeps its own provenance with it — a cursor
+            // and the marker it was minted for are inseparable.
             let myProgress = childKeysByParent[nodeKey]?.count ?? 0
             let theirProgress = other.childKeysByParent[nodeKey]?.count ?? 0
             if theirProgress < myProgress {
@@ -474,7 +495,7 @@ struct MarkerThreadWindow: Equatable {
     }
 
     /// Cursor for continuing a specific branch, if one is outstanding.
-    func branchCursor(for nodeKey: String) -> String? {
+    func branchCursor(for nodeKey: String) -> MarkerThreadCursor? {
         branchCursors[nodeKey]
     }
 }

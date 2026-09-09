@@ -295,7 +295,7 @@ struct MarkerThreadWindowTests {
                 branches: [RLMarkerThreadBranchDTO(nodeKey: "a", cursor: "page-1")]
             )
         )
-        #expect(window.branchCursor(for: "a") == "page-1")
+        #expect(window.branchCursor(for: "a")?.cursor == "page-1")
         #expect(window.hasMoreBranches)
 
         // First continuation delivers one of two children and a replacement cursor.
@@ -308,7 +308,7 @@ struct MarkerThreadWindowTests {
             ),
             consumedBranchKey: "a"
         )
-        #expect(window.branchCursor(for: "a") == "page-2", "a replacement cursor means remaining siblings")
+        #expect(window.branchCursor(for: "a")?.cursor == "page-2", "a replacement cursor means remaining siblings")
 
         // Final continuation delivers the rest and omits the cursor. Retirement
         // is decided by the consumed branch's identity, not by comparing row

@@ -55,26 +55,31 @@ struct MarkerRevision: Comparable, Hashable, Codable, CustomStringConvertible {
     /// every Foundation formatter on this path rounds to milliseconds.
     init?(wire raw: String) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
+        guard !text.isEmpty, text.count <= 64 else { return nil }
 
-        // Split date and time on the designator.
         let parts = text.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2 else { return nil }
 
+        // Date. Bounded to the year range Python's datetime can express, so the
+        // arithmetic below cannot overflow on a hostile or corrupt value.
         let dateComponents = parts[0].split(separator: "-", omittingEmptySubsequences: false)
         guard dateComponents.count == 3,
+              dateComponents.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
               let year = Int(dateComponents[0]),
               let month = Int(dateComponents[1]),
               let day = Int(dateComponents[2]),
+              (1...9999).contains(year),
               (1...12).contains(month),
-              (1...31).contains(day) else {
+              day >= 1,
+              day <= Self.daysInMonth(year: year, month: month) else {
             return nil
         }
 
         var timeText = String(parts[1])
         var offsetSeconds = 0
 
-        // Trailing zone: `Z`, `+HH:MM`, `-HHMM`, or absent (treated as UTC).
+        // Zone: `Z`, `+HH:MM` / `-HHMM`, or absent (UTC). A missing zone is the
+        // only case allowed to default; anything malformed is rejected.
         if timeText.hasSuffix("Z") || timeText.hasSuffix("z") {
             timeText.removeLast()
         } else if let signIndex = timeText.lastIndex(where: { $0 == "+" || $0 == "-" }),
@@ -82,34 +87,56 @@ struct MarkerRevision: Comparable, Hashable, Codable, CustomStringConvertible {
             let zone = String(timeText[timeText.index(after: signIndex)...])
             let sign = timeText[signIndex] == "-" ? -1 : 1
             let digits = zone.replacingOccurrences(of: ":", with: "")
-            guard digits.count == 4 || digits.count == 2,
-                  let hours = Int(digits.prefix(2)) else { return nil }
-            let minutes = digits.count == 4 ? Int(digits.suffix(2)) ?? 0 : 0
+            guard digits.allSatisfy(\.isNumber),
+                  digits.count == 4 || digits.count == 2,
+                  let hours = Int(digits.prefix(2)),
+                  (0...23).contains(hours) else {
+                return nil
+            }
+            let minutes: Int
+            if digits.count == 4 {
+                guard let parsed = Int(digits.suffix(2)), (0...59).contains(parsed) else { return nil }
+                minutes = parsed
+            } else {
+                minutes = 0
+            }
             offsetSeconds = sign * (hours * 3600 + minutes * 60)
             timeText = String(timeText[..<signIndex])
         }
 
-        // Fractional part, kept as digits so it can be scaled exactly.
+        // Fraction, kept as digits so it scales exactly.
         var fractionDigits = ""
         if let dot = timeText.firstIndex(of: ".") {
             fractionDigits = String(timeText[timeText.index(after: dot)...])
             timeText = String(timeText[..<dot])
-            guard fractionDigits.allSatisfy(\.isNumber) else { return nil }
+            guard !fractionDigits.isEmpty,
+                  fractionDigits.count <= 12,
+                  fractionDigits.allSatisfy(\.isNumber) else {
+                return nil
+            }
         }
 
+        // Clock. Every component must be present, numeric and in range —
+        // nothing silently defaults to zero, and a fourth component is a
+        // malformed value rather than something to ignore.
         let clock = timeText.split(separator: ":", omittingEmptySubsequences: false)
-        guard clock.count >= 2,
+        guard clock.count == 2 || clock.count == 3,
+              clock.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
               let hour = Int(clock[0]),
-              let minute = Int(clock[1]) else {
+              let minute = Int(clock[1]),
+              (0...23).contains(hour),
+              (0...59).contains(minute) else {
             return nil
         }
-        let second = clock.count > 2 ? Int(clock[2]) ?? 0 : 0
-        guard (0...23).contains(hour), (0...59).contains(minute), (0...60).contains(second) else {
-            return nil
+        let second: Int
+        if clock.count == 3 {
+            guard let parsed = Int(clock[2]), (0...60).contains(parsed) else { return nil }
+            second = parsed
+        } else {
+            second = 0
         }
 
-        // Pad or truncate to exactly six digits of microseconds. Truncation
-        // only ever discards precision finer than the backend emits.
+        // Pad or truncate to exactly six digits of microseconds.
         let normalizedFraction = String((fractionDigits + "000000").prefix(6))
         guard let microsecondPart = Int64(normalizedFraction) else { return nil }
 
@@ -117,8 +144,28 @@ struct MarkerRevision: Comparable, Hashable, Codable, CustomStringConvertible {
         let secondsOfDay = Int64(hour * 3600 + minute * 60 + second - offsetSeconds)
         let totalSeconds = days * 86_400 + secondsOfDay
 
-        microsecondsSinceEpoch = totalSeconds * 1_000_000 + microsecondPart
+        // Bounded inputs make this safe, but the multiply is still checked
+        // rather than trusted: a trap here would take the app down.
+        let (scaled, overflow) = totalSeconds.multipliedReportingOverflow(by: 1_000_000)
+        guard !overflow else { return nil }
+        let (total, addOverflow) = scaled.addingReportingOverflow(microsecondPart)
+        guard !addOverflow else { return nil }
+
+        microsecondsSinceEpoch = total
         wireText = text
+    }
+
+    /// Length of a month in the proleptic Gregorian calendar, so 31 February is
+    /// rejected rather than normalised into March.
+    static func daysInMonth(year: Int, month: Int) -> Int {
+        switch month {
+        case 1, 3, 5, 7, 8, 10, 12: return 31
+        case 4, 6, 9, 11: return 30
+        case 2:
+            let isLeap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+            return isLeap ? 29 : 28
+        default: return 0
+        }
     }
 
     /// Days from 1970-01-01 for a proleptic Gregorian date.

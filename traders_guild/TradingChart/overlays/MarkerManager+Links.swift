@@ -15,8 +15,15 @@ extension MarkerManager {
     /// Markers currently eligible to be drawn — already through the intent and
     /// visibility-mode filters. Viewport culling happens later in the renderer,
     /// so this is the widest honest definition of "on screen".
+    /// Markers the renderer actually painted this frame.
+    ///
+    /// Set by the chart after viewport culling. The fade rule asks whether at
+    /// least two members of the thesis are *visible*, and `filteredMarkers`
+    /// answers a different question — it includes markers scrolled far off
+    /// screen, so the rule would dim the chart around a lone glyph whose only
+    /// companion is a thousand candles away.
     var focusVisibleIds: Set<UUID> {
-        Set(filteredMarkers.map(\.id))
+        renderedMarkerIds ?? Set(filteredMarkers.map(\.id))
     }
 
     var linkGraph: MarkerLinkGraph {
@@ -74,6 +81,10 @@ extension MarkerManager {
     /// handlers: a response placed on the 1h chart still changes the badge on a
     /// parent the viewer is looking at on the 5m chart, and an early return
     /// would drop that correction entirely.
+    /// Absolute counts ride on every marker payload, not just creations.
+    ///
+    /// `marker_updated`, tracking snapshots and list hydration all carry them,
+    /// and skipping those paths left a badge stale until the next create.
     func applyLinkCounts(from dto: RLChartMarkerDTO) {
         if let parentUpdate = dto.parentCountUpdate {
             applyResponseCount(parentUpdate)
@@ -151,6 +162,33 @@ extension MarkerManager {
         }
     }
 
+    /// Conservative partial invalidation for a marker event.
+    ///
+    /// A created or updated marker changes a thesis the viewer may be reading —
+    /// including branches not yet loaded, whose counts and tombstones the server
+    /// would now render differently. The thesis containing either the marker or
+    /// its parent is dropped; unrelated theses are untouched.
+    func invalidateThreadsTouched(by dto: RLChartMarkerDTO) {
+        guard let store = threadStore else { return }
+        store.invalidateThesis(containing: dto.id)
+        if let parentId = dto.parentMarkerId {
+            store.invalidateThesis(containing: parentId)
+        }
+    }
+
+    /// Merge a broadcast marker without losing this viewer's own state.
+    ///
+    /// Broadcast payloads are actor-neutral, so their engagement and permission
+    /// flags describe nobody in particular. Replacing a loaded marker wholesale
+    /// would clear the viewer's own like and poll vote. The backend also
+    /// personalises per recipient, but this build must not depend on that.
+    func neutralMerge(_ incoming: RLChartMarkerDTO, into existing: RLChartMarkerDTO) -> RLChartMarkerDTO {
+        incoming.updating(
+            isLikedByCurrentUser: existing.isLikedByCurrentUser,
+            userPollVote: existing.userPollVote
+        )
+    }
+
     // MARK: - Pending navigation
 
     /// Re-select a marker the user travelled to, once it has actually loaded.
@@ -164,8 +202,14 @@ extension MarkerManager {
         guard linkedMarkersEnabled, let store = threadStore else { return }
         guard let pending = store.consumePendingNavigation() else { return }
         guard let marker = markers.first(where: { $0.id == pending.markerId }) else {
-            // Not loaded yet — put it back for the next load to pick up.
-            store.stagePendingNavigation(markerId: pending.markerId)
+            // Not loaded yet — put it back, carrying the ORIGINAL instant.
+            // Consuming then re-staging with a fresh timestamp would restart the
+            // expiry clock on every load and let an unreachable target wait
+            // indefinitely, then hijack a much later selection.
+            store.stagePendingNavigation(
+                markerId: pending.markerId,
+                preservingStagedAt: pending.stagedAt
+            )
             return
         }
         selectedMarker = marker

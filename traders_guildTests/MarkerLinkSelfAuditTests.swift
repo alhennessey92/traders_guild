@@ -86,7 +86,7 @@ struct MarkerLinkSelfAuditTests {
 
         let first = store.window(forMarkerId: id(2))
         #expect(first?.loadedCount == 3)
-        #expect(first?.branchCursor(for: "c") == "c-page-1")
+        #expect(first?.branchCursor(for: "c")?.cursor == "c-page-1")
 
         // Reader now opens response 9, which was in an unpaged branch and so
         // is not indexed. It arrives as its own window, resolving the same root.
@@ -108,7 +108,7 @@ struct MarkerLinkSelfAuditTests {
         let merged = store.window(forMarkerId: id(9))
         #expect(merged != nil)
         #expect(
-            merged?.branchCursor(for: "c") == "c-page-1",
+            merged?.branchCursor(for: "c")?.cursor == "c-page-1",
             "the first window's live branch cursor must survive the second promotion"
         )
         #expect(
@@ -150,7 +150,7 @@ struct MarkerLinkSelfAuditTests {
         )
 
         advanced.absorb(behind)
-        #expect(advanced.branchCursor(for: "root") == "page-1")
+        #expect(advanced.branchCursor(for: "root")?.cursor == "page-1")
     }
 
     /// Absorbing must not claim ancestry is settled when the other window knows

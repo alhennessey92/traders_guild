@@ -279,8 +279,18 @@ final class MarkerThreadStore: ObservableObject {
     /// `stagedAt` is preserved across re-staging so the expiry measures from
     /// the user's original tap, not from the last load attempt; otherwise a
     /// target that never arrives would renew itself forever.
-    func stagePendingNavigation(markerId: UUID, now: Date = Date()) {
+    /// - Parameter preservingStagedAt: the instant an earlier token for this
+    ///   same target was created. The restore loop *consumes* the token before
+    ///   re-staging, so without this the expiry clock restarts on every attempt
+    ///   and an unreachable target renews itself forever — the exact loop the
+    ///   expiry was added to stop.
+    func stagePendingNavigation(
+        markerId: UUID,
+        now: Date = Date(),
+        preservingStagedAt earlier: Date? = nil
+    ) {
         let stagedAt: Date = {
+            if let earlier { return earlier }
             if let existing = pendingNavigation, existing.markerId == markerId {
                 return existing.stagedAt
             }
