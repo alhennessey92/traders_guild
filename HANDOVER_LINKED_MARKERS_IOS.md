@@ -337,6 +337,21 @@ Four baselines, each **built and run**, not merely identified:
 | `linked-markers-android-compat` | Android `c296316` — 1.2.1 code 17, withheld | 9 tests, 0 failures |
 | `linked-markers-android-117-compat` | Android `acc2a30` — 1.1.7 code 5, **debut Play release** | 7 tests, 0 failures |
 
+### These four suites depend on the backend worktree
+
+All four read the seven wire fixtures from
+`.worktrees/linked-markers-backend/services/chart-service/tests/fixtures/linked_markers/`
+by a path relative to the test file. Nothing copies them, so the fixtures stay
+the single source of truth and cannot silently drift from the backend.
+
+**All four fail — deliberately — when a fixture is missing.** They do not skip.
+A compatibility suite that skips still reports success, which is the same
+vacuous pass the 1.1.8 target produced by running nothing at all. So if that
+backend worktree is moved or removed, these suites go red on purpose: the
+message names the expected directory. Restore the worktree, or regenerate the
+fixtures with the backend smoke runner, rather than reading it as a regression
+in the baseline under test.
+
 Testing the older baselines separately was justified, not ceremonial:
 
 - **iOS 1.1.8** does not have `RLPushNotificationTapPayload.markerGuildId`, and
