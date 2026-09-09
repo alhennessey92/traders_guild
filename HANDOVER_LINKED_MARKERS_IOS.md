@@ -410,11 +410,51 @@ indistinguishable from an ordinary marker until tapped.
 **Cross-timeframe.** Tapping the root (1h) from the 4h chart switched the chart
 to 1h and carried the selection across.
 
-**Not proven here:** the wide thesis's branch continuation was exercised over
-HTTP (200 nodes + `truncated`, then a 27-node branch page) but not through the
-UI list; and a branch cursor replayed against a different marker returned
-`409 marker_thread_refresh_required`, confirming provenance binding on this
-fixture too.
+**Wide thesis: still not walked in the UI, and now known to be blocked.** Its
+branch continuation is proven over HTTP (200 nodes + `truncated`, then a
+27-node branch page) and at the call site by the spy tests, but the chart
+cannot be driven to it: the wide root is the oldest row by `created_at`, so it
+sits on marker-list page 3, and every page after the first 500s on the
+`dateutil` defect above. A branch cursor replayed against a different marker
+still returned `409 marker_thread_refresh_required`, confirming provenance
+binding on this fixture too.
+
+Worth noting the thread endpoint is unaffected — it paginates correctly, which
+is why the 81-node ancestry walk succeeded. The break is in the *marker list*.
+
+---
+
+## Blocker found while attempting the wide-thesis UI walk (backend, not iOS)
+
+`chart-service` imports `python-dateutil` without declaring it. Every
+cursor-based page in that service therefore 500s:
+
+```
+File "/app/app/api/chart.py", line 2890, in get_markers
+    from dateutil.parser import isoparse
+ModuleNotFoundError: No module named 'dateutil'
+```
+
+Reproduced directly against the local gateway. `?timeframe=1h&limit=100`
+returns 200; add **any** `cursor` and it 500s — encoding, `+00:00` vs `Z`
+spelling and the time window make no difference.
+
+Not a deployment drift. The import is function-local at four sites in
+`services/chart-service/app/api/chart.py` — 2890 `get_markers`, 3040
+`get_marker_activity`, 3927 `get_marker_comments`, 4684
+`get_chart_chat_messages` — and `python-dateutil` appears in
+`market-ingestion-service/requirements.txt` only, never in
+`chart-service/requirements.txt`. It predates linked markers (`7476ec8`), and
+survived because a function-local import fires only on the cursor path, which
+no cursor-less request reaches.
+
+**This is not a QA-only problem.** Marker list paging is the first page plus a
+cursor, so any guild with more than 100 markers on one timeframe stops loading
+after page 1 in the shipped app, silently. Marker activity, marker comments and
+chart chat page the same way.
+
+Left untouched — the backend is yours. It is recorded here because it is the
+reason the wide-thesis UI walk below is incomplete.
 
 ---
 
