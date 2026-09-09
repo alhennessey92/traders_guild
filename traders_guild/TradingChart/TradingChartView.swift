@@ -3005,6 +3005,16 @@ struct TradingChartView: View {
         chartViewModel.markerManager = markerManager
         chartViewModel.observeMarkerSelection()
         markerManager.configureRealTime(dataManager: chartData)
+
+        // Capability and thesis cache are wired HERE, where the manager is
+        // guaranteed to exist. `chartViewModel.markerManager` is a weak,
+        // non-published var, so a view observing app state has no way to know
+        // when it appears: if the runtime flags arrive while it is still nil —
+        // which is the ordinary startup order — the capability is dropped
+        // silently and never re-applied, and focus never activates however
+        // many linked markers load.
+        markerManager.threadStore = rlAppState.markerThreadStore
+        markerManager.linkedMarkersEnabled = rlAppState.runtimeFlags.linkedMarkersEnabled
         isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

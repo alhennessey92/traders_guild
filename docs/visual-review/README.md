@@ -30,3 +30,27 @@ trip, server-authored node keys, live cursor pagination, or block enforcement.
   elements — unchanged from 1.2.1 — which is why the thesis list is the
   accessible path and must stay reachable without entering focus mode.
 - **No physical device and no Instruments run.** These are simulator captures.
+
+
+## Live backend E2E (2026-09-09)
+
+Driven against the local DEV gateway with the QA accounts. These are the real
+feature, real data — not fixtures.
+
+| File | What it shows |
+|---|---|
+| `07-live-backend-thesis-badges.png` | The QA thesis on 1H. Response-count badges on the left of each glyph carry real `direct_response_count` values; the root's "5" matched the API exactly |
+| `08-live-backend-focus.png` | Focus against live data: teal root ring on the selected marker, green `supports` ring above it, coloured dashed connectors routing left around the stack, unrelated markers dimmed |
+
+Verified in the same run, at API level:
+
+- create returns `parent_direct_response_count` and `parent_responses_revision`
+  **top-level**, advancing 3 → 4 → 5;
+- delete returns all six added fields beside the original `detail`, decrementing
+  4 → 3 → 2;
+- after teardown the thread reports `nodes=7, total_count=3` — four tombstones
+  excluded from the total, which is exactly what `activeLoadedCount` computes.
+
+Still not covered here: real opaque cursor pagination. Even with five responses
+the QA thesis fits in one window, so the server issued no branch cursors and the
+provenance path could not be exercised end to end. It is covered by unit tests.
