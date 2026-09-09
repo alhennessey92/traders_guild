@@ -174,6 +174,84 @@ final class MarkerThreadLoader: ObservableObject {
         }
     }
 
+    /// Re-read a thesis because the viewer explicitly asked to see it again.
+    ///
+    /// A reopen is not a walk. Walking inside an already-open thesis should
+    /// reuse the cache — that is what makes tapping through a thesis feel
+    /// instant. But reopening is the moment the viewer expects current truth,
+    /// and the cached fast path in `load` returns without going near the
+    /// server, so a node hidden since the last read would still be on screen.
+    ///
+    /// Forcing the request alone is not enough either: the fresh first page is
+    /// merged into whatever window is retained, and a merge can only add or
+    /// update nodes — it can never remove one that has become invisible and
+    /// happens to fall outside that page. So the window is discarded first and
+    /// rebuilt from the response.
+    ///
+    /// The current selection survives by construction: the request is anchored
+    /// on `markerId`, and a thread response always contains the marker it was
+    /// requested for, so the row the viewer is reading is in the fresh page or
+    /// the thesis is genuinely no longer visible to them.
+    func reopen(markerId: UUID, manager: MarkerManager, store: MarkerThreadStore) {
+        refreshAuthoritatively(markerId: markerId, manager: manager, store: store)
+    }
+
+    /// Throw away the cached topology and rebuild it from a fresh read.
+    ///
+    /// Shared by an explicit reopen and by structural paging failures, because
+    /// both are the same problem: the cached window may no longer describe the
+    /// thesis, and merging cannot fix it. `MarkerThreadWindow.insert` only ever
+    /// adds or replaces nodes, and the window root only ever moves *up* — so a
+    /// merge can raise a root but never lower one, and never removes an edge.
+    ///
+    /// That asymmetry is what makes force-loading insufficient. If an ancestor
+    /// was hard-deleted and the removal event never reached this viewer, the
+    /// branch detaches and the true root moves *down*. A fresh page merged into
+    /// the old nodes would keep the deleted ancestor, keep the edge pointing at
+    /// it, and render a thesis that no longer exists. Discarding first means the
+    /// response defines the topology, which is the only source that knows it.
+    ///
+    /// Selection is preserved, not nodes: the read is anchored on `markerId`, so
+    /// the marker being read about is in the fresh page by construction.
+    private func refreshAuthoritatively(
+        markerId: UUID,
+        manager: MarkerManager,
+        store: MarkerThreadStore
+    ) {
+        cancelAllRequests()
+        store.discardWindow(forMarkerId: markerId)
+        rows = []
+        window = nil
+        state = .idle
+        expandingNodeKeys.removeAll()
+        isLoadingAncestry = false
+        branchFailures.removeAll()
+        ancestryFailure = nil
+        // Belongs to no generation until the fresh page lands, so the cached
+        // fast path inside `load` cannot match even within one generation.
+        generation = -1
+        load(markerId: markerId, manager: manager, store: store, force: true)
+    }
+
+    /// Detach from whatever thesis this loader was showing.
+    ///
+    /// Used when the selection moves to a thesis the disclosure is not open on.
+    /// Clearing the rows is not sufficient on its own — the loader would still
+    /// be bound to the old `markerId`, so a request already on the wire could
+    /// land and repopulate a section the viewer has navigated away from.
+    func reset() {
+        cancelAllRequests()
+        markerId = nil
+        rows = []
+        window = nil
+        state = .idle
+        generation = -1
+        expandingNodeKeys.removeAll()
+        isLoadingAncestry = false
+        branchFailures.removeAll()
+        ancestryFailure = nil
+    }
+
     /// Drop every row and window this loader is holding.
     ///
     /// Called when the store's generation moves — a block, a report, a
@@ -286,24 +364,20 @@ final class MarkerThreadLoader: ObservableObject {
     ) {
         switch MarkerThreadRequestFailure.classify(error) {
         case .staleCursor:
-            // The cursor no longer addresses anything. Drop it first, then
-            // re-read the thread: a fresh initial page restores the cursor if
-            // the branch is still live, and leaves it absent if the branch is
-            // now exhausted. Keeping the dead cursor would leave a "More
-            // responses" button that can never succeed, since an initial page
-            // spends no cursor and so cannot retire one.
-            store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
+            // The cursor no longer addresses anything, which means the server's
+            // idea of this thesis has moved out from under the cached one. The
+            // whole window goes, not just the cursor: a structural 409 is
+            // exactly the case where the retained topology may be wrong, and a
+            // merge could never correct it.
             branchFailures[nodeKey] = "That moved — reloading."
-            load(markerId: markerId, manager: manager, store: store, force: true)
+            refreshAuthoritatively(markerId: markerId, manager: manager, store: store)
 
         case .gone:
-            // The issuing marker was hard-deleted while paging, or the branch is
-            // genuinely unreachable. Either way a re-read from the selected
-            // marker is the safe recovery: it re-issues cursors bound to a
-            // marker that still exists.
-            store.markBranchExhausted(markerId: markerId, nodeKey: nodeKey)
+            // The issuing marker was hard-deleted while paging. Its children
+            // detached and the real root moved down, so the cached parent edges
+            // are stale in the one direction a merge cannot repair.
             branchFailures[nodeKey] = nil
-            load(markerId: markerId, manager: manager, store: store, force: true)
+            refreshAuthoritatively(markerId: markerId, manager: manager, store: store)
 
         case .unavailable:
             branchFailures[nodeKey] = "Linked markers are temporarily unavailable."
@@ -359,8 +433,11 @@ final class MarkerThreadLoader: ObservableObject {
                 // forever against a cursor the server will never accept again.
                 switch MarkerThreadRequestFailure.classify(error) {
                 case .staleCursor, .gone:
+                    // Same reasoning as a branch: an ancestry cursor the server
+                    // refuses means the chain above this marker changed, and
+                    // that is precisely the change a merge cannot express.
                     self.ancestryFailure = nil
-                    self.load(markerId: markerId, manager: manager, store: store, force: true)
+                    self.refreshAuthoritatively(markerId: markerId, manager: manager, store: store)
                 case .unavailable:
                     self.ancestryFailure = "Linked markers are temporarily unavailable."
                 case .transient:
@@ -373,7 +450,10 @@ final class MarkerThreadLoader: ObservableObject {
 
     private func adopt(_ merged: MarkerThreadWindow) {
         window = merged
-        rows = merged.displayRows()
+        // Highlight follows the loader's current marker, not the window's. One
+        // window is shared by every marker in a thesis, so a walk that reuses it
+        // would otherwise keep pointing at whichever marker opened it.
+        rows = merged.displayRows(selectedMarkerId: markerId)
         state = .loaded
     }
 }
@@ -407,6 +487,14 @@ struct MarkerThesisDisclosure: View {
         }
     }
 
+    /// Relationship breakdown, shown *beneath* the count rather than instead of
+    /// it.
+    ///
+    /// It tallies only the relationships this build understands, among the
+    /// nodes currently loaded, so its sum is a floor and frequently lower than
+    /// the thesis total. Presenting it where the total belongs would read as
+    /// the size of the thesis and quietly under-report it — worst on exactly
+    /// the deep and wide theses where the total matters most.
     private var tallyText: String? {
         guard let window else { return nil }
         let tallies = window.relationshipTallies()
@@ -417,6 +505,12 @@ struct MarkerThesisDisclosure: View {
                 return "\(count) \(relationship.verb)"
             }
             .joined(separator: " · ")
+    }
+
+    /// One spoken line: the authoritative count first, breakdown after.
+    private var headerAccessibilityLabel: String {
+        guard let tallyText else { return "Thesis, \(headerCountText)" }
+        return "Thesis, \(headerCountText), \(tallyText)"
     }
 
     var body: some View {
@@ -464,7 +558,16 @@ struct MarkerThesisDisclosure: View {
             // Moving within the same thesis keeps the disclosure open; leaving
             // it collapses back to the default.
             isExpanded = store.isExpanded(forMarkerId: newId)
-            if isExpanded { loader.load(markerId: newId, manager: markerManager, store: store) }
+            if isExpanded {
+                // Still a walk, so the cache is deliberately reused.
+                loader.load(markerId: newId, manager: markerManager, store: store)
+            } else {
+                // Collapsed on the new marker. Without this the loader stays
+                // bound to the previous thesis with its requests still in
+                // flight, and expanding here later would show that thesis
+                // before the new one arrived.
+                loader.reset()
+            }
         }
     }
 
@@ -473,7 +576,10 @@ struct MarkerThesisDisclosure: View {
             withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
             store.setExpanded(isExpanded, forMarkerId: marker.id)
             if isExpanded {
-                loader.load(markerId: marker.id, manager: markerManager, store: store)
+                // Opening the section is a request for current state, not a
+                // walk through one already open, so this re-reads rather than
+                // adopting the cache.
+                loader.reopen(markerId: marker.id, manager: markerManager, store: store)
             }
         } label: {
             HStack(spacing: 8) {
@@ -484,9 +590,15 @@ struct MarkerThesisDisclosure: View {
                     Text("Thesis")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(AppColors.primaryForeground)
-                    Text(tallyText ?? headerCountText)
+                    // Always the count, never displaced by the breakdown.
+                    Text(headerCountText)
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
+                    if let tallyText {
+                        Text(tallyText)
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText.opacity(0.8))
+                    }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -495,7 +607,8 @@ struct MarkerThesisDisclosure: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Thesis, \(tallyText ?? headerCountText)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerAccessibilityLabel)
         .accessibilityHint(isExpanded ? "Collapses the thesis" : "Expands the thesis")
     }
 

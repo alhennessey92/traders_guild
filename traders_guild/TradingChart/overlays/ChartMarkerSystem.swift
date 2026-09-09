@@ -312,6 +312,15 @@ class MarkerManager: ObservableObject {
         }
     }
 
+    /// Whether the authenticated viewer can moderate in the current guild.
+    ///
+    /// Held here so a realtime payload's permission flags — which describe the
+    /// member who acted, not the member reading — can be replaced with locally
+    /// derived ones. Defaults to false: a wrong `true` offers a delete that the
+    /// server refuses, a wrong `false` only hides an affordance a refresh
+    /// restores.
+    @Published var viewerCanModerate: Bool = false
+
     /// Newest absolute response counts, applied monotonically and *before* any
     /// symbol/timeframe filtering.
     var responseCounts = MarkerResponseCountReconciler()
@@ -356,9 +365,20 @@ class MarkerManager: ObservableObject {
     /// The renderer only calls this on an actual change, and this guards again:
     /// re-deriving focus rebuilds the whole link topology, which must never sit
     /// on the pan path.
-    func reportRenderedMarkers(_ ids: Set<UUID>) {
+    ///
+    /// - Parameter selectionId: the selection the report describes. The call is
+    ///   deferred to the main actor from inside a draw pass, so the selection
+    ///   can have moved on before it lands; a report about the previous thesis
+    ///   would otherwise install that thesis's painted set as the new one's.
+    func reportRenderedMarkers(_ ids: Set<UUID>, forSelection selectionId: UUID) {
+        guard selectedMarker?.id == selectionId else { return }
         guard renderedMarkerIds != ids else { return }
         renderedMarkerIds = ids
+        // The latch protects the fade decision from topology churn *between*
+        // paints — progressive pages, realtime arrivals. It must not outlive a
+        // change in what is actually painted, which is the very input the
+        // "fewer than two visible members" rule is about.
+        clearFadeLatch()
         refreshLinkFocus()
     }
 
@@ -932,7 +952,11 @@ class MarkerManager: ObservableObject {
         // Preserve positioning while the anchor is unchanged. An anchor edit is
         // a new ID+timestamp layout identity and takes the next free slot at its
         // new candle instead of carrying a stale assignment across the chart.
-        var updated = markers[index].withMarker(markerDTO)
+        //
+        // The count comes from the reconciler, not from this payload: an update
+        // whose revision was just rejected as older must not write its stale
+        // count back over the newer one.
+        var updated = markers[index].withMarker(withReconciledCount(markerDTO))
         if !updated.hasStableLayout {
             guard let candles = dataManager?.candles,
                   let currentTf = currentTimeframe,
@@ -973,8 +997,10 @@ class MarkerManager: ObservableObject {
         applyLinkCounts(fromDeletion: payload)
 
         // The thesis this marker belonged to now has a hole in it; the server
-        // renders that as a tombstone, so the cached window is stale.
-        threadStore?.invalidateThesis(containing: markerId)
+        // renders that as a tombstone, so the cached window is stale. Routed
+        // through the same escalating path as creation: a deletion on a branch
+        // nobody has paged into is invisible to an id lookup.
+        invalidateThreadsTouched(byDeletionOf: payload)
 
         markers.removeAll { $0.id == markerId }
         responseCounts.forget(markerId)
@@ -1058,7 +1084,10 @@ class MarkerManager: ObservableObject {
         if let index = markers.firstIndex(where: { $0.id == markerId }) {
             let updated: ChartMarkerUI
             if let markerDTO = payload.marker {
-                updated = markers[index].withMarker(markerDTO)
+                // A tracking snapshot carries a whole marker, counts included,
+                // and is just as capable of arriving late as an update.
+                applyLinkCounts(from: markerDTO)
+                updated = markers[index].withMarker(withReconciledCount(markerDTO))
             } else {
                 updated = markers[index].withMarker(
                     markers[index].marker.updating(trackingState: payload.newState)
@@ -2620,7 +2649,8 @@ struct ChartMarkerSystem {
         chartData: ChartDataManager? = nil,
         dimmed: Bool = false,
         editingEmojiOverride: (markerId: UUID, emoji: String)? = nil,
-        linkRender: MarkerLinkRenderContext? = nil
+        linkRender: MarkerLinkRenderContext? = nil,
+        linkedMarkersEnabled: Bool = false
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2716,7 +2746,11 @@ struct ChartMarkerSystem {
                             center: entry.position,
                             isBelow: entry.marker.positionedBelow,
                             likeCount: entry.marker.likeCount,
-                            responseCount: entry.marker.responseCount
+                            badge: MarkerLinkRenderer.badgeKind(
+                                linkedMarkersEnabled: linkedMarkersEnabled,
+                                responseCount: entry.marker.responseCount,
+                                relationship: entry.marker.linkRelationship
+                            )
                         )
                     )
                 }
@@ -2780,7 +2814,13 @@ struct ChartMarkerSystem {
                 paintedMembers.insert(rendered.marker.id)
             }
             if paintedMembers != linkRender.focus.visibleMemberIds {
-                Task { @MainActor in markerManager.reportRenderedMarkers(paintedMembers) }
+                let reportedSelection = linkRender.focus.selectedId
+                Task { @MainActor in
+                    markerManager.reportRenderedMarkers(
+                        paintedMembers,
+                        forSelection: reportedSelection
+                    )
+                }
             }
         }
 
@@ -2824,7 +2864,8 @@ struct ChartMarkerSystem {
                 rotation: rendered.rotation,
                 emojiOverride: emojiOverride,
                 linkRing: linkRender?.ringStyles[rendered.marker.id],
-                linkRingProgress: linkRender?.revealProgress ?? 0
+                linkRingProgress: linkRender?.revealProgress ?? 0,
+                linkedMarkersEnabled: linkedMarkersEnabled
             )
         }
     }
@@ -2869,7 +2910,8 @@ struct ChartMarkerSystem {
         rotation: CGFloat = 0,
         emojiOverride: String? = nil,
         linkRing: MarkerLinkRingStyle? = nil,
-        linkRingProgress: CGFloat = 0
+        linkRingProgress: CGFloat = 0,
+        linkedMarkersEnabled: Bool = false
     ) {
         var drawContext = context
         if rotation != 0 {
@@ -2997,15 +3039,20 @@ struct ChartMarkerSystem {
             )
         }
 
-        // 7. Response count badge — the left-hand mirror of the like badge, so
-        // the two can never collide. Drawn in every state, not only in focus:
-        // this is the affordance that says a thesis exists before you tap.
+        // 7. The single left-hand badge — mirror of the like badge, so the two
+        // can never collide. Drawn in every state, not only in focus: this is
+        // the affordance that says a thesis exists before you tap. Gated on the
+        // capability inside `badgeKind`, because linked DTOs outlive the flag
+        // and a disabled capability must leave them undecorated.
         MarkerLinkRenderer.drawResponseBadge(
             context: drawContext,
             center: position,
             isBelow: isBelow,
-            count: marker.responseCount,
-            relationship: marker.linkRelationship
+            badge: MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: linkedMarkersEnabled,
+                responseCount: marker.responseCount,
+                relationship: marker.linkRelationship
+            )
         )
 
         // 8. Thesis ring. Colour lives here and nowhere else in the resting

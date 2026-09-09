@@ -307,7 +307,10 @@ extension RLChartMarkerDTO {
         pollOptions: [RLPollOptionDTO]? = nil,
         userPollVote: UUID? = nil,
         directResponseCount: Int? = nil,
-        responsesRevision: String? = nil
+        responsesRevision: String? = nil,
+        isCurrentUserMarker: Bool? = nil,
+        canEdit: Bool? = nil,
+        canDelete: Bool? = nil
     ) -> RLChartMarkerDTO {
         guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
             return self
@@ -349,6 +352,13 @@ extension RLChartMarkerDTO {
         if let responsesRevision = responsesRevision {
             dict["responsesRevision"] = responsesRevision
         }
+        // Viewer-relative permissions. A broadcast payload carries whoever
+        // created it, so these are re-derived locally rather than adopted.
+        if let isCurrentUserMarker = isCurrentUserMarker {
+            dict["isCurrentUserMarker"] = isCurrentUserMarker
+        }
+        if let canEdit = canEdit { dict["canEdit"] = canEdit }
+        if let canDelete = canDelete { dict["canDelete"] = canDelete }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let updated = try? JSONDecoder().decode(RLChartMarkerDTO.self, from: data) else {
             return self

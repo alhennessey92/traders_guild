@@ -389,6 +389,11 @@ struct MarkerThreadWindow: Equatable {
     /// *structural* figure — never present it as a contribution count.
     var loadedCount: Int { nodesByKey.count }
 
+    /// Every node currently held, in no particular order. Used by cache-wide
+    /// policy such as symbol-scoped invalidation, which needs to ask what a
+    /// window is about without reconstructing its order.
+    var nodes: [RLMarkerLinkPreviewDTO] { Array(nodesByKey.values) }
+
     /// Rows that represent an actual, visible contribution.
     ///
     /// Deleted intermediates occupy a structural row so descendants stay
@@ -449,7 +454,16 @@ struct MarkerThreadWindow: Equatable {
     ///
     /// Depth is derived here, never taken from the page, because branch pages
     /// report depths relative to their own window root.
-    func displayRows() -> [MarkerThreadRow] {
+    ///
+    /// - Parameter selectedMarkerId: which row to mark as the one being read.
+    ///   Passed in rather than taken from `requestedMarkerId`, which records the
+    ///   marker this window was first *built* for and must keep doing so —
+    ///   cursor provenance depends on it. Walking a thesis reuses one window
+    ///   under a root-keyed entry, so deriving the highlight from that field
+    ///   would leave the first marker looking current no matter where the
+    ///   viewer had navigated to since.
+    func displayRows(selectedMarkerId: UUID? = nil) -> [MarkerThreadRow] {
+        let current = selectedMarkerId ?? requestedMarkerId
         var rows: [MarkerThreadRow] = []
         var visited = Set<String>()
 
@@ -460,7 +474,7 @@ struct MarkerThreadWindow: Equatable {
                 MarkerThreadRow(
                     node: node,
                     depth: depth,
-                    isRequested: node.markerId != nil && node.markerId == requestedMarkerId,
+                    isRequested: node.markerId != nil && node.markerId == current,
                     hasMoreResponses: branchCursors[key] != nil
                 )
             )

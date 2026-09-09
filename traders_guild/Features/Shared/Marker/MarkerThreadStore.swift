@@ -121,8 +121,11 @@ final class MarkerThreadStore: ObservableObject {
 
     /// Drop only the thesis containing a marker — used when one marker is
     /// deleted, hidden, or becomes invisible to this viewer.
-    func invalidateThesis(containing markerId: UUID) {
-        guard let key = keysByMarkerId[markerId] else { return }
+    /// - Returns: whether a cached thesis was actually dropped, so a caller can
+    ///   tell "invalidated" from "this marker was never indexed" and escalate.
+    @discardableResult
+    func invalidateThesis(containing markerId: UUID) -> Bool {
+        guard let key = keysByMarkerId[markerId] else { return false }
         windows[key] = nil
         expandedKeys.remove(key)
         for (id, existing) in keysByMarkerId where existing == key {
@@ -132,6 +135,72 @@ final class MarkerThreadStore: ObservableObject {
             pendingNavigation = nil
         }
         generation &+= 1
+        return true
+    }
+
+    /// Drop every cached thesis on one symbol.
+    ///
+    /// The escalation for an event whose marker and parent are both unknown to
+    /// the cache. That is not the same as harmless: a thesis is same-guild and
+    /// same-symbol by contract, so a node created deep in a branch this viewer
+    /// has never paged into still changes the counts, tombstones and
+    /// `has_more` flags the server would render for a window they *are*
+    /// holding. Doing nothing there leaves a window that can never self-correct,
+    /// because nothing in it names the marker that changed.
+    ///
+    /// Scoped by symbol rather than dropping everything: a thesis cannot span
+    /// symbols, so windows on other symbols are provably unaffected. A window
+    /// whose nodes carry no symbol at all is dropped, because unknown is not
+    /// evidence of being unaffected.
+    ///
+    /// - Returns: whether anything was dropped.
+    @discardableResult
+    func invalidateTheses(onSymbolId symbolId: UUID?) -> Bool {
+        let doomed = windows.filter { _, window in
+            guard let symbolId else { return true }
+            let symbols = window.nodes.compactMap(\.symbolId)
+            return symbols.isEmpty || symbols.contains(symbolId)
+        }.map(\.key)
+
+        guard !doomed.isEmpty else { return false }
+
+        for key in doomed {
+            windows[key] = nil
+            expandedKeys.remove(key)
+            for (id, existing) in keysByMarkerId where existing == key {
+                keysByMarkerId[id] = nil
+            }
+            if pendingNavigation?.cacheKey == key {
+                pendingNavigation = nil
+            }
+        }
+        generation &+= 1
+        return true
+    }
+
+    /// Drop one thesis's cached window so the next read is authoritative,
+    /// without advancing the generation or collapsing the section.
+    ///
+    /// Distinct from `invalidateThesis` on purpose. That one answers "this
+    /// content may no longer be shown to this viewer" and so bumps the
+    /// generation to refuse anything already on the wire. This one answers "the
+    /// viewer asked to see this again", where the cache is merely *possibly*
+    /// stale: merging a fresh first page into a retained window can never
+    /// remove a node that has since become invisible and falls outside that
+    /// page, so the window is dropped and rebuilt from the response instead.
+    ///
+    /// - Returns: whether a window was actually discarded.
+    @discardableResult
+    func discardWindow(forMarkerId markerId: UUID) -> Bool {
+        guard let key = keysByMarkerId[markerId], windows[key] != nil else { return false }
+        windows[key] = nil
+        for (id, existing) in keysByMarkerId where existing == key {
+            keysByMarkerId[id] = nil
+        }
+        if pendingNavigation?.cacheKey == key {
+            pendingNavigation = nil
+        }
+        return true
     }
 
     // MARK: - Lookup

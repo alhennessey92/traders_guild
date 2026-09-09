@@ -75,6 +75,103 @@ struct MarkerLinkRenderTests {
         #expect(MarkerLinkRevealPolicy.target(focused: false) == 0)
     }
 
+    // MARK: - Badge policy
+
+    /// The capability gate lives in the policy, not at the call site. Linked
+    /// DTOs stay in memory after the flag goes false, so a disabled capability
+    /// with a live non-zero count must still resolve to no badge at all —
+    /// otherwise turning the feature off leaves the chart decorated.
+    @Test
+    func disabledCapabilityDrawsNoBadgeEvenWithCachedLinkedData() {
+        #expect(
+            MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: false,
+                responseCount: 7,
+                relationship: MarkerLinkRelationshipValue(.challenges)
+            ) == nil
+        )
+        // A cached root count is just as much stale decoration.
+        #expect(
+            MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: false,
+                responseCount: 3,
+                relationship: nil
+            ) == nil
+        )
+    }
+
+    /// Nothing is gated away when the capability is off and there is nothing
+    /// linked to hide: an unlinked, unanswered marker has no badge either way,
+    /// so the flag cannot change the resting 1.2.1 chart.
+    @Test
+    func disabledCapabilityMatchesTheUnlinkedRestingState() {
+        #expect(
+            MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: false,
+                responseCount: 0,
+                relationship: nil
+            ) == MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: true,
+                responseCount: 0,
+                relationship: nil
+            )
+        )
+    }
+
+    /// A response nothing has answered yet still has to say that it is a
+    /// response. A count of zero says nothing, so the leaf shows its
+    /// relationship glyph — without it a leaf is indistinguishable from an
+    /// ordinary marker until tapped, which is the whole affordance.
+    @Test
+    func linkedLeafShowsItsRelationshipRatherThanAnEmptyCount() throws {
+        let badge = try #require(
+            MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: true,
+                responseCount: 0,
+                relationship: MarkerLinkRelationshipValue(.supports)
+            )
+        )
+        #expect(badge == .leafIcon(MarkerLinkRelationshipValue(.supports)))
+    }
+
+    /// An unknown server relationship still reads as a leaf: the tolerant
+    /// wrapper supplies a generic glyph, so a relationship added after this
+    /// build ships is decorated rather than dropped.
+    @Test
+    func unknownRelationshipStillBadgesAsALeaf() throws {
+        let unknown = MarkerLinkRelationshipValue(raw: "contradicts")
+        let badge = try #require(
+            MarkerLinkRenderer.badgeKind(
+                linkedMarkersEnabled: true,
+                responseCount: 0,
+                relationship: unknown
+            )
+        )
+        #expect(badge == .leafIcon(unknown))
+    }
+
+    /// The three enabled cases the single badge has to separate.
+    @Test
+    func rootLinkedAndLeafAreThreeDistinctBadges() {
+        let supports = MarkerLinkRelationshipValue(.supports)
+        #expect(
+            MarkerLinkRenderer.badgeKind(linkedMarkersEnabled: true, responseCount: 4, relationship: nil)
+                == .rootCount(4)
+        )
+        #expect(
+            MarkerLinkRenderer.badgeKind(linkedMarkersEnabled: true, responseCount: 4, relationship: supports)
+                == .linkedCount(4, supports)
+        )
+        #expect(
+            MarkerLinkRenderer.badgeKind(linkedMarkersEnabled: true, responseCount: 0, relationship: supports)
+                == .leafIcon(supports)
+        )
+        // An unlinked, unanswered marker is the only badgeless case.
+        #expect(
+            MarkerLinkRenderer.badgeKind(linkedMarkersEnabled: true, responseCount: 0, relationship: nil) == nil
+        )
+    }
+
     // MARK: - Badge geometry
 
     /// Likes sit at x+8…x+22. The response badge mirrors them on the left, so
@@ -88,7 +185,7 @@ struct MarkerLinkRenderTests {
                 center: center,
                 isBelow: isBelow,
                 likeCount: 3,
-                responseCount: 2
+                badge: .linkedCount(2, MarkerLinkRelationshipValue(.supports))
             )
             #expect(all.count == 2)
             // Fail loudly rather than skipping: a missing like badge would mean
@@ -99,15 +196,42 @@ struct MarkerLinkRenderTests {
         }
     }
 
+    /// A leaf icon occupies the same rect as a count, so connectors must avoid
+    /// it too. Omitting it would route a curve through the one decoration that
+    /// identifies a leaf as a response.
     @Test
-    func badgeRectsOmitZeroCounts() {
+    func leafIconIsCollisionBoundLikeACount() {
+        let center = CGPoint(x: 200, y: 400)
+        for isBelow in [true, false] {
+            let leaf = MarkerLinkRenderer.badgeRects(
+                center: center,
+                isBelow: isBelow,
+                likeCount: 0,
+                badge: .leafIcon(MarkerLinkRelationshipValue(.challenges))
+            )
+            let counted = MarkerLinkRenderer.badgeRects(
+                center: center,
+                isBelow: isBelow,
+                likeCount: 0,
+                badge: .rootCount(2)
+            )
+            #expect(leaf == counted)
+            #expect(leaf == [MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: isBelow)])
+        }
+    }
+
+    /// With the capability off there is no left badge to avoid, so a connector
+    /// may use that space. Collision bounds and drawing must agree, or the
+    /// routing reserves space for a badge nobody can see.
+    @Test
+    func noBadgeMeansNoReservedSpace() {
         let center = CGPoint(x: 200, y: 400)
         #expect(
-            MarkerLinkRenderer.badgeRects(center: center, isBelow: false, likeCount: 0, responseCount: 0)
+            MarkerLinkRenderer.badgeRects(center: center, isBelow: false, likeCount: 0, badge: nil)
                 .isEmpty
         )
         #expect(
-            MarkerLinkRenderer.badgeRects(center: center, isBelow: false, likeCount: 0, responseCount: 1)
+            MarkerLinkRenderer.badgeRects(center: center, isBelow: false, likeCount: 1, badge: nil)
                 .count == 1
         )
     }

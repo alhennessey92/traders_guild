@@ -56,11 +56,21 @@ extension MarkerManager {
         // must not capture a guess. Until the renderer has reported which
         // members it painted for THIS selection, the visible set is a fallback,
         // and latching it would freeze the wrong answer for the whole selection.
+        //
+        // It also must not outlive the fact it was derived from. "Suppress the
+        // fade below two visible members" is an invariant of the design, not a
+        // preference the latch may override: panning a second member off screen
+        // has to undim the chart, or a lone glyph sits in a darkened chart with
+        // nothing to compare it to. So a latched decision is still floored by
+        // the current threshold — the latch may suppress a fade, never resurrect
+        // one. `reportRenderedMarkers` drops the latch outright when the painted
+        // set changes, so this floor is a second line rather than the only one.
+        let meetsVisibilityThreshold = state.shouldFadeUnrelated
         let shouldFade: Bool
         if let latch = fadeLatch, latch.selectionId == selected.id {
-            shouldFade = latch.shouldFade
+            shouldFade = latch.shouldFade && meetsVisibilityThreshold
         } else {
-            shouldFade = state.shouldFadeUnrelated
+            shouldFade = meetsVisibilityThreshold
             if renderedMarkerIds != nil {
                 setFadeLatch(selectionId: selected.id, shouldFade: shouldFade)
             }
@@ -168,31 +178,135 @@ extension MarkerManager {
         }
     }
 
-    /// Conservative partial invalidation for a marker event.
+    /// Rewrite a payload's response count with the reconciler's accepted one.
+    ///
+    /// Offering a count and then storing the payload are two different acts,
+    /// and the order they happen in is the whole problem. A `marker_updated` or
+    /// tracking snapshot that arrives out of order is correctly *rejected* by
+    /// the reconciler — it carries an older revision — and then written to the
+    /// loaded marker anyway by the wholesale replacement that follows, putting
+    /// the stale number straight back on the glyph and in the detail sheet. The
+    /// reconciler's verdict has to survive the replacement, not just precede it.
+    ///
+    /// Only the count and its revision are touched; every other field on the
+    /// payload is newer than what is loaded and is meant to win.
+    func withReconciledCount(_ dto: RLChartMarkerDTO) -> RLChartMarkerDTO {
+        guard let known = responseCounts.count(for: dto.id) else { return dto }
+        let knownRevision = responseCounts.revision(for: dto.id)?.wireText
+        guard known != dto.responseCount || knownRevision != dto.responsesRevision else {
+            return dto
+        }
+        return dto.updating(
+            directResponseCount: known,
+            responsesRevision: knownRevision
+        )
+    }
+
+    /// Partial invalidation for a marker event, escalating when the cache
+    /// cannot see the connection.
     ///
     /// A created or updated marker changes a thesis the viewer may be reading —
     /// including branches not yet loaded, whose counts and tombstones the server
-    /// would now render differently. The thesis containing either the marker or
-    /// its parent is dropped; unrelated theses are untouched.
+    /// would now render differently. Dropping the thesis that contains the
+    /// marker or its parent handles the common case.
+    ///
+    /// It is not sufficient on its own. When **neither** endpoint is indexed —
+    /// a response created on a branch the viewer has never paged into, whose
+    /// parent is likewise unloaded — matching by id finds nothing, and a window
+    /// that is genuinely now stale would survive with no way to discover it,
+    /// because nothing in it names the marker that changed. So an unmatched
+    /// event escalates to dropping cached theses on that symbol, which a thesis
+    /// can never leave.
     func invalidateThreadsTouched(by dto: RLChartMarkerDTO) {
-        guard let store = threadStore else { return }
-        store.invalidateThesis(containing: dto.id)
-        if let parentId = dto.parentMarkerId {
-            store.invalidateThesis(containing: parentId)
-        }
+        invalidateThreads(markerId: dto.id, parentMarkerId: dto.parentMarkerId, symbolId: dto.symbolId)
     }
 
-    /// Merge a broadcast marker without losing this viewer's own state.
-    ///
-    /// Broadcast payloads are actor-neutral, so their engagement and permission
-    /// flags describe nobody in particular. Replacing a loaded marker wholesale
-    /// would clear the viewer's own like and poll vote. The backend also
-    /// personalises per recipient, but this build must not depend on that.
-    func neutralMerge(_ incoming: RLChartMarkerDTO, into existing: RLChartMarkerDTO) -> RLChartMarkerDTO {
-        incoming.updating(
-            isLikedByCurrentUser: existing.isLikedByCurrentUser,
-            userPollVote: existing.userPollVote
+    /// The deletion counterpart. A delete leaves a tombstone the server renders
+    /// in place of the node, so an unmatched deletion is exactly as capable of
+    /// staling a window as an unmatched creation.
+    func invalidateThreadsTouched(byDeletionOf payload: MarkerDeletedPayload) {
+        invalidateThreads(
+            markerId: UUID(uuidString: payload.markerId),
+            parentMarkerId: payload.parentMarkerId.flatMap(UUID.init(uuidString:)),
+            symbolId: payload.symbolId.flatMap(UUID.init(uuidString:))
         )
+    }
+
+    private func invalidateThreads(markerId: UUID?, parentMarkerId: UUID?, symbolId: UUID?) {
+        guard let store = threadStore else { return }
+
+        var matched = false
+        if let markerId {
+            matched = store.invalidateThesis(containing: markerId)
+        }
+        if let parentMarkerId {
+            // Deliberately not short-circuited: a marker and its parent can sit
+            // in two separately cached windows, and both are now stale.
+            matched = store.invalidateThesis(containing: parentMarkerId) || matched
+        }
+        guard !matched else { return }
+
+        store.invalidateTheses(onSymbolId: symbolId)
+    }
+
+    /// Merge a broadcast marker without adopting somebody else's identity.
+    ///
+    /// A realtime payload is built with the *creator's* viewer context and sent
+    /// verbatim to the whole guild, so its permission flags describe whoever
+    /// acted, not whoever is reading. Adopting them hands every recipient the
+    /// creator's Edit and Delete affordances on a marker that is not theirs.
+    /// Its engagement flags are equally wrong: they would clear this viewer's
+    /// own like and poll vote.
+    ///
+    /// So two different repairs, for two different reasons:
+    ///
+    /// - **Engagement is preserved** from the loaded copy. Only this client
+    ///   knows what this viewer has liked or voted for; the payload cannot.
+    /// - **Permissions are re-derived** from the authenticated user and their
+    ///   membership in the current guild. Preserving them would be wrong too —
+    ///   the loaded copy predates the update — and trusting the payload is what
+    ///   leaks authorship. Only local derivation is correct in both directions.
+    ///
+    /// The backend does personalise per recipient on some paths. This does not
+    /// depend on that, because the paths that matter here demonstrably do not.
+    func neutralMerge(_ incoming: RLChartMarkerDTO, into existing: RLChartMarkerDTO) -> RLChartMarkerDTO {
+        let isMine = incoming.author.userId == userId
+        return incoming.updating(
+            isLikedByCurrentUser: existing.isLikedByCurrentUser,
+            // Nested per-viewer state the top-level vote field does not cover:
+            // the counts are authoritative, the `hasVoted` flags are not.
+            pollOptions: mergedPollOptions(incoming: incoming, existing: existing),
+            userPollVote: existing.userPollVote,
+            isCurrentUserMarker: isMine,
+            // Editing someone else's marker is refused server-side however
+            // senior the viewer, so moderation does not widen this.
+            canEdit: isMine,
+            // Moderators and admins can remove other members' markers.
+            canDelete: isMine || viewerCanModerate
+        )
+    }
+
+    /// Incoming counts with this viewer's own `hasVoted` flags restored.
+    ///
+    /// Matched by option id rather than position: an edited poll can reorder or
+    /// drop options, and carrying a flag across by index would attribute the
+    /// viewer's vote to an option they never chose.
+    private func mergedPollOptions(
+        incoming: RLChartMarkerDTO,
+        existing: RLChartMarkerDTO
+    ) -> [RLPollOptionDTO]? {
+        guard let incomingOptions = incoming.pollOptions else { return nil }
+        guard let existingOptions = existing.pollOptions else { return incomingOptions }
+        let voted = Set(existingOptions.filter(\.hasVoted).map(\.id))
+        guard !voted.isEmpty else { return incomingOptions }
+        return incomingOptions.map { option in
+            RLPollOptionDTO(
+                id: option.id,
+                text: option.text,
+                voteCount: option.voteCount,
+                hasVoted: voted.contains(option.id)
+            )
+        }
     }
 
     // MARK: - Pending navigation

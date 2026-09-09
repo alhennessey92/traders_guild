@@ -3015,6 +3015,9 @@ struct TradingChartView: View {
         // many linked markers load.
         markerManager.threadStore = rlAppState.markerThreadStore
         markerManager.linkedMarkersEnabled = rlAppState.runtimeFlags.linkedMarkersEnabled
+        // Realtime payloads carry the acting member's permissions, so the
+        // manager needs the reading member's membership to re-derive its own.
+        markerManager.viewerCanModerate = rlAppState.canModerate
         isChartLoading = chartViewModel.currentSymbol == nil || chartData.candles.isEmpty
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -7807,7 +7810,8 @@ struct TradingChartView: View {
             selectedMarkerRotation: selectionRotation,
             dimmed: controlViewModel.isMarkerPlacementMode,
             editingEmojiOverride: editingEmojiOverrideForMarkers,
-            linkRender: linkRenderContext(size: size)
+            linkRender: linkRenderContext(size: size),
+            linkedMarkersEnabled: markerManager.linkedMarkersEnabled
         )
     }
 

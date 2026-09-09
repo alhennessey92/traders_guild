@@ -42,6 +42,7 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
         let manager = chartViewModel.markerManager
         let wasEnabled = manager?.linkedMarkersEnabled ?? false
         manager?.linkedMarkersEnabled = enabled
+        manager?.viewerCanModerate = appState.canModerate
         // Held weakly by the manager: the store belongs to the session, not to
         // the chart, which is the whole reason a thesis survives a timeframe
         // change.
@@ -58,6 +59,8 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
     /// Re-scoping clears the cache, so one guild's thesis can never be read in
     /// another, and a signed-out account leaves nothing behind.
     private func applyScope() {
+        // Moderation is per guild, so switching guilds can gain or lose it.
+        chartViewModel.markerManager?.viewerCanModerate = appState.canModerate
         appState.markerThreadStore.activate(
             accountId: appState.currentUser?.id,
             guildId: appState.currentGuild?.id

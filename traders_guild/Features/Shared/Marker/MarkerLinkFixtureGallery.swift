@@ -502,7 +502,10 @@ struct MarkerLinkFixtureCanvas: View {
                 selectedMarkerId: selectedId,
                 selectedMarkerScale: 1.5,
                 selectedMarkerRotation: 0,
-                linkRender: renderContext(size: size)
+                linkRender: renderContext(size: size),
+                // The harness exists to review the decorated states, so the
+                // capability is on; the disabled state is covered by tests.
+                linkedMarkersEnabled: true
             )
         }
     }
