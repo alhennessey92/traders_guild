@@ -4,23 +4,60 @@ Branch: `claude/1.3.0-marker-visuals`
 Worktree: `.worktrees/linked-markers-claude`
 Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 
-Status: **complete and buildable**. Clean Debug *and Release* builds, full unit
-suite green (**481 passing, 0 failures**), app installs and launches, and the
-linked-marker visuals reviewed against a DEBUG fixture harness on two devices.
+Status: **complete, buildable and verified against the live DEV backend**.
+Clean Debug and Release builds, **477 swift-testing + 30 XCTest passing**,
+visuals reviewed against both a DEBUG fixture harness and real backend data.
 
 ---
 
-## Second pass (2026-09-09)
+## Passes so far
 
-Closes the privacy/moderation wiring, acts on five independent-review findings,
-and adds the fixture harness plus the visual review it enabled. See
-"Independent review findings" and "Visual review" below.
+1. **Implementation** — the feature, against the 1.3.0 contract.
+2. **Review pass** — five independent-review findings; privacy/moderation
+   wiring; the DEBUG fixture harness and its visual review.
+3. **Self-audit** — five defects found by auditing my own code.
+4. **Compatibility** — four released/submitted baselines built and tested
+   against the real backend fixtures.
+5. **Integration repairs + live E2E** — ten queued findings, microsecond-exact
+   revisions, and end-to-end verification against the local DEV backend, which
+   itself surfaced a bug that disabled the whole feature.
+
+---
+
+## Live backend verification (2026-09-09)
+
+Run against the local DEV gateway with the two QA accounts.
+
+| Check | Result |
+|---|---|
+| Create response | `parent_direct_response_count` and `parent_responses_revision` **top-level**, advancing 3 → 4 → 5 |
+| Delete response | All six added fields beside the original `detail`, decrementing 4 → 3 → 2 |
+| Tombstones excluded from totals | `nodes=7, total_count=3` — matches `activeLoadedCount` exactly |
+| `total_count` nullability | Arrives `null` the moment a branch cursor exists |
+| Badges on chart | Real `direct_response_count` values; root's "5" matched the API |
+| Focus on chart | Root ring, relationship rings, routed connectors, unrelated markers dimmed |
+| **Cursor provenance** | Issuing marker → **200**; different marker → **409**; different viewer → **409** |
+
+The cursor result is the important one. `marker_links._decode_cursor` validates
+the cursor's embedded `requested` marker, the viewer, and a guild epoch, so
+without `MarkerThreadCursor.issuedFor` every "More responses" tap after
+navigating within a thesis would have failed. Cursors also carry a one-hour TTL
+server-side; that expiry surfaces as the same 409 and recovers the same way.
+
+**Bug found only by running it.** `chartViewModel.markerManager` is a weak,
+non-published var, so a view observing app state cannot know when it appears.
+The ordinary startup order is that runtime flags arrive while it is still nil —
+so the capability was dropped silently and never re-applied, and focus never
+activated. The symptom was deceptive: response badges are not capability-gated,
+so they rendered real counts and the feature looked half-alive while rings,
+connectors and dimming were all missing. Capability and thesis store are now
+assigned in `handleOnAppear` alongside the manager itself.
 
 ---
 
 ## What is here
 
-Fifteen commits, each buildable:
+Nineteen commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -38,6 +75,11 @@ Fifteen commits, each buildable:
 | `a0b720a` | DEBUG fixture harness + two defects it exposed |
 | `66d413f` | Handover: review pass, privacy wiring, visual review |
 | `267661a` | Self-audit: converging windows, lagging counts, stale nav |
+| `74f9569` | Microsecond-exact revisions; revision-aware list merge |
+| `901856d` | Cursor provenance, guarded mutations, lifecycle repairs |
+| `f04240e` | Malformed revision inputs must not trap |
+| `4a8d827` | Capability wired where the manager actually exists |
+| `9515002` | Cursor provenance pinned to verified backend behaviour |
 
 ### New files (all auto-join the target — the project uses synchronized groups)
 
@@ -64,7 +106,12 @@ Fifteen commits, each buildable:
 **Tests** — `MarkerLinkGraphTests`, `MarkerLinkGeometryTests`, `MarkerThreadWindowTests`,
 `MarkerLinkStateTests`, `MarkerLinkDecodingTests`, `MarkerLinkRenderTests`,
 `MarkerLinkReviewFixTests` (independent-review findings),
-`MarkerLinkSelfAuditTests` (self-audit findings).
+`MarkerLinkSelfAuditTests` (self-audit findings),
+`MarkerRevisionPrecisionTests`, `MarkerLinkIntegrationRepairTests`,
+`MarkerThreadLoaderCallSiteTests`.
+
+Plus `Models/MarkerLink/MarkerRevision.swift` — microsecond-exact revision
+ordering, because no Foundation date type can carry these.
 
 ---
 
@@ -269,3 +316,64 @@ The tests the owner asked for, and where they live:
 - The fade decision is **latched per selection** so progressive pages cannot
   flicker the dim on and off; a deliberate filter change clears the latch and
   re-applies the rule.
+
+
+---
+
+## Compatibility worktrees (test-only, separate branches)
+
+Four baselines, each **built and run**, not merely identified:
+
+| Worktree | Baseline | Result |
+|---|---|---|
+| `linked-markers-ios-compat` | iOS `74c772c` — 1.2.1 build 22, submitted | 18 tests, 0 failures |
+| `linked-markers-ios-118-compat` | iOS `ios-v1.1.8-build18` — newest **released** | 9 tests, 0 failures |
+| `linked-markers-android-compat` | Android `c296316` — 1.2.1 code 17, withheld | 9 tests, 0 failures |
+| `linked-markers-android-117-compat` | Android `acc2a30` — 1.1.7 code 5, **debut Play release** | 7 tests, 0 failures |
+
+Testing the older baselines separately was justified, not ceremonial:
+
+- **iOS 1.1.8** does not have `RLPushNotificationTapPayload.markerGuildId`, and
+  its target does not execute swift-testing at all — a `@Test` file there
+  reported "Executed 0 tests" and passed having run nothing, so the suite was
+  rewritten as XCTest.
+- **Android 1.1.7** has no `parseWireInstant`, no `WsEvent.MarkerCreated` or
+  `MarkerDeleted`, and only the older `marker_event` wrapper the backend no
+  longer sends. Its marker websocket path is dead against the current backend,
+  and `marker_created` correctly degrades to `Unknown` rather than throwing.
+
+**The guard that matters for Android.** 1.1.7 maps markers with a bare
+`Instant.parse`, and the app's own `WireInstant.kt` records a numeric offset
+taking the live-candle stream down in production. So the linked-marker work must
+never change the spelling of a field that build already parses; the additive
+fields may use `+00:00` freely because it ignores them. That invariant is
+asserted directly rather than by asserting the offset throws — this suite runs on
+the desktop JVM, whose `ISO_INSTANT` accepts offsets, while Android's desugared
+`java.time` is what actually crashed.
+
+---
+
+## QA state left behind
+
+My E2E created and then deleted five markers in the QA thesis. Deletion is soft
+by contract, so those five remain as **tombstones** — structural rows with no
+identity or content. They are excluded from `total_count`, which is why the
+thread reads `nodes=8, total_count=null` with one branch cursor outstanding
+rather than its original `nodes=4, total_count=3`. The original root thesis and
+both disposable members are untouched; nothing can restore the pre-run node
+count, because that is what soft deletion means.
+
+## Not done
+
+1. **Physical device.** Nothing installed on the iPhone 14 Pro, as instructed.
+   An isolated DEV build/profile plan is still to be agreed.
+2. **No Instruments run**, so no FPS figure against the 57 fps baseline.
+3. **VoiceOver not driven.** Labels, traits and hints are set throughout and
+   relationship is always spoken rather than carried by colour, but the rotor was
+   not stepped. Chart glyphs remain Canvas pixels with no accessibility elements —
+   unchanged from 1.2.1 — so the thesis list is the accessible path.
+4. **0.22 unchanged**, as instructed. The light-grey observation stands: unrelated
+   markers there are closer to invisible than recessive, and a theme-aware floor
+   near 0.35 would read better. Owner's call.
+5. **Ancestry paging never exercised live.** The QA thesis is shallow, so no
+   ancestry cursor was ever issued. Branch cursors were, and are proven.
