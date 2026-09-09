@@ -915,7 +915,14 @@ class MarkerManager: ObservableObject {
               candleArrayMatchesTimeframe(candles, currentTf),
               let candleIndex = findCandleIndex(timestamp: markerDTO.candleTimestamp, in: candles) else { return }
 
-        var marker = ChartMarkerUI(marker: markerDTO, candleIndex: candleIndex)
+        // A created marker has no loaded copy to merge against, but its
+        // permission flags are just as much the creator's — this is the payload
+        // that hands every recipient an Edit affordance on someone else's
+        // marker. Derived rather than merged, since there is nothing to preserve.
+        var marker = ChartMarkerUI(
+            marker: locallyPermissioned(markerDTO),
+            candleIndex: candleIndex
+        )
 
         let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
             marker: marker,
@@ -953,10 +960,16 @@ class MarkerManager: ObservableObject {
         // a new ID+timestamp layout identity and takes the next free slot at its
         // new candle instead of carrying a stale assignment across the chart.
         //
-        // The count comes from the reconciler, not from this payload: an update
-        // whose revision was just rejected as older must not write its stale
-        // count back over the newer one.
-        var updated = markers[index].withMarker(withReconciledCount(markerDTO))
+        // Two corrections before the payload replaces what is loaded. The count
+        // comes from the reconciler, because an update whose revision was just
+        // rejected as older must not write its stale count back over the newer
+        // one. And engagement and permissions go through `neutralMerge`, which
+        // keeps this viewer's like and votes and re-derives their own
+        // permissions rather than adopting whatever the payload happens to
+        // carry.
+        var updated = markers[index].withMarker(
+            neutralMerge(withReconciledCount(markerDTO), into: markers[index].marker)
+        )
         if !updated.hasStableLayout {
             guard let candles = dataManager?.candles,
                   let currentTf = currentTimeframe,
@@ -1081,13 +1094,24 @@ class MarkerManager: ObservableObject {
         guard let payload = message.payload(as: MarkerTrackingStateChangedPayload.self),
               let markerId = UUID(uuidString: payload.markerId) else { return }
 
+        // Counts and thesis invalidation happen before the loaded-marker guard,
+        // for the same reason they do on create and update: a tracking snapshot
+        // for a marker on another timeframe — or one not loaded here at all —
+        // still carries an absolute count for its parent and still changes how
+        // the server would render its thesis. Doing this inside the guard meant
+        // both corrections were dropped exactly when the viewer could not see
+        // the marker for themselves.
+        if let markerDTO = payload.marker {
+            applyLinkCounts(from: markerDTO)
+            invalidateThreadsTouched(by: markerDTO)
+        }
+
         if let index = markers.firstIndex(where: { $0.id == markerId }) {
             let updated: ChartMarkerUI
             if let markerDTO = payload.marker {
-                // A tracking snapshot carries a whole marker, counts included,
-                // and is just as capable of arriving late as an update.
-                applyLinkCounts(from: markerDTO)
-                updated = markers[index].withMarker(withReconciledCount(markerDTO))
+                updated = markers[index].withMarker(
+                    neutralMerge(withReconciledCount(markerDTO), into: markers[index].marker)
+                )
             } else {
                 updated = markers[index].withMarker(
                     markers[index].marker.updating(trackingState: payload.newState)

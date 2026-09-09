@@ -217,6 +217,98 @@ struct MarkerLinkReviewQueueTests {
         #expect(store.window(forMarkerId: id(30)) == nil)
     }
 
+    /// The store deliberately allows two provisional windows onto one
+    /// unresolved thesis — neither knows it is the other. Matching an event by
+    /// id then invalidates only whichever window happens to hold that endpoint,
+    /// and returning early leaves the other stale with nothing in it to say so.
+    ///
+    /// The one on screen is frequently the other one.
+    @Test
+    func anEventMatchingOneProvisionalWindowStillInvalidatesTheOther() {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+
+        // Window A: knows marker 40, root unresolved.
+        store.ingest(
+            page: page(
+                requested: 40, windowRoot: "a",
+                nodes: [node("a", marker: 40, symbol: symbolId)]
+            ),
+            requestedMarkerId: id(40),
+            expectedGeneration: store.generation
+        )
+        // Window B: a separate provisional view of the same thesis, reached from
+        // another marker, which does not hold marker 40 at all.
+        store.ingest(
+            page: page(
+                requested: 41, windowRoot: "b",
+                nodes: [node("b", marker: 41, symbol: symbolId)]
+            ),
+            requestedMarkerId: id(41),
+            expectedGeneration: store.generation
+        )
+        #expect(store.window(forMarkerId: id(40)) != nil)
+        #expect(store.window(forMarkerId: id(41)) != nil)
+
+        let manager = manager()
+        manager.threadStore = store
+
+        // The event names marker 40 — indexed in A, absent from B.
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(42), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(40), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.window(forMarkerId: id(40)) == nil, "the matched window goes")
+        #expect(
+            store.window(forMarkerId: id(41)) == nil,
+            "and so does the unresolved window that merely failed to name it"
+        )
+    }
+
+    /// The sweep is bounded: a root-resolved window knows its own extent, so if
+    /// the event's marker and parent are both absent from it, it genuinely does
+    /// not contain them and must survive.
+    @Test
+    func aResolvedUnrelatedWindowSurvivesTheSweep() {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+        store.ingest(
+            page: page(
+                requested: 45, windowRoot: "done",
+                nodes: [node("done", marker: 45, symbol: symbolId)],
+                rootMarker: 45, rootResolved: true
+            ),
+            requestedMarkerId: id(45),
+            expectedGeneration: store.generation
+        )
+        store.ingest(
+            page: page(
+                requested: 46, windowRoot: "partial",
+                nodes: [node("partial", marker: 46, symbol: symbolId)]
+            ),
+            requestedMarkerId: id(46),
+            expectedGeneration: store.generation
+        )
+
+        let manager = manager()
+        manager.threadStore = store
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(47), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(46), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.window(forMarkerId: id(46)) == nil, "the matched partial window goes")
+        #expect(
+            store.window(forMarkerId: id(45)) != nil,
+            "a resolved window that named neither endpoint is provably unaffected"
+        )
+    }
+
     // MARK: - neutralMerge derives permissions locally
 
     /// A realtime payload is serialised with the *creator's* viewer context and

@@ -164,18 +164,50 @@ final class MarkerThreadStore: ObservableObject {
 
         guard !doomed.isEmpty else { return false }
 
-        for key in doomed {
-            windows[key] = nil
-            expandedKeys.remove(key)
-            for (id, existing) in keysByMarkerId where existing == key {
-                keysByMarkerId[id] = nil
-            }
-            if pendingNavigation?.cacheKey == key {
-                pendingNavigation = nil
-            }
-        }
+        for key in doomed { forget(key) }
         generation &+= 1
         return true
+    }
+
+    /// Drop every *unresolved* cached thesis on one symbol.
+    ///
+    /// A window whose root is still unresolved is a partial view: it does not
+    /// know its own extent, so it cannot rule out that an event belongs to it.
+    /// Two provisional windows of the same thesis can be cached side by side —
+    /// the store permits that deliberately, since neither knows it is the other
+    /// — and matching an event by id then invalidates only the one that happens
+    /// to hold the endpoint, leaving the other stale with no way to notice.
+    ///
+    /// Root-resolved windows on the same symbol are deliberately spared. One of
+    /// those does know its extent, so if the event's marker and parent are both
+    /// absent from it, it genuinely does not contain them.
+    ///
+    /// - Returns: whether anything was dropped.
+    @discardableResult
+    func invalidateUnresolvedTheses(onSymbolId symbolId: UUID?) -> Bool {
+        let doomed = windows.filter { _, window in
+            guard !window.rootResolved else { return false }
+            guard let symbolId else { return true }
+            let symbols = window.nodes.compactMap(\.symbolId)
+            return symbols.isEmpty || symbols.contains(symbolId)
+        }.map(\.key)
+
+        guard !doomed.isEmpty else { return false }
+        for key in doomed { forget(key) }
+        generation &+= 1
+        return true
+    }
+
+    /// Remove one cache entry and everything pointing at it.
+    private func forget(_ key: MarkerThreadCacheKey) {
+        windows[key] = nil
+        expandedKeys.remove(key)
+        for (id, existing) in keysByMarkerId where existing == key {
+            keysByMarkerId[id] = nil
+        }
+        if pendingNavigation?.cacheKey == key {
+            pendingNavigation = nil
+        }
     }
 
     /// Drop one thesis's cached window so the next read is authoritative,

@@ -36,6 +36,26 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
             .onChange(of: appState.currentGuild?.id) { _, _ in
                 applyScope()
             }
+            // Membership, not just guild identity. A role can change inside one
+            // guild — promoted, demoted, or the membership arriving after the
+            // guild switch — and observing only the guild id leaves the previous
+            // guild's moderation offering Delete on markers this viewer cannot
+            // remove. The membership id moves whenever the (guild, member) pair
+            // does, so it catches the switch as well.
+            .onChange(of: appState.currentMembership?.id) { _, _ in
+                applyModeration()
+            }
+            .onChange(of: appState.canModerate) { _, _ in
+                applyModeration()
+            }
+    }
+
+    /// Push the viewer's current moderation standing at the manager.
+    ///
+    /// Cheap and idempotent, so it is safe to call from every path that could
+    /// have changed it.
+    private func applyModeration() {
+        chartViewModel.markerManager?.viewerCanModerate = appState.canModerate
     }
 
     private func apply(enabled: Bool) {
@@ -60,7 +80,7 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
     /// another, and a signed-out account leaves nothing behind.
     private func applyScope() {
         // Moderation is per guild, so switching guilds can gain or lose it.
-        chartViewModel.markerManager?.viewerCanModerate = appState.canModerate
+        applyModeration()
         appState.markerThreadStore.activate(
             accountId: appState.currentUser?.id,
             guildId: appState.currentGuild?.id

@@ -244,39 +244,54 @@ extension MarkerManager {
             // in two separately cached windows, and both are now stale.
             matched = store.invalidateThesis(containing: parentMarkerId) || matched
         }
+        // Matching one endpoint is not proof the rest of the cache is current.
+        // The store deliberately allows two provisional windows onto the same
+        // unresolved thesis, so an event can land in one while the other — the
+        // one actually on screen — never held that endpoint and is now stale
+        // with nothing in it to say so. Unresolved windows on the symbol are
+        // swept either way; a root-resolved window that matched nothing knows
+        // its own extent and is genuinely unaffected, so it survives.
+        store.invalidateUnresolvedTheses(onSymbolId: symbolId)
         guard !matched else { return }
 
         store.invalidateTheses(onSymbolId: symbolId)
     }
 
-    /// Merge a broadcast marker without adopting somebody else's identity.
+    /// Merge a realtime marker without adopting somebody else's identity.
     ///
-    /// A realtime payload is built with the *creator's* viewer context and sent
-    /// verbatim to the whole guild, so its permission flags describe whoever
-    /// acted, not whoever is reading. Adopting them hands every recipient the
-    /// creator's Edit and Delete affordances on a marker that is not theirs.
-    /// Its engagement flags are equally wrong: they would clear this viewer's
-    /// own like and poll vote.
+    /// The backend personalises delivery, so in normal operation a payload's
+    /// viewer-relative fields already describe the recipient. This does not rely
+    /// on that. Personalisation is a property of the current server, applied
+    /// per delivery path, and a client that trusts it has no defence when one
+    /// path changes: the failure is silent, and it shows another member's Edit
+    /// and Delete affordances on a marker that is not theirs. Deriving locally
+    /// costs nothing and cannot regress.
     ///
-    /// So two different repairs, for two different reasons:
+    /// Two repairs, for two different reasons:
     ///
     /// - **Engagement is preserved** from the loaded copy. Only this client
-    ///   knows what this viewer has liked or voted for; the payload cannot.
+    ///   knows what this viewer has liked or voted for.
     /// - **Permissions are re-derived** from the authenticated user and their
     ///   membership in the current guild. Preserving them would be wrong too —
-    ///   the loaded copy predates the update — and trusting the payload is what
-    ///   leaks authorship. Only local derivation is correct in both directions.
-    ///
-    /// The backend does personalise per recipient on some paths. This does not
-    /// depend on that, because the paths that matter here demonstrably do not.
+    ///   the loaded copy predates the update — so local derivation is the only
+    ///   answer that is right in both directions.
     func neutralMerge(_ incoming: RLChartMarkerDTO, into existing: RLChartMarkerDTO) -> RLChartMarkerDTO {
-        let isMine = incoming.author.userId == userId
-        return incoming.updating(
+        locallyPermissioned(incoming).updating(
             isLikedByCurrentUser: existing.isLikedByCurrentUser,
             // Nested per-viewer state the top-level vote field does not cover:
             // the counts are authoritative, the `hasVoted` flags are not.
             pollOptions: mergedPollOptions(incoming: incoming, existing: existing),
-            userPollVote: existing.userPollVote,
+            userPollVote: existing.userPollVote
+        )
+    }
+
+    /// A marker's permissions as they apply to *this* viewer.
+    ///
+    /// Used where there is no loaded copy to merge against — a newly created
+    /// marker — and as the first half of `neutralMerge`.
+    func locallyPermissioned(_ dto: RLChartMarkerDTO) -> RLChartMarkerDTO {
+        let isMine = dto.author.userId == userId
+        return dto.updating(
             isCurrentUserMarker: isMine,
             // Editing someone else's marker is refused server-side however
             // senior the viewer, so moderation does not widen this.
@@ -288,6 +303,12 @@ extension MarkerManager {
 
     /// Incoming counts with this viewer's own `hasVoted` flags restored.
     ///
+    /// Every flag is rewritten from the loaded copy, including the false ones,
+    /// and including when this viewer has voted for nothing. Returning the
+    /// incoming options untouched in that case would let a foreign `hasVoted`
+    /// through — the exact leak this function exists to close — and "the viewer
+    /// has no votes" is precisely when a stray true is most misleading.
+    ///
     /// Matched by option id rather than position: an edited poll can reorder or
     /// drop options, and carrying a flag across by index would attribute the
     /// viewer's vote to an option they never chose.
@@ -296,9 +317,7 @@ extension MarkerManager {
         existing: RLChartMarkerDTO
     ) -> [RLPollOptionDTO]? {
         guard let incomingOptions = incoming.pollOptions else { return nil }
-        guard let existingOptions = existing.pollOptions else { return incomingOptions }
-        let voted = Set(existingOptions.filter(\.hasVoted).map(\.id))
-        guard !voted.isEmpty else { return incomingOptions }
+        let voted = Set((existing.pollOptions ?? []).filter(\.hasVoted).map(\.id))
         return incomingOptions.map { option in
             RLPollOptionDTO(
                 id: option.id,
