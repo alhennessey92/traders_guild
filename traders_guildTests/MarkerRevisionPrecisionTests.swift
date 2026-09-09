@@ -70,13 +70,77 @@ struct MarkerRevisionPrecisionTests {
         #expect(revision.microsecondsSinceEpoch == Int64(expected.timeIntervalSince1970) * 1_000_000)
     }
 
+    /// Malformed input must return nil, never trap.
+    ///
+    /// The arithmetic is integer and unchecked inputs would reach it, so the
+    /// domain is restricted to what Python's `datetime` can actually emit
+    /// before any multiplication happens. Each case below previously either
+    /// parsed silently wrong or risked overflow.
     @Test
-    func rejectsRubbishRatherThanGuessing() {
-        #expect(MarkerRevision(wire: "") == nil)
-        #expect(MarkerRevision(wire: "not-a-timestamp") == nil)
-        #expect(MarkerRevision(wire: "2026-09-09") == nil)
+    func rejectsMalformedValuesWithoutTrapping() {
+        let malformed = [
+            "",                                   // empty
+            "   ",                                // blank
+            "not-a-timestamp",
+            "2026-09-09",                         // date only, no time
+            "2026-09-09T",                        // no clock
+            "2026-13-01T00:00:00Z",               // month 13
+            "2026-00-01T00:00:00Z",               // month 0
+            "2026-02-31T00:00:00Z",               // Feb 31 must not normalise into March
+            "2025-02-29T00:00:00Z",               // not a leap year
+            "0000-01-01T00:00:00Z",               // year below the datetime domain
+            "10000-01-01T00:00:00Z",              // year above it
+            "99999999999999-01-01T00:00:00Z",     // the overflow candidate
+            "2026-09-09T24:00:00Z",               // hour 24
+            "2026-09-09T10:60:00Z",               // minute 60
+            "2026-09-09T10:00:61Z",               // second 61
+            "2026-09-09T10:00:00:00Z",            // a fourth clock component
+            "2026-09-09T10Z",                     // no minutes
+            "2026-09-09T1x:00:00Z",               // non-numeric clock
+            "2026-09-09T10:00:00.Z",              // empty fraction
+            "2026-09-09T10:00:00.12x456Z",        // non-numeric fraction
+            "2026-09-09T10:00:00+99:00",          // hour offset out of range
+            "2026-09-09T10:00:00+00:99",          // minute offset out of range
+            "2026-09-09T10:00:00+0",              // truncated offset
+            "2026-09-09T10:00:00+ab:cd",          // non-numeric offset
+            "2026-9-9T10:00:00Z",                 // unpadded date components
+        ]
+
+        for value in malformed {
+            #expect(MarkerRevision(wire: value) == nil, "should reject: \(value)")
+        }
+
         #expect(MarkerRevision.make(nil) == nil)
         #expect(MarkerRevision.make("   ") == nil)
+    }
+
+    /// The real wire domain still parses, so the tightening did not overreach.
+    @Test
+    func acceptsTheRealWireDomain() {
+        let valid = [
+            "2026-09-09T10:00:00Z",
+            "2026-09-09T10:00:00+00:00",
+            "2026-09-09T10:00:00.353082+00:00",
+            "2026-09-09T10:00:00.353082Z",
+            "2024-02-29T00:00:00Z",               // a genuine leap day
+            "0001-01-01T00:00:00Z",               // datetime.min
+            "9999-12-31T23:59:59.999999Z",        // datetime.max
+            "2026-09-09T10:00:00",                // no zone: treated as UTC
+            "2026-09-09T10:00Z",                  // seconds omitted
+        ]
+        for value in valid {
+            #expect(MarkerRevision(wire: value) != nil, "should accept: \(value)")
+        }
+    }
+
+    /// The extremes of the domain must not overflow the microsecond arithmetic.
+    @Test
+    func domainExtremesDoNotOverflow() throws {
+        let min = try #require(MarkerRevision(wire: "0001-01-01T00:00:00Z"))
+        let max = try #require(MarkerRevision(wire: "9999-12-31T23:59:59.999999Z"))
+        #expect(min < max)
+        #expect(min.microsecondsSinceEpoch < 0, "before the epoch")
+        #expect(max.microsecondsSinceEpoch > 0)
     }
 
     // MARK: - Reconciler

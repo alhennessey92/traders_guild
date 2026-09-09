@@ -64,7 +64,12 @@ struct MarkerRevision: Comparable, Hashable, Codable, CustomStringConvertible {
         // arithmetic below cannot overflow on a hostile or corrupt value.
         let dateComponents = parts[0].split(separator: "-", omittingEmptySubsequences: false)
         guard dateComponents.count == 3,
-              dateComponents.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
+              dateComponents.allSatisfy({ $0.allSatisfy(\.isNumber) }),
+              // Zero-padded widths, as Python's isoformat always writes them.
+              // Accepting "2026-9-9" would admit shapes the wire never uses.
+              dateComponents[0].count == 4,
+              dateComponents[1].count == 2,
+              dateComponents[2].count == 2,
               let year = Int(dateComponents[0]),
               let month = Int(dateComponents[1]),
               let day = Int(dateComponents[2]),
