@@ -140,19 +140,25 @@ struct MarkerLinkIntegrationRepairTests {
     /// attempt, which is the loop the expiry was added to stop.
     @MainActor
     @Test
-    func consumeThenRestagePreservesTheOriginalInstant() {
+    func consumeThenRestagePreservesTheOriginalInstant() throws {
         let store = MarkerThreadStore()
         store.activate(accountId: id(900), guildId: id(901))
         let tapped = Date()
 
         store.stagePendingNavigation(markerId: id(7), now: tapped)
 
-        // Three failed restore attempts, each consuming and re-staging.
+        // Three failed restore attempts, each consuming and re-staging. The
+        // token must survive every one of them — a nil here would mean the
+        // restore loop had already given up, which is a different bug and must
+        // fail rather than be skipped over.
         var carried = tapped
         for offset in [10.0, 20.0, 29.0] {
-            let pending = store.consumePendingNavigation(now: tapped.addingTimeInterval(offset))
-            let token = try? #require(pending)
-            carried = token?.stagedAt ?? carried
+            let token = try #require(
+                store.consumePendingNavigation(now: tapped.addingTimeInterval(offset)),
+                "the staged target must still be valid \(offset)s in"
+            )
+            #expect(token.stagedAt == tapped, "every attempt carries the original instant")
+            carried = token.stagedAt
             store.stagePendingNavigation(
                 markerId: id(7),
                 now: tapped.addingTimeInterval(offset),

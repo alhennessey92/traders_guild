@@ -57,29 +57,35 @@ assigned in `handleOnAppear` alongside the manager itself.
 
 ## What is here
 
-Nineteen commits, each buildable:
+25 commits, each buildable:
 
 | Commit | Contents |
 |---|---|
-| `5d017b1` | Pure link topology, thread window, connector geometry |
-| `a3efeb2` | Wire contract, thread store, placement session |
-| `6a5c0bd` | Tests for the pure layer |
-| `e0a242f` | Focus rendering: rings, badge, connectors |
-| `03e4249` | Link carried through placement |
-| `4fef5a5` | Respond action, relationship row, thesis disclosure |
+| `5d017b1` | Pure link topology, thread window and connector geometry |
+| `a3efeb2` | Link wire contract, thread store and placement session |
+| `6a5c0bd` | Cover link topology, thread merging and curve routing |
+| `e0a242f` | Thesis focus rendering, rings, badge and connectors |
+| `03e4249` | Carry the link through placement |
+| `4fef5a5` | Respond action, relationship row and thesis disclosure |
 | `0d9bf48` | Placement banner, response notification, focus exit |
-| `1cac77d` | Cache/session/count/wire-compat tests |
-| `2fd4830` | Reduce Motion + badge geometry as tested rules |
-| `07a7df3` | Selection restored after reload; reconnect invalidation |
+| `1cac77d` | Cache lifecycle, link session, counts and wire compat |
+| `2fd4830` | Make Reduce Motion and badge geometry testable rules |
+| `07a7df3` | Restore selection after reload, invalidate on reconnect |
 | `08b7652` | Sibling order, cursor retirement, failure classification |
-| `a0b720a` | DEBUG fixture harness + two defects it exposed |
-| `66d413f` | Handover: review pass, privacy wiring, visual review |
-| `267661a` | Self-audit: converging windows, lagging counts, stale nav |
-| `74f9569` | Microsecond-exact revisions; revision-aware list merge |
-| `901856d` | Cursor provenance, guarded mutations, lifecycle repairs |
+| `a0b720a` | DEBUG fixture harness, and two defects it exposed |
+| `66d413f` | Record the review pass, privacy wiring and visual review |
+| `267661a` | Converging thesis windows, lagging counts, stale navigation |
+| `97434a2` | Record the self-audit pass |
+| `0155db1` | List the new test files and the debug-only harness |
+| `74f9569` | Microsecond-exact revisions, and a revision-aware list merge |
+| `32d8267` | Export the fixture visual review as files |
+| `901856d` | Cursor provenance, guarded mutations, and lifecycle repairs |
 | `f04240e` | Malformed revision inputs must not trap |
-| `4a8d827` | Capability wired where the manager actually exists |
-| `9515002` | Cursor provenance pinned to verified backend behaviour |
+| `4a8d827` | Wire the link capability where the manager actually exists |
+| `9515002` | Pin cursor provenance against verified backend behaviour |
+| `a90aba0` | Bring the handover current |
+| `ffacc66` | Keep the fade rule off the pan path, and per selection |
+| `e288398` | Device profiling plan, isolation first |
 
 ### New files (all auto-join the target — the project uses synchronized groups)
 

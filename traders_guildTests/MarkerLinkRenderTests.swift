@@ -80,7 +80,7 @@ struct MarkerLinkRenderTests {
     /// Likes sit at x+8…x+22. The response badge mirrors them on the left, so
     /// the two can never overlap however many of each a marker has.
     @Test
-    func responseBadgeNeverOverlapsTheLikeBadge() {
+    func responseBadgeNeverOverlapsTheLikeBadge() throws {
         let center = CGPoint(x: 200, y: 400)
         for isBelow in [true, false] {
             let response = MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: isBelow)
@@ -91,11 +91,11 @@ struct MarkerLinkRenderTests {
                 responseCount: 2
             )
             #expect(all.count == 2)
-            let like = try? #require(all.first { $0 != response })
-            if let like {
-                #expect(!like.intersects(response), "badges must not overlap")
-                #expect(response.maxX < like.minX, "responses left, likes right")
-            }
+            // Fail loudly rather than skipping: a missing like badge would mean
+            // the geometry changed underneath this assertion.
+            let like = try #require(all.first { $0 != response })
+            #expect(!like.intersects(response), "badges must not overlap")
+            #expect(response.maxX < like.minX, "responses left, likes right")
         }
     }
 
