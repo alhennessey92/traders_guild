@@ -4,14 +4,23 @@ Branch: `claude/1.3.0-marker-visuals`
 Worktree: `.worktrees/linked-markers-claude`
 Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 
-Status: **complete and buildable**. Clean Debug build for iOS Simulator, full
-unit suite green (449 passing, 0 failures), app installs and launches.
+Status: **complete and buildable**. Clean Debug *and Release* builds, full unit
+suite green (**474 passing, 0 failures**), app installs and launches, and the
+linked-marker visuals reviewed against a DEBUG fixture harness on two devices.
+
+---
+
+## Second pass (2026-09-09)
+
+Closes the privacy/moderation wiring, acts on five independent-review findings,
+and adds the fixture harness plus the visual review it enabled. See
+"Independent review findings" and "Visual review" below.
 
 ---
 
 ## What is here
 
-Seven commits, each buildable:
+Twelve commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -24,6 +33,9 @@ Seven commits, each buildable:
 | `0d9bf48` | Placement banner, response notification, focus exit |
 | `1cac77d` | Cache/session/count/wire-compat tests |
 | `2fd4830` | Reduce Motion + badge geometry as tested rules |
+| `07a7df3` | Selection restored after reload; reconnect invalidation |
+| `08b7652` | Sibling order, cursor retirement, failure classification |
+| `a0b720a` | DEBUG fixture harness + two defects it exposed |
 
 ### New files (all auto-join the target — the project uses synchronized groups)
 
@@ -97,12 +109,82 @@ but it is the reason those diffs touch more lines than the feature needs.
 
 ---
 
+## Independent review findings — all five acted on
+
+| # | Finding | Resolution |
+|---|---|---|
+| 1 | `expandBranch` retired the cursor on **any** error, losing every remaining response under a node when offline / 503 / 429 | `MarkerThreadRequestFailure.classify` splits transient / staleCursor / gone / unavailable. Transient keeps the cursor and the button becomes a live retry; a stale cursor force-reloads the thread; only 404/410 retires |
+| 2 | Branch/ancestry tasks were untracked and lacked a marker-identity check, so a stale page or error could mutate another selection | All requests tracked and cancelled on marker change; every completion re-checks marker identity **and** generation; the generation check moved *into* `MarkerThreadStore.ingest` so no caller can omit it |
+| 3 | Append-only merge reversed sibling chronology on the deep-link path | Pages are spliced with `anchoredMerge`, which preserves both orderings using shared keys as anchors and files non-overlapping incoming keys ahead. Tombstones have no `createdAt`, so server sequence is the only authority |
+| 4 | Cursor retirement compared `directResponseCount` to loaded child count — counts exclude deleted children while rows include tombstones, so the cursor lived forever | Retirement now follows **consumed-branch identity**: spend a cursor, and absence of a replacement for that anchor means exhausted |
+| 5 | Capability disabled then re-enabled reopened a stale cached thread | A capability flip calls `invalidateAll(reason: .capabilityChanged)` |
+
+Contract clarification applied: `parent_direct_response_count` /
+`parent_responses_revision` are read as **top-level** fields on create HTTP,
+create event, delete HTTP and delete event. The "at least" floor counts
+`activeLoadedCount` (tombstones excluded), and a complete window with no
+server-supplied total still reports a floor rather than promoting its row count.
+
+## Privacy, moderation and membership invalidation
+
+| Trigger | Reason | Where |
+|---|---|---|
+| Block / unblock a member | `.privacyChanged` | `RLAppState.blockUser` / `unblockUser` |
+| Report content or a member | `.moderation` | `markReportedContent` / `markReportedUser` |
+| Role change, mute, suspend | `.moderation` | `setupGuildEventListeners` |
+| Leave a guild; guild deleted | `.membershipLost` | `leaveCurrentGuild`; guild-deleted event |
+| Guild or account change | `.scopeChanged` | `MarkerThreadStore.activate` |
+| Websocket reconnect | `.reconnect` | `MarkerManager.configureRealTime` |
+| Capability flip | `.capabilityChanged` | `MarkerLinkCapabilityObserver` |
+| Logout | `.logout` | `RLAppState` reset |
+| Marker deleted | per-thesis | `handleMarkerDeleted` |
+
+Windows are **dropped, not filtered**. A cached tombstone carries no author
+identity by design, so the cache cannot be filtered against a blocklist safely
+— which makes dropping the only correct response to a privacy change.
+
+## Visual review — fixture harness
+
+`MarkerLinkFixtureGallery`, reached with `-MarkerLinkFixtures`, drives the real
+`ChartMarkerSystem.drawMarkers` and the real linked-detail views against
+synthetic markers laid out by the real `MarkerPositionCalculator`. No backend, no
+auth, no network. Verified absent from Release: 9 references in the Debug dylib,
+**0 in the 107MB Release binary**.
+
+Reviewed on iPhone 16 Pro and iPhone SE (3rd gen):
+
+| Case | Result |
+|---|---|
+| Parent → unrelated → response, one candle | **Correct.** The green `supports` connector curves around the faded stranger, never through it; the grey stack spine below stays untinted |
+| All three relationships | Colour, ring and dash pattern all distinguishable; `[5,3]` / `[2,3]` / `[7,3,2,3]` read as different lines |
+| Dense chart (19 markers, 8-response thesis) | Holds after the ring fix; three stacked connectors compress into a bundle, which is inherent to same-candle stacking — the thread list carries the detail |
+| Light-grey theme | Rings and connectors clearly visible |
+| iPhone SE (375pt) | Layout and chart hold; rows full-width and legible |
+| Dynamic Type (accessibility-XL) | Rows reflow to a column; chips scale; tombstone keeps structure and relationship with no identity |
+| Reduce Motion | Connector at full length on first paint — focus appears, it just does not animate |
+| Count honesty | Window of 5 nodes incl. 1 tombstone with a live branch cursor renders **"4+"** — tombstone excluded, "+" retained |
+
+**Two defects found by looking, not by testing** (both fixed in `a0b720a`):
+rings drawn outside the glass edge made a focused stack read as one continuous
+tube at 40pt spacing; and the thesis row's chip/count used fixed 10pt type that
+ignored Dynamic Type entirely.
+
+**One finding reported, not changed:** at 0.22 on the **light-grey** theme,
+unrelated markers are not merely recessive — they are close to invisible, and a
+faded like badge reads as a colour smudge. 0.22 is a locked decision so it was
+implemented as specified; the recommendation is a theme-aware floor of roughly
+0.35 for `lightGrey` only. Owner's call.
+
 ## Verification performed
 
 - **Clean Debug build**, iOS Simulator (iPhone 16 Pro, iOS 18.2), scheme
   `traders_guild Compose Dev`.
-- **Full unit suite: 460 passing, 0 failures.** No pre-existing test changed
-  behaviour; two test fakes gained the new `MarkerAPIClient` members.
+- **Full unit suite: 474 passing, 0 failures.** No pre-existing test changed
+  behaviour; two test fakes gained the new `MarkerAPIClient` members. One of my
+  own earlier tests was corrected: it encoded the count-based cursor-retirement
+  rule that review showed to be wrong.
+- **Clean Release build**, with the fixture harness proven absent from the
+  binary.
 - **App installs and launches** to the sign-in screen without crashing.
 
 The tests the owner asked for, and where they live:
@@ -122,26 +204,32 @@ The tests the owner asked for, and where they live:
 
 ## Known gaps — not done, do not assume otherwise
 
-1. **No end-to-end visual verification.** The simulator reaches the sign-in
-   screen; without a backend serving linked payloads and two accounts I could not
-   place a response and look at it. Everything visual is verified by geometry and
-   policy tests, not by eye. **Still to check by hand once the backend is up:**
-   default same-candle response, parent-unrelated-response stack, both themes,
-   light-grey theme contrast at 0.22, small screen, Dynamic Type, VoiceOver
-   ordering in the thesis list, Reduce Motion, a dense stack, and a 20-response
-   thesis.
-2. **No physical-device Instruments run.** Connector routing is O(edges × samples)
-   per frame with a 12-edge cap; membership is computed on selection change, not
-   per frame. Unmeasured against the 57 fps baseline.
-3. **Cache invalidation covers logout, guild change, marker deletion and
-   websocket reconnect.** Not yet wired: `.privacyChanged` and `.moderation`.
-   `invalidateAll(reason:)` accepts both and `invalidateThesis(containing:)`
-   exists — they need calling from wherever a block or a moderation action
-   lands. That is the remaining integration gap, and it matters because a
-   cached window could otherwise show a node the viewer has since blocked.
-4. **Discord relation copy** (generic sentence only) is backend-side; nothing on
+1. **Fixture visual verification is not backend E2E.** The harness renders the
+   real drawing and detail code against synthetic data, which covers layout,
+   colour, contrast, type and reflow. It does **not** cover: a real
+   create→notify→realtime round trip, server-authored `node_key` shapes, real
+   cursor pagination against a live thread, actual block enforcement on reads,
+   or the cross-timeframe jump against real history paging. Those need Codex's
+   backend and two accounts.
+2. **VoiceOver not driven.** Labels, traits and hints are set on every linked
+   view and relationship is always spoken rather than carried by colour, but I
+   did not run VoiceOver and step the rotor. Chart glyphs remain Canvas pixels
+   with no accessibility elements — unchanged from 1.2.1 — which is why the
+   thesis list is the accessible path and must stay reachable without focus mode.
+3. **No physical-device Instruments run.** Connector routing is
+   O(edges × samples) per frame with a 12-edge cap; membership is computed on
+   selection change, not per frame. Unmeasured against the 57 fps baseline.
+4. **Reduce Motion cannot be toggled by `simctl`.** I set it via the
+   accessibility defaults and the connector renders at full length on first
+   paint, which together with `reduceMotionSnapsInsteadOfHidingFocus` is good
+   evidence — but a still screenshot cannot prove the *absence* of an animation.
+5. **Bilateral blocks initiated by the other party** have no client event. This
+   viewer learns of them on refetch, so the thesis cache is protected by
+   reconnect and moderation invalidation rather than by a dedicated signal. If
+   the backend gains a "blocked by" event, wire it to `.privacyChanged`.
+6. **Discord relation copy** (generic sentence only) is backend-side; nothing on
    iOS was changed for it, and public share cards are untouched as specified.
-5. **Android** untouched, as instructed.
+7. **Android** untouched, as instructed.
 
 ---
 
