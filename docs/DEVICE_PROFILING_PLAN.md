@@ -47,9 +47,30 @@ target only. Do not weaken ATS in the shared configuration.
 
 ## What to measure
 
-The baseline to beat is the one from the gesture-perf work: **57 frames drawn
-per second while panning**. The linked-marker changes that touch the pan path are
-the connector routing, the ring and badge drawing, and the painted-member report.
+**The 57 frames/s figure is context, not a baseline.**
+
+The gesture-perf work measured 57 frames drawn per second during a pan, on a
+different build of a different version, on an unrecorded dataset, some weeks
+ago. Comparing a new measurement against it would attribute to linked markers
+every difference that has accumulated since — other 1.2.x chart changes, a
+different marker count, a different iOS version, a warmer or colder device.
+
+So it is a sanity check on the order of magnitude and nothing more. The number
+that decides whether this feature costs frames is a **matched pair**, measured
+in one sitting:
+
+| | Build | Bundle id |
+|---|---|---|
+| A | `.worktrees/linked-markers-ios-device-baseline` — 1.2.1 as submitted | `co.tradersguild.app.linkeddev` |
+| B | this worktree — 1.3.0 with linked markers | `co.tradersguild.app.linkeddev` |
+
+Both built `DevProfile`, both installed on the same iPhone 14 Pro, both driven
+over the same guild, symbol, timeframe and marker set, back to back, on the same
+charge state. The isolated configuration is deliberately free of feature code so
+that it applies unchanged to the baseline worktree; that is what makes A and B
+differ only by the feature.
+
+Report the pair, never a single number against history.
 
 1. **Same fixture, same gesture.** A thesis with enough responses to force a
    dense stack, one sustained horizontal pan, repeated three times.

@@ -1,0 +1,29 @@
+#include "Shared-LinkedDev.xcconfig"
+
+// Optimized build for device profiling.
+//
+// Release-grade codegen, because a Debug build's frame timings measure -Onone
+// rather than the app: whole-module optimization and inlining are exactly what
+// a chart draw loop depends on. Only the diagnostic surface is widened.
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) TG_ISOLATED_DEV
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+GCC_OPTIMIZATION_LEVEL = s
+ONLY_ACTIVE_ARCH = NO
+ENABLE_TESTABILITY = NO
+VALIDATE_PRODUCT = YES
+
+// Keep the symbols Instruments needs to attribute time to a function rather
+// than to an address. Without these a time profile of an optimized build is a
+// wall of unresolved frames.
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+STRIP_INSTALLED_PRODUCT = NO
+SWIFT_REFLECTION_METADATA_LEVEL = all
+
+// Still a development-signed build, so Instruments can attach.
+TG_APS_ENVIRONMENT = development
+CODE_SIGN_ENTITLEMENTS = traders_guild/traders_guild.LinkedDev.entitlements
+
+TG_LAN_HOST = 192.168.1.182
+TG_GATEWAY_PORT = 30080

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Isolated DEV entitlements. Deliberately NOT a copy of the shipping ones.
+
+	  aps-environment: sandbox only. A DEV build registering against production
+	  APNs would take push delivery for the real app's token on a shared device.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!--
+	  Its own keychain group, and only its own. The shipping app's group is
+	  absent, so this build cannot read the production session, cannot overwrite
+	  it, and signing out of one does not sign out of the other. This is what
+	  makes it safe to run a QA account beside a personal account on one phone.
+	-->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)co.tradersguild.app.linkeddev</string>
+	</array>
+
+	<!--
+	  No com.apple.developer.associated-domains. Universal links belong to the
+	  shipping app: two installed apps claiming applinks:tradersguild.co would
+	  compete for real marker links on a personal device, and the resolution is
+	  not deterministic. The custom `tradersguild://` scheme is likewise left to
+	  the real app — see the DEV URL scheme in the generated Info.plist.
+
+	  No com.apple.developer.applesignin either. Sign in with Apple is bound to
+	  the shipping bundle id (AppConfig.appleSignInClientID is
+	  "co.tradersguild.app"), so it cannot work under a different id — and QA
+	  sign-in is by email, which needs no entitlement.
+	-->
+</dict>
+</plist>

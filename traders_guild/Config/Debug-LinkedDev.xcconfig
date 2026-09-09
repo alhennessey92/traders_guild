@@ -1,0 +1,21 @@
+#include "Shared-LinkedDev.xcconfig"
+
+// Debug DEV launch: attachable, symbol-rich, for stepping through behaviour.
+// Not for measuring it — see Profile-LinkedDev.xcconfig.
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG TG_ISOLATED_DEV
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+GCC_OPTIMIZATION_LEVEL = 0
+ONLY_ACTIVE_ARCH = YES
+ENABLE_TESTABILITY = YES
+
+// APNs sandbox. A DEV build must never register against production APNs, or a
+// test device competes with the real app for the same token.
+TG_APS_ENVIRONMENT = development
+CODE_SIGN_ENTITLEMENTS = traders_guild/traders_guild.LinkedDev.entitlements
+
+// Gateway on the Mac's LAN address — a device cannot reach the Mac's
+// `localhost`. Set TG_LAN_HOST to the Mac's current LAN IP; it changes with the
+// network, which is why it is a variable rather than a literal.
+TG_LAN_HOST = 192.168.1.182
+TG_GATEWAY_PORT = 30080

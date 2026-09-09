@@ -1,0 +1,36 @@
+// Isolated device DEV / profiling build.
+//
+// Settings shared by both isolated configurations. This file, its two siblings,
+// the two entitlements files and the two schemes are the whole of the isolated
+// setup: it carries no feature code, so it applies unchanged to a baseline
+// checkout for a same-device comparison.
+//
+// The isolation is the point. This app must be installable beside the real one
+// on a personal device without touching it — a different bundle id so it
+// installs alongside rather than over, a different keychain group so it cannot
+// read or overwrite the production session, and a different APNs registration
+// so a test device never receives production pushes.
+
+// A distinct id, so the App Store build on the device is never replaced.
+PRODUCT_BUNDLE_IDENTIFIER = co.tradersguild.app.linkeddev
+
+// Distinguishable on the home screen and in the app switcher. Deliberately
+// short: iOS truncates hard under the icon, and "Traders Guild" alone would be
+// indistinguishable from the real app at a glance.
+TG_DISPLAY_NAME = TG LinkedDev
+
+// Its own keychain group. Without this the DEV build and the production build
+// share `$(AppIdentifierPrefix)$(CFBundleIdentifier)`-derived storage only by
+// coincidence of id; naming it explicitly makes the separation deliberate and
+// survives an id change.
+TG_KEYCHAIN_GROUP = $(AppIdentifierPrefix)co.tradersguild.app.linkeddev
+
+// Signed with the existing team. Automatic signing provisions the new App ID.
+DEVELOPMENT_TEAM = B4WE2NR99U
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+
+// Universal links belong to the shipping app. A DEV build claiming
+// applinks:tradersguild.co would compete with it for real links on a personal
+// device, so the isolated entitlements drop associated domains entirely.
+TG_ISOLATED_DEV = YES
