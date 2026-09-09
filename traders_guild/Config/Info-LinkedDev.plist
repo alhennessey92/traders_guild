@@ -64,8 +64,6 @@
 	<string>Traders Guild uses speech recognition to transcribe your voice into chat messages.</string>
 	<key>TGDevGatewayBaseURL</key>
 	<string>http://$(TG_LAN_HOST):$(TG_GATEWAY_PORT)/api/v1</string>
-	<key>TGDevRoutingMode</key>
-	<string>API_GATEWAY</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

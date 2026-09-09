@@ -15,6 +15,24 @@ enum AppDeepLink: Equatable, Sendable {
     case emailVerification(String)
 
     private static let customScheme = "tradersguild"
+
+    /// The isolated DEV build registers its own URL scheme, because two
+    /// installed apps claiming `tradersguild://` race for every real link and
+    /// the winner is not deterministic. The parser has to know about it, or
+    /// every deep link into that build is silently dropped — which looks exactly
+    /// like a broken navigation feature rather than an unregistered scheme.
+    ///
+    /// Ordinary builds are unchanged: the condition is defined only by the two
+    /// isolated configurations, so this array compiles down to the single
+    /// original scheme everywhere else.
+    private static var acceptedCustomSchemes: [String] {
+        #if TG_ISOLATED_DEV
+        return [customScheme, "\(customScheme)-linkeddev"]
+        #else
+        return [customScheme]
+        #endif
+    }
+
     private static let trustedWebHosts: Set<String> = [
         "tradersguild.co",
         "open.tradersguild.co",
@@ -27,7 +45,7 @@ enum AppDeepLink: Equatable, Sendable {
 
         let scheme = (components.scheme ?? "").lowercased()
         let host = (components.host ?? "").lowercased()
-        let isCustomScheme = scheme == Self.customScheme
+        let isCustomScheme = Self.acceptedCustomSchemes.contains(scheme)
         let isTrustedWebLink = scheme == "https" && Self.trustedWebHosts.contains(host)
         guard isCustomScheme || isTrustedWebLink else { return nil }
 

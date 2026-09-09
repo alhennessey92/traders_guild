@@ -23,13 +23,14 @@ struct AppConfig {
     // Routing mode for dev-first direct services vs future gateway
     static var apiRoutingMode: APIRoutingMode {
         #if TG_ISOLATED_DEV
-        // The isolated DEV build bakes its routing into the bundle, ahead of any
-        // environment lookup. See `bakedDevGatewayBaseURL` for why.
-        if let raw = bakedValue(key: "TGDevRoutingMode"),
-           let mode = APIRoutingMode(rawValue: raw.uppercased()) {
-            return mode
-        }
-        #endif
+        // Unconditional, and deliberately not configurable. Reading the baked
+        // value and falling through when it is absent would leave the one path
+        // this build exists to make impossible — an environment variable, a
+        // persisted UserDefaults entry, or a missing key sending it to
+        // production. The isolated build routes through the gateway or not at
+        // all.
+        return .apiGateway
+        #else
 
         if let raw = normalizedEnvValue(key: "TG_API_ROUTING_MODE"),
            let mode = APIRoutingMode(rawValue: raw.uppercased()) {
@@ -49,13 +50,14 @@ struct AppConfig {
         #else
         return .apiGateway
         #endif
+        #endif
     }
 
     static var developmentGatewayBaseURL: String {
-        let devDefault = "http://localhost:30080/api/v1"
         #if TG_ISOLATED_DEV
-        if let baked = bakedDevGatewayBaseURL { return baked }
-        #endif
+        return isolatedDevGatewayBaseURL
+        #else
+        let devDefault = "http://localhost:30080/api/v1"
         #if targetEnvironment(simulator)
         return normalizedEnvURL(
             keys: ["TG_GATEWAY_BASE_URL_DEV_SIMULATOR", "TG_GATEWAY_BASE_URL_DEV"],
@@ -67,42 +69,92 @@ struct AppConfig {
             fallback: devDefault
         )
         #endif
+        #endif
     }
 
     static var productionGatewayBaseURL: String {
         #if TG_ISOLATED_DEV
-        // The isolated build has no production endpoint. Every routing path
-        // that would otherwise reach api.tradersguild.co resolves to the local
-        // gateway instead, so an optimized build launched from the home screen
-        // — with no scheme environment to read — cannot fall through to
-        // production. This is the difference between "configured for DEV" and
-        // "incapable of reaching production".
-        if let baked = bakedDevGatewayBaseURL { return baked }
-        #endif
-
+        // The isolated build has no production endpoint at all. Not "prefers the
+        // local one" — every path that would otherwise resolve to
+        // api.tradersguild.co resolves to loopback, and no environment variable
+        // or persisted default can override it.
+        return isolatedDevGatewayBaseURL
+        #else
         return normalizedEnvURL(
             keys: ["TG_GATEWAY_BASE_URL_PROD"],
             fallback: "https://api.tradersguild.co/api/v1"
         )
+        #endif
     }
 
     #if TG_ISOLATED_DEV
+    /// Where an isolated build sends everything, misconfiguration included.
+    ///
+    /// Loopback rather than the production host, so a broken or missing bake
+    /// fails closed: the app cannot reach a server at all, which is loud and
+    /// harmless. Falling back to the real gateway would make the one failure
+    /// mode this build exists to prevent also the *quietest* one — an optimized
+    /// build silently talking to production while looking fine.
+    static let isolatedDevFailClosedBaseURL = "http://127.0.0.1:1/api/v1"
+
+    /// The baked gateway if it is usable, otherwise the fail-closed loopback.
+    static var isolatedDevGatewayBaseURL: String {
+        bakedDevGatewayBaseURL ?? isolatedDevFailClosedBaseURL
+    }
+
     /// Gateway URL written into the bundle at build time by the isolated DEV
     /// configurations.
     ///
     /// `ProcessInfo.environment` only carries scheme variables when Xcode
     /// launches the app. Tapping the icon — which is how any real profiling run
     /// starts, because a debugger attached from launch distorts the timings —
-    /// gives an empty environment. The `UserDefaults` fallback below papers over
-    /// that only *after* one Xcode-launched run has persisted a value, so a
-    /// fresh install would resolve to the production gateway on first launch.
-    /// Baking the value removes the ordering dependency entirely.
+    /// gives an empty environment, and the `UserDefaults` fallback used
+    /// elsewhere only helps *after* one Xcode-launched run has persisted a
+    /// value. Baking the value removes the ordering dependency entirely.
+    ///
+    /// Returns nil rather than something unusable, and the caller substitutes
+    /// loopback: see `isolatedDevFailClosedBaseURL`.
     static var bakedDevGatewayBaseURL: String? {
         guard let raw = bakedValue(key: "TGDevGatewayBaseURL") else { return nil }
-        // An unexpanded "$(TG_LAN_HOST)" means the xcconfig was not applied;
-        // treat it as absent rather than issuing requests to a literal.
-        guard !raw.contains("$(") else { return nil }
-        return raw
+        return isValidIsolatedDevURL(raw) ? raw : nil
+    }
+
+    /// A baked URL is only accepted if it is a real, local, http(s) URL.
+    ///
+    /// The unexpanded-`$(…)` case is the one that actually happens — Xcode
+    /// substitutes build settings into Info.plist values but not keys, and a
+    /// misplaced setting leaves the literal behind — but a host check matters
+    /// just as much: a bake pointing anywhere public would defeat the isolation
+    /// silently, so it is refused rather than trusted.
+    static func isValidIsolatedDevURL(_ raw: String) -> Bool {
+        guard !raw.contains("$("), !raw.contains(")") else { return false }
+        guard let components = URLComponents(string: raw),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = components.host?.lowercased(),
+              !host.isEmpty
+        else { return false }
+        return isLocalHost(host)
+    }
+
+    /// Loopback, `.local`, link-local, or an RFC1918 private address.
+    private static func isLocalHost(_ host: String) -> Bool {
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
+        if host.hasSuffix(".local") { return true }
+
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        let octets = parts.compactMap { UInt8($0) }
+        guard octets.count == 4 else { return false }
+
+        switch (octets[0], octets[1]) {
+        case (10, _): return true
+        case (127, _): return true
+        case (192, 168): return true
+        case (169, 254): return true                       // link-local
+        case (172, 16...31): return true
+        default: return false
+        }
     }
 
     private static func bakedValue(key: String) -> String? {

@@ -16,6 +16,8 @@ CODE_SIGN_ENTITLEMENTS = traders_guild/traders_guild.LinkedDev.entitlements
 
 // Gateway on the Mac's LAN address — a device cannot reach the Mac's
 // `localhost`. Set TG_LAN_HOST to the Mac's current LAN IP; it changes with the
-// network, which is why it is a variable rather than a literal.
+// network, which is why it is a variable rather than a literal. AppConfig
+// refuses a baked URL whose host is not local and falls back to loopback, so a
+// stale or mistyped value fails closed instead of reaching somewhere public.
 TG_LAN_HOST = 192.168.1.182
 TG_GATEWAY_PORT = 30080
