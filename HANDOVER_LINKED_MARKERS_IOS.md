@@ -58,8 +58,13 @@ Fifteen commits, each buildable:
 - `Features/Shared/Marker/MarkerLinkViews.swift` — picker, relationship row, thread row, banner, capability observer
 - `Features/Shared/Marker/MarkerThesisDisclosure.swift` — lazy thread loader + disclosure
 
+**Debug-only** (excluded from Release, proven by binary inspection)
+- `Features/Shared/Marker/MarkerLinkFixtureGallery.swift` — visual harness
+
 **Tests** — `MarkerLinkGraphTests`, `MarkerLinkGeometryTests`, `MarkerThreadWindowTests`,
-`MarkerLinkStateTests`, `MarkerLinkDecodingTests`, `MarkerLinkRenderTests`.
+`MarkerLinkStateTests`, `MarkerLinkDecodingTests`, `MarkerLinkRenderTests`,
+`MarkerLinkReviewFixTests` (independent-review findings),
+`MarkerLinkSelfAuditTests` (self-audit findings).
 
 ---
 
