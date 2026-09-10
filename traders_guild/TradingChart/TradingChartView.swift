@@ -7810,7 +7810,7 @@ struct TradingChartView: View {
             selectedMarkerRotation: selectionRotation,
             dimmed: controlViewModel.isMarkerPlacementMode,
             editingEmojiOverride: editingEmojiOverrideForMarkers,
-            linkRender: linkRenderContext(size: size),
+            linkRender: linkRenderContext(plotRect: plotRect),
             linkedMarkersEnabled: markerManager.linkedMarkersEnabled
         )
     }
@@ -7842,7 +7842,11 @@ struct TradingChartView: View {
     /// Reduce Motion is resolved here rather than inside the Canvas: a static
     /// draw function cannot read the environment, so the reveal is handed in
     /// already settled — 1 immediately when the user has asked for less motion.
-    private func linkRenderContext(size: CGSize) -> MarkerLinkRenderContext? {
+    /// - Parameter plotRect: the rect the marker layer is actually clipped to —
+    ///   axes excluded. Passing the full canvas size, as this once did, told the
+    ///   focus layer that glyphs behind the y-axis or under the x-axis strip
+    ///   were visible.
+    private func linkRenderContext(plotRect: CGRect) -> MarkerLinkRenderContext? {
         guard let focus = markerManager.linkFocus else { return nil }
 
         var ringStyles: [UUID: MarkerLinkRingStyle] = [:]
@@ -7857,7 +7861,7 @@ struct TradingChartView: View {
             focus: focus,
             ringStyles: ringStyles,
             revealProgress: reduceMotion ? 1 : linkRevealProgress,
-            plotRect: CGRect(origin: .zero, size: size)
+            plotRect: plotRect
         )
     }
 

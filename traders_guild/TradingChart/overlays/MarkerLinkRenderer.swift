@@ -179,6 +179,32 @@ enum MarkerLinkRenderer {
         )
     }
 
+    // MARK: - Visibility
+
+    /// Whether a glyph's painted disc actually falls inside the plot.
+    ///
+    /// The render queue is culled horizontally, by candle index and a margin, so
+    /// membership in it does not mean a glyph was seen: a companion can sit
+    /// above or below the price range, behind the y-axis, or inside the margin
+    /// and never be painted. The fade rule counts *visible* members, so it needs
+    /// this rather than queue membership.
+    ///
+    /// Circle-against-rect, using the final scaled radius, so a partly visible
+    /// disc still counts — half a glyph at the edge is a glyph the viewer can
+    /// see and compare against.
+    static func isGlyphVisible(
+        center: CGPoint,
+        scaledRadius: CGFloat,
+        in plotRect: CGRect
+    ) -> Bool {
+        guard !plotRect.isEmpty, scaledRadius > 0 else { return false }
+        let nearestX = min(max(center.x, plotRect.minX), plotRect.maxX)
+        let nearestY = min(max(center.y, plotRect.minY), plotRect.maxY)
+        let dx = center.x - nearestX
+        let dy = center.y - nearestY
+        return (dx * dx + dy * dy) <= (scaledRadius * scaledRadius)
+    }
+
     // MARK: - Response badge
 
     /// What the single left-hand badge shows for one marker.

@@ -2840,6 +2840,18 @@ struct ChartMarkerSystem {
         if let linkRender, let markerManager {
             var paintedMembers: Set<UUID> = []
             for rendered in renderQueue where linkRender.focus.memberIds.contains(rendered.marker.id) {
+                // Queue membership is not visibility. The queue is culled
+                // horizontally by candle index and a margin, so a member can be
+                // in it while sitting off the top or bottom of the price range,
+                // behind the y-axis, or inside the margin — never painted, yet
+                // previously counted as a visible companion, which kept the fade
+                // on with a single glyph actually on screen.
+                let radius = (MarkerVisualSpec.baseCanvasDiameter / 2) * rendered.scale
+                guard MarkerLinkRenderer.isGlyphVisible(
+                    center: rendered.position,
+                    scaledRadius: radius,
+                    in: linkRender.plotRect
+                ) else { continue }
                 paintedMembers.insert(rendered.marker.id)
             }
             if paintedMembers != linkRender.focus.visibleMemberIds {
