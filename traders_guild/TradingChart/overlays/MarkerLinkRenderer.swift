@@ -12,6 +12,76 @@
 
 import SwiftUI
 
+/// The per-marker state the glyph loop would otherwise recompute for every
+/// marker, on every frame: the theme's colours and the symbols it draws.
+///
+/// Both were measured, not guessed. On the dense QA thesis the chart's
+/// main-thread profile was dominated by two things inside the glyph loop:
+///
+/// * `GraphicsContext.resolve(Image(systemName:))`, which is not a lookup — it
+///   goes through `Image.NamedImageProvider.resolve` and rebuilds the symbol
+///   from its name, for the same handful of names hundreds of times a frame.
+/// * every `AppColors` read, because a themed colour resolves through
+///   `ThemeManager.shared.currentTheme`, an `@AppStorage`, and so performs a
+///   `UserDefaults` read. There are roughly eight per marker.
+///
+/// Scoped to one draw pass deliberately, and passed `inout` rather than stored.
+/// A resolved symbol reflects the environment of the context that resolved it,
+/// and a colour reflects the theme at the moment it was read; a cache outliving
+/// the pass could serve either one stale after a theme or trait change, while
+/// one that dies with the pass cannot.
+struct MarkerDrawPass {
+    let markerShadow: Color
+    let markerFill: Color
+    let markerNeutralTint: Color
+    let glassStroke: Color
+    let heartBadge: Color
+    let onAccent: Color
+    let neutralBadgeFill: Color
+
+    private let supports: Color
+    private let challenges: Color
+    private let buildsOn: Color
+    private let unknownRelationship: Color
+
+    private var resolvedSymbols: [String: GraphicsContext.ResolvedImage] = [:]
+
+    init() {
+        markerShadow = AppColors.canvasMarkerShadow
+        markerFill = AppColors.canvasMarkerFill
+        markerNeutralTint = AppColors.canvasMarkerNeutralTint
+        glassStroke = MarkerVisualSpec.glassStrokeColor
+        heartBadge = AppColors.markerHeartBadge
+        onAccent = AppColors.onAccentForeground
+        neutralBadgeFill = AppColors.surfaceGray40
+        supports = AppColors.statusPositive
+        challenges = AppColors.statusNegative
+        buildsOn = AppColors.accentColor
+        unknownRelationship = AppColors.greyText
+    }
+
+    /// The same value `MarkerLinkRelationshipValue.accentColor` returns, read
+    /// once for each of the three relationships rather than once per marker.
+    func accent(for relationship: MarkerLinkRelationshipValue) -> Color {
+        switch relationship.known {
+        case .supports: return supports
+        case .challenges: return challenges
+        case .buildsOn: return buildsOn
+        case nil: return unknownRelationship
+        }
+    }
+
+    mutating func symbol(
+        named name: String,
+        in context: GraphicsContext
+    ) -> GraphicsContext.ResolvedImage {
+        if let hit = resolvedSymbols[name] { return hit }
+        let image = context.resolve(Image(systemName: name))
+        resolvedSymbols[name] = image
+        return image
+    }
+}
+
 /// Everything the marker layer needs to draw one focus state.
 ///
 /// Assembled once per frame by the chart from `MarkerManager`, so the renderer
@@ -259,7 +329,8 @@ enum MarkerLinkRenderer {
         context: GraphicsContext,
         center: CGPoint,
         isBelow: Bool,
-        badge: BadgeKind?
+        badge: BadgeKind?,
+        pass: inout MarkerDrawPass
     ) {
         guard let badge else { return }
         let rect = responseBadgeRect(center: center, isBelow: isBelow)
@@ -267,9 +338,9 @@ enum MarkerLinkRenderer {
         let fill: Color
         switch badge {
         case .rootCount:
-            fill = AppColors.surfaceGray40
+            fill = pass.neutralBadgeFill
         case let .linkedCount(_, relationship), let .leafIcon(relationship):
-            fill = relationship.accentColor
+            fill = pass.accent(for: relationship)
         }
 
         context.fill(
@@ -279,15 +350,20 @@ enum MarkerLinkRenderer {
 
         switch badge {
         case let .rootCount(count), let .linkedCount(count, _):
+            // `verbatim:`, not interpolation. `Text("\(count)")` is a
+            // `LocalizedStringKey` with an argument, so every frame it walked
+            // the localisation path — resolving arguments and enumerating an
+            // attributed string per marker. A count is a number, never
+            // translated prose, so none of that work has anything to do.
             context.draw(
-                Text(count > 99 ? "99+" : "\(count)")
+                Text(verbatim: count > 99 ? "99+" : "\(count)")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(AppColors.onAccentForeground),
+                    .foregroundColor(pass.onAccent),
                 at: CGPoint(x: rect.midX, y: rect.midY)
             )
         case let .leafIcon(relationship):
-            var icon = context.resolve(Image(systemName: relationship.icon))
-            icon.shading = .color(AppColors.onAccentForeground)
+            var icon = pass.symbol(named: relationship.icon, in: context)
+            icon.shading = .color(pass.onAccent)
             let side = min(badgeSize - 5, max(icon.size.width, icon.size.height))
             context.draw(
                 icon,

@@ -2876,6 +2876,10 @@ struct ChartMarkerSystem {
         var focusDimmedContext = context
         focusDimmedContext.opacity = MarkerLinkGraph.unrelatedOpacity
 
+        // Theme colours read once, symbols resolved once — per pass, not per
+        // marker per frame. See `MarkerDrawPass`.
+        var pass = MarkerDrawPass()
+
         for rendered in glyphQueue {
             // Use original undimmed context for selected markers so they stay at full opacity
             var drawContext = (isDimmed && rendered.isSelected) ? context : markerContext
@@ -2895,7 +2899,8 @@ struct ChartMarkerSystem {
                 emojiOverride: emojiOverride,
                 linkRing: linkRender?.ringStyles[rendered.marker.id],
                 linkRingProgress: linkRender?.revealProgress ?? 0,
-                linkedMarkersEnabled: linkedMarkersEnabled
+                linkedMarkersEnabled: linkedMarkersEnabled,
+                pass: &pass
             )
         }
     }
@@ -2941,7 +2946,8 @@ struct ChartMarkerSystem {
         emojiOverride: String? = nil,
         linkRing: MarkerLinkRingStyle? = nil,
         linkRingProgress: CGFloat = 0,
-        linkedMarkersEnabled: Bool = false
+        linkedMarkersEnabled: Bool = false,
+        pass: inout MarkerDrawPass
     ) {
         var drawContext = context
         if rotation != 0 {
@@ -2968,16 +2974,16 @@ struct ChartMarkerSystem {
 
         // 1. Shadow
         let shadowRect = circleRect.offsetBy(dx: 1, dy: 1)
-        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(AppColors.canvasMarkerShadow))
+        drawContext.fill(Path(ellipseIn: shadowRect), with: .color(pass.markerShadow))
 
         // 2. Opaque dark base (canvas can't use .ultraThinMaterial — must block chart content)
-        drawContext.fill(circlePath, with: .color(AppColors.canvasMarkerFill))
+        drawContext.fill(circlePath, with: .color(pass.markerFill))
 
         // 3. Tint overlay — subtle for standard, stronger for alerts
         if isAlert, let severity = markerSeverity {
             drawContext.fill(circlePath, with: .color(severity.color.opacity(0.30)))
         } else {
-            drawContext.fill(circlePath, with: .color(AppColors.canvasMarkerNeutralTint))
+            drawContext.fill(circlePath, with: .color(pass.markerNeutralTint))
         }
 
         // 4. Stroke — thin white for standard, colored + thicker for alerts
@@ -2990,7 +2996,7 @@ struct ChartMarkerSystem {
         } else {
             drawContext.stroke(
                 circlePath,
-                with: .color(MarkerVisualSpec.glassStrokeColor),
+                with: .color(pass.glassStroke),
                 style: StrokeStyle(lineWidth: MarkerVisualSpec.glassStrokeWidth)
             )
         }
@@ -3046,7 +3052,8 @@ struct ChartMarkerSystem {
                     color: iconColor,
                     at: position,
                     maxIconSize: iconSize,
-                    yOffset: 0
+                    yOffset: 0,
+                    pass: &pass
                 )
             }
         }
@@ -3060,11 +3067,15 @@ struct ChartMarkerSystem {
                 width: 14,
                 height: 14
             )
-            drawContext.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(AppColors.markerHeartBadge))
+            drawContext.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(pass.heartBadge))
+            // `verbatim:` for the same reason as the response badge: a like
+            // count is a number, and the localised-key path resolved arguments
+            // and walked an attributed string for it on every marker, every
+            // frame. Pre-existing, but it is the same defect in the same loop.
             drawContext.draw(
-                Text("\(marker.likeCount)")
+                Text(verbatim: "\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(AppColors.onAccentForeground),
+                    .foregroundColor(pass.onAccent),
                 at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
             )
         }
@@ -3082,7 +3093,8 @@ struct ChartMarkerSystem {
                 linkedMarkersEnabled: linkedMarkersEnabled,
                 responseCount: marker.responseCount,
                 relationship: marker.linkRelationship
-            )
+            ),
+            pass: &pass
         )
 
         // 8. Thesis ring. Colour lives here and nowhere else in the resting
@@ -3106,10 +3118,10 @@ struct ChartMarkerSystem {
         color: Color,
         at position: CGPoint,
         maxIconSize: CGFloat,
-        yOffset: CGFloat
+        yOffset: CGFloat,
+        pass: inout MarkerDrawPass
     ) {
-        let iconImage = Image(systemName: symbolName)
-        var resolvedIcon = context.resolve(iconImage)
+        var resolvedIcon = pass.symbol(named: symbolName, in: context)
         resolvedIcon.shading = .color(color)
         let imageSize = resolvedIcon.size
 
