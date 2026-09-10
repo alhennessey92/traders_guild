@@ -4,9 +4,17 @@ Branch: `claude/1.3.0-marker-visuals`
 Worktree: `.worktrees/linked-markers-claude`
 Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 
-Status: **complete, buildable and verified against the live DEV backend**.
-Clean Debug and Release builds, **477 swift-testing + 30 XCTest passing**,
-visuals reviewed against both a DEBUG fixture harness and real backend data.
+Status: **buildable and verified against the live DEV backend**, with the
+outstanding items named under *Not done* rather than folded into "complete".
+
+Latest full run — `traders_guild Compose Dev`, 2026-09-10:
+**554 passed, 0 failed** across 55 suites (505 swift-testing cases,
+34 XCTest, `ChartPanPerformanceDriver` skipped in this scheme by design — see
+*Profiling harness*), and **0 warnings** in linked-marker files. The isolated
+`traders_guild LinkedDev Profile` / `DevProfile` scheme also builds for test.
+
+Visuals reviewed against a DEBUG fixture harness, against real backend data,
+and — for the deep thesis — driven through the real UI (see *Live acceptance*).
 
 ---
 
@@ -354,8 +362,8 @@ Recorded exactly, from the run that produced them.
 
 | | |
 |---|---|
-| Full suite | **546 passed, 0 failed**, 0 warnings in linked-marker files |
-| Full-suite log | `scratchpad/full.log` |
+| Full suite | **554 passed, 0 failed** (505 swift-testing + 34 XCTest, 55 suites), 0 warnings in linked-marker files |
+| Full-suite log | `scratchpad/full6.log` |
 | Device build log | `scratchpad/b-iso.log` (`** BUILD SUCCEEDED **`) |
 | Simulator build log | `scratchpad/b-normal.log` |
 | Live HTTP ancestry probe | `scratchpad/live-ancestry.json` |
@@ -455,6 +463,69 @@ chart chat page the same way.
 
 Left untouched — the backend is yours. It is recorded here because it is the
 reason the wide-thesis UI walk below is incomplete.
+
+---
+
+## Profiling harness — setup and commands
+
+`traders_guildUITests/ChartPanPerformanceDriver.swift`. Portable and
+test-only: no feature code, no assertions about linked markers, so it applies
+to the 1.2.1 baseline worktree unchanged. That is the point — a matched pair is
+only matched if both halves are driven identically.
+
+**Prepare the device first.** The driver `activate()`s an app that is already
+running and already prepared; it deliberately never launches one, because
+launching discards the chart position, selection and thesis focus that the
+measurement is about.
+
+1. Install and launch `co.tradersguild.app.linkeddev` (`DevProfile`), sign in
+   with the QA account, and open the guild, symbol and timeframe holding the
+   dense fixture.
+2. Put the chart where the measurement should happen — markers visible, and a
+   thesis selected if focus is being measured.
+3. Attach Instruments to the **app**, not the test runner.
+4. Leave it foreground, no debugger. The `LinkedDev Profile` scheme's run *and*
+   test actions both launch without one.
+
+```
+xcodebuild build-for-testing \
+  -project traders_guild.xcodeproj \
+  -scheme "traders_guild LinkedDev Profile" \
+  -configuration DevProfile \
+  -destination 'platform=iOS,name=<device name>'
+
+xcodebuild test-without-building \
+  -project traders_guild.xcodeproj \
+  -scheme "traders_guild LinkedDev Profile" \
+  -configuration DevProfile \
+  -destination 'platform=iOS,name=<device name>' \
+  -only-testing:traders_guildUITests/ChartPanPerformanceDriver
+```
+
+Cut the Instruments trace between the `TG_PROFILE_BEGIN` and `TG_PROFILE_END`
+markers it prints, and compare the two builds over the same pair count.
+
+**Two scheme facts that are load-bearing, not incidental.**
+
+The `LinkedDev Profile` scheme carries the UI-test target *only*. Adding the
+unit-test target fails the build: `@testable import` needs
+`ENABLE_TESTABILITY`, which `DevProfile` disables because testability
+suppresses cross-module optimisation — a build with it on is not the build
+being measured. Unit tests stay on `traders_guild Compose Dev`.
+
+`ChartPanPerformanceDriver` is skipped in `traders_guild Compose Dev`. It
+drives an installed, prepared isolated app, so in the ordinary suite it failed
+every run. That is a scheme decision and does not soften the driver: run it
+against an unprepared app and it still fails visibly, with the chart controls
+it looked for. Verified — on a simulator with no prepared isolated app it fails
+"No chart control found… refusing to record a meaningless trace" rather than
+passing.
+
+**It does not time anything itself.** Wall clock in the driver is dominated by
+its own settle sleeps, so an elapsed-time assertion would pass whether or not a
+gesture ever reached the chart. Frame timings come from Instruments; what the
+driver guarantees is that the gestures are identical, that they landed on a
+real chart, and that the app is still on that chart afterwards.
 
 ---
 
