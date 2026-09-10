@@ -187,6 +187,153 @@ struct MarkerThreadRefreshCallSiteTests {
         )
     }
 
+    /// A marker DTO in the shape the update paths hand to the invalidator.
+    private func authorEdit(markerId: UUID, parentMarkerId: UUID, symbolId: UUID) -> RLChartMarkerDTO {
+        RLChartMarkerDTO(
+            id: markerId, symbolId: symbolId, guildId: guildId, author: member(1),
+            candleTimestamp: Date(timeIntervalSince1970: 1_700_000_000), timeframe: "1h",
+            price: 100, intent: "analysis", title: "Node b (edited)", note: nil,
+            visibility: "guild", confidence: nil, trackingEnabled: false, trackingState: nil,
+            alertSeverity: nil, createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAtFormatted: "just now", isVisible: true, likeCount: 0,
+            isLikedByCurrentUser: false, commentCount: 0, comments: [],
+            isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [],
+            primaryComponentId: nil, pollQuestion: nil, pollOptions: nil, userPollVote: nil,
+            predictionResult: nil, parentMarkerId: parentMarkerId, linkRelationship: "supports",
+            parentPreview: nil, directResponseCount: 0, responsesRevision: nil
+        )
+    }
+
+    // MARK: - The author's own writes reach an open disclosure
+
+    /// An author edits a node the reader has open, and the reader's disclosure
+    /// must show the edit without losing where they were.
+    ///
+    /// Driven with the same DTO the update handlers hand to the invalidator, so
+    /// what is asserted is the half no other test covers: that an invalidated
+    /// window is actually re-read by an *open* disclosure, and that the reader
+    /// keeps their place. That the handlers reach the invalidator at all is
+    /// covered separately, from a real socket frame, in
+    /// `MarkerRealtimeHandlerTests`.
+    ///
+    /// The selection sits on a *different* node from the edited one, which is
+    /// the case where a naive "reload the selected marker" would be correct by
+    /// accident.
+    @Test
+    func anAuthorsEditRefreshesTheOpenWindowAndKeepsTheSelection() async throws {
+        let spy = ThreadSpyAPI()
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+        let manager = makeManager(spy: spy)
+        manager.threadStore = store
+        let loader = MarkerThreadLoader()
+
+        let before = [
+            node("root", marker: 1, responses: 1),
+            node("a", parent: "root", marker: 2, responses: 1),
+            node("b", parent: "a", marker: 3)
+        ]
+        var edited = before
+        edited[2] = RLMarkerLinkPreviewDTO(
+            nodeKey: "b", parentKey: "a", markerId: id(3),
+            linkRelationship: "supports", authorUsername: "author-b",
+            symbolId: symbolId, title: "Node b (edited)", directResponseCount: 0
+        )
+        spy.pages = [
+            page(requested: 2, windowRoot: "root", nodes: before, rootMarker: 1, rootResolved: true),
+            page(requested: 2, windowRoot: "root", nodes: edited, rootMarker: 1, rootResolved: true)
+        ]
+
+        loader.load(markerId: id(2), manager: manager, store: store)
+        try await settle(until: { loader.state == .loaded }, "initial load")
+        #expect(spy.requests.count == 1)
+        #expect(loader.rows.first(where: \.isRequested)?.node.nodeKey == "a")
+
+        // The edit lands on node `b`, which the reader is not sitting on.
+        manager.invalidateThreadsTouched(
+            by: authorEdit(markerId: id(3), parentMarkerId: id(2), symbolId: symbolId)
+        )
+        loader.load(markerId: id(2), manager: manager, store: store)
+        try await settle(
+            until: { spy.requests.count == 2 && loader.state == .loaded },
+            "reload after the author's edit"
+        )
+
+        #expect(
+            loader.rows.contains { $0.node.title == "Node b (edited)" },
+            "the edited node must be re-read, not served from the stale window"
+        )
+        #expect(
+            loader.rows.first(where: \.isRequested)?.node.nodeKey == "a",
+            "and the reader must not be moved off the node they were reading"
+        )
+    }
+
+    /// The same for a deletion, which is the harder half: the node does not come
+    /// back as edited content, it comes back as a tombstone, and the row it
+    /// occupied must stay in place so the branch below it still makes sense.
+    @Test
+    func anAuthorsDeleteLeavesATombstoneAndKeepsTheSelection() async throws {
+        let spy = ThreadSpyAPI()
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+        let manager = makeManager(spy: spy)
+        manager.threadStore = store
+        let loader = MarkerThreadLoader()
+
+        let before = [
+            node("root", marker: 1, responses: 1),
+            node("a", parent: "root", marker: 2, responses: 1),
+            node("b", parent: "a", marker: 3, responses: 1),
+            node("c", parent: "b", marker: 4)
+        ]
+        // `b` is soft-deleted: it keeps its place and its edges, and loses its
+        // identity. `c` still hangs off it.
+        var afterDelete = before
+        afterDelete[2] = RLMarkerLinkPreviewDTO(
+            nodeKey: "b", parentKey: "a", markerId: nil,
+            linkRelationship: "supports", isUnavailable: true,
+            symbolId: symbolId, title: nil, directResponseCount: 1
+        )
+        spy.pages = [
+            page(requested: 4, windowRoot: "root", nodes: before, rootMarker: 1, rootResolved: true),
+            page(requested: 4, windowRoot: "root", nodes: afterDelete, rootMarker: 1, rootResolved: true)
+        ]
+
+        loader.load(markerId: id(4), manager: manager, store: store)
+        try await settle(until: { loader.state == .loaded }, "initial load")
+        #expect(loader.rows.count == 4)
+
+        // The author's own delete never echoes back over the socket, so the
+        // HTTP acknowledgement is the only notice their client gets.
+        manager.invalidateThreadsTouched(
+            byDeletionOf: RLMarkerDeleteResponseDTO(
+                detail: "deleted",
+                markerId: id(3),
+                symbolId: symbolId,
+                parentMarkerId: id(2),
+                parentDirectResponseCount: 1
+            )
+        )
+        loader.load(markerId: id(4), manager: manager, store: store)
+        try await settle(
+            until: { spy.requests.count == 2 && loader.state == .loaded },
+            "reload after the author's delete"
+        )
+
+        let tombstone = loader.rows.first { $0.node.nodeKey == "b" }
+        #expect(tombstone != nil, "a deleted node keeps its place as a tombstone")
+        #expect(tombstone?.node.markerId == nil)
+        #expect(
+            loader.rows.contains { $0.node.nodeKey == "c" },
+            "and the branch below it survives"
+        )
+        #expect(
+            loader.rows.first(where: \.isRequested)?.node.nodeKey == "c",
+            "the reader stays on the node they were reading"
+        )
+    }
+
     // MARK: - A structural 409 rebuilds the topology
 
     /// Cached root R with child C. C's branch cursor 409s, which means the
