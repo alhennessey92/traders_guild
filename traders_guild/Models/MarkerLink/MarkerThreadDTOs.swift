@@ -260,6 +260,10 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
     let parentMarkerId: UUID?
     let parentDirectResponseCount: Int?
     let parentResponsesRevision: String?
+    /// Whether the parent still has any child row, tombstones included. The
+    /// author never receives their own realtime event, so this acknowledgement
+    /// is the only place their client learns the thesis survived the delete.
+    let parentHasResponses: Bool?
 
     init(
         detail: String? = nil,
@@ -268,7 +272,8 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
         symbolId: UUID? = nil,
         parentMarkerId: UUID? = nil,
         parentDirectResponseCount: Int? = nil,
-        parentResponsesRevision: String? = nil
+        parentResponsesRevision: String? = nil,
+        parentHasResponses: Bool? = nil
     ) {
         self.detail = detail
         self.markerId = markerId
@@ -277,6 +282,7 @@ struct RLMarkerDeleteResponseDTO: Codable, Equatable {
         self.parentMarkerId = parentMarkerId
         self.parentDirectResponseCount = parentDirectResponseCount
         self.parentResponsesRevision = parentResponsesRevision
+        self.parentHasResponses = parentHasResponses
     }
 }
 

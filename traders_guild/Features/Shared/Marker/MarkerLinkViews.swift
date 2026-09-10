@@ -161,11 +161,16 @@ struct MarkerLinkRelationshipPicker: View {
 struct MarkerLinkRelationshipRow: View {
     let relationship: MarkerLinkRelationshipValue?
     let preview: RLMarkerLinkPreviewDTO?
+    /// The parent id is gone while the relationship survives — what
+    /// `ON DELETE SET NULL` leaves behind when an ancestor is hard-deleted.
+    /// There is nothing left to hydrate, so an absent preview here means gone
+    /// rather than merely unfetched.
+    var isDetached: Bool = false
     /// Nil disables tapping — a tombstone, or a preview that cannot navigate.
     let onOpenParent: (() -> Void)?
 
     private var isUnavailable: Bool {
-        preview?.isUnavailable ?? false
+        preview?.isUnavailable ?? isDetached
     }
 
     private var accent: Color {

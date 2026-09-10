@@ -122,7 +122,8 @@ extension MarkerManager {
             MarkerResponseCountUpdate(
                 markerId: parentId,
                 directResponseCount: count,
-                revision: MarkerRevision.make(response.parentResponsesRevision)
+                revision: MarkerRevision.make(response.parentResponsesRevision),
+                hasResponses: response.parentHasResponses
             )
         )
     }
@@ -130,17 +131,33 @@ extension MarkerManager {
     /// Offer one absolute observation and write it through to a loaded marker.
     func applyResponseCount(_ update: MarkerResponseCountUpdate) {
         let outcome = responseCounts.apply(update)
-        guard case .applied(let count) = outcome else { return }
+        // `.unchanged` still matters here. A soft delete of the only response
+        // can leave the count where it was — zero to zero, when the parent had
+        // already been corrected — while flipping the structural answer, and
+        // that flip is the whole signal that the thesis survives.
+        let count: Int
+        switch outcome {
+        case .applied(let value), .unchanged(let value):
+            count = value
+        case .stale:
+            return
+        }
+        let structural = responseCounts.hasResponses(for: update.markerId)
 
         guard let index = markers.firstIndex(where: { $0.id == update.markerId }) else {
             // The marker is not loaded on this chart — the reconciler still
             // holds the value, so it applies the moment the marker arrives.
             return
         }
+        guard count != markers[index].responseCount
+                || structural != markers[index].marker.hasResponses else {
+            return
+        }
         markers[index] = markers[index].withMarker(
             markers[index].marker.updating(
                 directResponseCount: count,
-                responsesRevision: update.revision?.wireText
+                responsesRevision: update.revision?.wireText,
+                hasResponses: structural
             )
         )
         if selectedMarker?.id == update.markerId {
@@ -167,12 +184,15 @@ extension MarkerManager {
             }
 
             // Then correct the row only if the reconciler now knows better.
-            guard let known = responseCounts.count(for: markerId),
-                  known != markers[index].responseCount else { continue }
+            guard let known = responseCounts.count(for: markerId) else { continue }
+            let structural = responseCounts.hasResponses(for: markerId)
+            guard known != markers[index].responseCount
+                    || structural != marker.hasResponses else { continue }
             markers[index] = markers[index].withMarker(
                 marker.updating(
                     directResponseCount: known,
-                    responsesRevision: responseCounts.revision(for: markerId)?.wireText
+                    responsesRevision: responseCounts.revision(for: markerId)?.wireText,
+                    hasResponses: structural
                 )
             )
         }
@@ -193,12 +213,19 @@ extension MarkerManager {
     func withReconciledCount(_ dto: RLChartMarkerDTO) -> RLChartMarkerDTO {
         guard let known = responseCounts.count(for: dto.id) else { return dto }
         let knownRevision = responseCounts.revision(for: dto.id)?.wireText
-        guard known != dto.responseCount || knownRevision != dto.responsesRevision else {
+        // The reconciler only ever holds a structural answer a payload gave it,
+        // so a nil here means nobody has said — leave the payload's own value
+        // alone rather than blanking it.
+        let knownStructural = responseCounts.hasResponses(for: dto.id) ?? dto.hasResponses
+        guard known != dto.responseCount
+                || knownRevision != dto.responsesRevision
+                || knownStructural != dto.hasResponses else {
             return dto
         }
         return dto.updating(
             directResponseCount: known,
-            responsesRevision: knownRevision
+            responsesRevision: knownRevision,
+            hasResponses: knownStructural
         )
     }
 

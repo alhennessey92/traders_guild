@@ -144,6 +144,106 @@ struct MarkerLinkDecodingTests {
         #expect(marker.parentCountUpdate == nil)
     }
 
+    // MARK: - Structural responses, separate from the active count
+
+    /// The case the two-member acceptance found: a root whose only response was
+    /// soft-deleted has an active count of zero and a thesis that still exists,
+    /// with a grandchild hanging off the tombstone. Before `has_responses` the
+    /// disclosure vanished from that root and the branch below it could only be
+    /// reached from underneath.
+    @Test
+    func aRootWithOnlyATombstonedChildStillParticipates() throws {
+        let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
+        ,
+        "direct_response_count": 0,
+        "has_responses": true
+        """))
+
+        #expect(marker.responseCount == 0, "the active count stays active-only")
+        #expect(marker.hasAnyResponses)
+        #expect(marker.participatesInThesis, "so the thesis affordance survives")
+        #expect(!marker.isLinkedResponse)
+    }
+
+    /// The flag is not a synonym for the count in the other direction either:
+    /// a hard delete clears it while the count is already zero.
+    @Test
+    func aRootWithNoChildRowsAtAllDoesNotParticipate() throws {
+        let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
+        ,
+        "direct_response_count": 0,
+        "has_responses": false
+        """))
+
+        #expect(!marker.hasAnyResponses)
+        #expect(!marker.participatesInThesis)
+    }
+
+    /// An older server omits the field. Absent must read as "did not say" and
+    /// fall back to the count, never as "no".
+    @Test
+    func anAbsentStructuralFlagFallsBackToTheCount() throws {
+        let answered = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
+        ,
+        "direct_response_count": 3
+        """))
+        #expect(answered.hasResponses == nil)
+        #expect(answered.hasAnyResponses, "three active responses is still a thesis")
+        #expect(answered.participatesInThesis)
+
+        let bare = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: ""))
+        #expect(bare.hasResponses == nil)
+        #expect(!bare.hasAnyResponses)
+        #expect(!bare.participatesInThesis)
+    }
+
+    /// `ON DELETE SET NULL` clears the parent id and cannot clear the
+    /// relationship, so this shape is what a hard-deleted ancestor leaves. It
+    /// is still a response: it must still say what it answers, offer the
+    /// thread, and show the parent as gone rather than as merely unfetched.
+    @Test
+    func aDetachedResponseIsStillAResponseWithAnUnavailableParent() throws {
+        let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
+        ,
+        "link_relationship": "challenges",
+        "direct_response_count": 0
+        """))
+
+        #expect(marker.parentMarkerId == nil)
+        #expect(marker.isLinkedResponse, "a retained relationship is still a link")
+        #expect(marker.isDetachedResponse)
+        #expect(marker.participatesInThesis, "so the thread stays reachable")
+        #expect(marker.hasUnavailableParent, "and the parent reads as gone, not unfetched")
+        #expect(marker.parentCountUpdate == nil, "there is no parent left to correct")
+    }
+
+    /// The ordinary unlinked marker must not be dragged into that: no parent,
+    /// no relationship, nothing to show.
+    @Test
+    func anUnlinkedMarkerIsNotTreatedAsDetached() throws {
+        let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: ""))
+        #expect(!marker.isDetachedResponse)
+        #expect(!marker.hasUnavailableParent)
+    }
+
+    /// The create/delete payload counterpart, carried alongside the absolute
+    /// parent count and ordered by the same revision.
+    @Test
+    func parentStructuralFlagRidesTheParentCountUpdate() throws {
+        let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
+        ,
+        "parent_marker_id": "99999999-9999-9999-9999-999999999999",
+        "link_relationship": "supports",
+        "parent_direct_response_count": 0,
+        "parent_responses_revision": "2026-09-01T12:00:01.000004Z",
+        "parent_has_responses": true
+        """))
+
+        let update = try #require(marker.parentCountUpdate)
+        #expect(update.directResponseCount == 0)
+        #expect(update.hasResponses == true, "zero active, but the thesis survives")
+    }
+
     @Test
     func linkedMarkerPayloadDecodes() throws {
         let marker = try decode(RLChartMarkerDTO.self, Self.markerJSON(extra: """
@@ -222,6 +322,56 @@ struct MarkerLinkDecodingTests {
         }
         """)
         #expect(payload.parentCountUpdate?.directResponseCount == 3)
+    }
+
+    /// A soft delete: the parent's active count falls to zero while a tombstone
+    /// remains, and the structural flag is the only thing that says so.
+    @Test
+    func deletedEventCarriesTheStructuralFlagBesideTheCount() throws {
+        let payload = try decode(MarkerDeletedPayload.self, """
+        {
+          "marker_id": "11111111-1111-1111-1111-111111111111",
+          "guild_id": "22222222-2222-2222-2222-222222222222",
+          "parent_marker_id": "99999999-9999-9999-9999-999999999999",
+          "parent_direct_response_count": 0,
+          "parent_responses_revision": "2026-09-10T18:00:00.000009Z",
+          "parent_has_responses": true
+        }
+        """)
+        let update = try #require(payload.parentCountUpdate)
+        #expect(update.directResponseCount == 0)
+        #expect(update.hasResponses == true)
+    }
+
+    /// An old server omits it, and that must not read as "the thesis is gone".
+    @Test
+    func deletedEventWithoutTheFlagLeavesItUnknown() throws {
+        let payload = try decode(MarkerDeletedPayload.self, """
+        {
+          "marker_id": "11111111-1111-1111-1111-111111111111",
+          "guild_id": "22222222-2222-2222-2222-222222222222",
+          "parent_marker_id": "99999999-9999-9999-9999-999999999999",
+          "parent_direct_response_count": 0
+        }
+        """)
+        #expect(payload.parentCountUpdate?.hasResponses == nil)
+    }
+
+    /// The author never receives their own realtime event, so the HTTP
+    /// acknowledgement is the only place their client learns any of this.
+    @Test
+    func deleteAcknowledgementCarriesTheStructuralFlag() throws {
+        let response = try decode(RLMarkerDeleteResponseDTO.self, """
+        {
+          "detail": "Marker deleted",
+          "marker_id": "11111111-1111-1111-1111-111111111111",
+          "parent_marker_id": "99999999-9999-9999-9999-999999999999",
+          "parent_direct_response_count": 0,
+          "parent_has_responses": true
+        }
+        """)
+        #expect(response.parentHasResponses == true)
+        #expect(response.parentDirectResponseCount == 0)
     }
 
     /// The capability defaults to off, so a server that has never heard of it

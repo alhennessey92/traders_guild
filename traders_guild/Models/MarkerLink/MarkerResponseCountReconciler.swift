@@ -17,10 +17,37 @@
 
 import Foundation
 
+/// What a delete attempt actually did.
+///
+/// A `Bool` would collapse the two failures that matter to a user into one:
+/// "the server said no" and "the request never landed" call for different
+/// words on screen, and only one of them is worth a Retry button.
+enum MarkerDeleteOutcome: Equatable {
+    case deleted
+    /// This viewer may not delete it — checked before the request, so no
+    /// destructive call is made on a marker the server would refuse.
+    case notPermitted
+    /// Not on this chart; nothing to delete.
+    case notFound
+    /// The request failed. **Nothing was removed** — the marker is still there,
+    /// still selected, and the caller must say so rather than dismissing.
+    case failed
+}
+
 /// One absolute observation of a parent's response count.
 struct MarkerResponseCountUpdate: Equatable {
     let markerId: UUID
     let directResponseCount: Int
+    /// Whether any child row survives, tombstones included.
+    ///
+    /// Travels with the count and is ordered by the same revision, because the
+    /// two answer different questions about the same instant: the count says
+    /// how many *active* responses there are, this says whether the thesis
+    /// still exists at all. A soft delete drops the first to zero and leaves
+    /// the second true.
+    ///
+    /// `nil` is "the server did not say", never "no".
+    let hasResponses: Bool?
     /// Server-advanced revision, exact to the microsecond.
     ///
     /// Deliberately not a `Date`: the backend advances this by microseconds
@@ -29,10 +56,16 @@ struct MarkerResponseCountUpdate: Equatable {
     /// revisions compare equal and silently drop a real count change.
     let revision: MarkerRevision?
 
-    init(markerId: UUID, directResponseCount: Int, revision: MarkerRevision? = nil) {
+    init(
+        markerId: UUID,
+        directResponseCount: Int,
+        revision: MarkerRevision? = nil,
+        hasResponses: Bool? = nil
+    ) {
         self.markerId = markerId
         self.directResponseCount = directResponseCount
         self.revision = revision
+        self.hasResponses = hasResponses
     }
 }
 
@@ -55,6 +88,9 @@ struct MarkerResponseCountReconciler: Equatable {
     private struct Entry: Equatable {
         var count: Int
         var revision: MarkerRevision?
+        /// Kept across a rejected or unchanged update, so a payload that omits
+        /// the structural flag cannot erase one an earlier payload supplied.
+        var hasResponses: Bool?
     }
 
     private var entries: [UUID: Entry] = [:]
@@ -74,39 +110,55 @@ struct MarkerResponseCountReconciler: Equatable {
     @discardableResult
     mutating func apply(_ update: MarkerResponseCountUpdate) -> MarkerResponseCountOutcome {
         guard let existing = entries[update.markerId] else {
-            entries[update.markerId] = Entry(count: update.directResponseCount, revision: update.revision)
+            entries[update.markerId] = Entry(
+                count: update.directResponseCount,
+                revision: update.revision,
+                hasResponses: update.hasResponses
+            )
             return .applied(update.directResponseCount)
+        }
+
+        // An accepted update carries the structural flag forward only when it
+        // actually supplied one; a payload from a server that predates the
+        // field must not be read as "this thesis no longer exists".
+        func accept() -> MarkerResponseCountOutcome {
+            entries[update.markerId] = Entry(
+                count: update.directResponseCount,
+                revision: update.revision ?? existing.revision,
+                hasResponses: update.hasResponses ?? existing.hasResponses
+            )
+            return existing.count == update.directResponseCount
+                ? .unchanged(update.directResponseCount)
+                : .applied(update.directResponseCount)
         }
 
         switch (existing.revision, update.revision) {
         case let (stored?, incoming?):
             if incoming > stored {
-                entries[update.markerId] = Entry(count: update.directResponseCount, revision: incoming)
-                return existing.count == update.directResponseCount
-                    ? .unchanged(update.directResponseCount)
-                    : .applied(update.directResponseCount)
+                return accept()
             }
             if incoming == stored {
+                // Same instant: the count cannot move, but a redelivery that
+                // carries the structural flag may still fill in one that was
+                // missing, which is strictly more information about that same
+                // revision.
+                if existing.hasResponses == nil, let known = update.hasResponses {
+                    entries[update.markerId]?.hasResponses = known
+                }
                 return .unchanged(existing.count)
             }
             return .stale
 
-        case (nil, .some(let incoming)):
+        case (nil, .some):
             // A versioned value always supersedes an unversioned one.
-            entries[update.markerId] = Entry(count: update.directResponseCount, revision: incoming)
-            return existing.count == update.directResponseCount
-                ? .unchanged(update.directResponseCount)
-                : .applied(update.directResponseCount)
+            return accept()
 
         case (.some, nil):
             // Unversioned cannot be proven newer than versioned.
             return .stale
 
         case (nil, nil):
-            entries[update.markerId] = Entry(count: update.directResponseCount, revision: nil)
-            return existing.count == update.directResponseCount
-                ? .unchanged(update.directResponseCount)
-                : .applied(update.directResponseCount)
+            return accept()
         }
     }
 
@@ -117,6 +169,11 @@ struct MarkerResponseCountReconciler: Equatable {
 
     func revision(for markerId: UUID) -> MarkerRevision? {
         entries[markerId]?.revision
+    }
+
+    /// The newest known structural answer, or nil if no payload has supplied one.
+    func hasResponses(for markerId: UUID) -> Bool? {
+        entries[markerId]?.hasResponses
     }
 
     /// Forget a marker — it was deleted, or its thesis was invalidated.

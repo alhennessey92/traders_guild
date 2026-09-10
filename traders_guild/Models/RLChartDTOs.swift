@@ -1414,10 +1414,25 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     /// and every Foundation date decoder on this path rounds to milliseconds.
     /// Order them through `responsesRevisionValue`.
     let responsesRevision: String?
+    /// Whether this marker has *any* child row at all, tombstones included.
+    ///
+    /// Deliberately separate from `directResponseCount`, which stays
+    /// active-only: a root whose one response was soft-deleted has a count of
+    /// zero and a thesis that still exists, with a surviving grandchild hanging
+    /// off the tombstone. Without this the thesis affordance disappeared from
+    /// that root and the branch below became unreachable from above.
+    ///
+    /// `nil` means *the server did not say* — an older payload — so callers
+    /// must fall back to the count rather than reading nil as "no".
+    let hasResponses: Bool?
     /// Authoritative count for the *parent*, carried on create/delete payloads
     /// so a response can correct its parent's badge without a synthetic event.
     let parentDirectResponseCount: Int?
     let parentResponsesRevision: String?
+    /// The structural counterpart of `parentDirectResponseCount`, carried on
+    /// the same payloads so a deletion can tell the parent it still has a
+    /// tombstoned child even as its active count falls to zero.
+    let parentHasResponses: Bool?
 
     /// Explicit stand-in for the synthesized memberwise initializer.
     ///
@@ -1461,8 +1476,10 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         parentPreview: RLMarkerLinkPreviewDTO? = nil,
         directResponseCount: Int? = nil,
         responsesRevision: String? = nil,
+        hasResponses: Bool? = nil,
         parentDirectResponseCount: Int? = nil,
-        parentResponsesRevision: String? = nil
+        parentResponsesRevision: String? = nil,
+        parentHasResponses: Bool? = nil
     ) {
         self.id = id
         self.symbolId = symbolId
@@ -1500,8 +1517,10 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         self.parentPreview = parentPreview
         self.directResponseCount = directResponseCount
         self.responsesRevision = responsesRevision
+        self.hasResponses = hasResponses
         self.parentDirectResponseCount = parentDirectResponseCount
         self.parentResponsesRevision = parentResponsesRevision
+        self.parentHasResponses = parentHasResponses
     }
 
     // MARK: - Linked marker accessors
@@ -1516,15 +1535,34 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
     }
 
     /// Answers another marker.
-    var isLinkedResponse: Bool { parentMarkerId != nil }
+    ///
+    /// A retained relationship counts even with no parent id. That is exactly
+    /// the shape a hard-deleted ancestor leaves behind — `ON DELETE SET NULL`
+    /// clears the parent and cannot clear the relationship — and such a marker
+    /// is still a response, still part of a thesis, and must still say so
+    /// rather than quietly reverting to an ordinary marker.
+    var isLinkedResponse: Bool { parentMarkerId != nil || linkRelationshipValue != nil }
+
+    /// Detached: it answers something the server can no longer point at.
+    var isDetachedResponse: Bool { parentMarkerId == nil && linkRelationshipValue != nil }
+
+    /// Whether anything answers this marker, counting tombstones.
+    ///
+    /// Falls back to the active count when the server did not say, so an older
+    /// payload behaves exactly as it did before this field existed.
+    var hasAnyResponses: Bool { hasResponses ?? (responseCount > 0) }
 
     /// Takes part in a thesis at all, in either direction.
-    var participatesInThesis: Bool { isLinkedResponse || responseCount > 0 }
+    var participatesInThesis: Bool { isLinkedResponse || hasAnyResponses }
 
     /// The parent is known to be gone or hidden from this viewer, as opposed to
     /// simply not hydrated on this payload.
+    ///
+    /// A detached response counts: its parent id was cleared by the ancestor's
+    /// hard deletion, so there is nothing left to hydrate and an absent preview
+    /// is not "not fetched yet".
     var hasUnavailableParent: Bool {
-        parentPreview?.isUnavailable ?? false
+        parentPreview?.isUnavailable ?? isDetachedResponse
     }
 
     /// Microsecond-exact ordering value for this marker's own revision.
@@ -1539,7 +1577,8 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         return MarkerResponseCountUpdate(
             markerId: parentMarkerId,
             directResponseCount: parentDirectResponseCount,
-            revision: parentResponsesRevisionValue
+            revision: parentResponsesRevisionValue,
+            hasResponses: parentHasResponses
         )
     }
 
@@ -1549,7 +1588,8 @@ struct RLChartMarkerDTO: Codable, Identifiable, Equatable, Hashable {
         return MarkerResponseCountUpdate(
             markerId: id,
             directResponseCount: directResponseCount,
-            revision: responsesRevisionValue
+            revision: responsesRevisionValue,
+            hasResponses: hasResponses
         )
     }
 
@@ -2159,6 +2199,10 @@ struct MarkerDeletedPayload: Codable {
     let parentMarkerId: String?
     let parentDirectResponseCount: Int?
     let parentResponsesRevision: String?
+    /// Whether the parent still has any child row after this deletion,
+    /// tombstones included. A soft delete leaves this true while the count
+    /// falls to zero, which is the only signal that the thesis survives.
+    let parentHasResponses: Bool?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -2168,6 +2212,7 @@ struct MarkerDeletedPayload: Codable {
         parentMarkerId = try c.decodeIfPresent(String.self, forKey: .parentMarkerId)
         parentDirectResponseCount = try c.decodeIfPresent(Int.self, forKey: .parentDirectResponseCount)
         parentResponsesRevision = try c.decodeIfPresent(String.self, forKey: .parentResponsesRevision)
+        parentHasResponses = try c.decodeIfPresent(Bool.self, forKey: .parentHasResponses)
     }
 
     /// The parent reconciliation carried by this event, if any.
@@ -2178,7 +2223,8 @@ struct MarkerDeletedPayload: Codable {
         return MarkerResponseCountUpdate(
             markerId: parentId,
             directResponseCount: parentDirectResponseCount,
-            revision: MarkerRevision.make(parentResponsesRevision)
+            revision: MarkerRevision.make(parentResponsesRevision),
+            hasResponses: parentHasResponses
         )
     }
 }

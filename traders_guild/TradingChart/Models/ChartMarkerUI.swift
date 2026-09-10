@@ -172,6 +172,8 @@ struct ChartMarkerUI: Identifiable, Hashable {
     var responsesRevision: String? { marker.responsesRevision }
     var responsesRevisionValue: MarkerRevision? { marker.responsesRevisionValue }
     var isLinkedResponse: Bool { marker.isLinkedResponse }
+    var isDetachedResponse: Bool { marker.isDetachedResponse }
+    var hasAnyResponses: Bool { marker.hasAnyResponses }
     var participatesInThesis: Bool { marker.participatesInThesis }
     var hasUnavailableParent: Bool { marker.hasUnavailableParent }
 
@@ -308,6 +310,7 @@ extension RLChartMarkerDTO {
         userPollVote: UUID? = nil,
         directResponseCount: Int? = nil,
         responsesRevision: String? = nil,
+        hasResponses: Bool? = nil,
         isCurrentUserMarker: Bool? = nil,
         canEdit: Bool? = nil,
         canDelete: Bool? = nil
@@ -351,6 +354,11 @@ extension RLChartMarkerDTO {
         // avoid, silently collapsing microsecond-separated revisions.
         if let responsesRevision = responsesRevision {
             dict["responsesRevision"] = responsesRevision
+        }
+        // Structural, and deliberately writable independently of the count: a
+        // soft delete drops the count to zero and leaves this true.
+        if let hasResponses = hasResponses {
+            dict["hasResponses"] = hasResponses
         }
         // Viewer-relative permissions. A broadcast payload carries whoever
         // created it, so these are re-derived locally rather than adopted.
