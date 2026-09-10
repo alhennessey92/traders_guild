@@ -22,6 +22,9 @@ struct MarkerViewingGeneralTab: View {
     var onOpenLinkedMarker: ((RLMarkerLinkPreviewDTO) -> Void)? = nil
 
     @State private var showRelationshipPicker: Bool = false
+    @State private var showDeleteConfirmation: Bool = false
+    @State private var isDeleting: Bool = false
+    @State private var deleteFailureMessage: String? = nil
 
     private static let priceFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -73,12 +76,25 @@ struct MarkerViewingGeneralTab: View {
                 if canShowShareAction {
                     shareMarkerButton
                 }
+                if liveMarker.canDelete {
+                    deleteMarkerAction
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .confirmationDialog(
+            "Delete this marker?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Marker", role: .destructive) { performDelete() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(deleteConfirmationMessage)
+        }
         .sheet(isPresented: $showReportReasonSheet) {
             ReportReasonSheet(
                 title: "Why are you reporting this marker?",
@@ -105,6 +121,7 @@ struct MarkerViewingGeneralTab: View {
             MarkerLinkRelationshipRow(
                 relationship: liveMarker.linkRelationship,
                 preview: liveMarker.parentPreview,
+                isDetached: liveMarker.isDetachedResponse,
                 onOpenParent: liveMarker.parentPreview.flatMap { preview in
                     preview.canNavigate ? { onOpenLinkedMarker?(preview) } : nil
                 }
@@ -982,6 +999,97 @@ struct MarkerViewingGeneralTab: View {
             return "Share with your guild or post to X, Discord & more."
         }
         return "Send this guild marker directly to another member."
+    }
+
+    // MARK: - Delete
+
+    /// Warn about the descendants before the tap, not after.
+    ///
+    /// A linked marker is not deleted in isolation: the responses under it stay,
+    /// re-parented onto a tombstone that keeps their relationship. Saying so
+    /// here is the difference between an informed decision and a surprise.
+    private var deleteConfirmationMessage: String {
+        liveMarker.hasAnyResponses
+            ? "Responses to this marker will stay in the thesis, shown under an unavailable marker. This cannot be undone."
+            : "This cannot be undone."
+    }
+
+    private var deleteMarkerAction: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(role: .destructive) {
+                deleteFailureMessage = nil
+                showDeleteConfirmation = true
+            } label: {
+                HStack(spacing: 10) {
+                    if isDeleting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    Text(isDeleting ? "Deleting…" : "Delete Marker")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                }
+                .foregroundColor(AppColors.statusNegative)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppColors.statusNegative.opacity(0.10))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeleting)
+            .accessibilityLabel(liveMarker.canDelete && !liveMarker.isCurrentUserMarker
+                                ? "Delete Marker, moderator action"
+                                : "Delete Marker")
+
+            // A failure has to be visible and recoverable. The marker is still
+            // on the chart at this point — nothing was removed — so the honest
+            // thing is to say the delete did not happen and offer it again.
+            if let deleteFailureMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.statusNegative)
+                    Text(deleteFailureMessage)
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                    Spacer(minLength: 8)
+                    Button("Retry") { showDeleteConfirmation = true }
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.plain)
+                        .foregroundColor(AppColors.accentColor)
+                }
+                .padding(.horizontal, 4)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func performDelete() {
+        guard !isDeleting else { return }
+        isDeleting = true
+        deleteFailureMessage = nil
+        let markerId = liveMarker.id
+        Task { @MainActor in
+            let outcome = await markerManager.deleteMarker(id: markerId)
+            isDeleting = false
+            switch outcome {
+            case .deleted:
+                // The manager clears the selection, which dismisses this sheet.
+                break
+            case .notPermitted:
+                deleteFailureMessage = "You can no longer delete this marker."
+            case .notFound:
+                deleteFailureMessage = "This marker is no longer on the chart."
+            case .failed:
+                deleteFailureMessage = "Couldn't delete this marker. It is still here."
+            }
+        }
     }
 
     private var shareMarkerButton: some View {

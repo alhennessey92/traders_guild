@@ -1355,33 +1355,54 @@ class MarkerManager: ObservableObject {
         }
     }
 
-    func deleteMarker(id: UUID) async {
-        // Optimistic update - remove immediately
-        let markerToDelete = markers.first { $0.id == id }
+    /// Delete a marker, server first.
+    ///
+    /// Deliberately **not** optimistic. This used to remove the marker and
+    /// clear the selection before asking the server, then push the row back on
+    /// failure — and with no `api` configured it removed the marker and
+    /// returned, so a marker that was never deleted looked deleted until the
+    /// next fetch. That is tolerable for a debug affordance and not for an
+    /// action a member can reach: the one thing a destructive control must
+    /// never do is report success it did not get.
+    ///
+    /// Permission is checked against the loaded marker's own `canDelete`, which
+    /// `neutralMerge` derives locally rather than adopting from a broadcast, so
+    /// a payload serialized for its author cannot talk this client into
+    /// offering a delete the server will refuse.
+    @discardableResult
+    func deleteMarker(id: UUID) async -> MarkerDeleteOutcome {
+        guard let target = markers.first(where: { $0.id == id }) else {
+            return .notFound
+        }
+        guard target.canDelete else { return .notPermitted }
+        guard let api else { return .failed }
+
+        let acknowledgement: RLMarkerDeleteResponseDTO
+        do {
+            acknowledgement = try await api.deleteMarker(guildId: currentGuildId, markerId: id)
+        } catch {
+            // Nothing was removed, so there is nothing to put back. The caller
+            // surfaces this; the marker is still on the chart and still
+            // selected, which is the truth.
+            return .failed
+        }
+
         markers.removeAll { $0.id == id }
+        // Only clear a selection that is still the marker we deleted: the user
+        // may have tapped another marker while the request was in flight, and
+        // dropping that selection would be a second surprise.
         if selectedMarker?.id == id {
             selectedMarker = nil
         }
-        
-        // Persist to backend
-        guard let api = api else { return }
-        
-        do {
-            let acknowledgement = try await api.deleteMarker(guildId: currentGuildId, markerId: id)
-            // Same reasoning as create: the author never receives their own
-            // delete event, so the parent's corrected count — and the
-            // invalidation of the thesis they just put a hole in — arrive here.
-            applyLinkCounts(fromDeletion: acknowledgement)
-            invalidateThreadsTouched(byDeletionOf: acknowledgement)
-            responseCounts.forget(id)
-            refreshLinkFocus()
-        } catch {
-            // Revert optimistic update on error
-            if let marker = markerToDelete {
-                markers.append(marker)
-            }
-            print("Failed to delete marker: \(error)")
-        }
+        // Same reasoning as create: the author never receives their own
+        // delete event, so the parent's corrected count — and the
+        // invalidation of the thesis they just put a hole in — arrive here.
+        applyLinkCounts(fromDeletion: acknowledgement)
+        invalidateThreadsTouched(byDeletionOf: acknowledgement)
+        responseCounts.forget(id)
+        recalculateAllPositions()
+        refreshLinkFocus()
+        return .deleted
     }
 
     private struct MarkerLayoutSnapshot {
