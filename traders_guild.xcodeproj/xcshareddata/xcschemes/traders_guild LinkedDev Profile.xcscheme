@@ -24,18 +24,18 @@
    </BuildAction>
    <TestAction
       buildConfiguration = "DevProfile"
-      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
-      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      selectedDebuggerIdentifier = ""
+      selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D60EC77F2E280DB3005E2FF1"
-               BuildableName = "traders_guildTests.xctest"
-               BlueprintName = "traders_guildTests"
+               BlueprintIdentifier = "D60EC7892E280DB3005E2FF1"
+               BuildableName = "traders_guildUITests.xctest"
+               BlueprintName = "traders_guildUITests"
                ReferencedContainer = "container:traders_guild.xcodeproj">
             </BuildableReference>
          </TestableReference>
