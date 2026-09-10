@@ -33,9 +33,26 @@
 		D6DEV0000000000000000004 /* Info-LinkedDev.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = traders_guild/Config/Info-LinkedDev.plist; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D6C0F1A02E9A0001005E2FF1 /* Exceptions for "traders_guild" folder in "traders_guild" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Config/Debug-LinkedDev.xcconfig,
+				Config/Debug-StagingK8s.xcconfig,
+				Config/Info-LinkedDev.plist,
+				Config/Profile-LinkedDev.xcconfig,
+				Config/Shared-LinkedDev.xcconfig,
+			);
+			target = D60EC76F2E280DB2005E2FF1 /* traders_guild */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D60EC7722E280DB2005E2FF1 /* traders_guild */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D6C0F1A02E9A0001005E2FF1 /* Exceptions for "traders_guild" folder in "traders_guild" target */,
+			);
 			path = traders_guild;
 			sourceTree = "<group>";
 		};
