@@ -2283,7 +2283,7 @@ extension RealAPIService {
     ) async throws -> RLChatroomMessagesListDTO {
         var path = "/messaging/guilds/\(guildId.uuidString)/chatrooms/\(chatroomId.uuidString)/messages?limit=\(limit)"
         if let cursor = cursor {
-            path += "&cursor=\(cursor)"
+            path += "&cursor=\(cursor.tgQueryEncoded)"
         }
         return try await request(
             path,
@@ -2541,7 +2541,7 @@ extension RealAPIService {
     ) async throws -> RLDMMessagesListDTO {
         var path = "/messaging/guilds/\(guildId.uuidString)/dms/\(threadId.uuidString)/messages?limit=\(limit)"
         if let cursor = cursor {
-            path += "&cursor=\(cursor)"
+            path += "&cursor=\(cursor.tgQueryEncoded)"
         }
         return try await request(
             path,
@@ -3590,8 +3590,7 @@ extension RealAPIService {
             "limit=\(limit)"
         ]
         if let cursor = cursor, !cursor.isEmpty {
-            let encodedCursor = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor
-            queryParts.append("cursor=\(encodedCursor)")
+            queryParts.append("cursor=\(cursor.tgQueryEncoded)")
         }
         if let assetClass = assetClass, !assetClass.isEmpty {
             queryParts.append("asset_class=\(assetClass)")
@@ -3797,7 +3796,7 @@ extension RealAPIService {
     ) async throws -> RLMarkersListDTO {
         var path = "/chart/guilds/\(guildId.uuidString)/symbols/\(symbolId.uuidString)/markers?timeframe=\(timeframe)&limit=\(limit)"
         if let cursor = cursor {
-            path += "&cursor=\(cursor)"
+            path += "&cursor=\(cursor.tgQueryEncoded)"
         }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -3880,9 +3879,8 @@ extension RealAPIService {
     /// at that structural node.
     func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
         var path = "/chart/markers/\(markerId.uuidString)/thread"
-        if let cursor, !cursor.isEmpty,
-           let encoded = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            path += "?cursor=\(encoded)"
+        if let cursor, !cursor.isEmpty {
+            path += "?cursor=\(cursor.tgQueryEncoded)"
         }
         return try await request(path, service: .chart, auth: true)
     }
@@ -3991,7 +3989,7 @@ extension RealAPIService {
     ) async throws -> RLMarkerCommentsListDTO {
         var path = "/chart/markers/\(markerId.uuidString)/comments?limit=\(limit)"
         if let cursor = cursor {
-            path += "&cursor=\(cursor)"
+            path += "&cursor=\(cursor.tgQueryEncoded)"
         }
         return try await request(
             path,
@@ -4142,7 +4140,7 @@ extension RealAPIService {
     ) async throws -> RLChartChatMessagesListDTO {
         var path = "/chart/chart-chats/\(chatId.uuidString)/messages?limit=\(limit)"
         if let cursor = cursor {
-            path += "&cursor=\(cursor)"
+            path += "&cursor=\(cursor.tgQueryEncoded)"
         }
         return try await request(
             path,
@@ -4469,5 +4467,28 @@ extension RealAPIService {
             service: .reputation,
             auth: true
         )
+    }
+}
+
+/// Percent-encoding for opaque cursor values placed in a query string.
+///
+/// `.urlQueryAllowed` is not enough on its own: it permits `+`, and `+` in a
+/// query string means a space. A timestamp cursor of `…415598+00:00` therefore
+/// reaches the server as `…415598 00:00`, which its ISO parser rejects — the
+/// marker list returned 500 on every page after the first, and the failure was
+/// invisible because the *first* page never carries a cursor.
+///
+/// Thread cursors escaped this only by luck: they are Fernet tokens in base64url,
+/// which has no `+`. Anything timestamp-shaped does not get that luck.
+private let tgCursorAllowedCharacters: CharacterSet = {
+    var allowed = CharacterSet.urlQueryAllowed
+    allowed.remove(charactersIn: "+&=?#")
+    return allowed
+}()
+
+extension String {
+    /// This string, safe to interpolate as a query-string value.
+    var tgQueryEncoded: String {
+        addingPercentEncoding(withAllowedCharacters: tgCursorAllowedCharacters) ?? self
     }
 }
