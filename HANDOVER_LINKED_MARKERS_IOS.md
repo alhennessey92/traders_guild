@@ -7,6 +7,15 @@ Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 Status: **buildable and verified against the live DEV backend**, with the
 outstanding items named under *Not done* rather than folded into "complete".
 
+Codex integration checkpoint: Claude commits through `1c8fe8c` are integrated.
+`120b972` additionally clips focus hit testing to the rendered plot and shares
+paint priority with drawing; the integrated unit suite passes **572/572** with
+no skips. Saved screenshots and independent evidence notes are in
+`docs/visual-review/live-simulator-2026-09-10/`. Physical testing is deferred
+while the owner is away. Codex previously installed the isolated baseline app
+only; the historical "nothing installed" statements below describe Claude's
+own earlier stage, not the current device state.
+
 Latest full run — `traders_guild Local Gateway`, 2026-09-10, counted with
 `xcresulttool get test-results summary` rather than by grepping the log:
 **577 passed, 5 skipped, 0 failed, 582 total**. The five skips are the

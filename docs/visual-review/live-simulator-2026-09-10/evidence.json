@@ -1,0 +1,28 @@
+{
+  "source_commit": "4f96dbf",
+  "test_summary": {
+    "result": "Passed",
+    "totalTestCount": 582,
+    "passedTests": 577,
+    "failedTests": 0,
+    "skippedTests": 5
+  },
+  "samples": {
+    "focus-off-fixed.sample.txt": {
+      "path": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/perf-evidence/focus-off-fixed.sample.txt",
+      "sha256": "1176d91474fda03f4d2be112dcf3d552e6de0c2bb0bdf7e3935759f81b79ebee"
+    },
+    "focus-off.sample.txt": {
+      "path": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/perf-evidence/focus-off.sample.txt",
+      "sha256": "bb6bd960d0b35c1119eff91bb9fd23dd2dde0330300f71826aac9e4f240d708f"
+    },
+    "focus-on.sample.txt": {
+      "path": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/perf-evidence/focus-on.sample.txt",
+      "sha256": "bb7106d93aa187cbf676ab0ea7c13de3e0d168100f53b500a4201a3ff5cd8050"
+    },
+    "focus-off-pass.sample.txt": {
+      "path": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/perf-evidence/focus-off-pass.sample.txt",
+      "sha256": "75fadb58ecf6062db1507e15375bba2ce0a40565dae65bbc9235e2a169fd56e8"
+    }
+  }
+}
