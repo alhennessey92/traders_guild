@@ -309,6 +309,112 @@ struct MarkerLinkReviewQueueTests {
         )
     }
 
+    /// A confirmed root is not completeness.
+    ///
+    /// Window B has a resolved root *and* an outstanding branch cursor — the
+    /// shape of the wide QA thesis: 200 nodes, `truncated`, one branch left to
+    /// page. A response created behind that cursor belongs to B, while nothing
+    /// in B names it. Provisional window A, covering a different part of the
+    /// same symbol, does name the event's parent.
+    ///
+    /// Matching A must not spare B. Keying the sweep on `rootResolved` did
+    /// exactly that, leaving the window most likely to be on screen stale.
+    @Test
+    func aResolvedRootWithAnOutstandingBranchIsStillSwept() throws {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+
+        // B: root resolved, but a branch cursor is still outstanding.
+        store.ingest(
+            page: page(
+                requested: 70,
+                windowRoot: "b",
+                nodes: [node("b", marker: 70, responses: 200, symbol: symbolId)],
+                branches: [RLMarkerThreadBranchDTO(nodeKey: "b", cursor: "more-under-b")],
+                rootMarker: 70,
+                rootResolved: true
+            ),
+            requestedMarkerId: id(70),
+            expectedGeneration: store.generation
+        )
+        let b = try #require(store.window(forMarkerId: id(70)))
+        #expect(b.completeness != .complete, "a branch cursor means incomplete")
+
+        // A: provisional, and the only window naming the event's parent.
+        store.ingest(
+            page: page(
+                requested: 71,
+                windowRoot: "a",
+                nodes: [node("a", marker: 71, symbol: symbolId)]
+            ),
+            requestedMarkerId: id(71),
+            expectedGeneration: store.generation
+        )
+
+        let manager = manager()
+        manager.threadStore = store
+
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(72), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(71), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.window(forMarkerId: id(71)) == nil, "the matched provisional window goes")
+        #expect(
+            store.window(forMarkerId: id(70)) == nil,
+            "and so does the resolved-but-branch-incomplete window that could still contain it"
+        )
+    }
+
+    /// The bound still holds: a thesis that is genuinely finished — root
+    /// resolved, no ancestry cursor, no branch cursors — and that named neither
+    /// endpoint does know the event is not its own, and survives.
+    @Test
+    func aFullyCompleteUnrelatedThesisSurvives() throws {
+        let store = MarkerThreadStore()
+        store.activate(accountId: id(1), guildId: guildId)
+        store.ingest(
+            page: page(
+                requested: 75,
+                windowRoot: "done",
+                nodes: [node("done", marker: 75, symbol: symbolId)],
+                rootMarker: 75,
+                rootResolved: true
+            ),
+            requestedMarkerId: id(75),
+            expectedGeneration: store.generation
+        )
+        let done = try #require(store.window(forMarkerId: id(75)))
+        #expect(done.completeness == .complete)
+
+        store.ingest(
+            page: page(
+                requested: 76,
+                windowRoot: "partial",
+                nodes: [node("partial", marker: 76, symbol: symbolId)]
+            ),
+            requestedMarkerId: id(76),
+            expectedGeneration: store.generation
+        )
+
+        let manager = manager()
+        manager.threadStore = store
+        manager.invalidateThreadsTouched(
+            by: makeMarkerDTO(
+                id: id(77), author: member(2), symbolId: symbolId,
+                parentMarkerId: id(76), linkRelationship: "supports"
+            )
+        )
+
+        #expect(store.window(forMarkerId: id(76)) == nil, "the matched partial window goes")
+        #expect(
+            store.window(forMarkerId: id(75)) != nil,
+            "a finished thesis that named neither endpoint is provably unaffected"
+        )
+    }
+
     /// One event, one generation change.
     ///
     /// Invalidating in steps — the marker's thesis, then the parent's, then a

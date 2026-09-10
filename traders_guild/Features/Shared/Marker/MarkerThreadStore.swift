@@ -138,17 +138,22 @@ final class MarkerThreadStore: ObservableObject {
     /// What gets dropped:
     ///
     /// - Any thesis holding the event's marker or its parent. The common case.
-    /// - Every **unresolved** thesis on the symbol, whether or not one of those
-    ///   matched. An unresolved window does not know its own extent, so it
-    ///   cannot rule the event out — and the store deliberately allows two
-    ///   provisional windows onto one thesis, so an event can land in the one
-    ///   that is not on screen.
-    /// - If **nothing** matched, every thesis on the symbol, resolved included:
+    /// - Every **incomplete** thesis on the symbol, whether or not one of those
+    ///   matched. Incomplete means what `MarkerThreadCompleteness` means: an
+    ///   unresolved root, an outstanding ancestry cursor, *or* an outstanding
+    ///   branch cursor. Such a window has nodes it has never seen, so it cannot
+    ///   rule the event out.
+    /// - If **nothing** matched, every thesis on the symbol, complete included:
     ///   an event the cache cannot place anywhere may belong to any of them.
     ///
-    /// A resolved window survives only when something else did match, because
-    /// then it genuinely knows the event is not its own. Theses on other symbols
-    /// always survive: a thesis cannot span symbols.
+    /// Only a **fully complete** window survives a matched event, and only then
+    /// does it genuinely know the event is not its own. A confirmed root is not
+    /// enough on its own — the wide QA thesis has a confirmed root, 200 nodes
+    /// and an outstanding branch cursor, so a response created behind that
+    /// cursor belongs to it while its root says nothing about it. Keying on
+    /// `rootResolved` left exactly that window stale.
+    ///
+    /// Theses on other symbols always survive: a thesis cannot span symbols.
     ///
     /// - Returns: whether anything was dropped.
     @discardableResult
@@ -160,7 +165,7 @@ final class MarkerThreadStore: ObservableObject {
         let matchedAnEndpoint = !doomed.isEmpty
 
         for (key, window) in windows where onSymbol(window, symbolId) {
-            if !window.rootResolved || !matchedAnEndpoint {
+            if window.completeness != .complete || !matchedAnEndpoint {
                 doomed.insert(key)
             }
         }

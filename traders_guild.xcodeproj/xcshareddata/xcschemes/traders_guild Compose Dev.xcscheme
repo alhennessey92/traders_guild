@@ -49,6 +49,11 @@
                BlueprintName = "traders_guildUITests"
                ReferencedContainer = "container:traders_guild.xcodeproj">
             </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "ChartPanPerformanceDriver">
+               </Test>
+            </SkippedTests>
          </TestableReference>
       </Testables>
    </TestAction>

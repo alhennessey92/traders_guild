@@ -232,6 +232,20 @@ extension MarkerManager {
         )
     }
 
+    /// The acknowledgement variant, for a delete the viewer performed themselves.
+    ///
+    /// The author never receives their own realtime event — the server
+    /// suppresses the echo — so this HTTP acknowledgement is the *only* place
+    /// their client learns the thesis changed. Without it the author is the one
+    /// person who keeps seeing the pre-delete window.
+    func invalidateThreadsTouched(byDeletionOf response: RLMarkerDeleteResponseDTO) {
+        invalidateThreads(
+            markerId: response.markerId,
+            parentMarkerId: response.parentMarkerId,
+            symbolId: response.symbolId
+        )
+    }
+
     private func invalidateThreads(markerId: UUID?, parentMarkerId: UUID?, symbolId: UUID?) {
         guard let store = threadStore else { return }
         // One call, one generation bump. The store decides what an event of this

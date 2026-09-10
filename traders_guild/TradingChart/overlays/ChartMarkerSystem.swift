@@ -1324,8 +1324,11 @@ class MarkerManager: ObservableObject {
             let created = try await api.createMarkerV2(guildId: currentGuildId, request: request)
             // HTTP create is authoritative for the creator: the realtime echo
             // of their own marker is suppressed server-side, so this is the
-            // only place the author learns their parent's new count.
+            // only place the author learns their parent's new count — and the
+            // only place their own cached thesis can be invalidated. Everyone
+            // else gets both from `marker_created`; the author gets neither.
             applyLinkCounts(from: created)
+            invalidateThreadsTouched(by: created)
             if let idx = markers.firstIndex(where: { $0.id == tempId }),
                let newCandleIndex = findCandleIndex(timestamp: created.candleTimestamp, in: candles) {
                 let resolvedCreated = patchPollFields(
@@ -1366,8 +1369,10 @@ class MarkerManager: ObservableObject {
         do {
             let acknowledgement = try await api.deleteMarker(guildId: currentGuildId, markerId: id)
             // Same reasoning as create: the author never receives their own
-            // delete event, so the parent's corrected count arrives here.
+            // delete event, so the parent's corrected count — and the
+            // invalidation of the thesis they just put a hole in — arrive here.
             applyLinkCounts(fromDeletion: acknowledgement)
+            invalidateThreadsTouched(byDeletionOf: acknowledgement)
             responseCounts.forget(id)
             refreshLinkFocus()
         } catch {
