@@ -2740,26 +2740,15 @@ struct ChartMarkerSystem {
                 markerPositions.append((marker, position))
             }
 
-            // Nudge non-selected markers away when one is selected (todo 38 — stack safety)
-            if let selId = selectedMarkerId,
-               let selIdx = markerPositions.firstIndex(where: { $0.marker.id == selId }),
-               selectedMarkerScale > 1.0 {
-                let sel = markerPositions[selIdx]
-                let nudgeAmount: CGFloat = 10
-                let stackDir: CGFloat = sel.marker.positionedBelow ? 1.0 : -1.0
-                for i in markerPositions.indices where i != selIdx {
-                    let other = markerPositions[i]
-                    guard other.marker.positionedBelow == sel.marker.positionedBelow else { continue }
-                    let otherStack = other.marker.stackIndex
-                    let selStack = sel.marker.stackIndex
-                    if otherStack == selStack - 1 {
-                        markerPositions[i].position.y -= stackDir * nudgeAmount
-                    } else if otherStack == selStack + 1 {
-                        markerPositions[i].position.y += stackDir * nudgeAmount
-                    }
-                }
-            }
-            
+            // Nudge non-selected markers away when one is selected (todo 38 —
+            // stack safety). Shared with hit testing so a tap resolves against
+            // the positions actually painted.
+            MarkerStackLayout.applySelectionNudge(
+                to: &markerPositions,
+                selectedMarkerId: selectedMarkerId,
+                selectedMarkerScale: selectedMarkerScale
+            )
+
             // Captured after the nudge above, so connectors attach where the
             // glyphs actually land rather than where they would have.
             if linkRender != nil {
@@ -3190,6 +3179,118 @@ struct ChartMarkerSystem {
     
     // MARK: - Hit Detection
     
+    /// Focus-mode hit testing, against the geometry that was painted.
+    ///
+    /// Builds the same per-candle layout the renderer does — same positions,
+    /// same shared nudge — then orders every candidate by paint priority and
+    /// takes the topmost under the point. Glyph discs only: badges and
+    /// connectors are decoration, and treating them as targets would widen
+    /// glyphs asymmetrically.
+    private static func focusedMarkerAtLocation(
+        _ location: CGPoint,
+        markers: [ChartMarkerUI],
+        candles: [RLCandleDTO],
+        chartSize: CGSize,
+        priceRange: (min: Double, max: Double),
+        priceScale: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat,
+        selectedMarkerId: UUID?,
+        selectedMarkerScale: CGFloat,
+        focusMemberIds: Set<UUID>
+    ) -> ChartMarkerUI? {
+        let scaledHeight = chartSize.height * priceScale
+        let grouped = Dictionary(grouping: markers.filter(\.isVisible)) { $0.candleIndex }
+        let baseRadius = MarkerVisualSpec.baseCanvasDiameter / 2
+        // The same horizontal cull the renderer applies, so hit testing
+        // considers exactly the candles that were drawn.
+        let cullMargin = Swift.max(
+            totalCandleWidth * 6,
+            MarkerVisualSpec.baseCanvasDiameter * Swift.max(selectedMarkerScale, 1.0)
+                + MarkerPositionCalculator.hitRadius
+        )
+
+        var candidates: [(marker: ChartMarkerUI, bounds: MarkerGlyphBounds, priority: Int, order: Int)] = []
+
+        for candleIndex in grouped.keys.sorted() {
+            guard let atCandle = grouped[candleIndex],
+                  candleIndex >= 0, candleIndex < candles.count else { continue }
+
+            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
+            guard x >= -cullMargin, x <= chartSize.width + cullMargin else { continue }
+
+            let candle = candles[candleIndex]
+            let range = CGFloat(priceRange.max - priceRange.min)
+            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / range) * scaledHeight - verticalOffset
+            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / range) * scaledHeight - verticalOffset
+            let centerX = x + actualCandleWidth / 2
+
+            var positions: [(marker: ChartMarkerUI, position: CGPoint)] = atCandle
+                .sorted { $0.createdAt < $1.createdAt }
+                .map { marker in
+                    (marker, MarkerPositionCalculator.computeMarkerScreenPosition(
+                        marker: marker,
+                        candleHighY: candleHighY,
+                        candleLowY: candleLowY,
+                        centerX: centerX,
+                        priceScale: priceScale,
+                        viewportHeight: chartSize.height
+                    ))
+                }
+
+            MarkerStackLayout.applySelectionNudge(
+                to: &positions,
+                selectedMarkerId: selectedMarkerId,
+                selectedMarkerScale: selectedMarkerScale
+            )
+
+            for (order, entry) in positions.enumerated() {
+                let isSelected = entry.marker.id == selectedMarkerId
+                candidates.append((
+                    marker: entry.marker,
+                    bounds: MarkerGlyphBounds(
+                        id: entry.marker.id,
+                        center: entry.position,
+                        radius: baseRadius * (isSelected ? selectedMarkerScale : 1.0)
+                    ),
+                    priority: MarkerStackLayout.paintPriority(
+                        markerId: entry.marker.id,
+                        isSelected: isSelected,
+                        focusMemberIds: focusMemberIds
+                    ),
+                    order: candleIndex * 10_000 + order
+                ))
+            }
+        }
+
+        // Topmost first: highest paint priority, then latest painted within it.
+        let topmostFirst = candidates.sorted {
+            $0.priority != $1.priority ? $0.priority > $1.priority : $0.order > $1.order
+        }
+        let touchRadius = MarkerPositionCalculator.hitRadius
+        return topmostFirst.first {
+            $0.bounds.isHit(by: location, touchRadius: touchRadius)
+        }?.marker
+    }
+
+    /// Which marker a tap selects.
+    ///
+    /// Two behaviours, deliberately separate.
+    ///
+    /// **In focus mode** the tap resolves against the geometry the viewer is
+    /// looking at: post-nudge centres, the selected glyph's scaled radius, and
+    /// paint priority — unrelated, then thesis members, then the selected glyph
+    /// — walked topmost-first. Without that, a tap in a dense stack could select
+    /// the neighbour *behind* the glyph under the finger, because the legacy
+    /// path recomputes unnudged centres and walks creation order, neither of
+    /// which is what was drawn. Walking a thesis by tapping is the feature, so
+    /// this has to agree with the picture.
+    ///
+    /// **Otherwise** the 1.2.1 behaviour, verbatim: recomputed centres,
+    /// creation order reversed, fixed radius. A standalone marker outside any
+    /// thesis behaves exactly as it always has.
     static func findMarkerAtLocation(
         _ location: CGPoint,
         markers: [ChartMarkerUI],
@@ -3200,7 +3301,10 @@ struct ChartMarkerSystem {
         verticalOffset: CGFloat,
         totalCandleWidth: CGFloat,
         actualCandleWidth: CGFloat,
-        totalOffset: CGFloat
+        totalOffset: CGFloat,
+        selectedMarkerId: UUID? = nil,
+        selectedMarkerScale: CGFloat = 1.0,
+        focusMemberIds: Set<UUID> = []
     ) -> ChartMarkerUI? {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -3208,6 +3312,24 @@ struct ChartMarkerSystem {
               priceScale > 0,
               totalCandleWidth > 0,
               actualCandleWidth > 0 else { return nil }
+
+        if !focusMemberIds.isEmpty {
+            return focusedMarkerAtLocation(
+                location,
+                markers: markers,
+                candles: candles,
+                chartSize: chartSize,
+                priceRange: priceRange,
+                priceScale: priceScale,
+                verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                totalOffset: totalOffset,
+                selectedMarkerId: selectedMarkerId,
+                selectedMarkerScale: selectedMarkerScale,
+                focusMemberIds: focusMemberIds
+            )
+        }
 
         let scaledHeight = chartSize.height * priceScale
         let allVisibleMarkers = markers.filter { $0.isVisible }

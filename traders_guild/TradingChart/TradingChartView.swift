@@ -4077,7 +4077,10 @@ struct TradingChartView: View {
                     verticalOffset: totalVerticalOffset,
                     totalCandleWidth: totalCandleWidth,
                     actualCandleWidth: actualCandleWidth,
-                    totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth
+                    totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth,
+                    selectedMarkerId: markerManager.selectedMarker?.id,
+                    selectedMarkerScale: selectionScale,
+                    focusMemberIds: markerManager.linkFocus?.memberIds ?? []
                 ) {
                     HapticFeedback.selection.trigger()
                     tappedMarkerId = marker.id

@@ -30,6 +30,21 @@ struct MarkerGlyphBounds: Equatable {
         self.badgeRects = badgeRects
     }
 
+    /// Whether a tap lands on this glyph's disc.
+    ///
+    /// The disc only — badges and connectors are decoration, not targets. A
+    /// like badge sits 8pt to the right of the disc edge, so treating it as
+    /// tappable would silently widen every glyph asymmetrically.
+    ///
+    /// `touchRadius` is the minimum comfortable target; a selected glyph drawn
+    /// at 1.5x is already larger than that and keeps its own radius.
+    func isHit(by point: CGPoint, touchRadius: CGFloat) -> Bool {
+        let limit = max(radius, touchRadius)
+        let dx = point.x - center.x
+        let dy = point.y - center.y
+        return dx * dx + dy * dy <= limit * limit
+    }
+
     func contains(_ point: CGPoint, clearance: CGFloat) -> Bool {
         let dx = point.x - center.x
         let dy = point.y - center.y
@@ -347,5 +362,85 @@ enum MarkerLinkGeometry {
         let dx = a.x - b.x
         let dy = a.y - b.y
         return sqrt(dx * dx + dy * dy)
+    }
+}
+
+/// Glyphs as a frame paints them, in paint order.
+///
+/// Bottom-first, matching `glyphQueue`, so a hit test walks it in reverse to
+/// find the topmost glyph under a point. Exists so hit testing can share the
+/// renderer's final geometry — post-nudge, post-scale, plot-culled — instead of
+/// recomputing it with a second, subtly different algorithm.
+struct MarkerPaintedGlyphs: Equatable {
+    /// The selection this snapshot describes, so a frame that arrives after the
+    /// selection moved can be discarded rather than applied to a new thesis.
+    let selectionId: UUID
+    /// Bottom-first. Reverse to hit-test topmost-first.
+    let glyphsInPaintOrder: [MarkerGlyphBounds]
+
+    static let none = MarkerPaintedGlyphs(selectionId: UUID(), glyphsInPaintOrder: [])
+
+    /// The topmost glyph under a point, or nil.
+    func topmostHit(at point: CGPoint, touchRadius: CGFloat) -> UUID? {
+        for glyph in glyphsInPaintOrder.reversed() where glyph.isHit(by: point, touchRadius: touchRadius) {
+            return glyph.id
+        }
+        return nil
+    }
+}
+
+/// Layout the renderer and hit testing must agree on.
+///
+/// Both need the same answer to "where did that glyph actually land, and which
+/// one is on top". Writing it twice is how a tap starts selecting the marker
+/// beside the one under the finger, so it is written once here and called from
+/// both.
+enum MarkerStackLayout {
+
+    /// How far a selected glyph pushes its immediate stack neighbours.
+    static let selectionNudge: CGFloat = 10
+
+    /// Move the selected glyph's immediate neighbours clear of it.
+    ///
+    /// A selected marker is drawn at 1.5x and would otherwise overlap the
+    /// glyphs directly above and below it in the same stack. Only `stackIndex`
+    /// ±1 on the same side move, and only while the selection is actually
+    /// scaled up.
+    static func applySelectionNudge(
+        to positions: inout [(marker: ChartMarkerUI, position: CGPoint)],
+        selectedMarkerId: UUID?,
+        selectedMarkerScale: CGFloat
+    ) {
+        guard let selectedMarkerId,
+              selectedMarkerScale > 1.0,
+              let selectedIndex = positions.firstIndex(where: { $0.marker.id == selectedMarkerId })
+        else { return }
+
+        let selected = positions[selectedIndex]
+        let direction: CGFloat = selected.marker.positionedBelow ? 1.0 : -1.0
+
+        for index in positions.indices where index != selectedIndex {
+            let other = positions[index]
+            guard other.marker.positionedBelow == selected.marker.positionedBelow else { continue }
+            if other.marker.stackIndex == selected.marker.stackIndex - 1 {
+                positions[index].position.y -= direction * selectionNudge
+            } else if other.marker.stackIndex == selected.marker.stackIndex + 1 {
+                positions[index].position.y += direction * selectionNudge
+            }
+        }
+    }
+
+    /// Paint priority, lowest first: unrelated, then focused thesis members,
+    /// then the selected glyph on top.
+    ///
+    /// The renderer draws in this order and a tap resolves against its reverse,
+    /// so what looks topmost is what a tap selects.
+    static func paintPriority(
+        markerId: UUID,
+        isSelected: Bool,
+        focusMemberIds: Set<UUID>
+    ) -> Int {
+        if isSelected { return 2 }
+        return focusMemberIds.contains(markerId) ? 1 : 0
     }
 }
