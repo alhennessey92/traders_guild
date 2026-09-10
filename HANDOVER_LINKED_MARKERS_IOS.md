@@ -19,7 +19,7 @@ own earlier stage, not the current device state.
 
 Latest full run — `traders_guild Local Gateway`, 2026-09-10, counted with
 `xcresulttool get test-results summary` rather than by grepping the log:
-**583 passed, 5 skipped, 0 failed, 588 total**. The five skips are the
+**604 passed, 5 skipped, 0 failed, 609 total**. The five skips are the
 pre-existing credential-dependent auth and guild-picker UI cases, unrelated to
 this feature. `ChartPanPerformanceDriver` **ran and passed** in this run, against
 the prepared isolated app — the first end-to-end proof the corrected harness
@@ -79,7 +79,7 @@ assigned in `handleOnAppear` alongside the manager itself.
 
 ## What is here
 
-53 commits, each buildable:
+56 commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -136,6 +136,9 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `aba1f14` | Clip focus hit targets to the rendered plot |
 | `2437e80` | Prepare version 1.3.0 build 23 |
 | `7095534` | A focus miss must still exit, including below the plot |
+| `2cc3c32` | Record the two-member acceptance, and correct the spine claim |
+| `fdf28a0` | Keep a thesis reachable after its only response is deleted |
+| `31da3ca` | Give deletion a reachable action and an honest failure |
 
 The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
 immediately after it, is yours — the isolated local-development schemes — and is
@@ -434,9 +437,9 @@ Recorded exactly, from the run that produced them.
 
 | | |
 |---|---|
-| Full suite | **583 passed, 5 skipped, 0 failed, 588 total** — `xcresulttool get test-results summary` |
-| Full-suite result bundle | `scratchpad/full10.xcresult` (log: `scratchpad/full10.log`) |
-| Unit target alone | 575 passed, 0 failed, 0 skipped — `scratchpad/acc-units.xcresult` |
+| Full suite | **604 passed, 5 skipped, 0 failed, 609 total** — `xcresulttool get test-results summary` |
+| Full-suite result bundle | `scratchpad/full11.xcresult` (log: `scratchpad/full11.log`) |
+| Unit target alone | 596 passed, 0 failed, 0 skipped — `scratchpad/lc-units.xcresult` |
 | Two-member acceptance evidence | `scratchpad/acceptance/` — `A01`–`A16`, `B01`–`B11` |
 | Earlier full-suite bundles | `scratchpad/full9.xcresult` (577/5/582), `scratchpad/full7.log` (574/5/579) |
 | Wide-thesis UI walk console | `scratchpad/z.txt` |
@@ -811,33 +814,61 @@ Server side, confirmed over HTTP: the thread from G returns three nodes with the
 middle one `is_unavailable: true` and its title and timeframe nulled, while R's
 `direct_response_count` is 0 — soft-deleted children are not counted.
 
-### Two things worth your decision
+### Two lifecycle gaps this round found — both now closed
 
-1. **No delete control in the marker detail sheet.** I could not find one, as the
-   author or as an ADMIN moderator on another member's marker: both sheets end at
-   *Share Marker*, and expanding *General* shows metadata only. The delete was
-   therefore issued through the local DEV API, which is why the author's own
-   client had to refetch rather than learning from the HTTP acknowledgement path.
-   If deletion lives on a surface I did not find, say where and I will drive it;
-   if it is genuinely absent from this sheet, it is a gap in the feature's own
-   lifecycle story, since the plan makes deletion the escape hatch that keeps
-   linked markers permanently guild-visible.
-2. **A root whose only response is a tombstone loses its thesis affordance.**
-   R's disclosure is gated on `hasParent || directResponseCount > 0`, and the
-   count excludes soft-deleted children, so after C was deleted the disclosure
-   disappeared from R entirely — while the thread still exists, and G still hangs
-   off the tombstone. The chain stays reachable from G upward, never from R down.
-   Both halves are per spec; the combination is not obviously what you want, and
-   the honest fix is probably a backend count decision rather than a client gate,
-   so I have not touched it.
+1. **Deletion had no reachable action.** `MarkerDetailView` and
+   `EmbeddedMarkerDetailView` each carry a Delete Marker menu and neither is
+   instantiated anywhere in the app, so the menu was dead code; the sheet that is
+   actually presented ended at *Share Marker*, as author and as ADMIN moderator
+   alike. Closed in `31da3ca`, together with the manager path behind it, which
+   was optimistic and silent on failure — see that commit.
+2. **A root whose only response is a tombstone lost its thesis affordance.** The
+   disclosure was gated on an active count that excludes soft-deleted children,
+   so the branch below the tombstone was reachable from underneath and never from
+   the root. Closed in `fdf28a0` against the backend's additive `has_responses` /
+   `parent_has_responses`, with the active count's meaning unchanged.
 
 ### Not performed
 
-* **Failed-request draft retention.** The only way to force a failure here is to
-  break the shared local gateway or rebuild the app against the fail-closed host.
-  Both disturb work that is not mine, so this is untested rather than passing.
+* **A live detached response.** The parent-id-cleared shape needs a *hard*
+  delete, and the backend soft-deletes, so I could not produce one against the
+  live DEV data without doing something to the database that is not mine to do.
+  Covered at decode level instead, in `MarkerLinkDecodingTests`.
 * No physical device, no production endpoint, no external share destination, and
   the deep/wide fixture and the other member's markers were not modified.
+
+---
+
+## Lifecycle round — structural responses and a reachable delete (2026-09-10)
+
+Backend added `has_responses` on markers and `parent_has_responses` on the
+create/delete payloads, additive and defaulted false, with the active count's
+definition untouched. iOS matched it in `fdf28a0`, and the delete seam that the
+same acceptance exposed was closed in `31da3ca`.
+
+Live on the isolated DevProfile build against the rebuilt DEV backend, on the
+disposable QA branch — the deep/wide fixture was not touched:
+
+* **Moderator delete through the new action.** Alex (ADMIN) opened Sam's
+  cross-timeframe reply, and the sheet now ends with a destructive *Delete
+  Marker* row. It confirms first, and the delete landed. (`C02`–`C04`)
+* **The root kept its thesis at zero active responses.** With the reply gone,
+  `direct_response_count` is 0 and `has_responses` is true, and the disclosure is
+  still there reading *0 direct responses* — where before this round it vanished.
+  (`C05`)
+* **The branch is reachable from the root again.** Expanding it walks
+  *QA Accept Root* → *Unavailable marker (Supports 1)* → *QA Accept Grandchild
+  (Builds on)*, which is exactly the path that was lost. (`C06`, `C07`)
+* **Failed-request draft retention**, done the way you suggested rather than by
+  breaking the gateway: a new throwaway parent, a response composed against it
+  with the link banner attached, the parent deleted out from under the open
+  composer, then submit. The composer stays open, the draft text and the banner
+  survive, and the failure is stated in place — *"Placement Failed. Your response
+  is still here — try again."* (`D01`, `D02`)
+
+Server-side spot check through the gateway confirmed the wire values these
+depend on: the root at `direct_response_count: 0` / `has_responses: true`, and
+both replies carrying `parent_has_responses: true`.
 
 ---
 
