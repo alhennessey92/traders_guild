@@ -8,9 +8,9 @@ Status: **buildable and verified against the live DEV backend**, with the
 outstanding items named under *Not done* rather than folded into "complete".
 
 Latest full run — `traders_guild Compose Dev`, 2026-09-10:
-**554 passed, 0 failed** across 55 suites (505 swift-testing cases,
-34 XCTest, `ChartPanPerformanceDriver` skipped in this scheme by design — see
-*Profiling harness*), and **0 warnings** in linked-marker files. The isolated
+**558 passed, 0 failed** across 55 suites (`ChartPanPerformanceDriver` skipped
+in this scheme by design — see *Profiling harness*), and **0 warnings** in
+linked-marker files. The isolated
 `traders_guild LinkedDev Profile` / `DevProfile` scheme also builds for test.
 
 Visuals reviewed against a DEBUG fixture harness, against real backend data,
@@ -94,14 +94,23 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `a90aba0` | Bring the handover current |
 | `ffacc66` | Keep the fade rule off the pan path, and per selection |
 | `e288398` | Device profiling plan, isolation first |
-| `6f45f56` | Assert instead of skipping, and correct this table |
+| `6f45f56` | Assert instead of skipping, and correct the commit table |
+| `ce82cc2` | Record the compat suites' fixture dependency |
 | `e2ebddd` | Close the commit table honestly |
 | `8e462bb` | Isolated device DEV and profiling configuration |
 | `7beffb0` | The queued integration-review findings |
 | `382bbda` | Make the isolated build fail closed and reachable |
 | `bb770df` | Wire the realtime repairs into the handlers that need them |
 | `f1f5191` | Deterministic chart-pan driver for device profiling |
-
+| `79cf2aa` | Record live acceptance, exact counts and artifact paths |
+| `404875c` | Invalidate a marker event in one pass |
+| `f7d3e97` | Audit what VoiceOver reaches in the linked-marker surfaces |
+| `267df44` | Say exactly how far the VoiceOver check goes |
+| `32afe63` | Record the chart-service cursor defect blocking the wide walk |
+| `8915e92` | Make the pan driver measure the prepared app, not a relaunch |
+| `9e1a1c1` | Invalidate on the viewer's own writes, and sweep by completeness |
+| `2504734` | Reconcile counts and document the profiling harness |
+| `bac0b07` | Percent-encode cursors placed in a query string |
 The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
 immediately after it, is yours — the isolated local-development schemes — and is
 excluded here. A final documentation commit updates this table and so cannot
@@ -362,8 +371,9 @@ Recorded exactly, from the run that produced them.
 
 | | |
 |---|---|
-| Full suite | **554 passed, 0 failed** (505 swift-testing + 34 XCTest, 55 suites), 0 warnings in linked-marker files |
-| Full-suite log | `scratchpad/full6.log` |
+| Full suite | **558 passed, 0 failed** (55 suites), 0 warnings in linked-marker files |
+| Full-suite log | `scratchpad/full7.log` |
+| Wide-thesis UI walk console | `scratchpad/z.txt` |
 | Device build log | `scratchpad/b-iso.log` (`** BUILD SUCCEEDED **`) |
 | Simulator build log | `scratchpad/b-normal.log` |
 | Live HTTP ancestry probe | `scratchpad/live-ancestry.json` |
@@ -418,24 +428,63 @@ indistinguishable from an ordinary marker until tapped.
 **Cross-timeframe.** Tapping the root (1h) from the 4h chart switched the chart
 to 1h and carried the selection across.
 
-**Wide thesis: still not walked in the UI, and now known to be blocked.** Its
-branch continuation is proven over HTTP (200 nodes + `truncated`, then a
-27-node branch page) and at the call site by the spy tests, but the chart
-cannot be driven to it: the wide root is the oldest row by `created_at`, so it
-sits on marker-list page 3, and every page after the first 500s on the
-`dateutil` defect above. A branch cursor replayed against a different marker
-still returned `409 marker_thread_refresh_required`, confirming provenance
-binding on this fixture too.
+### Wide thesis — branch continuation, walked in the UI
 
-Worth noting the thread endpoint is unaffected — it paginates correctly, which
-is why the 81-node ancestry walk succeeded. The break is in the *marker list*.
+Selected `QA Wide Response 010` ("Builds on Alex Link QA's QA Wide Thesis
+Root") from the dense 1h stack and expanded the disclosure. One tap on
+**"⊕ More responses"**:
+
+| | before the tap | after |
+|---|---|---|
+| Header | `2+ in this thesis` | **`200+ in this thesis`** |
+| Tally | `1 builds on` | **`66 supports · 66 challenges · 67 builds on`** |
+| Rows | root + the selected marker | root + Responses 001, 002, … |
+| Footer | `Showing part of this thesis` | still shown — 226 nodes, 200 loaded |
+
+The request was
+`GET /chart/markers/CA88CBA9…/thread?cursor=gAAAAABqolLmk-Dl…` — a Fernet
+cursor replayed against the **issuing** marker rather than the selected one.
+Cursor provenance holding in the real UI, not only in the spy tests.
+
+The root row shows `225` while the header reads `200+`: the count is the
+window's, the root's own badge is its direct-response total, and neither is
+silently rounded into the other.
+
+**And the header fix earning its keep on the case it was written for.** The
+tally sums to 199. Had it still replaced the count, a 226-node thesis would
+have presented "199" as though that were the whole of it.
+
+### Focus mode on real dense data
+
+With ~100 markers loaded on 1h, selecting a linked marker produced the
+flagship visual against genuinely cluttered data:
+
+- a **teal** ring on the selected builds-on marker, **green** on a supports
+  member, **red** on a challenges member — relationship carried by ring colour
+  *and* by the dash pattern and badge, never by hue alone
+- a long **curved dashed teal connector** between them, the quadratic Bézier
+  rather than a straight trendline
+- every unrelated marker visibly recessed at 0.22, candles untouched
+- the clutter guards visible: connectors reach the parent and direct children
+  only, not across all 226 nodes
+
+Also confirmed live on this pass: the **`99+`** count badge (the >99 path),
+leaf glyph badges in all three relationship colours across the dense stack, and
+`Showing part of this thesis`.
+
+Screenshots: `scratchpad/v1.png` (dense stack, `99+`), `v8.png` (focus mode,
+three rings, connector, dimming), `u1c.png` / `u2c.png` (before and after the
+branch continuation).
 
 ---
 
-## Blocker found while attempting the wide-thesis UI walk (backend, not iOS)
+## Two cursor defects the wide-thesis walk uncovered — both now fixed
 
-`chart-service` imports `python-dateutil` without declaring it. Every
-cursor-based page in that service therefore 500s:
+Marker-list pagination was broken from both ends. Neither had anything to do
+with linked markers; both blocked this feature's acceptance, and both would
+have hit any guild that outgrew a single page.
+
+### 1. `chart-service` imported a package it never declared (backend — owner fixed)
 
 ```
 File "/app/app/api/chart.py", line 2890, in get_markers
@@ -443,26 +492,52 @@ File "/app/app/api/chart.py", line 2890, in get_markers
 ModuleNotFoundError: No module named 'dateutil'
 ```
 
-Reproduced directly against the local gateway. `?timeframe=1h&limit=100`
-returns 200; add **any** `cursor` and it 500s — encoding, `+00:00` vs `Z`
-spelling and the time window make no difference.
-
-Not a deployment drift. The import is function-local at four sites in
-`services/chart-service/app/api/chart.py` — 2890 `get_markers`, 3040
+Function-local at four sites — 2890 `get_markers`, 3040
 `get_marker_activity`, 3927 `get_marker_comments`, 4684
-`get_chart_chat_messages` — and `python-dateutil` appears in
-`market-ingestion-service/requirements.txt` only, never in
-`chart-service/requirements.txt`. It predates linked markers (`7476ec8`), and
-survived because a function-local import fires only on the cursor path, which
-no cursor-less request reaches.
+`get_chart_chat_messages` — while `python-dateutil` was declared only in
+`market-ingestion-service/requirements.txt`. Not deployment drift. It survived
+because a function-local import fires only on the cursor path, and the *first*
+page of any list carries no cursor, so everything looked healthy until a guild
+grew past one page.
 
-**This is not a QA-only problem.** Marker list paging is the first page plus a
-cursor, so any guild with more than 100 markers on one timeframe stops loading
-after page 1 in the shipped app, silently. Marker activity, marker comments and
-chart chat page the same way.
+Fixed by the owner. All four cursor routes now verified.
 
-Left untouched — the backend is yours. It is recorded here because it is the
-reason the wide-thesis UI walk below is incomplete.
+### 2. iOS sent the cursor unencoded (client — fixed here, `bac0b07`)
+
+After the backend fix the app still 500'd while direct HTTP succeeded. One
+character apart:
+
+| cursor spelling | result |
+|---|---|
+| `%2B00:00` | 200 |
+| `+00:00` — what the app sent | **500** `ValueError: Unused components in ISO string` |
+| `Z` | 200 |
+
+`.urlQueryAllowed` permits `+`, and `+` in a query string means a space, so
+`…415598+00:00` reached the service as `…415598 00:00`. Seven call sites
+interpolated the cursor raw; two more used `.urlQueryAllowed`, which does not
+help here. All now go through one `tgQueryEncoded` helper that escapes `+`
+along with the query delimiters, while base64url and `Z`-spelled cursors pass
+through byte-exact — opaque cursors are decrypted server-side and compared
+against an embedded marker id, so they must not change.
+
+**Why the thesis worked while the list did not.** Thread cursors are Fernet
+tokens in base64url, an alphabet with `-` and `_` but no `+`. They were correct
+by luck, not by encoding. That is exactly why ancestry paged cleanly in the UI
+on the earlier pass while the marker list returned 500 on every page after the
+first.
+
+Verified end to end afterwards: three 1h marker pages, **all 200, zero
+failures**, and the wide thesis rendered.
+
+### A third condition, not a defect
+
+The seeded fixture initially used timestamps beyond the DEV instance's retained
+candle history, so markers loaded but rendered nothing —
+`findCandleIndex` drops a marker whose candle is absent. Corrected by the owner
+(backend `a639ef1`) by adding local synthetic coverage. Worth knowing because
+the symptom — a 200 response and an empty chart — looks like a client bug and
+is not.
 
 ---
 
@@ -638,5 +713,17 @@ count, because that is what soft deletion means.
 4. **0.22 unchanged**, as instructed. The light-grey observation stands: unrelated
    markers there are closer to invisible than recessive, and a theme-aware floor
    near 0.35 would read better. Owner's call.
-5. ~~Ancestry paging never exercised live.~~ **Now exercised**, against the
-   owner's deep/wide fixture — see *Live acceptance* below.
+5. ~~Ancestry paging never exercised live.~~ **Done.** Both paging directions
+   are now walked in the real UI against the owner's deep/wide fixture:
+   three-window ancestry to the root on the 81-node chain, and branch
+   continuation on the 226-node wide thesis. See *Live acceptance*.
+
+## Left for the owner, not gaps in this work
+
+- **Physical device install and the matched-pair Instruments run.** The
+  isolated artifact and the corrected pan driver are ready; the owner holds
+  installation.
+- **`UnifiedMarkerBadge`'s unlabelled intent symbols.** App-wide chrome
+  predating this feature, surfaced by the accessibility audit, counted in its
+  attached snapshot. Worth a pass outside this branch.
+- **A rotor-driven VoiceOver session**, which no automated check replaces.
