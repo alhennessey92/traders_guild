@@ -3,6 +3,7 @@
 Branch: `claude/1.3.0-marker-visuals`
 Worktree: `.worktrees/linked-markers-claude`
 Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
+Version: **1.3.0 build 23** (`f36340f`)
 
 Status: **buildable and verified against the live DEV backend**, with the
 outstanding items named under *Not done* rather than folded into "complete".
@@ -18,7 +19,7 @@ own earlier stage, not the current device state.
 
 Latest full run — `traders_guild Local Gateway`, 2026-09-10, counted with
 `xcresulttool get test-results summary` rather than by grepping the log:
-**577 passed, 5 skipped, 0 failed, 582 total**. The five skips are the
+**583 passed, 5 skipped, 0 failed, 588 total**. The five skips are the
 pre-existing credential-dependent auth and guild-picker UI cases, unrelated to
 this feature. `ChartPanPerformanceDriver` **ran and passed** in this run, against
 the prepared isolated app — the first end-to-end proof the corrected harness
@@ -78,7 +79,7 @@ assigned in `handleOnAppear` alongside the manager itself.
 
 ## What is here
 
-49 commits, each buildable:
+53 commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -131,6 +132,10 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `71b2461` | Hoist per-frame symbol, text and theme work out of the glyph loop |
 | `57f7067` | Keep build-configuration files out of the app bundle |
 | `4f96dbf` | Cover an author's own write reaching an open disclosure |
+| `1c8fe8c` | Record the simulator profiling, and what it could not measure |
+| `aba1f14` | Clip focus hit targets to the rendered plot |
+| `2437e80` | Prepare version 1.3.0 build 23 |
+| `7095534` | A focus miss must still exit, including below the plot |
 
 The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
 immediately after it, is yours — the isolated local-development schemes — and is
@@ -364,19 +369,21 @@ The tests the owner asked for, and where they live:
 6. **Discord relation copy** (generic sentence only) is backend-side; nothing on
    iOS was changed for it, and public share cards are untouched as specified.
 7. **Android** untouched, as instructed.
-8. **The short-connector fallback was never built.** The plan says a link whose
-   connector is suppressed should instead tint that stack segment with the
-   relationship colour, so the link stays legible. `drawStackedConnectionLines`
-   strokes `surfaceGray40` unconditionally, and there is no tint anywhere.
+8. **Suppressed connectors leave the stack spine grey — by design, not a gap.**
+   In a tight stack the router can find no obstacle-free bow on either side at
+   any magnitude, and correctly declines rather than drawing a line across other
+   glyphs; the same happens below the 24pt chord minimum. The result is a pair of
+   ringed markers with a plain grey stack line between them (screenshot `11`).
 
-   This shows up in real dense data, and not only below the 24pt threshold: in
-   a tight stack the router can find no obstacle-free bow on either side at any
-   magnitude and correctly declines to draw a line across other glyphs, and the
-   result is a pair of ringed markers with a plain grey stack line between them
-   (screenshot `11`). Relationship is still carried by the ring and the badge,
-   so nothing is broken — but the third channel the plan asked for is absent.
-   Left for you to decide rather than added while you were away, since it is a
-   visual change to shared chart chrome.
+   The approved plan is explicit that the shared stack spine is **never**
+   recoloured, and that an unsafe dedicated curve is simply omitted, with the
+   badge and the thread list carrying navigation instead. Relationship remains
+   redundantly encoded by the ring, the badge and the row text, so nothing is
+   lost for colour-blind readers.
+
+   Recorded here because an earlier draft of this document called it a missing
+   fallback, quoting the superseded original plan. It is not; no design decision
+   is outstanding.
 
 ---
 
@@ -427,10 +434,11 @@ Recorded exactly, from the run that produced them.
 
 | | |
 |---|---|
-| Full suite | **577 passed, 5 skipped, 0 failed, 582 total** — `xcresulttool get test-results summary` |
-| Full-suite result bundle | `scratchpad/full9.xcresult` (log: `scratchpad/full9.log`) |
-| Unit target alone | 569 passed, 0 failed, 0 skipped — `scratchpad/full8.xcresult` |
-| Earlier full-suite log | `scratchpad/full7.log` (574/5/579, before this session's two tests) |
+| Full suite | **583 passed, 5 skipped, 0 failed, 588 total** — `xcresulttool get test-results summary` |
+| Full-suite result bundle | `scratchpad/full10.xcresult` (log: `scratchpad/full10.log`) |
+| Unit target alone | 575 passed, 0 failed, 0 skipped — `scratchpad/acc-units.xcresult` |
+| Two-member acceptance evidence | `scratchpad/acceptance/` — `A01`–`A16`, `B01`–`B11` |
+| Earlier full-suite bundles | `scratchpad/full9.xcresult` (577/5/582), `scratchpad/full7.log` (574/5/579) |
 | Wide-thesis UI walk console | `scratchpad/z.txt` |
 | Device build log | `scratchpad/b-iso.log` (`** BUILD SUCCEEDED **`) |
 | Simulator build log | `scratchpad/b-normal.log` |
@@ -703,6 +711,133 @@ local gateway.
   tombstone in one of their chains. The behaviour is covered instead by
   `4f96dbf`, which drives the same DTOs the update and delete paths hand to the
   invalidator and asserts an open disclosure re-reads and keeps its place.
+
+---
+
+## Codex commits reviewed and integrated
+
+`120b972` (clipped-plot focus hit) and `f36340f` (1.3.0 build 23) were
+cherry-picked and reviewed independently. The clipping is right and the paint
+priority is now genuinely shared: `MarkerStackLayout.paintPriority` drives both
+the renderer's `glyphQueue` and the hit test, and the added
+`marker.id.uuidString` tiebreak matters, because `order` is per candle group and
+two markers in different groups can collide on it — an unstable sort there would
+make a dense tap non-deterministic.
+
+One defect found and repaired in `7095534`: the clip was added as an early return
+*in front of* the hit test, and the tap handler's miss branch sits after it, so a
+tap in the x-axis reserved band stopped exiting focus. Detail in that commit; the
+short version is that clipping belongs inside `findMarkerAtLocation`, which
+already does it, and the view must ask before it decides.
+
+I first reported this as affecting the price axis too. It does not: the 64pt
+y-axis lane carries `yAxisGestureOverlay`, applied *after* this gesture, so taps
+there never reach the marker layer either way. Only the band below the plot
+changed behaviour.
+
+`f36340f` needed no repair. Verified from built products that Release still
+produces `co.tradersguild.app` / "Traders Guild" at 1.3.0 (23), and that the
+bundle-contents exception from `57f7067` survived the cherry-pick.
+
+---
+
+## Two-member update/delete acceptance (2026-09-10)
+
+Run on a **new disposable thesis**, deliberately separate from the deep/wide
+performance fixture, which was left untouched. Two simulators, two accounts:
+iPhone 17 Pro as *Alex Link QA* (guild ADMIN) and iPhone 17 as *Sam Link QA*
+(MEMBER), both on the isolated `co.tradersguild.app.linkeddev` DevProfile build,
+1.3.0 build 23, routed to the local gateway.
+
+The thesis, all `question` intent on BTC/USD:
+
+| | marker | author | timeframe | relationship |
+|---|---|---|---|---|
+| R | QA Accept Root | Alex | 1h @ Sep 10 05:00Z | — |
+| C | QA Accept Response | Sam | 1h | supports R |
+| G | QA Accept Grandchild | Alex | **4h** | builds on C |
+| C2 | QA Accept Cross-TF Reply | Sam | **4h** | challenges R |
+
+### What was driven through the UI
+
+* **Respond-with-marker, end to end.** Sam opened R, tapped *Respond with
+  marker*, chose *Supports* from the three-way picker, and the placement session
+  came up carrying the link: a banner reading *"Supports linkqad1f509e30's QA
+  Accept Root — Shared with the guild"* with **Change** and **✕** controls, the
+  parent's candle seeded, price left at the viewport default so the two glyphs
+  separate, and visibility locked to guild. Submitted, and the post-placement
+  share sheet was dismissed with *Not now* — nothing left this machine.
+  (`B03`–`B05`)
+* **Badge policy on real data.** With R and C stacked on the same candle, R wears
+  a **neutral grey `1`** and C a **green `1`** — root count neutral, linked count
+  in its own relationship colour, one badge each, likes still on the right.
+  (`A07`)
+* **Author edit.** Sam edited C's note through the edit flow and submitted; the
+  edit sheet correctly showed **no link banner**, since the relationship is
+  immutable and `buildUpdateRequest` ignores link context. (`B07`–`B09`)
+* **Permissions.** Sam sees *Edit* on C and not on R; Alex sees *Edit* on R and
+  not on C, and no route back to private on a linked marker.
+* **Cross-timeframe walking.** From C, Sam's disclosure showed all three nodes
+  with the header recomputed to *"3+ in this thesis — 1 supports · 1 builds on"*
+  and the grandchild indented two levels. (`B10`)
+* **Inbox navigation, cross-timeframe.** Alex's guild Notifications list carries
+  *"Sam Link QA responded to your marker — A new challenges response on
+  BTC/USD."* Opening it switched the chart **1H → 4H**, animated to Sep 10 05:00
+  and selected C2, which wears the red *challenges* badge. Focus correctly did
+  not engage: C2's parent is on 1h and absent from this chart. (`A15`, `A16`)
+
+### Refresh while a disclosure is open
+
+Alex held R's thesis disclosure open throughout. When Sam retitled C, **Alex's
+open disclosure updated in place with no interaction**: the row text changed from
+*Question* to *QA Accept Response (title e…*, while the root row stayed
+highlighted and the header stayed put. That is the assigned check —
+edit-while-open refreshes and preserves selection — verified across two clients.
+(`A08` → `A10`)
+
+### Delete of the intermediate
+
+C was soft-deleted by its author. On **Alex's client**, which had C selected, the
+websocket event closed the marker sheet and cleared the selection, removed C from
+the canvas, and dropped R's badge to no count — `direct_response_count` 1 → 0,
+live. (`A12`, `A13`) On **Sam's client**, after refetch, G's detail shows the
+parent row as *"Builds on an unavailable marker — The marker this answers isn't
+available to you"*, greyed and not tappable, and the thread renders root →
+**Unavailable marker** (keeping its *Supports 1* chip) → **QA Accept Grandchild**,
+current row highlighted. The descendant survives and the chain still reads.
+(`B11`)
+
+Server side, confirmed over HTTP: the thread from G returns three nodes with the
+middle one `is_unavailable: true` and its title and timeframe nulled, while R's
+`direct_response_count` is 0 — soft-deleted children are not counted.
+
+### Two things worth your decision
+
+1. **No delete control in the marker detail sheet.** I could not find one, as the
+   author or as an ADMIN moderator on another member's marker: both sheets end at
+   *Share Marker*, and expanding *General* shows metadata only. The delete was
+   therefore issued through the local DEV API, which is why the author's own
+   client had to refetch rather than learning from the HTTP acknowledgement path.
+   If deletion lives on a surface I did not find, say where and I will drive it;
+   if it is genuinely absent from this sheet, it is a gap in the feature's own
+   lifecycle story, since the plan makes deletion the escape hatch that keeps
+   linked markers permanently guild-visible.
+2. **A root whose only response is a tombstone loses its thesis affordance.**
+   R's disclosure is gated on `hasParent || directResponseCount > 0`, and the
+   count excludes soft-deleted children, so after C was deleted the disclosure
+   disappeared from R entirely — while the thread still exists, and G still hangs
+   off the tombstone. The chain stays reachable from G upward, never from R down.
+   Both halves are per spec; the combination is not obviously what you want, and
+   the honest fix is probably a backend count decision rather than a client gate,
+   so I have not touched it.
+
+### Not performed
+
+* **Failed-request draft retention.** The only way to force a failure here is to
+  break the shared local gateway or rebuild the app against the fail-closed host.
+  Both disturb work that is not mine, so this is untested rather than passing.
+* No physical device, no production endpoint, no external share destination, and
+  the deep/wide fixture and the other member's markers were not modified.
 
 ---
 
