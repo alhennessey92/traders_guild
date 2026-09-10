@@ -4067,11 +4067,14 @@ struct TradingChartView: View {
                 let totalOffset = gestureState.panOffset.width
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
                 let plotRect = markerPlotRect(size: geometry.size)
-                if markerManager.linkFocus != nil, !plotRect.contains(location) {
-                    return
-                }
 
-                if let marker = ChartMarkerSystem.findMarkerAtLocation(
+                // Ask the hit test first, then decide. It already clips a focus
+                // tap to `plotRect`; guarding here as well would also swallow
+                // the empty-tap exit below the plot, leaving a tap in the time
+                // strip doing nothing while a thesis is focused. (The price lane
+                // is a separate matter — `yAxisGestureOverlay` sits above this
+                // gesture and takes those taps before it ever runs.)
+                let hitMarker = ChartMarkerSystem.findMarkerAtLocation(
                     location,
                     markers: markerManager.filteredMarkers,
                     candles: chartData.candles,
@@ -4086,7 +4089,14 @@ struct TradingChartView: View {
                     selectedMarkerScale: selectionScale,
                     focusMemberIds: markerManager.linkFocus?.memberIds ?? [],
                     plotRect: plotRect
+                )
+
+                switch ChartMarkerSystem.tapOutcome(
+                    hitMarkerId: hitMarker?.id,
+                    isFocused: markerManager.linkFocus != nil
                 ) {
+                case .select:
+                    guard let marker = hitMarker else { break }
                     HapticFeedback.selection.trigger()
                     tappedMarkerId = marker.id
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -4114,14 +4124,14 @@ struct TradingChartView: View {
                         )
                         stageMarkerSelection(focusMarker)
                     }
-                } else if markerManager.linkFocus != nil {
-                    // Empty-tap exit, scoped strictly to focus mode and reached
-                    // only after the crosshair, placement and drawing handlers
-                    // above have declined the tap. Outside focus a miss still
-                    // does nothing, exactly as in 1.2.1.
+                case .exitFocus:
+                    // Reached only after the crosshair, placement and drawing
+                    // handlers above have declined the tap.
                     withAnimation(.easeInOut(duration: 0.2)) {
                         markerManager.selectedMarker = nil
                     }
+                case .ignore:
+                    break
                 }
             }
     }

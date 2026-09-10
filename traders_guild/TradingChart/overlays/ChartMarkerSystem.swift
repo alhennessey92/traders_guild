@@ -3170,6 +3170,29 @@ struct ChartMarkerSystem {
         return UsernameLabelCandidate(markerId: marker.id, rect: rect, sortKey: sortKey)
     }
 
+    /// What a chart tap means once the marker layer has had its say.
+    ///
+    /// One rule, in one place, because the tap handler has now got it wrong
+    /// twice. The order matters: ask the hit test *first*, decide afterwards.
+    /// Clipping a focus tap to the visible plot is the hit test's job — it
+    /// already refuses a point outside `plotRect` and rejects a disc that was
+    /// never painted — so a second guard in front of the hit test buys nothing
+    /// and costs the empty-tap exit, which is the whole way out of focus mode
+    /// for someone whose thumb lands on the price axis.
+    enum MarkerTapOutcome: Equatable {
+        case select(UUID)
+        /// A miss, while a thesis is focused. Exits focus — wherever the miss
+        /// was, including the axis gutters the marker layer does not paint.
+        case exitFocus
+        /// A miss outside focus, which does nothing, exactly as in 1.2.1.
+        case ignore
+    }
+
+    static func tapOutcome(hitMarkerId: UUID?, isFocused: Bool) -> MarkerTapOutcome {
+        if let hitMarkerId { return .select(hitMarkerId) }
+        return isFocused ? .exitFocus : .ignore
+    }
+
     private static func drawUsernameLabel(
         context: GraphicsContext,
         marker: ChartMarkerUI,

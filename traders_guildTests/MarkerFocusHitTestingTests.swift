@@ -161,6 +161,54 @@ struct MarkerFocusHitTestingTests {
                     focusMemberIds: [m.id], plotRect: plot)?.id == m.id)
     }
 
+    // MARK: - A miss must still exit focus, wherever it landed
+
+    /// The rule the tap handler follows, pinned separately from the hit test.
+    ///
+    /// This is the half that regressed. Clipping focus taps to the plot was
+    /// added as an early return *in front of* the hit test, which was right
+    /// about the touch target and wrong about the miss: a tap in the x-axis
+    /// reserved band — the time strip below the plot — stopped exiting focus,
+    /// because it returned before reaching the miss branch.
+    ///
+    /// Only that band, not "the axes" generally: the 64pt price lane carries its
+    /// own `yAxisGestureOverlay`, so taps there never reach this gesture at all
+    /// and behave identically either way. Verified live in the simulator that a
+    /// tap in the time strip exits focus with this in place.
+    ///
+    /// Clipping is `findMarkerAtLocation`'s job, and
+    /// `focusIgnoresTapsInClippedAxisAreas` above covers it. What this covers is
+    /// that a miss — including one the clipping produced — still exits.
+    @Test
+    func aMissExitsFocusEvenWhenItCameFromTheClippedAxisArea() {
+        let m = marker(1, stackIndex: 0, createdOffset: 0)
+        let center = paintedCenter(of: m, among: [m], selectedId: nil, selectedScale: 1)
+        // A plot that excludes the glyph, as the y-axis lane does.
+        let plot = CGRect(x: 0, y: 0, width: center.x - 22, height: chartSize.height)
+        let point = CGPoint(x: plot.maxX - 1, y: center.y)
+
+        let missed = hit(at: point, markers: [m], focusMemberIds: [m.id], plotRect: plot)
+        #expect(missed == nil, "the clipping must still reject the tap")
+        #expect(
+            ChartMarkerSystem.tapOutcome(hitMarkerId: missed?.id, isFocused: true) == .exitFocus,
+            "and the miss it produced must still be a way out of focus"
+        )
+    }
+
+    /// The same miss outside focus does nothing, exactly as in 1.2.1.
+    @Test
+    func aMissOutsideFocusStillDoesNothing() {
+        #expect(ChartMarkerSystem.tapOutcome(hitMarkerId: nil, isFocused: false) == .ignore)
+    }
+
+    /// A hit selects, focused or not.
+    @Test
+    func aHitSelectsRegardlessOfFocus() {
+        let id = UUID()
+        #expect(ChartMarkerSystem.tapOutcome(hitMarkerId: id, isFocused: true) == .select(id))
+        #expect(ChartMarkerSystem.tapOutcome(hitMarkerId: id, isFocused: false) == .select(id))
+    }
+
     // MARK: - The nudge must be shared
 
     /// The renderer moves a selected glyph's immediate neighbours 10pt clear.
