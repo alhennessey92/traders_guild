@@ -4066,6 +4066,10 @@ struct TradingChartView: View {
                 }
                 let totalOffset = gestureState.panOffset.width
                 let totalVerticalOffset = clampedVerticalOffset(chartHeight: geometry.size.height)
+                let plotRect = markerPlotRect(size: geometry.size)
+                if markerManager.linkFocus != nil, !plotRect.contains(location) {
+                    return
+                }
 
                 if let marker = ChartMarkerSystem.findMarkerAtLocation(
                     location,
@@ -4080,7 +4084,8 @@ struct TradingChartView: View {
                     totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth,
                     selectedMarkerId: markerManager.selectedMarker?.id,
                     selectedMarkerScale: selectionScale,
-                    focusMemberIds: markerManager.linkFocus?.memberIds ?? []
+                    focusMemberIds: markerManager.linkFocus?.memberIds ?? [],
+                    plotRect: plotRect
                 ) {
                     HapticFeedback.selection.trigger()
                     tappedMarkerId = marker.id
@@ -7779,18 +7784,22 @@ struct TradingChartView: View {
         }
     }
 
-    private func drawTopPriorityMarkers(context: GraphicsContext, size: CGSize) {
-        var markerContext = context
+    private func markerPlotRect(size: CGSize) -> CGRect {
         let xAxisReservedHeight = xAxisReservedBandHeight(
             chartHeight: size.height,
             includeLabelStrip: mainChartLayoutAlwaysIncludesXAxisLabelStripHeight
         )
-        let plotRect = CGRect(
+        return CGRect(
             x: 0,
             y: 0,
             width: max(0, size.width - yAxisWidth),
             height: max(0, size.height - xAxisReservedHeight)
         )
+    }
+
+    private func drawTopPriorityMarkers(context: GraphicsContext, size: CGSize) {
+        var markerContext = context
+        let plotRect = markerPlotRect(size: size)
         markerContext.clip(to: Path(plotRect))
 
         let totalOffset = gestureState.panOffset.width

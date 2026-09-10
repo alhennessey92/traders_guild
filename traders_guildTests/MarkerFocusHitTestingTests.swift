@@ -106,7 +106,8 @@ struct MarkerFocusHitTestingTests {
         markers: [ChartMarkerUI],
         selectedId: UUID? = nil,
         selectedScale: CGFloat = 1.0,
-        focusMemberIds: Set<UUID> = []
+        focusMemberIds: Set<UUID> = [],
+        plotRect: CGRect? = nil
     ) -> ChartMarkerUI? {
         ChartMarkerSystem.findMarkerAtLocation(
             point,
@@ -121,8 +122,43 @@ struct MarkerFocusHitTestingTests {
             totalOffset: chartSize.width / 2 - 14,
             selectedMarkerId: selectedId,
             selectedMarkerScale: selectedScale,
-            focusMemberIds: focusMemberIds
+            focusMemberIds: focusMemberIds,
+            plotRect: plotRect
         )
+    }
+
+    @Test
+    func focusCannotSelectAnInvisibleDiscThroughItsExpandedTouchTarget() {
+        let m = marker(1, stackIndex: 0, createdOffset: 0)
+        let center = paintedCenter(of: m, among: [m], selectedId: nil, selectedScale: 1)
+        // The visible plot ends beyond the 18pt disc but within its 28pt touch target.
+        let plot = CGRect(x: 0, y: 0, width: center.x - 22, height: chartSize.height)
+        let point = CGPoint(x: plot.maxX - 1, y: center.y)
+        #expect(hit(at: point, markers: [m], focusMemberIds: [m.id], plotRect: plot) == nil)
+        // Standalone behavior continues to use its existing target radius.
+        #expect(hit(at: point, markers: [m], plotRect: plot)?.id == m.id)
+    }
+
+    @Test
+    func focusIgnoresTapsInClippedAxisAreas() {
+        let m = marker(1, stackIndex: 0, createdOffset: 0)
+        let center = paintedCenter(of: m, among: [m], selectedId: nil, selectedScale: 1)
+        let rightAxisPlot = CGRect(x: 0, y: 0, width: center.x - 4, height: chartSize.height)
+        let bottomAxisPlot = CGRect(x: 0, y: 0, width: chartSize.width, height: center.y - 4)
+        for plot in [rightAxisPlot, bottomAxisPlot] {
+            #expect(hit(at: center, markers: [m], focusMemberIds: [m.id], plotRect: plot) == nil)
+            #expect(hit(at: center, markers: [m], plotRect: plot)?.id == m.id)
+        }
+    }
+
+    @Test
+    func focusCanSelectTheVisiblePartOfAScaledDiscAtThePlotEdge() {
+        let m = marker(1, stackIndex: 0, createdOffset: 0)
+        let center = paintedCenter(of: m, among: [m], selectedId: m.id, selectedScale: 1.5)
+        let plot = CGRect(x: 0, y: 0, width: center.x - 22, height: chartSize.height)
+        let point = CGPoint(x: plot.maxX - 1, y: center.y)
+        #expect(hit(at: point, markers: [m], selectedId: m.id, selectedScale: 1.5,
+                    focusMemberIds: [m.id], plotRect: plot)?.id == m.id)
     }
 
     // MARK: - The nudge must be shared

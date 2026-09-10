@@ -2855,16 +2855,15 @@ struct ChartMarkerSystem {
         }
 
         let glyphQueue = renderQueue.sorted {
-            if $0.isSelected != $1.isSelected {
-                return !$0.isSelected
-            }
-            // Focused thesis members paint above faded ones, mirroring the
-            // existing selected-above-everything rule.
-            if let linkRender {
-                let lhsFocused = linkRender.focus.memberIds.contains($0.marker.id)
-                let rhsFocused = linkRender.focus.memberIds.contains($1.marker.id)
-                if lhsFocused != rhsFocused { return !lhsFocused }
-            }
+            let lhsPriority = MarkerStackLayout.paintPriority(
+                markerId: $0.marker.id, isSelected: $0.isSelected,
+                focusMemberIds: linkRender?.focus.memberIds ?? []
+            )
+            let rhsPriority = MarkerStackLayout.paintPriority(
+                markerId: $1.marker.id, isSelected: $1.isSelected,
+                focusMemberIds: linkRender?.focus.memberIds ?? []
+            )
+            if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
             if $0.sortKey != $1.sortKey {
                 return $0.sortKey < $1.sortKey
             }
@@ -3211,8 +3210,10 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         selectedMarkerId: UUID?,
         selectedMarkerScale: CGFloat,
-        focusMemberIds: Set<UUID>
+        focusMemberIds: Set<UUID>,
+        plotRect: CGRect
     ) -> ChartMarkerUI? {
+        guard plotRect.contains(location) else { return nil }
         let scaledHeight = chartSize.height * priceScale
         let grouped = Dictionary(grouping: markers.filter(\.isVisible)) { $0.candleIndex }
         let baseRadius = MarkerVisualSpec.baseCanvasDiameter / 2
@@ -3260,12 +3261,16 @@ struct ChartMarkerSystem {
 
             for (order, entry) in positions.enumerated() {
                 let isSelected = entry.marker.id == selectedMarkerId
+                let radius = baseRadius * (isSelected ? selectedMarkerScale : 1.0)
+                guard MarkerLinkRenderer.isGlyphVisible(
+                    center: entry.position, scaledRadius: radius, in: plotRect
+                ) else { continue }
                 candidates.append((
                     marker: entry.marker,
                     bounds: MarkerGlyphBounds(
                         id: entry.marker.id,
                         center: entry.position,
-                        radius: baseRadius * (isSelected ? selectedMarkerScale : 1.0)
+                        radius: radius
                     ),
                     priority: MarkerStackLayout.paintPriority(
                         markerId: entry.marker.id,
@@ -3279,7 +3284,9 @@ struct ChartMarkerSystem {
 
         // Topmost first: highest paint priority, then latest painted within it.
         let topmostFirst = candidates.sorted {
-            $0.priority != $1.priority ? $0.priority > $1.priority : $0.order > $1.order
+            if $0.priority != $1.priority { return $0.priority > $1.priority }
+            if $0.order != $1.order { return $0.order > $1.order }
+            return $0.marker.id.uuidString > $1.marker.id.uuidString
         }
         let touchRadius = MarkerPositionCalculator.hitRadius
         return topmostFirst.first {
@@ -3316,7 +3323,8 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         selectedMarkerId: UUID? = nil,
         selectedMarkerScale: CGFloat = 1.0,
-        focusMemberIds: Set<UUID> = []
+        focusMemberIds: Set<UUID> = [],
+        plotRect: CGRect? = nil
     ) -> ChartMarkerUI? {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -3339,7 +3347,8 @@ struct ChartMarkerSystem {
                 totalOffset: totalOffset,
                 selectedMarkerId: selectedMarkerId,
                 selectedMarkerScale: selectedMarkerScale,
-                focusMemberIds: focusMemberIds
+                focusMemberIds: focusMemberIds,
+                plotRect: plotRect ?? CGRect(origin: .zero, size: chartSize)
             )
         }
 

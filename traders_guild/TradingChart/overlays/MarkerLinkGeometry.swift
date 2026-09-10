@@ -365,30 +365,6 @@ enum MarkerLinkGeometry {
     }
 }
 
-/// Glyphs as a frame paints them, in paint order.
-///
-/// Bottom-first, matching `glyphQueue`, so a hit test walks it in reverse to
-/// find the topmost glyph under a point. Exists so hit testing can share the
-/// renderer's final geometry — post-nudge, post-scale, plot-culled — instead of
-/// recomputing it with a second, subtly different algorithm.
-struct MarkerPaintedGlyphs: Equatable {
-    /// The selection this snapshot describes, so a frame that arrives after the
-    /// selection moved can be discarded rather than applied to a new thesis.
-    let selectionId: UUID
-    /// Bottom-first. Reverse to hit-test topmost-first.
-    let glyphsInPaintOrder: [MarkerGlyphBounds]
-
-    static let none = MarkerPaintedGlyphs(selectionId: UUID(), glyphsInPaintOrder: [])
-
-    /// The topmost glyph under a point, or nil.
-    func topmostHit(at point: CGPoint, touchRadius: CGFloat) -> UUID? {
-        for glyph in glyphsInPaintOrder.reversed() where glyph.isHit(by: point, touchRadius: touchRadius) {
-            return glyph.id
-        }
-        return nil
-    }
-}
-
 /// Layout the renderer and hit testing must agree on.
 ///
 /// Both need the same answer to "where did that glyph actually land, and which
