@@ -10,6 +10,12 @@ including three additional clipped-plot hit-testing regressions. Its result
 bundle is `/tmp/linked-codex-edge-tests.xcresult`. This run verifies the final
 edge correction; it does not repeat Claude's UI acceptance or pan-driver run.
 
+The integrated clean Release simulator build passed. Feature packaging at
+`f36340f` also built successfully and its Info.plist reports **1.3.0 build 23**,
+`co.tradersguild.app`. The bundle contains no xcconfig or stray DEV Info.plist,
+and the project contains no macOS target. This is local build evidence, not an
+App Store upload or physical-device measurement.
+
 - `03-focus-mode-live-dense.png`: selected marker, relationship rings and a curved
   connector on the dense real backend fixture; unrelated markers faded.
 - `10-disclosure-survived-timeframe-change.png`: Step 64 selected after moving
