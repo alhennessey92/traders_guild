@@ -126,6 +126,11 @@ struct AppConfig {
     /// misplaced setting leaves the literal behind — but a host check matters
     /// just as much: a bake pointing anywhere public would defeat the isolation
     /// silently, so it is refused rather than trusted.
+    ///
+    /// It does not catch a *wrong* local address. A stale private LAN host is
+    /// valid and is accepted; it simply fails to connect. That is the intended
+    /// division: this guard is about never reaching somewhere public, not about
+    /// guaranteeing reachability.
     static func isValidIsolatedDevURL(_ raw: String) -> Bool {
         guard !raw.contains("$("), !raw.contains(")") else { return false }
         guard let components = URLComponents(string: raw),

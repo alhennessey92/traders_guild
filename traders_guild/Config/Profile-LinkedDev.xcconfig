@@ -25,5 +25,16 @@ SWIFT_REFLECTION_METADATA_LEVEL = all
 TG_APS_ENVIRONMENT = development
 CODE_SIGN_ENTITLEMENTS = traders_guild/traders_guild.LinkedDev.entitlements
 
-TG_LAN_HOST = 192.168.1.182
+// Gateway host, per SDK. The simulator shares the Mac's network stack, so
+// loopback always works; a device cannot reach the Mac's loopback and needs its
+// current LAN address, overridden here or on the command line
+// (`xcodebuild ... TG_LAN_HOST=<mac LAN ip>`).
+//
+// The conditional must follow the general setting: xcconfig is last-wins.
+//
+// Note a stale-but-valid private address is accepted and simply fails to
+// connect — AppConfig's loopback fallback covers a missing, unexpanded or
+// non-local host, not a wrong one.
+TG_LAN_HOST = 192.168.1.249
+TG_LAN_HOST[sdk=iphonesimulator*] = 127.0.0.1
 TG_GATEWAY_PORT = 30080
