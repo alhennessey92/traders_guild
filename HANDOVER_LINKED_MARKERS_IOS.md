@@ -7,11 +7,15 @@ Base: iOS `74c772c` (1.2.1 build 22) + DEV prerequisite `321e02d`
 Status: **buildable and verified against the live DEV backend**, with the
 outstanding items named under *Not done* rather than folded into "complete".
 
-Latest full run — `traders_guild Compose Dev`, 2026-09-10:
-**558 passed, 0 failed** across 55 suites (`ChartPanPerformanceDriver` skipped
-in this scheme by design — see *Profiling harness*), and **0 warnings** in
-linked-marker files. The isolated
-`traders_guild LinkedDev Profile` / `DevProfile` scheme also builds for test.
+Latest full run — `traders_guild Local Gateway`, 2026-09-10, counted with
+`xcresulttool get test-results summary` rather than by grepping the log:
+**577 passed, 5 skipped, 0 failed, 582 total**. The five skips are the
+pre-existing credential-dependent auth and guild-picker UI cases, unrelated to
+this feature. `ChartPanPerformanceDriver` **ran and passed** in this run, against
+the prepared isolated app — the first end-to-end proof the corrected harness
+drives a real chart rather than reporting success on a login screen. 0 warnings
+in linked-marker files. The isolated `traders_guild LinkedDev Profile` /
+`DevProfile` scheme also builds for test, and `Release` builds clean.
 
 Visuals reviewed against a DEBUG fixture harness, against real backend data,
 and — for the deep thesis — driven through the real UI (see *Live acceptance*).
@@ -65,7 +69,7 @@ assigned in `handleOnAppear` alongside the manager itself.
 
 ## What is here
 
-25 commits, each buildable:
+49 commits, each buildable:
 
 | Commit | Contents |
 |---|---|
@@ -111,6 +115,14 @@ assigned in `handleOnAppear` alongside the manager itself.
 | `9e1a1c1` | Invalidate on the viewer's own writes, and sweep by completeness |
 | `2504734` | Reconcile counts and document the profiling harness |
 | `bac0b07` | Percent-encode cursors placed in a query string |
+| `79b6f94` | Record the wide-thesis walk and both cursor defects |
+| `2bcd290` | Default the isolated gateway host per SDK |
+| `7d654c0` | Count a member visible only if its disc is in the plot |
+| `cab887c` | Resolve focus-mode taps against the geometry that was painted |
+| `71b2461` | Hoist per-frame symbol, text and theme work out of the glyph loop |
+| `57f7067` | Keep build-configuration files out of the app bundle |
+| `4f96dbf` | Cover an author's own write reaching an open disclosure |
+
 The branch starts at `74c772c` (iOS 1.2.1 build 22). `321e02d`, the commit
 immediately after it, is yours — the isolated local-development schemes — and is
 excluded here. A final documentation commit updates this table and so cannot
@@ -325,10 +337,13 @@ The tests the owner asked for, and where they live:
    thesis list is the accessible path and must stay reachable without focus mode.
 3. **No physical-device Instruments run.** Connector routing is
    O(edges × samples) per frame with a 12-edge cap; membership is computed on
-   selection change, not per frame. Unmeasured. The 57 fps figure from the
-   gesture-perf work is context from another build on other hardware, not a
-   baseline — see `docs/DEVICE_PROFILING_PLAN.md` for the matched-pair method
-   that replaces it.
+   selection change, not per frame. The simulator sampling above measured both
+   and found them small (86 and 149 samples), but that is diagnostic and cannot
+   satisfy the ≤5% gate. The 57 fps figure from the gesture-perf work is context
+   from another build on other hardware, not a baseline — see
+   `docs/DEVICE_PROFILING_PLAN.md` for the matched-pair method that replaces it.
+   Note also that Instruments' Time Profiler could not be driven against a
+   simulator process at all here; on device it should work normally.
 4. **Reduce Motion cannot be toggled by `simctl`.** I set it via the
    accessibility defaults and the connector renders at full length on first
    paint, which together with `reduceMotionSnapsInsteadOfHidingFocus` is good
@@ -340,6 +355,38 @@ The tests the owner asked for, and where they live:
 6. **Discord relation copy** (generic sentence only) is backend-side; nothing on
    iOS was changed for it, and public share cards are untouched as specified.
 7. **Android** untouched, as instructed.
+8. **The short-connector fallback was never built.** The plan says a link whose
+   connector is suppressed should instead tint that stack segment with the
+   relationship colour, so the link stays legible. `drawStackedConnectionLines`
+   strokes `surfaceGray40` unconditionally, and there is no tint anywhere.
+
+   This shows up in real dense data, and not only below the 24pt threshold: in
+   a tight stack the router can find no obstacle-free bow on either side at any
+   magnitude and correctly declines to draw a line across other glyphs, and the
+   result is a pair of ringed markers with a plain grey stack line between them
+   (screenshot `11`). Relationship is still carried by the ring and the badge,
+   so nothing is broken — but the third channel the plan asked for is absent.
+   Left for you to decide rather than added while you were away, since it is a
+   visual change to shared chart chrome.
+
+---
+
+## One finding that is not about linked markers
+
+The app target's sources are in a file-system synchronized group, and that group
+copies every non-source file it finds into the bundle. Before this branch the
+shipped app already contained `Debug-StagingK8s.xcconfig` — a build-configuration
+file naming a staging gateway, sitting inside the production `.app`. The isolated
+DEV work added three more xcconfigs and an `Info-LinkedDev.plist` beside it, and
+Xcode began warning about the plist because a second Info.plist in Copy Bundle
+Resources is a validation hazard.
+
+`57f7067` adds a membership exception for those five files. Nothing reads them at
+runtime, so the change is inert; it is recorded here because it alters what the
+**production** artifact contains, which is not something a linked-markers branch
+would normally touch. Verified from the built products: DevProfile and Release
+bundles now hold no xcconfig and no stray plist, and Release still builds as
+`co.tradersguild.app` / "Traders Guild".
 
 ---
 
@@ -371,8 +418,10 @@ Recorded exactly, from the run that produced them.
 
 | | |
 |---|---|
-| Full suite | **558 passed, 0 failed** (55 suites), 0 warnings in linked-marker files |
-| Full-suite log | `scratchpad/full7.log` |
+| Full suite | **577 passed, 5 skipped, 0 failed, 582 total** — `xcresulttool get test-results summary` |
+| Full-suite result bundle | `scratchpad/full9.xcresult` (log: `scratchpad/full9.log`) |
+| Unit target alone | 569 passed, 0 failed, 0 skipped — `scratchpad/full8.xcresult` |
+| Earlier full-suite log | `scratchpad/full7.log` (574/5/579, before this session's two tests) |
 | Wide-thesis UI walk console | `scratchpad/z.txt` |
 | Device build log | `scratchpad/b-iso.log` (`** BUILD SUCCEEDED **`) |
 | Simulator build log | `scratchpad/b-normal.log` |
@@ -538,6 +587,113 @@ candle history, so markers loaded but rendered nothing —
 (backend `a639ef1`) by adding local synthetic coverage. Worth knowing because
 the symptom — a 200 response and an empty chart — looks like a client bug and
 is not.
+
+---
+
+## Simulator profiling — what it found, and its limits (2026-09-10)
+
+Diagnostic only. Simulator numbers cannot satisfy the physical ≤5% gate; what
+they can do is show *where* the main thread goes, and that turned out to be
+worth doing.
+
+### Instruments could not be used, and that is a real limitation
+
+`xctrace record --template 'Time Profiler' --device <simulator udid> --attach
+traders_guild` produces a trace containing nothing but an empty `RunIssues`
+store — no data streams, and `xctrace export --toc` then fails with *Document
+Missing Template Error*. Attaching on the host instead (`--attach 8028`, or by
+name) is refused outright: the host device list does not include
+simulator-hosted processes. Both were tried, bounded, before moving on.
+
+`/usr/bin/sample` on the simulator app's host pid works, gives per-thread call
+trees with sample counts, and is what every figure below comes from.
+
+### Protocol
+
+Optimised `DevProfile` build, the owner's seeded dense QA thesis on 1h, signed
+in as the disposable QA account against the local gateway. Each pass: 30s of
+sampling at 1 ms while eight identical `press-and-drag` pans run (four
+out-and-back pairs, 270pt, 1.2s each, from the same starting viewport).
+
+Two honest caveats. The pairs do **not** cancel — the viewport walks backwards
+over the run, because forward pans clamp at the newest candle and backward ones
+do not — so each pass covers progressively sparser data. And repeating a pass
+moves the top-line figure by about ten percent. Both passes of any comparison
+below start from the same viewport and run the same eight gestures, so they are
+comparable to each other; none of them is a steady-state figure.
+
+### What it found
+
+`drawTopPriorityMarkers` held 2983 of the main thread's samples, and 1760 of
+those were inside `drawResponseBadge` — not drawing it, *preparing* to draw it.
+Three separate per-marker-per-frame costs, described in `71b2461`: a
+`LocalizedStringKey` walk to render a number, an SF Symbol rebuilt from its name
+for each of three distinct symbols, and a `UserDefaults` read behind every
+`AppColors` access.
+
+| Pass | `drawTopPriorityMarkers` | `drawMarkers` | badge prep | theme reads in the glyph loop |
+|---|---|---|---|---|
+| focus off, before | 2983 | 2279 | 1760 | 332 |
+| focus off, after | 1546 | 973 | — | 246 |
+| focus off, after both fixes | 1709 | — | — | **0** |
+| focus on, after | 2543 | 1316 | — | — |
+
+Read that as: the halving is real and outside the noise band; the theme-read
+removal is exact where it is attributable (332 → 0 inside `drawSingleMarker`)
+and invisible in the top-line figure, which is why both rows are shown. Focus
+mode — which paints a second dimmed context, sorts a focus tier and routes
+Bézier connectors — now costs less than the idle chart did before the fixes.
+
+Within focus, the feature's own work is small: connector routing
+(`MarkerLinkGeometry.route`) 86 samples, the extra glyph sort 149. The rest is
+SwiftUI rasterising more glyph state, not link logic.
+
+No recurring stall or hitch pattern appeared in any pass — no single frame's
+work dominated, and nothing blocked the main thread on I/O.
+
+Evidence: `scratchpad/perf-evidence/` — `focus-off.sample.txt` (before),
+`focus-off-fixed.sample.txt`, `focus-off-pass.sample.txt`, `focus-on.sample.txt`,
+and screenshots `01`–`12`.
+
+---
+
+## Dense thread walking — disclosure and selection (2026-09-10)
+
+Driven in the UI on the owner's 81-node deep fixture, isolated DEV build,
+local gateway.
+
+- **Header policy holds after loading.** Expanded on *QA Deep Thesis Step 62*
+  the header reads `32+ in this thesis` with `11 supports · 11 challenges ·
+  10 builds on` beneath it — the whole-thesis partial count preserved, the
+  relationship tally secondary, and the `+` refusing to imply the tally is the
+  whole thesis. Screenshot `06`.
+- **Tombstone in place.** The deleted intermediate renders as *Unavailable
+  marker*, keeps its relationship chip, and the branch below it still reads.
+  Screenshot `07`.
+- **The current row follows selection**, highlighted from the loader's marker id
+  rather than authorship — the highlighted row is *Step 62*, authored by the
+  other QA account. Screenshot `08`.
+- **Across a timeframe change.** Tapping the row for *Step 64*, which lives on
+  4h, switched the chart to 4H, animated to the node and selected it, and left
+  the disclosure **expanded** with the header recomputed (`34+`, `12 · 11 · 11`)
+  and the retained window reused rather than discarded. The relationship row
+  followed too, from *Supports … Step 61* to *Builds on … Step 63*. Screenshots
+  `09`, `10`.
+- **Focus correctly does not engage on 4h** for that node: its parent and child
+  are 1h markers, absent from this chart, so there is no visible companion to
+  compare against and the chart is not faded. Walking back to a 1h node
+  re-engaged focus immediately, with rings in three relationship colours and the
+  rest of the layer at 0.22. Screenshot `11`.
+- **Author actions.** The Edit affordance appears on nodes this account authored
+  and not on the other account's, and a linked marker offers no route back to
+  private. Entering and cancelling edit restored the idle chart exactly —
+  placement dim cleared, no selection, no residue (screenshot `12`).
+
+  I did **not** perform a live update or delete: those mutate the fixture the
+  owner is running acceptance against, and a soft delete would leave a permanent
+  tombstone in one of their chains. The behaviour is covered instead by
+  `4f96dbf`, which drives the same DTOs the update and delete paths hand to the
+  invalidator and asserts an open disclosure re-reads and keeps its place.
 
 ---
 
