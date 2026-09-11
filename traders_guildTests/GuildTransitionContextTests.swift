@@ -17,15 +17,17 @@ struct GuildTransitionContextTests {
 
     /// Launch, session restore, and the end of signup or onboarding all use
     /// the launch request, so this is every place the old pulsing text lived.
-    @Test func launchShowsTheAppLogoWithTheBrandBeneathIt() {
+    @Test func launchShowsTheIconAloneWithTheWordmarkAtTheBottom() {
         let presentation = GuildTransitionPresentation(
             request: .launch(), reduceMotion: false
         )
         #expect(presentation.badge == .appLogo)
+        #expect(presentation.layout == .standaloneMark, "icon alone, name at the bottom")
         #expect(presentation.title == "Traders Guild")
         #expect(presentation.subtitle == nil, "the title already is the name")
+        #expect(!presentation.showsRing, "nothing competes with the mark")
+        #expect(!presentation.animatesRing)
         #expect(presentation.accessibilityLabel == "Traders Guild, loading")
-        #expect(presentation.animatesRing)
     }
 
     /// The guild operations are the treatment the user liked; they keep the
@@ -37,24 +39,34 @@ struct GuildTransitionContextTests {
                 request: .guild(action, guild: entry.guild), reduceMotion: false
             )
             #expect(presentation.badge == .guildCrest)
+            #expect(presentation.layout == .badgeWithCaption)
+            #expect(presentation.showsRing)
+            #expect(presentation.animatesRing)
             #expect(presentation.title == action.headline)
             #expect(presentation.subtitle == "Night Owls")
             #expect(presentation.accessibilityLabel == "\(action.headline) Night Owls")
         }
     }
 
-    /// Reduce Motion stops the ring turning and nothing else: the badge, the
-    /// words and the spoken label are identical, so the state is still
-    /// communicated.
+    /// Reduce Motion stops a guild operation's ring turning and nothing else:
+    /// the badge, the words and the spoken label are identical, so the state
+    /// is still communicated. Launch has no ring, so it has nothing to hold.
     @Test func reduceMotionHoldsTheRingAndChangesNothingElse() {
-        let moving = GuildTransitionPresentation(request: .launch(), reduceMotion: false)
-        let still = GuildTransitionPresentation(request: .launch(), reduceMotion: true)
+        let entry = makeGuildEntry(name: "Night Owls")
+        let request = GuildTransitionRequest.guild(.switching, guild: entry.guild)
+        let moving = GuildTransitionPresentation(request: request, reduceMotion: false)
+        let still = GuildTransitionPresentation(request: request, reduceMotion: true)
         #expect(moving.animatesRing)
         #expect(!still.animatesRing)
+        #expect(still.showsRing == moving.showsRing)
         #expect(still.badge == moving.badge)
+        #expect(still.layout == moving.layout)
         #expect(still.title == moving.title)
         #expect(still.subtitle == moving.subtitle)
         #expect(still.accessibilityLabel == moving.accessibilityLabel)
+
+        let launch = GuildTransitionPresentation(request: .launch(), reduceMotion: true)
+        #expect(launch == GuildTransitionPresentation(request: .launch(), reduceMotion: false))
     }
 
     /// The overlay's copy must never say "Welcome to" again, on any action.

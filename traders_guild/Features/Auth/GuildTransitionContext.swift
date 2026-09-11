@@ -141,31 +141,51 @@ struct GuildTransitionPresentation: Equatable {
         case guildCrest
     }
 
+    /// Where the words go relative to the badge.
+    enum Layout: Equatable {
+        /// The icon alone in the centre of the screen, the wordmark at the
+        /// bottom — a splash, in the way Coinbase's is: nothing competes with
+        /// the mark, and the name sits where the eye lands last.
+        case standaloneMark
+        /// The crest in its progress ring with the verb and name directly
+        /// beneath — the guild-operation treatment.
+        case badgeWithCaption
+    }
+
     let badge: Badge
-    /// The prominent line: the brand at launch, the verb during an operation.
+    let layout: Layout
+    /// The brand at launch, the verb during an operation.
     let title: String
     /// The guild's name during an operation; nothing at launch, where the
     /// title already is the name and repeating it would be noise.
     let subtitle: String?
-    /// Whether the progress ring turns. Off under Reduce Motion — the ring is
-    /// still drawn, so the state still reads as "working", it simply holds.
+    /// Whether a progress ring is drawn at all. A guild operation shows one;
+    /// launch shows the icon on its own.
+    let showsRing: Bool
+    /// Whether that ring turns. Off under Reduce Motion — the ring is still
+    /// drawn, so the state still reads as "working", it simply holds.
     let animatesRing: Bool
     /// Spoken as one element, so VoiceOver announces the state rather than a
     /// decorative image followed by two fragments.
     let accessibilityLabel: String
 
     init(request: GuildTransitionRequest, reduceMotion: Bool) {
-        animatesRing = !reduceMotion
         switch request.action {
         case .launch:
             badge = .appLogo
+            layout = .standaloneMark
             title = request.headline
             subtitle = nil
+            showsRing = false
+            animatesRing = false
             accessibilityLabel = "\(request.headline), loading"
         case .creating, .joining, .deleting, .switching:
             badge = .guildCrest
+            layout = .badgeWithCaption
             title = request.headline
             subtitle = request.subject
+            showsRing = true
+            animatesRing = !reduceMotion
             accessibilityLabel = "\(request.headline) \(request.subject)"
         }
     }

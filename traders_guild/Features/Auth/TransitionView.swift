@@ -54,8 +54,9 @@ struct TransitionView: View {
             }
 
             // The ring is the only continuous motion, and it is progress, not
-            // decoration. Under Reduce Motion it is drawn but does not turn.
-            if presentation.animatesRing {
+            // decoration. Launch has no ring — the icon stands alone. Under
+            // Reduce Motion a ring is drawn but does not turn.
+            if presentation.showsRing && presentation.animatesRing {
                 withAnimation(.linear(duration: 1.05).repeatForever(autoreverses: false)) {
                     ringRotation = 360
                 }
@@ -123,9 +124,49 @@ struct TransitionView: View {
         }
     }
 
-    /// One composition for every transition: a badge inside a progress ring,
-    /// then the title and, for a guild operation, the guild's name.
+    /// The two layouts the presentation model describes.
+    ///
+    /// Launch: the icon alone in the centre, the wordmark at the bottom of the
+    /// screen — a splash. Guild operations: the crest in its ring with the verb
+    /// and the guild's name directly beneath, exactly as in 1.2.1.
+    @ViewBuilder
     private var transitionContent: some View {
+        switch presentation.layout {
+        case .standaloneMark:
+            standaloneMarkContent
+        case .badgeWithCaption:
+            badgeWithCaptionContent
+        }
+    }
+
+    /// Icon centred on the screen, name at the bottom. The name sits above
+    /// the safe area so it clears the home indicator on every device, and is
+    /// deliberately quieter than the mark: the icon is the brand here, the
+    /// wordmark is the caption.
+    private var standaloneMarkContent: some View {
+        ZStack {
+            AppLogoMark(size: 96, showsStroke: true, showsShadow: true)
+
+            VStack {
+                Spacer()
+                Text(presentation.title)
+                    .font(.subheadline.weight(.semibold))
+                    .tracking(0.6)
+                    .foregroundColor(AppColors.whiteText.opacity(0.88))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 28)
+            }
+        }
+        .opacity(opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(presentation.accessibilityLabel)
+    }
+
+    /// The guild-operation composition: badge in a progress ring, then the
+    /// verb and the guild's name.
+    private var badgeWithCaptionContent: some View {
         VStack(spacing: 18) {
             ZStack {
                 Circle()
@@ -169,10 +210,9 @@ struct TransitionView: View {
     private var transitionBadge: some View {
         switch presentation.badge {
         case .appLogo:
-            // The App Store icon, at a size that sits inside the ring with the
-            // same breathing room the 72pt crest has. No shadow: it is on the
-            // auth gradient, not a card, and a drop shadow inside a ring reads
-            // as a smudge.
+            // Not reached by the launch layout, which draws the mark on its
+            // own; kept so the switch stays total if a ringed logo is ever
+            // wanted.
             AppLogoMark(size: 60, showsStroke: true, showsShadow: false)
         case .guildCrest:
             transitionCrest
