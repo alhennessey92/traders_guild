@@ -90,8 +90,9 @@ the biometric lock (`BiometricAppLockView.swift`, "Unlock Traders Guild").
   tokens are theme-aware; the icon carries its own navy ground so it reads on
   any theme; text uses the existing `whiteText` / `greyText` tokens as the guild
   variants already did.
-* Small screens: the composition is an 88pt badge and two text lines, centred.
-  No SE-class simulator was available to photograph.
+* Small screens: launch uses a 96pt centered icon and a bottom wordmark within
+  the safe area; guild operations use the 88pt badge and caption layout.
+  No SE-class simulator was photographed.
 
 ## Evidence
 
@@ -158,9 +159,20 @@ used for marker work, and no physical device was touched.
 
 ## Integration notes for Codex
 
-* Everything is in `0453685`, on top of `deb7b4f`. No changes to markers,
-  backend, Android, macOS, signing or version.
+* Implementation is in `0453685` and `a88982d`, with evidence in `a2ba1ee`
+  and the latter revision, on top of `deb7b4f`. Codex integrated all three at
+  `9650886`. No changes to markers, backend, Android, macOS, signing or version.
 * `AppIconPreviewView` was private to `UserSettingsSubViews.swift`; if any
   in-flight work references it by name, point it at `AppLogoMark`.
 * `GuildTransitionAction.launch.headline` changed value. The only consumer is
   `TransitionView`, via `GuildTransitionPresentation`.
+
+## Codex integration verification
+
+Integrated through `a88982d` at feature commit `9650886`. Codex reviewed the final launch and accessibility-XXXL screenshots, the shared logo extraction, all transition call sites and the preserved dismissal/session logic. Application and test sources matched Claude's tested tree before the subsequent DEV-only gateway configuration change.
+
+Independently inspected `tr2-units.xcresult`: **612 passed, 0 failed, 0 skipped**; durable output is `docs/transition-evidence/test-summary.json`. Clean production-scheme Release simulator build passed with zero compiler errors (`/tmp/linked-codex-release-logo.log`). Built artifact identifies as `co.tradersguild.app`, **1.3.0 build 23**, and includes both `TG 3.png` and `appiconbg 2.png`; no xcconfig resources are bundled. This also rebuilds the earlier smoother-connector change in Release. Project/target configuration was unchanged by the transition commits.
+
+Device setup correction `c7556a4`: the Mac's LAN address changed to **192.168.1.182**. Both isolated device configurations now use it; simulator override remains loopback. Xcode's resolved LinkedDev/iphoneos settings confirm `DevDebug`, `co.tradersguild.app.linkeddev`, the new host and port30080 (`/tmp/linked-logo-device-settings.json`). Local services are running; disposable QA login and runtime linking capability passed over that LAN address. Rebuild TG LinkedDev on the phone to pick up the code and address; an existing install retains its old baked configuration. No phone installation or operation was performed by Codex during this review.
+
+Ready for owner hands-on retesting. The existing physical performance, manual VoiceOver and production rollout gates remain open. Light-grey/small-screen live visual acceptance still needs the owner's retest; no claim is made that every theme/device variant was photographed.

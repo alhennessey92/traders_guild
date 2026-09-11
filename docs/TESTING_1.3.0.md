@@ -48,7 +48,7 @@ For a physical iPhone, select it as Xcode's destination with the same LinkedDev
 scheme. Connect USB, unlock the phone, enable Developer Mode and keep it on the
 same network as this Mac; USB alone does not route the LAN gateway. If iOS asks
 for Local Network access, allow it. The Mac address verified on 11 September is
-`192.168.1.249`, matching `TG_LAN_HOST` in both `Debug-LinkedDev.xcconfig` and
+`192.168.1.182`, matching `TG_LAN_HOST` in both `Debug-LinkedDev.xcconfig` and
 `Profile-LinkedDev.xcconfig` under `traders_guild/Config/`. Update those device
 settings if the Mac address changes; leave the simulator loopback override intact.
 Use **traders_guild LinkedDev Profile** for the later performance measurement.
@@ -66,6 +66,19 @@ navigate back to its candle. Local synthetic candle coverage runs from
 6 September 05:00 UTC through 10 September 06:00 UTC; it is not a live feed.
 
 ## Short hands-on pass
+
+After pulling in the transition update, rebuild with **Command-R** from this
+feature project using **traders_guild LinkedDev** and your iPhone as destination.
+It remains version **1.3.0 build 23**; the version label alone does not distinguish
+the earlier local build from the new one. Keep existing app data and QA login.
+
+For the new launch screen, stop the Xcode run, then open **TG LinkedDev** from
+the phone's Home Screen. Repeat after force-quitting the app. Expect the square
+TG logo centered and a small Traders Guild wordmark above the bottom safe area,
+with no pulsing welcome text. On a fast restored session this can be brief;
+loading/dismissal timing has not been prolonged to display the artwork. Check
+large text and Reduce Motion. Guild operations keep their existing crest/name
+treatment, with the rotating ring held still under Reduce Motion.
 
 1. Create a guild marker. From its details or action bar, respond using Supports,
    Challenges and Builds on. Check the link banner, locked guild visibility,
