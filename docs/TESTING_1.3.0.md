@@ -1,5 +1,32 @@
 # Testing iOS 1.3.0
 
+## Open the feature project
+
+The normal Xcode recent project on `feat/1.2.0-result-cards-guild-identity` is
+the protected release checkout. The feature lives in a separate, hidden
+`.worktrees` directory; switching branches in the release checkout is unnecessary.
+
+1. In Finder, press **Command-Shift-G** (Go to Folder) and paste:
+
+   `/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-ios/`
+
+2. Open **traders_guild.xcodeproj** in that folder. Alternatively, run:
+
+   ```sh
+   open '/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-ios/traders_guild.xcodeproj'
+   ```
+
+3. In Xcode's top toolbar choose scheme **traders_guild LinkedDev** and
+   destination **iPhone 17 Pro (iOS 26.0)**. This simulator is installed locally.
+   Press **Command-R**. The scheme selects **DevDebug** automatically; no manual
+   build-configuration or database changes are needed.
+
+The Git branch in this project should read **feat/1.3.0-linked-markers**.
+Xcode calls the toolbar choice a *scheme*. Its name is separate from both
+the Git branch and the backend database schema.
+
+## App and backend
+
 Use this feature worktree's Xcode project and the **traders_guild LinkedDev**
 scheme for hands-on testing. It installs **TG LinkedDev** with separate app data.
 The **traders_guild LinkedDev Profile** scheme uses optimized code for profiling.
@@ -11,6 +38,20 @@ The simulator uses the Mac's loopback gateway on port 30080. A physical iPhone
 needs the Mac's current LAN address in `TG_LAN_HOST` and network access to that
 gateway. A previously installed build can contain an outdated address; rebuild
 after a network change. Local DEV services and data are retained.
+
+Verified on 11 September: local Docker project `traders-guild-local` is running,
+database migration head is `m1n2o3p4q5r6`, QA login works, and
+`linked_markers_enabled` is true. This setup uses the Mac's local DEV database,
+not the remote DEV deployment. Keep Docker Desktop running.
+
+For a physical iPhone, select it as Xcode's destination with the same LinkedDev
+scheme. Connect USB, unlock the phone, enable Developer Mode and keep it on the
+same network as this Mac; USB alone does not route the LAN gateway. If iOS asks
+for Local Network access, allow it. The Mac address verified on 11 September is
+`192.168.1.249`, matching `TG_LAN_HOST` in both `Debug-LinkedDev.xcconfig` and
+`Profile-LinkedDev.xcconfig` under `traders_guild/Config/`. Update those device
+settings if the Mac address changes; leave the simulator loopback override intact.
+Use **traders_guild LinkedDev Profile** for the later performance measurement.
 
 QA account details are in the private local files
 `/tmp/linked-marker-qa-credentials.json` and `/tmp/linked-device-login.txt`.
