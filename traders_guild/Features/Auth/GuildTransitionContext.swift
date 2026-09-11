@@ -14,9 +14,10 @@ enum GuildTransitionAction: Equatable {
     case deleting
     case switching
 
+    /// The verb for a guild operation. Launch has none: it is the brand.
     var headline: String {
         switch self {
-        case .launch: return "Welcome to"
+        case .launch: return "Traders Guild"
         case .creating: return "Creating"
         case .joining: return "Joining"
         case .deleting: return "Deleting"
@@ -120,6 +121,53 @@ struct GuildTransitionRequest: Identifiable, Equatable {
 
     var subject: String {
         action == .launch ? "Traders Guild" : (guild?.displayName ?? "your guild")
+    }
+}
+
+/// What the transition overlay draws for a request.
+///
+/// Pure, so it can be tested without a view. The overlay used to branch on
+/// `action == .launch` in three places and draw two unrelated compositions —
+/// a pulsing pair of text lines for launch, a crest in a ring for everything
+/// else. Both now share one layout: a badge in a ring, a title, an optional
+/// subtitle. The only thing the action decides is what sits in the badge and
+/// what the lines say.
+struct GuildTransitionPresentation: Equatable {
+    enum Badge: Equatable {
+        /// The square app icon — launch, session restore, and the end of
+        /// signup or onboarding.
+        case appLogo
+        /// The guild's crest, for an operation on a guild.
+        case guildCrest
+    }
+
+    let badge: Badge
+    /// The prominent line: the brand at launch, the verb during an operation.
+    let title: String
+    /// The guild's name during an operation; nothing at launch, where the
+    /// title already is the name and repeating it would be noise.
+    let subtitle: String?
+    /// Whether the progress ring turns. Off under Reduce Motion — the ring is
+    /// still drawn, so the state still reads as "working", it simply holds.
+    let animatesRing: Bool
+    /// Spoken as one element, so VoiceOver announces the state rather than a
+    /// decorative image followed by two fragments.
+    let accessibilityLabel: String
+
+    init(request: GuildTransitionRequest, reduceMotion: Bool) {
+        animatesRing = !reduceMotion
+        switch request.action {
+        case .launch:
+            badge = .appLogo
+            title = request.headline
+            subtitle = nil
+            accessibilityLabel = "\(request.headline), loading"
+        case .creating, .joining, .deleting, .switching:
+            badge = .guildCrest
+            title = request.headline
+            subtitle = request.subject
+            accessibilityLabel = "\(request.headline) \(request.subject)"
+        }
     }
 }
 

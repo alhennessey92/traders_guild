@@ -4,12 +4,72 @@ import Testing
 
 struct GuildTransitionContextTests {
 
-    @Test func launchKeepsTheOriginalWelcome() {
+    @Test func launchIsTheBrandNotAWelcomeLine() {
         let request = GuildTransitionRequest.launch()
         #expect(request.action == .launch)
         #expect(request.guild == nil)
-        #expect(request.headline == "Welcome to")
+        #expect(request.headline == "Traders Guild")
         #expect(request.subject == "Traders Guild")
+        #expect(!request.headline.contains("Welcome"))
+    }
+
+    // MARK: - What the overlay draws
+
+    /// Launch, session restore, and the end of signup or onboarding all use
+    /// the launch request, so this is every place the old pulsing text lived.
+    @Test func launchShowsTheAppLogoWithTheBrandBeneathIt() {
+        let presentation = GuildTransitionPresentation(
+            request: .launch(), reduceMotion: false
+        )
+        #expect(presentation.badge == .appLogo)
+        #expect(presentation.title == "Traders Guild")
+        #expect(presentation.subtitle == nil, "the title already is the name")
+        #expect(presentation.accessibilityLabel == "Traders Guild, loading")
+        #expect(presentation.animatesRing)
+    }
+
+    /// The guild operations are the treatment the user liked; they keep the
+    /// crest, the verb and the guild's name exactly.
+    @Test func guildOperationsKeepTheCrestVerbAndName() {
+        let entry = makeGuildEntry(name: "Night Owls")
+        for action in [GuildTransitionAction.creating, .joining, .deleting, .switching] {
+            let presentation = GuildTransitionPresentation(
+                request: .guild(action, guild: entry.guild), reduceMotion: false
+            )
+            #expect(presentation.badge == .guildCrest)
+            #expect(presentation.title == action.headline)
+            #expect(presentation.subtitle == "Night Owls")
+            #expect(presentation.accessibilityLabel == "\(action.headline) Night Owls")
+        }
+    }
+
+    /// Reduce Motion stops the ring turning and nothing else: the badge, the
+    /// words and the spoken label are identical, so the state is still
+    /// communicated.
+    @Test func reduceMotionHoldsTheRingAndChangesNothingElse() {
+        let moving = GuildTransitionPresentation(request: .launch(), reduceMotion: false)
+        let still = GuildTransitionPresentation(request: .launch(), reduceMotion: true)
+        #expect(moving.animatesRing)
+        #expect(!still.animatesRing)
+        #expect(still.badge == moving.badge)
+        #expect(still.title == moving.title)
+        #expect(still.subtitle == moving.subtitle)
+        #expect(still.accessibilityLabel == moving.accessibilityLabel)
+    }
+
+    /// The overlay's copy must never say "Welcome to" again, on any action.
+    @Test func noTransitionSaysWelcomeTo() {
+        let entry = makeGuildEntry(name: "Any")
+        var requests = [GuildTransitionRequest.launch()]
+        for action in [GuildTransitionAction.creating, .joining, .deleting, .switching] {
+            requests.append(.guild(action, guild: entry.guild))
+        }
+        for request in requests {
+            let presentation = GuildTransitionPresentation(request: request, reduceMotion: false)
+            #expect(!presentation.title.contains("Welcome to"))
+            #expect(!(presentation.subtitle ?? "").contains("Welcome to"))
+            #expect(!presentation.accessibilityLabel.contains("Welcome to"))
+        }
     }
 
     @Test func eachActNamesItselfAndKeepsTheCapturedIdentity() {

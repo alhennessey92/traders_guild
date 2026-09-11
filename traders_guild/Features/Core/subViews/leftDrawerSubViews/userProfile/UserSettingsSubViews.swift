@@ -2177,51 +2177,6 @@ struct TermsPrivacyView: View {
 // MARK: - About View
 // ================================================================================================
 
-private struct AppIconPreviewView: View {
-    var body: some View {
-        ZStack {
-            if let backgroundImage = bundleImage(named: "appiconbg 2") {
-                backgroundImage
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Circle()
-                    .fill(AppColors.accentColor.opacity(0.3))
-            }
-
-            if let logoImage = bundleImage(named: "TG 3") {
-                logoImage
-                    .resizable()
-                    .scaledToFit()
-                    .padding(18)
-            } else {
-                Text("TG")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(AppColors.accentColor)
-            }
-        }
-        .frame(width: 100, height: 100)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AppColors.standardSearchFieldStroke, lineWidth: 1)
-        )
-        .shadow(color: AppColors.surfaceBlack20, radius: 12, x: 0, y: 6)
-    }
-
-    private func bundleImage(named name: String) -> Image? {
-        guard let url = Bundle.main.url(
-            forResource: name,
-            withExtension: "png",
-            subdirectory: "AppIconPreview/Assets"
-        ) ?? Bundle.main.url(forResource: name, withExtension: "png"),
-        let image = UIImage(contentsOfFile: url.path) else {
-            return nil
-        }
-        return Image(uiImage: image)
-    }
-}
-
 struct AboutView: View {
     let onBack: () -> Void
     
@@ -2245,7 +2200,7 @@ struct AboutView: View {
                     VStack(spacing: 32) {
                         // App logo and name
                         VStack(spacing: 16) {
-                            AppIconPreviewView()
+                            AppLogoMark(size: 100)
                             
                             Text("Traders Guild")
                                 .font(.title2)

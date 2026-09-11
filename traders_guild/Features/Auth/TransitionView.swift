@@ -4,8 +4,13 @@
 //
 //  Created by Al Hennessey on 23/09/2025.
 //
-//  Handle transition from the end of the signup process to the rootview
-//  UPDATED: Now waits for chart to be ready before dismissing
+//  The full-screen brand transition: launch and session restore, the end of
+//  signup and onboarding, and every guild operation. One composition for all
+//  of them — see `GuildTransitionPresentation` for what each one says.
+//
+//  Dismissal here is driven by app state (session restored, chart ready, the
+//  request-scoped failsafe) and is deliberately untouched by presentation
+//  changes.
 
 import SwiftUI
 
@@ -16,9 +21,8 @@ struct TransitionView: View {
     let request: GuildTransitionRequest
 
     @EnvironmentObject var RLAppState: RLAppState
-    
-    //@EnvironmentObject var appState: AppState
-    @State private var scale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var fadeIn: Bool = false
     @State private var opacity: Double = 1.0
     @State private var ringRotation: Double = 0
@@ -41,21 +45,17 @@ struct TransitionView: View {
         .onAppear {
             let requestID = request.id
 
-            // Fade in
+            // One entrance. The launch overlay used to breathe at 1.1x for as
+            // long as it was up, which on a slow chart load is several seconds
+            // of a logo pulsing at the user; it now fades in once and holds.
             withAnimation(.easeIn(duration: 1.0)) {
                 fadeIn = true
                 opacity = 1
             }
 
-            if request.action == .launch {
-                // Preserve the launch animation exactly as it was.
-                withAnimation(
-                    .easeInOut(duration: 1.2)
-                    .repeatForever(autoreverses: true)
-                ) {
-                    scale = 1.1
-                }
-            } else {
+            // The ring is the only continuous motion, and it is progress, not
+            // decoration. Under Reduce Motion it is drawn but does not turn.
+            if presentation.animatesRing {
                 withAnimation(.linear(duration: 1.05).repeatForever(autoreverses: false)) {
                     ringRotation = 360
                 }
@@ -110,58 +110,72 @@ struct TransitionView: View {
         }
     }
 
-    @ViewBuilder
+    private var presentation: GuildTransitionPresentation {
+        GuildTransitionPresentation(request: request, reduceMotion: reduceMotion)
+    }
+
+    /// The ring's colour: the guild's crest colour during an operation, the
+    /// brand accent at launch.
+    private var ringTint: Color {
+        switch presentation.badge {
+        case .appLogo: return AppColors.accentColor
+        case .guildCrest: return GuildCrestCatalog.color(for: request.guild?.crestColor)
+        }
+    }
+
+    /// One composition for every transition: a badge inside a progress ring,
+    /// then the title and, for a guild operation, the guild's name.
     private var transitionContent: some View {
-        if request.action == .launch {
-            VStack {
-                Text(request.headline)
-                    .font(.title2)
-                    .foregroundColor(AppColors.greyText)
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 3)
+                    .frame(width: 88, height: 88)
 
-                Text(request.subject)
-                    .font(AppFonts.title(size: 40))
-                    .fontWeight(.heavy)
-                    .foregroundColor(AppColors.whiteText)
+                Circle()
+                    .trim(from: 0.08, to: 0.76)
+                    .stroke(ringTint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 88, height: 88)
+                    .rotationEffect(.degrees(ringRotation))
+
+                transitionBadge
             }
-            .multilineTextAlignment(.center)
-            .scaleEffect(scale)
-            .opacity(opacity)
-        } else {
-            VStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 3)
-                        .frame(width: 88, height: 88)
 
-                    Circle()
-                        .trim(from: 0.08, to: 0.76)
-                        .stroke(
-                            GuildCrestCatalog.color(for: request.guild?.crestColor),
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                        )
-                        .frame(width: 88, height: 88)
-                        .rotationEffect(.degrees(ringRotation))
+            VStack(spacing: 6) {
+                Text(presentation.title)
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(AppColors.whiteText)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(2)
 
-                    transitionCrest
-                }
-
-                VStack(spacing: 6) {
-                    Text(request.headline)
-                        .font(.title2.weight(.bold))
-                        .foregroundColor(AppColors.whiteText)
-
-                    Text(request.subject)
+                if let subtitle = presentation.subtitle {
+                    Text(subtitle)
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(AppColors.greyText)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.7)
                         .lineLimit(2)
                 }
-                .padding(.horizontal, 24)
             }
-            .opacity(opacity)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(request.headline) \(request.subject)")
+            .padding(.horizontal, 24)
+        }
+        .opacity(opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(presentation.accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var transitionBadge: some View {
+        switch presentation.badge {
+        case .appLogo:
+            // The App Store icon, at a size that sits inside the ring with the
+            // same breathing room the 72pt crest has. No shadow: it is on the
+            // auth gradient, not a card, and a drop shadow inside a ring reads
+            // as a smudge.
+            AppLogoMark(size: 60, showsStroke: true, showsShadow: false)
+        case .guildCrest:
+            transitionCrest
         }
     }
 
