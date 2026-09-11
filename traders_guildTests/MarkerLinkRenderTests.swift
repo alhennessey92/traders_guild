@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
 @testable import traders_guild
 
@@ -8,6 +9,99 @@ struct MarkerLinkRenderTests {
 
     private func id(_ n: Int) -> UUID {
         UUID(uuidString: "00000000-0000-0000-0000-\(String(format: "%012d", n))")!
+    }
+
+    // MARK: - The path the renderer actually emits
+
+    /// Flatten a `Path` into its element kinds, so a test can assert on what
+    /// was emitted rather than on what a helper would have computed.
+    private func elements(of path: Path) -> [String] {
+        var kinds: [String] = []
+        path.forEach { element in
+            switch element {
+            case .move: kinds.append("move")
+            case .line: kinds.append("line")
+            case .quadCurve: kinds.append("quad")
+            case .curve: kinds.append("cubic")
+            case .closeSubpath: kinds.append("close")
+            }
+        }
+        return kinds
+    }
+
+    private func route(magnitude: CGFloat = 22) -> MarkerLinkRoute {
+        let start = CGPoint(x: 120, y: 500)
+        let end = CGPoint(x: 260, y: 430)
+        return MarkerLinkRoute(
+            edge: MarkerLinkEdge(
+                parentId: id(1), childId: id(2),
+                relationship: MarkerLinkRelationshipValue(.supports),
+                kind: .childOfSelected
+            ),
+            start: start,
+            end: end,
+            control: MarkerLinkGeometry.controlPoint(
+                parent: start, child: end, magnitude: magnitude, side: -1
+            ),
+            relationship: MarkerLinkRelationshipValue(.supports)
+        )
+    }
+
+    /// The connector must be emitted as one real quadratic, not as a polyline.
+    ///
+    /// Asserted on the emitted path rather than on the geometry helpers,
+    /// because that is the thing that regressed: the curve was correct and the
+    /// renderer flattened it into 32 straight segments, putting the whole bend
+    /// into one or two miter joins. A helper-level test cannot see that.
+    @Test
+    func theConnectorIsEmittedAsOneQuadraticNotAPolyline() {
+        let path = MarkerLinkRenderer.trimmedPath(for: route(), progress: 1)
+        #expect(elements(of: path) == ["move", "quad"])
+    }
+
+    /// Including mid-reveal, at a progress that is deliberately not a multiple
+    /// of any step count — a quantised implementation would land elsewhere.
+    @Test
+    func aPartialRevealIsAlsoOneQuadraticAndEndsExactlyOnTheCurve() throws {
+        let route = route()
+        let progress: CGFloat = 0.137
+        let path = MarkerLinkRenderer.trimmedPath(for: route, progress: progress)
+
+        #expect(elements(of: path) == ["move", "quad"])
+
+        var last: CGPoint?
+        path.forEach { element in
+            if case let .quadCurve(to, _) = element { last = to }
+        }
+        let endpoint = try #require(last)
+        let expected = route.point(at: progress)
+        #expect(MarkerLinkGeometry.distance(endpoint, expected) < 0.001,
+                "reveal ended at \(endpoint), curve is at \(expected)")
+    }
+
+    /// Zero progress draws nothing but the move, so a focus that has not begun
+    /// revealing cannot flash a full connector.
+    @Test
+    func zeroProgressEmitsNoCurve() {
+        #expect(elements(of: MarkerLinkRenderer.trimmedPath(for: route(), progress: 0)) == ["move"])
+    }
+
+    /// Reduce Motion snaps progress to 1, which must be the whole connector and
+    /// still a single curve.
+    @Test
+    func reduceMotionSnapEmitsTheWholeCurve() throws {
+        let route = route()
+        let path = MarkerLinkRenderer.trimmedPath(
+            for: route,
+            progress: MarkerLinkRevealPolicy.target(focused: true)
+        )
+        #expect(elements(of: path) == ["move", "quad"])
+
+        var last: CGPoint?
+        path.forEach { element in
+            if case let .quadCurve(to, _) = element { last = to }
+        }
+        #expect(MarkerLinkGeometry.distance(try #require(last), route.end) < 0.001)
     }
 
     // MARK: - Reduce Motion

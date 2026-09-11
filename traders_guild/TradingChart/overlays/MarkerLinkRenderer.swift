@@ -192,21 +192,37 @@ enum MarkerLinkRenderer {
                 style: StrokeStyle(
                     lineWidth: connectorWidth,
                     lineCap: .round,
+                    lineJoin: .round,
                     dash: dash
                 )
             )
         }
     }
 
-    /// The quadratic route, flattened and cut at `progress`.
+    /// The quadratic route, cut at `progress`.
+    ///
+    /// Emits one real quadratic segment. It used to emit 32 straight ones,
+    /// which on a short bowed span put as much as 38 degrees of direction
+    /// change into a single join — the connector's angular look.
     static func trimmedPath(for route: MarkerLinkRoute, progress: CGFloat) -> Path {
-        let steps = 32
-        let limit = max(1, Int((CGFloat(steps) * progress).rounded()))
+        let t = max(0, min(1, progress))
         var path = Path()
         path.move(to: route.start)
-        for step in 1...limit {
-            path.addLine(to: route.point(at: CGFloat(step) / CGFloat(steps)))
-        }
+        guard t > 0 else { return path }
+        // One real curve, not 32 chords of one. The flattened version put up to
+        // 38 degrees of turn into a single miter join on a short bowed span,
+        // which is what the connector's angular look actually was. A quadratic
+        // is exactly representable here, so there is nothing to approximate.
+        path.addQuadCurve(
+            to: route.point(at: t),
+            control: MarkerLinkGeometry.subCurveControl(
+                start: route.start,
+                control: route.control,
+                end: route.end,
+                t0: 0,
+                t1: t
+            )
+        )
         return path
     }
 

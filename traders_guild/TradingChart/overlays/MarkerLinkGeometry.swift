@@ -86,7 +86,16 @@ enum MarkerLinkGeometry {
     /// Lateral bow magnitudes tried in order. The smallest clears the 1.5pt grey
     /// stack spine; the larger ones clear a stacked glyph (radius 18) and its
     /// badges (which extend to 22pt from centre) sitting between the endpoints.
-    static let bowLadder: [CGFloat] = [14, 26, 34, 44]
+    ///
+    /// The first rung is 22 rather than 14 because of what trimming does to a
+    /// same-candle pair. Both ends lose a disc radius from a 40pt chord, so the
+    /// drawn span is the *middle* of the arc — its flattest part. Measured on
+    /// the real stack spacing, a 14pt bow leaves 13pt of span bowing 1.6pt:
+    /// visually a straight diagonal. 22 leaves 21.7pt bowing 6.5pt, a sagitta
+    /// ratio of 0.30, which reads as a round arc without approaching the
+    /// semicircle a ratio of 0.5 would give. Escalation is unchanged: a rung
+    /// that collides simply moves to the next.
+    static let bowLadder: [CGFloat] = [22, 26, 34, 44]
 
     /// Cross-candle chords get a proportional bow instead of a fixed ladder.
     static let diagonalBowRatio: CGFloat = 0.12
@@ -222,7 +231,7 @@ enum MarkerLinkGeometry {
                     edge: edge,
                     start: trimmed.start,
                     end: trimmed.end,
-                    control: control,
+                    control: trimmed.control,
                     relationship: edge.relationship
                 )
 
@@ -278,6 +287,30 @@ enum MarkerLinkGeometry {
         return CGPoint(x: mid.x + px * scaled * side, y: mid.y + py * scaled * side)
     }
 
+    /// The control point of the sub-curve of a quadratic between `t0` and `t1`.
+    ///
+    /// De Casteljau, and the reason this exists: moving the two endpoints onto
+    /// the curve and *keeping the original control point* does not shorten the
+    /// curve, it replaces it with a different one. The control stays where it
+    /// was while the chord collapses, so what gets drawn is a far tighter arc
+    /// than the one that was routed — on a selected same-candle pair, a 19.6pt
+    /// span bulging 14.5pt sideways, which is a hairpin, not a connector.
+    static func subCurveControl(
+        start: CGPoint,
+        control: CGPoint,
+        end: CGPoint,
+        t0: CGFloat,
+        t1: CGFloat
+    ) -> CGPoint {
+        let a = lerp(start, control, t0)
+        let b = lerp(control, end, t0)
+        return lerp(a, b, t1)
+    }
+
+    static func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+    }
+
     static func quadraticPoint(
         start: CGPoint,
         control: CGPoint,
@@ -296,13 +329,17 @@ enum MarkerLinkGeometry {
 
     /// Walk the curve inward from both ends until it clears each glyph's edge,
     /// so the connector touches the glass rather than crossing the glyph.
+    ///
+    /// Returns the *sub-curve*, control point included. Trimming a Bézier means
+    /// taking the piece of it between two parameters, not keeping the original
+    /// control and hoping — see `subCurveControl`.
     static func trim(
         start: CGPoint,
         end: CGPoint,
         control: CGPoint,
         startRadius: CGFloat,
         endRadius: CGFloat
-    ) -> (start: CGPoint, end: CGPoint)? {
+    ) -> (start: CGPoint, end: CGPoint, control: CGPoint)? {
         let steps = 96
         var tStart: CGFloat?
         var tEnd: CGFloat?
@@ -330,7 +367,11 @@ enum MarkerLinkGeometry {
         // Reject a stub: two glyphs can overlap on the chord and still leave a
         // usable span once the path bows clear, but not always.
         guard distance(trimmedStart, trimmedEnd) >= minimumDrawnSpan else { return nil }
-        return (trimmedStart, trimmedEnd)
+        return (
+            trimmedStart,
+            trimmedEnd,
+            subCurveControl(start: start, control: control, end: end, t0: tS, t1: tE)
+        )
     }
 
     /// Sample the drawn span and reject any path that grazes another glyph, a
