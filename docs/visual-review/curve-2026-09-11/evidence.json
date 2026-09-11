@@ -1,0 +1,32 @@
+[
+  {
+    "file": "BEFORE-crop-unrelated.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/BEFORE-crop-unrelated.png",
+    "sha256": "0f55aab84bee5c4faa491d3fd37a5d704e161ebd31feecfa70bca4dbb8ce9cb1"
+  },
+  {
+    "file": "AFTER-crop-unrelated.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/AFTER-crop-unrelated.png",
+    "sha256": "818fc264d785fd27a7f3958d023df45b84228e133d1d848382ec32bd3a1c0a59"
+  },
+  {
+    "file": "BEFORE-crop-three.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/BEFORE-crop-three.png",
+    "sha256": "2a3b9997ac034c8b775c14fd2843d04928f4b4dcc71fa91d01f9c1796bbb1698"
+  },
+  {
+    "file": "AFTER-crop-three.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/AFTER-crop-three.png",
+    "sha256": "ec22783d9e384a91cb33907d7b2b59d94cc47cd5045651529638a2a86b84d9af"
+  },
+  {
+    "file": "AFTER-gallery-three.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/AFTER-gallery-three.png",
+    "sha256": "5e09833efae947226743f10106d3ba5f453f5a4d80ad5c76fa3423b0b4558c32"
+  },
+  {
+    "file": "AFTER-gallery-unrelated.png",
+    "source": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/db687bc5-c94e-4a2a-bb97-65e63897681e/scratchpad/curve/AFTER-gallery-unrelated.png",
+    "sha256": "0717c37e4de9bb8b7ff4fa15feb66aeaf0afa92b9be5f16011852f36f8cd38f1"
+  }
+]
