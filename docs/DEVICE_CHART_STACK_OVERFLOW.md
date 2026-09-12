@@ -63,13 +63,31 @@ function's dynamic stack allocations.
   `stack-evidence/simulator/claude-report.md` and adjacent images. This verifies
   visible updates, not instrumentation of every individual `.onChange` handler.
 
-## Acceptance still to complete
+## Owner device retest — 12 September
+
+The owner subsequently reported that testing was looking good and supplied an
+arm64 DevDebug device log. It records successful session restoration, chart and
+history loading across several timeframes, creation of an ordinary alert marker
+and a linked Supports analysis response with an EMA component, and completed
+marker navigation from 5m to 4h. All 62 recorded HTTP statuses were successful
+(61 × 200, 1 × 201); no EXC_BAD_ACCESS or app exception was recorded. This closes
+the earlier uncertainty about reaching and using the chart after device startup.
+
+The excerpt ends with `Debug session ended with code 9: killed`. The cause is
+not established by that line; owner confirmation of an intentional stop is
+pending. The dSYM and keyboard/variant-selector diagnostics do not coincide
+with a recorded application exception. This log does not establish push receipt,
+another member's realtime delivery, thread traversal, or a performance result.
+The raw owner log remains in the private attachment, not in Git.
+
+## Remaining acceptance
 
 The diagnostic breakpoint was removed and execution resumed. Xcode subsequently
 lost its debug-server connection; CoreDevice's follow-up request returned a
-connection reset. A complete physical cold launch and chart interaction pass
-must therefore still be confirmed. Do not equate the improved breakpoint
-measurement with a verified completed launch.
+connection reset. The owner retest above now provides subsequent physical
+startup and basic interaction evidence. The complete linked-marker acceptance
+matrix remains in progress; the breakpoint measurement alone was not treated
+as a verified completed launch.
 
 Rebuild using **traders_guild LinkedDev**, keep the existing QA login/data, and
 check restored launch, marker selection and empty-tap deselection, timeframe
