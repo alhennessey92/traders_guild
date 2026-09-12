@@ -55,6 +55,13 @@ function's dynamic stack allocations.
 - Raw diagnostic captures remain at `/tmp/linked-device-crash-frames.json`,
   `/tmp/linked-device-crash-region.txt`, `/tmp/linked-device-fixed-frames.json` and
   `/tmp/linked-stack-review.md`. Compact evidence is in `stack-evidence/`.
+- Claude independently applied the identical source change in its own worktree
+  and passed seven DevDebug simulator checks: restored cold launch, timeframe
+  change, panning into the dense fixture, marker selection, empty-tap deselection,
+  entering placement and cancelling placement. Codex verified source parity and
+  reviewed the launch, focus, placement and cancellation screenshots. See
+  `stack-evidence/simulator/claude-report.md` and adjacent images. This verifies
+  visible updates, not instrumentation of every individual `.onChange` handler.
 
 ## Acceptance still to complete
 
