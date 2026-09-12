@@ -41,6 +41,10 @@ measurement point. Static disassembly prologues alone do not capture the origina
 function's dynamic stack allocations.
 
 - Signed physical-device DevDebug build passed (`/tmp/linked-device-debug-fix.log`).
+- Integrated production-scheme Release simulator build passed on 12 September
+  (`/tmp/linked-chart-boundary-release.log`, scheme **traders_guild GCP Public
+  Prod**, arm64 and x86_64). This was an incremental rebuild after the earlier
+  clean logo Release build, and includes source fix `6bd2b62`.
 - Full unit target: **615 passed, 0 failed, 0 skipped**, independently read from
   `/tmp/linked-chart-boundary-debug-tests.xcresult`. The three new tests cover
   deferred construction, fresh body evaluation and bounded parent storage.
