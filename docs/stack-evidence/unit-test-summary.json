@@ -1,0 +1,10 @@
+{
+  "result": "Passed",
+  "scheme": "traders_guild Compose Dev",
+  "device": "iPhone 17 Pro / iOS 26.0 simulator",
+  "passedTests": 615,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "source": "/tmp/linked-chart-boundary-debug-tests.xcresult",
+  "verification": "xcresulttool get test-results summary"
+}

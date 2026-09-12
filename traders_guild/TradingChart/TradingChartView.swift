@@ -942,7 +942,9 @@ struct TradingChartView: View {
             }
 
             GeometryReader { geometry in
-                chartContent(geometry: geometry)
+                ChartBodyBoundary {
+                    chartContent(geometry: geometry)
+                }
             }
         }
         .ignoresSafeArea(edges: .top)
@@ -1084,11 +1086,13 @@ struct TradingChartView: View {
         let predictionPlacementActive = isPredictionPlacementOverlayActive
 
         ZStack {
-            interactiveChartLayer(
-                geometry: geometry,
-                coordinateSystem: coordinateSystem,
-                predictionPlacementActive: predictionPlacementActive
-            )
+            ChartBodyBoundary {
+                interactiveChartLayer(
+                    geometry: geometry,
+                    coordinateSystem: coordinateSystem,
+                    predictionPlacementActive: predictionPlacementActive
+                )
+            }
             .gesture(crosshairDismissTapGesture())
             .gesture(crosshairGesture(coordinateSystem: coordinateSystem))
             .simultaneousGesture(tapGestureForMarkers(geometry: geometry))

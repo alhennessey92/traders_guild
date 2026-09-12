@@ -53,6 +53,16 @@ for Local Network access, allow it. The Mac address verified on 11 September is
 settings if the Mac address changes; leave the simulator loopback override intact.
 Use **traders_guild LinkedDev Profile** for the later performance measurement.
 
+The 12 September chart startup fix is intended for the ordinary **LinkedDev**
+scheme too. Rebuild with **Command-R**; switching to Profile is unnecessary.
+The fix reduces chart construction stack usage in DevDebug. Physical stack
+evidence and remaining launch checks are recorded in
+`DEVICE_CHART_STACK_OVERFLOW.md`.
+
+For automated unit tests, use **traders_guild Compose Dev** with a simulator.
+The LinkedDev/DevDebug unit-test target currently fails to resolve the app
+module; this does not prevent building and running the LinkedDev app.
+
 QA account details are in the private local files
 `/tmp/linked-marker-qa-credentials.json` and `/tmp/linked-device-login.txt`.
 Do not commit or share those files. Use a new disposable marker branch for edits

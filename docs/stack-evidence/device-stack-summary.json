@@ -1,0 +1,15 @@
+{
+  "crash": {
+    "frame_count": 282,
+    "captured_span_bytes": 1028160,
+    "getter_to_outermost_span_bytes": 1000240,
+    "boundary_present": false
+  },
+  "fixed": {
+    "frame_count": 226,
+    "captured_span_bytes": 237616,
+    "getter_to_outermost_span_bytes": 237616,
+    "boundary_present": true
+  },
+  "measurement": "LLDB physical iPhone 14 Pro; DevDebug -Onone; backtrace stack-pointer spans, not direct pthread stack bounds."
+}
