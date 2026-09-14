@@ -424,6 +424,74 @@ enum MarkerLinkRenderer {
         }
     }
 
+    // MARK: - Cross-timeframe jump badges
+
+    /// Draw the selected glyph's cross-timeframe badges.
+    ///
+    /// A filled disc in the relationship's colour with the target timeframe in
+    /// the middle, and a circular arrow running around the outside — clockwise
+    /// down to a response, anticlockwise up to a parent. `reveal` fades them in
+    /// with the selection pop so they arrive with the glyph rather than
+    /// blinking on after it.
+    static func drawTimeframeJumpBadges(
+        context: GraphicsContext,
+        placements: [MarkerTimeframeJumpLayout.Placement],
+        reveal: CGFloat,
+        pass: inout MarkerDrawPass
+    ) {
+        let alpha = max(0, min(1, reveal))
+        guard alpha > 0, !placements.isEmpty else { return }
+        var badgeContext = context
+        badgeContext.opacity = alpha
+
+        for placement in placements {
+            let center = placement.center
+            let accent = pass.accent(for: placement.jump.relationship)
+            let disc = MarkerTimeframeJumpLayout.badgeRadius
+            let ring = MarkerTimeframeJumpLayout.arrowRadius
+
+            // A hairline of chart background under the disc and the arrow so
+            // they stay legible over a candle or another glyph.
+            badgeContext.fill(
+                Path(ellipseIn: CGRect(x: center.x - ring - 1.5, y: center.y - ring - 1.5,
+                                       width: (ring + 1.5) * 2, height: (ring + 1.5) * 2)),
+                with: .color(pass.markerShadow.opacity(0.55))
+            )
+            badgeContext.fill(
+                Path(ellipseIn: CGRect(x: center.x - disc, y: center.y - disc, width: disc * 2, height: disc * 2)),
+                with: .color(accent)
+            )
+
+            // The arrow: a 300° arc with a small head at its leading end.
+            let clockwise = placement.jump.direction == .toResponse
+            let start = Angle.degrees(-120)
+            let end = Angle.degrees(clockwise ? 180 : -420)
+            var arc = Path()
+            arc.addArc(center: center, radius: ring, startAngle: start, endAngle: end, clockwise: !clockwise)
+            badgeContext.stroke(arc, with: .color(accent), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+
+            let tip = CGPoint(x: center.x + ring * CGFloat(cos(end.radians)),
+                              y: center.y + ring * CGFloat(sin(end.radians)))
+            // Tangent direction of travel at the tip.
+            let tangent = end.radians + (clockwise ? .pi / 2 : -.pi / 2)
+            var head = Path()
+            for side in [-1.0, 1.0] {
+                let angle = tangent + .pi + side * 0.55
+                head.move(to: tip)
+                head.addLine(to: CGPoint(x: tip.x + 4.5 * CGFloat(cos(angle)),
+                                         y: tip.y + 4.5 * CGFloat(sin(angle))))
+            }
+            badgeContext.stroke(head, with: .color(accent), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+
+            badgeContext.draw(
+                Text(verbatim: placement.jump.timeframe.shortName)
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundColor(pass.onAccent),
+                at: center
+            )
+        }
+    }
+
     /// Badge rectangles a connector must avoid for one glyph: the like badge on
     /// the right, the response badge on the left.
     ///

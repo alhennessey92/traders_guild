@@ -381,6 +381,54 @@ extension MarkerManager {
         selectedMarker = marker
     }
 
+    // MARK: - Cross-timeframe jumps
+
+    /// Badges the selected glyph wears for linked markers on other timeframes.
+    ///
+    /// Derived on read, not cached: the parent half is a field on the marker,
+    /// and the response half appears on its own once the thesis window lands,
+    /// which is exactly when the next frame should start showing it.
+    var timeframeJumps: [MarkerTimeframeJump] {
+        guard linkedMarkersEnabled,
+              let selected = selectedMarker,
+              let timeframe = currentTimeframe else { return [] }
+        return MarkerTimeframeJumpResolver.jumps(
+            for: selected,
+            currentTimeframe: timeframe,
+            thread: threadStore?.window(forMarkerId: selected.id)
+        )
+    }
+
+    /// Fetch the selected marker's thesis window if a response badge could
+    /// need it and nothing has loaded it yet.
+    ///
+    /// The sheet's disclosure normally fetches the same window and both go
+    /// through the store, which refuses a page from a superseded generation;
+    /// this just stops the badge depending on whether the sheet happened to be
+    /// built. Only responded-to markers fetch — a leaf or an unlinked marker
+    /// has no response to jump to.
+    func loadThreadForTimeframeJumps() {
+        timeframeJumpThreadTask?.cancel()
+        timeframeJumpThreadTask = nil
+        guard linkedMarkersEnabled,
+              let selected = selectedMarker,
+              selected.hasAnyResponses,
+              let store = threadStore,
+              store.window(forMarkerId: selected.id) == nil else { return }
+        let markerId = selected.id
+        let generation = store.generation
+        timeframeJumpThreadTask = Task { @MainActor [weak self, weak store] in
+            guard let self else { return }
+            guard let page = try? await self.fetchThreadPage(markerId: markerId, cursor: nil),
+                  !Task.isCancelled,
+                  let store, store.generation == generation,
+                  self.selectedMarker?.id == markerId else { return }
+            _ = store.ingest(page: page, requestedMarkerId: markerId, expectedGeneration: generation)
+            // Nothing observes the window itself; nudge the layer to redraw.
+            self.objectWillChange.send()
+        }
+    }
+
     // MARK: - Thread paging
 
     /// Fetch one bounded window of a thesis.

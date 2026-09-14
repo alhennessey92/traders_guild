@@ -274,6 +274,7 @@ class MarkerManager: ObservableObject {
             // that wrong answer for the life of the selection.
             renderedMarkerIds = nil
             refreshLinkFocus()
+            loadThreadForTimeframeJumps()
         }
     }
     // Changing a filter is a deliberate act, not a race, so the fade latch is
@@ -349,6 +350,9 @@ class MarkerManager: ObservableObject {
     /// Thesis cache, owned by app state so it outlives this manager's layout
     /// teardown. Weak: the store belongs to the session, not to the chart.
     weak var threadStore: MarkerThreadStore?
+    /// The thesis fetch a selection started so its cross-timeframe response
+    /// badge can name a target. See `loadThreadForTimeframeJumps`.
+    var timeframeJumpThreadTask: Task<Void, Never>?
 
     /// The first `.connected` is the initial connection, not a reconnect, and
     /// must not throw away a cache that was just populated.
@@ -397,7 +401,9 @@ class MarkerManager: ObservableObject {
     private var currentSymbolId: UUID?
 
     /// Current timeframe for API calls
-    private var currentTimeframe: RLChartTimeframe?
+    /// `private(set)`, not `private`: the links extension reads it to decide
+    /// which linked markers are on another timeframe.
+    private(set) var currentTimeframe: RLChartTimeframe?
 
     /// The chart context that owns the current marker layout assignments.
     ///
@@ -2768,7 +2774,8 @@ struct ChartMarkerSystem {
         dimmed: Bool = false,
         editingEmojiOverride: (markerId: UUID, emoji: String)? = nil,
         linkRender: MarkerLinkRenderContext? = nil,
-        linkedMarkersEnabled: Bool = false
+        linkedMarkersEnabled: Bool = false,
+        timeframeJumps: [MarkerTimeframeJump] = []
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2990,6 +2997,26 @@ struct ChartMarkerSystem {
                 linkRing: linkRender?.ringStyles[rendered.marker.id],
                 linkRingProgress: linkRender?.revealProgress ?? 0,
                 linkedMarkersEnabled: linkedMarkersEnabled,
+                pass: &pass
+            )
+        }
+
+        // Cross-timeframe badges on the selected glyph, over everything. Not
+        // during placement: the layer is dimmed and nothing is selected then.
+        if linkedMarkersEnabled, !isDimmed, !timeframeJumps.isEmpty,
+           let selected = renderQueue.first(where: { $0.isSelected }) {
+            let placements = MarkerTimeframeJumpLayout.placements(
+                selectedCenter: selected.position,
+                scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * selected.scale,
+                isBelow: selected.marker.positionedBelow,
+                jumps: timeframeJumps
+            )
+            // Ride the selection pop: fully in once the glyph reaches its
+            // selected scale, invisible while it is still resting.
+            MarkerLinkRenderer.drawTimeframeJumpBadges(
+                context: context,
+                placements: placements,
+                reveal: MarkerTimeframeJumpLayout.reveal(selectedMarkerScale: selected.scale),
                 pass: &pass
             )
         }
@@ -3424,6 +3451,80 @@ struct ChartMarkerSystem {
     /// **Otherwise** the 1.2.1 behaviour, verbatim: recomputed centres,
     /// creation order reversed, fixed radius. A standalone marker outside any
     /// thesis behaves exactly as it always has.
+    /// The cross-timeframe badge under a tap, if the selected glyph wears one.
+    ///
+    /// Checked before glyph hit-testing: the badges sit just outside the
+    /// selected disc's hit radius, and a tap there should travel rather than
+    /// re-select. Uses the same geometry the draw pass used, so it resolves
+    /// against what was painted.
+    static func timeframeJumpAtLocation(
+        _ location: CGPoint,
+        markers: [ChartMarkerUI],
+        candles: [RLCandleDTO],
+        chartSize: CGSize,
+        priceRange: (min: Double, max: Double),
+        priceScale: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat,
+        selectedMarkerId: UUID?,
+        selectedMarkerScale: CGFloat,
+        jumps: [MarkerTimeframeJump]
+    ) -> MarkerTimeframeJump? {
+        guard !jumps.isEmpty,
+              let selectedMarkerId,
+              let selected = markers.first(where: { $0.id == selectedMarkerId && $0.isVisible }),
+              selected.candleIndex >= 0, selected.candleIndex < candles.count,
+              priceRange.max > priceRange.min,
+              chartSize.width > 0, chartSize.height > 0,
+              priceScale > 0, totalCandleWidth > 0, actualCandleWidth > 0 else { return nil }
+
+        let scaledHeight = chartSize.height * priceScale
+        let candle = candles[selected.candleIndex]
+        let x = CGFloat(selected.candleIndex) * totalCandleWidth + totalOffset
+        let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+        let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+        let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+            marker: selected,
+            candleHighY: candleHighY,
+            candleLowY: candleLowY,
+            centerX: x + actualCandleWidth / 2,
+            priceScale: priceScale,
+            viewportHeight: chartSize.height
+        )
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: position,
+            scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * Swift.max(selectedMarkerScale, 1.0),
+            isBelow: selected.positionedBelow,
+            jumps: jumps
+        )
+        return MarkerTimeframeJumpLayout.placement(at: location, in: placements)?.jump
+    }
+
+    /// Travel to the badge's marker.
+    ///
+    /// The selection is staged on the thread store so it survives the marker
+    /// teardown a timeframe change performs, and the navigation helper's by-id
+    /// fallback covers a target the destination window does not contain.
+    @MainActor
+    @discardableResult
+    static func performTimeframeJump(
+        _ jump: MarkerTimeframeJump,
+        chartViewModel: ChartViewModel,
+        gestureState: ChartGestureState,
+        markerManager: MarkerManager
+    ) -> Bool {
+        if let loaded = markerManager.markers.first(where: { $0.id == jump.markerId }) {
+            markerManager.selectedMarker = loaded
+            return true
+        }
+        guard let target = MarkerNavigationTarget(linkPreview: jump.preview) else { return false }
+        markerManager.threadStore?.stagePendingNavigation(markerId: jump.markerId)
+        let helper = MarkerNavigationHelper(chartViewModel: chartViewModel, gestureState: gestureState)
+        return helper.navigateToMarker(target, resolvedSymbol: nil)
+    }
+
     static func findMarkerAtLocation(
         _ location: CGPoint,
         markers: [ChartMarkerUI],
