@@ -37,7 +37,11 @@ struct MarkerPlacementPanel: View {
         VStack(spacing: 0) {
             switch placementState.selectedPlacementTab {
             case .general:
-                MarkerPlacementGeneralTab(placementState: placementState)
+                MarkerPlacementGeneralTab(
+                    placementState: placementState,
+                    currentChartTimeframe: currentChartTimeframe,
+                    onSelectTimeframe: onSelectTimeframe
+                )
             case .components:
                 UnifiedComponentsHostView(
                     adapter: MarkerComponentsAdapter(

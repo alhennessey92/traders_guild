@@ -22,6 +22,7 @@ struct MarkerViewingGeneralTab: View {
     var onOpenLinkedMarker: ((RLMarkerLinkPreviewDTO) -> Void)? = nil
 
     @State private var showRelationshipPicker: Bool = false
+    @State private var pendingResponseRelationship: MarkerLinkRelationship?
     @State private var showDeleteConfirmation: Bool = false
     @State private var isDeleting: Bool = false
     @State private var deleteFailureMessage: String? = nil
@@ -149,10 +150,13 @@ struct MarkerViewingGeneralTab: View {
         markerManager.linkedMarkersEnabled
             && onRespondToMarker != nil
             && liveMarker.visibility == "guild"
+            && liveMarker.guildId == rlAppState.currentGuild?.id
+            && liveMarker.symbolId == symbolDTO?.id
     }
 
     private var respondToMarkerButton: some View {
         Button {
+            pendingResponseRelationship = nil
             showRelationshipPicker = true
         } label: {
             HStack(spacing: 8) {
@@ -174,16 +178,26 @@ struct MarkerViewingGeneralTab: View {
             )
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showRelationshipPicker) {
+        .accessibilityIdentifier("marker.respond")
+        .sheet(isPresented: $showRelationshipPicker, onDismiss: {
+            // Switching to placement removes this view. Wait until its sheet
+            // finishes dismissing before replacing the presenting content.
+            guard let relationship = pendingResponseRelationship else { return }
+            pendingResponseRelationship = nil
+            onRespondToMarker?(relationship)
+        }) {
             MarkerLinkRelationshipPicker(
                 parentSummary: respondPickerSummary,
                 onSelect: { relationship in
+                    pendingResponseRelationship = relationship
                     showRelationshipPicker = false
-                    onRespondToMarker?(relationship)
                 },
-                onCancel: { showRelationshipPicker = false }
+                onCancel: {
+                    pendingResponseRelationship = nil
+                    showRelationshipPicker = false
+                }
             )
-            .presentationDetents([.height(360)])
+            .presentationDetents([.height(430), .large])
         }
     }
 

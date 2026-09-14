@@ -97,61 +97,65 @@ struct MarkerLinkRelationshipPicker: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Respond with a marker")
-                    .font(.headline)
-                    .foregroundColor(AppColors.primaryForeground)
-                if let parentSummary {
-                    Text(parentSummary)
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.greyText)
-                        .lineLimit(2)
-                }
-            }
-
-            ForEach(MarkerLinkRelationship.allCases, id: \.self) { relationship in
-                Button {
-                    onSelect(relationship)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: relationship.icon)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(relationship.accentColor)
-                            .frame(width: 28)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(relationship.displayName)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(AppColors.primaryForeground)
-                            Text(relationship.pickerSubtitle)
-                                .font(.caption)
-                                .foregroundColor(AppColors.greyText)
-                                .multilineTextAlignment(.leading)
-                        }
-                        Spacer(minLength: 0)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Respond with a marker")
+                        .font(.headline)
+                        .foregroundColor(AppColors.primaryForeground)
+                    if let parentSummary {
+                        Text(parentSummary)
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.greyText)
+                            .lineLimit(2)
                     }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(relationship.accentColor.opacity(0.10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(relationship.accentColor.opacity(0.30), lineWidth: 1)
-                            )
-                    )
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(relationship.displayName). \(relationship.pickerSubtitle)")
-            }
 
-            Button("Cancel", action: onCancel)
-                .font(.subheadline)
-                .foregroundColor(AppColors.greyText)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
+                ForEach(MarkerLinkRelationship.allCases, id: \.self) { relationship in
+                    Button {
+                        onSelect(relationship)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: relationship.icon)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(relationship.accentColor)
+                                .frame(width: 28)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(relationship.displayName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(AppColors.primaryForeground)
+                                Text(relationship.pickerSubtitle)
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.greyText)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(relationship.accentColor.opacity(0.10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(relationship.accentColor.opacity(0.30), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("marker.respond.\(relationship.rawValue)")
+                    .accessibilityLabel("\(relationship.displayName). \(relationship.pickerSubtitle)")
+                }
+
+                Button("Cancel", action: onCancel)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+            }
+            .padding(16)
         }
-        .padding(16)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 

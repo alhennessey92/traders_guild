@@ -218,6 +218,9 @@ final class MarkerPlacementState: ObservableObject {
     /// entering edit mode, logout, an unrelated chart context, or the author
     /// removing it from the banner.
     @Published var linkSession = MarkerLinkSession()
+    @Published private(set) var responseTimeframeChangeID: UUID?
+    @Published private(set) var responseTimeframeLoadFailed = false
+    var isChangingResponseTimeframe: Bool { responseTimeframeChangeID != nil }
 
     var drawingInteractionPhase: DrawingInteractionPhase {
         get { drawingSession.drawingInteractionPhase }
@@ -735,6 +738,7 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     var isValid: Bool {
+        guard !isChangingResponseTimeframe, !responseTimeframeLoadFailed else { return false }
         let anchorCount = components.filter { $0.componentType == .anchor }.count
         guard anchorCount == 1 else { return false }
 
@@ -830,7 +834,33 @@ final class MarkerPlacementState: ObservableObject {
     /// Begin answering a marker. Parent identity is fixed for the session; the
     /// relationship can still be changed from the banner.
     func beginRespondingTo(_ context: MarkerLinkContext) {
+        clearResponseTimeframeChange()
         linkSession.begin(context, currentVisibility: visibility)
+    }
+
+    /// A chart reload must never reset the response's note, components or link.
+    /// The request identity also prevents an old completion from affecting a
+    /// cancelled response or a later response draft.
+    func beginResponseTimeframeChange() -> UUID {
+        let requestID = UUID()
+        responseTimeframeChangeID = requestID
+        responseTimeframeLoadFailed = false
+        linkSession.clearFailure()
+        return requestID
+    }
+
+    func finishResponseTimeframeChange(_ requestID: UUID, succeeded: Bool) {
+        guard responseTimeframeChangeID == requestID else { return }
+        responseTimeframeChangeID = nil
+        responseTimeframeLoadFailed = !succeeded
+        if !succeeded {
+            linkSession.recordFailure("Couldn't load this timeframe. Your draft is saved; choose the timeframe again to retry.")
+        }
+    }
+
+    private func clearResponseTimeframeChange() {
+        responseTimeframeChangeID = nil
+        responseTimeframeLoadFailed = false
     }
 
     func changeLinkRelationship(_ relationship: MarkerLinkRelationship) {
@@ -840,12 +870,14 @@ final class MarkerPlacementState: ObservableObject {
     /// The author removed the link from the banner. Ordinary visibility
     /// behaviour returns, including private-by-default personal markers.
     func removeLink() {
+        clearResponseTimeframeChange()
         if let restored = linkSession.end(.removedByAuthor) {
             visibility = restored
         }
     }
 
     func endLinkSession(_ reason: MarkerLinkSessionEnd) {
+        clearResponseTimeframeChange()
         if let restored = linkSession.end(reason) {
             visibility = restored
         }
@@ -2065,8 +2097,8 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    func buildCreateRequest(symbolId: UUID, timeframe: String) -> RLCreateMarkerRequest {
-        let requestComponents = requestComponentsForCurrentState()
+    func buildCreateRequest(symbolId: UUID, timeframe: String, resolvedAnchorTime: Date? = nil) -> RLCreateMarkerRequest {
+        let requestComponents = requestComponentsForCurrentState(resolvedAnchorTime: resolvedAnchorTime)
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2148,8 +2180,15 @@ final class MarkerPlacementState: ObservableObject {
         )
     }
 
-    private func requestComponentsForCurrentState() -> [RLMarkerComponentRequest] {
+    private func requestComponentsForCurrentState(resolvedAnchorTime: Date? = nil) -> [RLMarkerComponentRequest] {
         var requestDrafts = components
+        // Canonicalize only the submitted anchor after an interval switch.
+        // Keep the original draft time so switching back restores its candle.
+        if let resolvedAnchorTime,
+           let index = requestDrafts.firstIndex(where: { $0.componentType == .anchor }),
+           let price = requestDrafts[index].payload.levelPrice {
+            requestDrafts[index].payload = .anchor(AnchorPayload(time: resolvedAnchorTime, price: price))
+        }
         if intent == .setup, let anchorPrice = anchorDraft?.payload.levelPrice {
             let entryPayload: MarkerComponentPayload = .levelEntry(
                 LevelPayload(price: anchorPrice, label: "Entry")

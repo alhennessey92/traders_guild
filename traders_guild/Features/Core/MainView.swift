@@ -3470,9 +3470,7 @@ struct ChartBottomSheet: View {
                 : liveChartDrawings,
             currentChartTimeframe: chartViewModel.currentTimeframe,
             onSelectTimeframe: { timeframe in
-                if chartViewModel.currentTimeframe != timeframe {
-                    chartViewModel.setTimeframe(timeframe)
-                }
+                selectPlacementTimeframe(timeframe)
             },
             onBeginInteractiveDrawing: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -3490,6 +3488,49 @@ struct ChartBottomSheet: View {
         )
         .padding(.horizontal, 16)
         .padding(.top, 12)
+    }
+
+    private func selectPlacementTimeframe(_ timeframe: RLChartTimeframe) {
+        guard let context = placementState.linkSession.context else {
+            chartViewModel.setTimeframe(timeframe)
+            return
+        }
+        guard !placementState.isChangingResponseTimeframe,
+              chartViewModel.currentTimeframe != timeframe || placementState.responseTimeframeLoadFailed,
+              let symbol = chartViewModel.currentSymbol,
+              symbol.id == context.parentSymbolId,
+              rlAppState.currentGuild?.id == context.parentGuildId else { return }
+
+        let anchorTime = placementState.anchorDraft?.payload.anchorTime ?? context.parentCandleTimestamp
+        let requestID = placementState.beginResponseTimeframeChange()
+        Task { @MainActor in
+            // Reuse the chart's awaited context-loading path, rather than
+            // guessing when setTimeframe's asynchronous request has finished.
+            let prepared = await chartViewModel.prepareChartContext(symbol: symbol, timeframe: timeframe, forceReload: true)
+            guard placementState.responseTimeframeChangeID == requestID else { return }
+            guard prepared,
+                  chartViewModel.currentSymbol?.id == context.parentSymbolId,
+                  chartViewModel.currentTimeframe == timeframe,
+                  rlAppState.currentGuild?.id == context.parentGuildId else {
+                placementState.finishResponseTimeframeChange(requestID, succeeded: false)
+                return
+            }
+
+            if MarkerResponseAnchorResolver.index(
+                for: anchorTime, candles: chartViewModel.dataManager.candles, timeframe: timeframe
+            ) == nil {
+                await chartViewModel.loadNavigationWindow(around: anchorTime, timeframe: timeframe)
+            }
+            guard placementState.responseTimeframeChangeID == requestID else { return }
+            let ready = chartViewModel.currentTimeframe == timeframe
+                && chartViewModel.currentSymbol?.id == context.parentSymbolId
+                && rlAppState.currentGuild?.id == context.parentGuildId
+                && MarkerResponseAnchorResolver.index(
+                    for: anchorTime, candles: chartViewModel.dataManager.candles, timeframe: timeframe
+                ) != nil
+            placementState.finishResponseTimeframeChange(requestID, succeeded: ready)
+            if ready { controlViewModel.focusResponseAnchorAction?() }
+        }
     }
 
     // MARK: - Chat Tab Content
@@ -3594,7 +3635,10 @@ struct ChartBottomSheet: View {
 
         // A private marker has no audience to answer, and the server rejects a
         // link to one.
-        guard marker.visibility == "guild" else { return }
+        guard marker.visibility == "guild",
+              chartViewModel.markerManager?.linkedMarkersEnabled == true,
+              marker.guildId == rlAppState.currentGuild?.id,
+              marker.symbolId == chartViewModel.currentSymbol?.id else { return }
 
         placementState.beginRespondingTo(
             MarkerLinkContext(
@@ -3611,7 +3655,9 @@ struct ChartBottomSheet: View {
 
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
+            chartViewModel.selectedMarkerForSheet = nil
             controlViewModel.startMarkerPlacement(intent: marker.intent)
+            selectedDetent = .fraction(0.35)
         }
     }
 

@@ -10,6 +10,7 @@ import SwiftUI
 struct ChartSettingsView: View {
     @ObservedObject var settings: ChartSettings
     var onResetToLatest: (() -> Void)? = nil
+    var linkedMarkersEnabled: Bool = false
     @ObservedObject private var markerLayoutSettings = MarkerDisplaySettings.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -36,7 +37,7 @@ struct ChartSettingsView: View {
                         candleColorsCard
                         timeframeViewportCard
                         markerLayoutCard
-                        linkedMarkerCard
+                        if linkedMarkersEnabled { linkedMarkerCard }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 14)

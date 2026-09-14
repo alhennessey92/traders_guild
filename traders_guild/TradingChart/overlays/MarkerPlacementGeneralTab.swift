@@ -14,6 +14,8 @@ struct MarkerPlacementGeneralTab: View {
     }
 
     @ObservedObject var placementState: MarkerPlacementState
+    var currentChartTimeframe: RLChartTimeframe? = nil
+    var onSelectTimeframe: ((RLChartTimeframe) -> Void)? = nil
     @State private var intentChangeWarning: String?
     @State private var pendingIntentSwitch: PendingIntentSwitch?
     @State private var isIntentPickerExpanded = false
@@ -110,6 +112,7 @@ struct MarkerPlacementGeneralTab: View {
                 onChangeRelationship: { showLinkRelationshipPicker = true },
                 onRemove: { placementState.removeLink() }
             )
+            .disabled(placementState.isChangingResponseTimeframe)
             .sheet(isPresented: $showLinkRelationshipPicker) {
                 MarkerLinkRelationshipPicker(
                     parentSummary: context.bannerSentence,
@@ -119,7 +122,7 @@ struct MarkerPlacementGeneralTab: View {
                     },
                     onCancel: { showLinkRelationshipPicker = false }
                 )
-                .presentationDetents([.height(360)])
+                .presentationDetents([.height(430), .large])
             }
         }
     }
@@ -129,6 +132,15 @@ struct MarkerPlacementGeneralTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 heroPanel
                 linkBanner
+                if placementState.linkSession.isActive,
+                   let timeframe = currentChartTimeframe,
+                   let onSelectTimeframe {
+                    MarkerResponseTimeframeControl(
+                        timeframe: timeframe,
+                        isLoading: placementState.isChangingResponseTimeframe,
+                        onSelect: onSelectTimeframe
+                    )
+                }
 
                 if isIntentPickerExpanded {
                     intentPicker

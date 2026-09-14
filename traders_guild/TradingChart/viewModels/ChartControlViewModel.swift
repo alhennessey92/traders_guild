@@ -35,6 +35,7 @@ class ChartControlViewModel: ObservableObject {
     
     var resetChartAction: (() -> Void)?
     var resetToLatestAction: (() -> Void)?
+    var focusResponseAnchorAction: (() -> Void)?
     var jumpToStartAction: (() -> Void)?
     var jumpToLatestAction: (() -> Void)?
     var toggleAutoScrollAction: (() -> Void)?

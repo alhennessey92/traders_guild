@@ -827,6 +827,12 @@ struct TradingChartView: View {
             if controlViewModel.currentMarkerIntent == .setup {
                 return snappedMarkerCandleIndex(from: chartData.candles.count - 1) ?? -1
             }
+            if placementState.linkSession.isActive, !isMarkerBeingDragged,
+               let time = placementState.anchorDraft?.payload.anchorTime {
+                return MarkerResponseAnchorResolver.index(
+                    for: time, candles: chartData.candles, timeframe: currentTimeframe
+                ) ?? -1
+            }
             if previewCandleIndex < 0 {
                 return snappedMarkerCandleIndex(from: calculateCenterCandleIndex()) ?? -1
             }
@@ -962,7 +968,8 @@ struct TradingChartView: View {
                     settings: chartSettings,
                     onResetToLatest: {
                         controlViewModel.resetToLatest()
-                    }
+                    },
+                    linkedMarkersEnabled: markerManager.linkedMarkersEnabled
                 )
             }
             .sheet(item: $drawingTextEditorContext) { context in
@@ -1006,6 +1013,14 @@ struct TradingChartView: View {
 
     private func withPlacementObservers<Content: View>(_ content: Content) -> some View {
         content
+            .onChange(of: placementState.isChangingResponseTimeframe) { wasLoading, isLoading in
+                if wasLoading && !isLoading && isChartLoading {
+                    // Success already centers the anchor synchronously. Failure
+                    // or cancellation must also release the chart's loading state.
+                    initializeLatestPositionIfNeeded()
+                    isChartLoading = false
+                }
+            }
             .onChange(of: placementState.intent) { oldValue, newValue in
                 handlePlacementIntentChange(oldIntent: oldValue, newIntent: newValue)
             }
@@ -2842,6 +2857,18 @@ struct TradingChartView: View {
         guard placementState.isValid,
               let symbolId = chartData.currentSymbol?.id else { return }
 
+        var resolvedResponseAnchorTime: Date?
+        if placementState.linkSession.isActive, placementState.intent != .setup {
+            guard let time = placementState.anchorDraft?.payload.anchorTime,
+                  let index = MarkerResponseAnchorResolver.index(
+                    for: time, candles: chartData.candles, timeframe: currentTimeframe
+                  ) else {
+                placementState.linkSession.recordFailure("Load the response candle before placing this marker. Your draft is saved.")
+                return
+            }
+            resolvedResponseAnchorTime = chartData.candles[index].timestamp
+        }
+
         isSubmittingPlacement = true
         placementSubmitErrorMessage = nil
 
@@ -2882,7 +2909,8 @@ struct TradingChartView: View {
 
         let request = placementState.buildCreateRequest(
             symbolId: symbolId,
-            timeframe: chartViewModel.currentTimeframe.toBackendString()
+            timeframe: chartViewModel.currentTimeframe.toBackendString(),
+            resolvedAnchorTime: resolvedResponseAnchorTime
         )
         let fallbackCandleIndex = effectiveCandleIndex
         let candleIdx = optimisticCandleIndex(from: request, fallback: fallbackCandleIndex)
@@ -3041,7 +3069,12 @@ struct TradingChartView: View {
         if !oldValue && newValue {
             // Prefer crosshair's target candle if active, otherwise fall back to center
             let preferredIndex: Int
-            if crosshairManager.isActive,
+            if let context = placementState.linkSession.context,
+               let parentIndex = MarkerResponseAnchorResolver.index(
+                    for: context.parentCandleTimestamp, candles: chartData.candles, timeframe: currentTimeframe
+               ) {
+                preferredIndex = parentIndex
+            } else if crosshairManager.isActive,
                let targetCandle = crosshairManager.targetCandle,
                let idx = chartData.candles.firstIndex(where: { $0.timestamp == targetCandle.timestamp }) {
                 preferredIndex = idx
@@ -3126,7 +3159,7 @@ struct TradingChartView: View {
     /// Sets the anchor at the visible center candle with current close price.
     private func initializePlacementState() {
         let intent = controlViewModel.currentMarkerIntent ?? .analysis
-        let centerIdx = effectiveCandleIndex
+        let centerIdx = placementState.linkSession.isActive ? calculateCenterCandleIndex() : effectiveCandleIndex
         let candles = chartData.candles
 
         var anchorTime: Date
@@ -3143,10 +3176,8 @@ struct TradingChartView: View {
             anchorPrice = 0
         }
 
-        // A response starts on its parent's candle, keeping the viewport's
-        // default price. Seeding the price too would place the response on the
-        // parent's exact point, where it simply stacks and reads as unrelated
-        // to what it is answering.
+        // Keep the normal viewport price while seeding the parent's candle.
+        // Glyph layout is candle/stack based, independent of the anchor price.
         if let link = placementState.linkSession.context,
            let parentCandle = Self.findCandleIndexForTimestamp(link.parentCandleTimestamp, in: candles),
            parentCandle >= 0, parentCandle < candles.count {
@@ -3313,6 +3344,12 @@ struct TradingChartView: View {
             hasInitializedPosition = false
             isChartLoading = true
             markerManager.clearMarkers()
+            if placementState.isChangingResponseTimeframe {
+                // The awaited draft switch owns loading and centering. A
+                // delayed reset here would pull it back to the latest candle.
+                indicatorManager.recalculateIndicators(candles: chartData.candles)
+                return
+            }
             // While a marker-panel navigation is in flight, MarkerNavigationHelper owns the
             // scroll position and will reload markers itself. Skipping the snap-to-latest reset
             // prevents the chart from jumping to the right edge before navigation can land.
@@ -3335,6 +3372,10 @@ struct TradingChartView: View {
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
         let historicalPrependedCount = chartData.consumeLastPrependedCandleCount()
         if historicalPrependedCount > 0 {
+            return
+        }
+        if placementState.isChangingResponseTimeframe {
+            indicatorManager.recalculateIndicators(candles: chartData.candles)
             return
         }
 
@@ -7887,7 +7928,9 @@ struct TradingChartView: View {
             focus: focus,
             ringStyles: ringStyles,
             revealProgress: reduceMotion ? 1 : linkRevealProgress,
-            plotRect: plotRect
+            plotRect: plotRect,
+            lineWidth: chartSettings.linkLineWidth,
+            curvature: chartSettings.linkCurvature
         )
     }
 
@@ -8101,6 +8144,7 @@ struct TradingChartView: View {
     @discardableResult
     private func initializeLatestPositionIfNeeded() -> Bool {
         guard !hasInitializedPosition,
+              !placementState.isChangingResponseTimeframe,
               !chartViewModel.isNavigatingToMarker,
               !chartData.candles.isEmpty,
               chartViewModel.currentSymbol != nil else {
@@ -8262,7 +8306,40 @@ struct TradingChartView: View {
     
     // MARK: - Control Actions Setup
 
+    private func focusResponseAnchor() {
+        guard controlViewModel.isMarkerPlacementMode,
+              placementState.linkSession.isActive,
+              let anchor = placementState.anchorDraft,
+              let time = anchor.payload.anchorTime,
+              let index = MarkerResponseAnchorResolver.index(
+                for: time, candles: chartData.candles, timeframe: currentTimeframe
+              ) else { return }
+        previewCandleIndex = index
+        let width = chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width
+        let height = chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.55
+        let center = max(1, width - yAxisWidth) / 2
+        let targetOffset = center
+            - CGFloat(index - chartData.historicalRenderIndexOffset) * totalCandleWidth
+            - baseCandleWidth * gestureState.candleWidthScale / 2
+        gestureState.stopMomentum()
+        gestureState.panOffset.width = clampedHorizontalPanOffset(
+            proposedOffset: targetOffset, chartWidth: width, candleWidthScale: gestureState.candleWidthScale
+        )
+        if let price = anchor.payload.levelPrice,
+           let vertical = verticalOffsetCentering(
+                price: price, chartHeight: height,
+                priceScale: gestureState.priceScale, priceRange: chartData.priceRange
+           ) {
+            gestureState.verticalPanOffset = clampedVerticalOffset(vertical, chartHeight: height)
+        }
+        hasInitializedPosition = true
+        isChartLoading = false
+    }
+
     private func setupControlActions() {
+        controlViewModel.focusResponseAnchorAction = {
+            self.focusResponseAnchor()
+        }
         controlViewModel.resetChartAction = {
             self.gestureState.reset()
         }

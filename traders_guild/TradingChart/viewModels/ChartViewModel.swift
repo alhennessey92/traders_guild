@@ -25,6 +25,7 @@ class ChartViewModel: ObservableObject {
     private var stalenessWatchdogTask: Task<Void, Never>?
     private var historicalPreloadTask: Task<Void, Never>?
     private var markerNavigationTimeoutTask: Task<Void, Never>?
+    private var chartLoadGeneration: UInt = 0
     private var lastRealtimeMarketEventAt: Date = .distantPast
 
     /// Drives automatic recovery from the empty / "Market Data Unavailable" state
@@ -256,17 +257,22 @@ class ChartViewModel: ObservableObject {
     }
     
     /// Load chart data (symbol + candles + markers) from backend
+    @discardableResult
     private func loadChartData(
         symbolId: UUID,
         guildId: UUID,
         timeframe: RLChartTimeframe,
         skipSubscribe: Bool = false,
         mergeWithExisting: Bool = false
-    ) async {
+    ) async -> Bool {
+        chartLoadGeneration &+= 1
+        let generation = chartLoadGeneration
+        let accountId = appState.currentUser?.id
         if !mergeWithExisting {
             cancelHistoricalPreload()
         }
 
+        var loaded = false
         do {
             let timeframeString = timeframe.toBackendString()
             let chartData = try await api.getChartData(
@@ -276,6 +282,9 @@ class ChartViewModel: ObservableObject {
                 candleLimit: timeframe.initialCandlesCount,
                 continuousTime: true
             )
+
+            guard generation == chartLoadGeneration, appState.currentUser?.id == accountId,
+                  isCurrentChartContext(symbolId: symbolId, guildId: guildId, timeframe: timeframe) else { return false }
 
             // Update current symbol if it changed
             if currentSymbol?.id != chartData.symbol.id {
@@ -305,6 +314,7 @@ class ChartViewModel: ObservableObject {
                 dataManager.updateWithMarketData(chartData.candles)
                 hasMoreHistoricalCandles = chartData.hasMoreCandles
             }
+            loaded = true
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
             reconcileCurrentCandleWithSymbolSnapshot(chartData.symbol)
             noteRealtimeMarketEvent()
@@ -342,6 +352,9 @@ class ChartViewModel: ObservableObject {
             }
 
         } catch {
+            loaded = false
+            guard generation == chartLoadGeneration, appState.currentUser?.id == accountId,
+                  isCurrentChartContext(symbolId: symbolId, guildId: guildId, timeframe: timeframe) else { return false }
             if case let APIError.serverError(statusCode, detail) = error, statusCode == 409 {
                 await handleUnsupportedSymbolFallback(
                     previousSymbolId: symbolId,
@@ -350,7 +363,7 @@ class ChartViewModel: ObservableObject {
                     detail: detail,
                     skipSubscribe: skipSubscribe
                 )
-                return
+                return false
             }
             errorMessage = RLUserFacingErrorMapper.message(from: error, context: .chart)
             appState.showError(error, title: "Failed to Load Chart", style: .toast, context: .chart)
@@ -364,6 +377,9 @@ class ChartViewModel: ObservableObject {
         // Start/stop empty-state auto-recovery based on whether this load left
         // us with candles. No-ops for the merge/resync paths (candles present).
         updateChartRetryLoop()
+        return loaded && generation == chartLoadGeneration
+            && appState.currentUser?.id == accountId
+            && isCurrentChartContext(symbolId: symbolId, guildId: guildId, timeframe: timeframe)
     }
 
     private func handleUnsupportedSymbolFallback(
@@ -513,7 +529,12 @@ class ChartViewModel: ObservableObject {
         symbol: RLTradingSymbolDTO,
         timeframe: RLChartTimeframe
     ) async -> Bool {
-        _ = target
+        await prepareChartContext(symbol: symbol, timeframe: timeframe)
+    }
+
+    /// Await a chart context for either navigation or a response draft. Does
+    /// not select a marker or reset the caller's composition state.
+    func prepareChartContext(symbol: RLTradingSymbolDTO, timeframe: RLChartTimeframe, forceReload: Bool = false) async -> Bool {
         guard symbol.isSelectableForActiveProvider else {
             appState.showError(
                 title: "Symbol Unavailable",
@@ -527,7 +548,7 @@ class ChartViewModel: ObservableObject {
             return false
         }
 
-        let needsReload = currentSymbol?.id != symbol.id
+        let needsReload = forceReload || currentSymbol?.id != symbol.id
             || currentTimeframe != timeframe
             || dataManager.candles.isEmpty
             || dataManager.currentTimeframe != timeframe
@@ -542,17 +563,23 @@ class ChartViewModel: ObservableObject {
         if needsReload {
             markerManager?.clearMarkers()
             subscribeToRealTimeTicks(guildId: guildId, symbolId: symbol.id, timeframe: timeframe)
-            await loadChartData(
+            let loaded = await loadChartData(
                 symbolId: symbol.id,
                 guildId: guildId,
                 timeframe: timeframe,
                 skipSubscribe: true
             )
+            guard loaded else { return false }
             scheduleIndicatorRecalc()
         } else {
             markerManager?.recalculateCandleIndices(candles: dataManager.candles)
         }
-        return true
+        return isCurrentChartContext(symbolId: symbol.id, guildId: guildId, timeframe: timeframe)
+            && !dataManager.candles.isEmpty
+    }
+
+    private func isCurrentChartContext(symbolId: UUID, guildId: UUID, timeframe: RLChartTimeframe) -> Bool {
+        currentSymbol?.id == symbolId && appState.currentGuild?.id == guildId && currentTimeframe == timeframe
     }
 
     private func detailMessage(forUnsupportedSymbolDetail detail: String) -> String {
@@ -576,6 +603,8 @@ class ChartViewModel: ObservableObject {
         }
 
         let targetTimeframe = timeframe ?? currentTimeframe
+        let generation = chartLoadGeneration
+        let accountId = appState.currentUser?.id
         let candleLimit = targetTimeframe.initialCandlesCount
         let halfWindowCandles = max(1, candleLimit / 2)
         let endTime = timestamp.addingTimeInterval(targetTimeframe.seconds * Double(halfWindowCandles))
@@ -589,6 +618,9 @@ class ChartViewModel: ObservableObject {
                 endTime: endTime,
                 continuousTime: true
             )
+
+            guard generation == chartLoadGeneration, appState.currentUser?.id == accountId,
+                  isCurrentChartContext(symbolId: symbol.id, guildId: guildId, timeframe: targetTimeframe) else { return }
 
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
