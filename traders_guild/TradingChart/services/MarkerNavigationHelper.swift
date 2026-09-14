@@ -346,12 +346,24 @@ class MarkerNavigationHelper {
                 candleSpacing: candleSpacing
             )
 
-            let matchedMarker = await Self.waitForMarkerForDetail(
+            var matchedMarker = await Self.waitForMarkerForDetail(
                 targetMarker,
                 in: capturedChartViewModel,
                 timeout: 5.0
             )
             guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+            if matchedMarker == nil {
+                // The window fetch is bounded by the candles the chart loaded, so
+                // a marker on the live candle — or on one the persisted series
+                // had not reached — is not in it. We know the id; ask for it
+                // directly before giving up. Positioned against the candles as
+                // they are *now*, which by this point include the live one.
+                matchedMarker = await capturedChartViewModel.markerManager?.loadMarker(
+                    id: targetMarker.markerId,
+                    candles: capturedChartViewModel.dataManager.candles
+                )
+                guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
+            }
             if let matchedMarker {
                 capturedChartViewModel.markerManager?.selectedMarker = matchedMarker
             }

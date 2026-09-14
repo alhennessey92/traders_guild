@@ -2323,6 +2323,9 @@ private final class MarkerPlacementUpdateFakeAPI: MarkerAPIClient {
     ) async throws -> RLMarkersListDTO {
         fatalError("getMarkers should not be called in MarkerPlacementUpdateFakeAPI")
     }
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        throw APIError.networkError("unused")
+    }
 
     func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
         createCalls += 1

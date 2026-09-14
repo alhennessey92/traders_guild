@@ -416,6 +416,9 @@ private final class RealtimeFakeAPI: MarkerAPIClient, @unchecked Sendable {
         guildId: UUID, symbolId: UUID, timeframe: String, limit: Int,
         cursor: String?, startTime: Date?, endTime: Date?
     ) async throws -> RLMarkersListDTO { markersResponse }
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        throw APIError.networkError("unused")
+    }
 
     func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
         throw APIError.networkError("unused")

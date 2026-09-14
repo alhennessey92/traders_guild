@@ -512,6 +512,9 @@ private final class ThreadSpyAPI: MarkerAPIClient, @unchecked Sendable {
     ) async throws -> RLMarkersListDTO {
         RLMarkersListDTO(markers: [], totalCount: 0, hasMore: false, nextCursor: nil)
     }
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        throw APIError.networkError("unused")
+    }
     func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
         throw APIError.networkError("unused")
     }

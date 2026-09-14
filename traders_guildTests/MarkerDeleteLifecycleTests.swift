@@ -324,6 +324,9 @@ private final class DeleteFakeAPI: MarkerAPIClient, @unchecked Sendable {
     ) async throws -> RLMarkersListDTO {
         RLMarkersListDTO(markers: [], totalCount: 0, hasMore: false, nextCursor: nil)
     }
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        throw APIError.networkError("unused")
+    }
     func getMarkerThread(markerId: UUID, cursor: String?) async throws -> RLMarkerThreadResponseDTO {
         throw APIError.serverError(500, "unused")
     }

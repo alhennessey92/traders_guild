@@ -585,6 +585,9 @@ private final class MarkerAuditFakeAPI: MarkerAPIClient {
     ) async throws -> RLMarkersListDTO {
         markersResponse
     }
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
+        throw APIError.networkError("unused")
+    }
 
     func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
         fatalError("createMarkerV2 should not be called in MarkerAuditFakeAPI")

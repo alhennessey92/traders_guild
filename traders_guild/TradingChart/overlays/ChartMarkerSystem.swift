@@ -116,6 +116,9 @@ protocol MarkerAPIClient: AnyObject {
         startTime: Date?,
         endTime: Date?
     ) async throws -> RLMarkersListDTO
+    /// One marker by id, with the viewer's own permission flags. Used when a
+    /// marker is known to exist but the window fetch did not contain it.
+    func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO
     func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO
     func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO
     /// Returns the richer 1.3.0 acknowledgement, which still carries `detail`
@@ -511,6 +514,71 @@ class MarkerManager: ObservableObject {
             subscribeToMarkerChannel(guildId: guildId)
         } catch {
             print("Failed to load markers: \(error)")
+        }
+    }
+
+    /// Fetch one marker by id and place it on `candles`.
+    ///
+    /// The window fetch that fills `markers` is bounded by the candles the
+    /// chart was given at load time, so a marker on a candle that arrived
+    /// afterwards — the live candle, or one the persisted series had not
+    /// reached yet — is not in it and never will be until the next reload.
+    /// Navigation knows the id it is travelling to, so it can ask for that
+    /// marker directly instead of failing because the window happened not to
+    /// contain it.
+    ///
+    /// Returns the loaded copy if the marker is already here. Returns nil when
+    /// the marker cannot be shown on this chart: another symbol, timeframe or
+    /// guild; a private marker that is not ours; the context changed while the
+    /// request was in flight; or no loaded candle within tolerance of its
+    /// timestamp — a candle the backend never persisted is not conjured.
+    @discardableResult
+    func loadMarker(id: UUID, candles: [RLCandleDTO]) async -> ChartMarkerUI? {
+        if let existing = markers.first(where: { $0.id == id }) {
+            return existing
+        }
+        guard let api,
+              let currentSymbolId,
+              let currentTf = currentTimeframe,
+              candleArrayMatchesTimeframe(candles, currentTf) else { return nil }
+        let requestedContext = layoutContext
+
+        let dto: RLChartMarkerDTO
+        do {
+            dto = try await api.getMarker(markerId: id)
+        } catch {
+            print("Failed to load marker \(id): \(error)")
+            return nil
+        }
+
+        guard layoutContext == requestedContext,
+              dto.symbolId == currentSymbolId,
+              dto.guildId == currentGuildId,
+              dto.timeframe == currentTf.toBackendString(),
+              canRenderMarker(dto) else { return nil }
+
+        return await MainActor.run { () -> ChartMarkerUI? in
+            // The window fetch or a realtime create may have landed it meanwhile.
+            if let existing = markers.first(where: { $0.id == id }) {
+                return existing
+            }
+            guard let candleIndex = findCandleIndex(timestamp: dto.candleTimestamp, in: candles) else {
+                return nil
+            }
+            // A by-id read carries the viewer's own flags, unlike the create
+            // broadcast, so nothing needs re-deriving here.
+            var marker = ChartMarkerUI(marker: dto, candleIndex: candleIndex)
+            let positioning = MarkerPositionCalculator.calculatePositionForNewMarker(
+                marker: marker,
+                existingMarkers: markers,
+                candles: candles
+            )
+            marker.positionedBelow = positioning.isBelow
+            marker.proximityTier = positioning.tier
+            marker.stackIndex = positioning.stackIndex
+            marker.hasStableLayout = true
+            markers.append(marker)
+            return marker
         }
     }
 
