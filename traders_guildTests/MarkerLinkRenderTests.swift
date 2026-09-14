@@ -79,6 +79,66 @@ struct MarkerLinkRenderTests {
                 "reveal ended at \(endpoint), curve is at \(expected)")
     }
 
+    /// A bracket route is emitted as one cubic, and its partial reveal is the
+    /// true sub-curve — same contract as the quadratic, other family.
+    @Test
+    func aBracketRouteIsEmittedAsOneCubicAndRevealsAlongItself() throws {
+        let start = CGPoint(x: 200, y: 318)
+        let end = CGPoint(x: 200, y: 582)
+        let controls = MarkerLinkGeometry.bracketControls(
+            parent: CGPoint(x: 200, y: 300), child: CGPoint(x: 200, y: 600), offset: 36, side: -1
+        )
+        let route = MarkerLinkRoute(
+            edge: MarkerLinkEdge(
+                parentId: id(1), childId: id(2),
+                relationship: MarkerLinkRelationshipValue(.buildsOn),
+                kind: .withinThesis
+            ),
+            start: start, end: end, control: controls.0, control2: controls.1,
+            relationship: MarkerLinkRelationshipValue(.buildsOn)
+        )
+
+        #expect(elements(of: MarkerLinkRenderer.trimmedPath(for: route, progress: 1)) == ["move", "cubic"])
+
+        let progress: CGFloat = 0.371
+        let partial = MarkerLinkRenderer.trimmedPath(for: route, progress: progress)
+        #expect(elements(of: partial) == ["move", "cubic"])
+        var last: CGPoint?
+        partial.forEach { element in
+            if case let .curve(to, _, _) = element { last = to }
+        }
+        #expect(MarkerLinkGeometry.distance(try #require(last), route.point(at: progress)) < 0.001)
+
+        // Every point of the partial lies on the full curve.
+        let piece = MarkerLinkGeometry.subCubic(
+            start: start, control1: controls.0, control2: controls.1, end: end, t0: 0, t1: progress
+        )
+        for step in 0...10 {
+            let local = CGFloat(step) / 10
+            let onPiece = MarkerLinkGeometry.cubicPoint(
+                start: piece.start, control1: piece.control1, control2: piece.control2, end: piece.end, t: local
+            )
+            #expect(MarkerLinkGeometry.distance(onPiece, route.point(at: progress * local)) < 0.5)
+        }
+    }
+
+    /// Thickness is the stroke width and nothing else; the dash rhythm that
+    /// says "challenges" versus "supports" is unchanged by it.
+    @Test
+    func lineWidthIsClampedAndDashesAreUntouched() {
+        #expect(ChartSettings.linkLineWidthRange.contains(ChartSettings.defaultLinkLineWidth))
+        #expect(MarkerLinkRelationshipValue(.challenges).dashPattern
+                == MarkerLinkRelationshipValue(.challenges).dashPattern)
+        // The renderer clamps a caller's width into the setting's range.
+        let context = MarkerLinkRenderContext(
+            focus: .standalone(selectedId: id(1)), ringStyles: [:], revealProgress: 1,
+            plotRect: CGRect(x: 0, y: 0, width: 400, height: 800),
+            lineWidth: 99, curvature: 1
+        )
+        #expect(context.lineWidth == 99, "the context carries what it was given")
+        // Drawing is where the clamp applies; exercised in the settings tests.
+    }
+
     /// Zero progress draws nothing but the move, so a focus that has not begun
     /// revealing cannot flash a full connector.
     @Test

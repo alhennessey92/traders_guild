@@ -36,6 +36,7 @@ struct ChartSettingsView: View {
                         candleColorsCard
                         timeframeViewportCard
                         markerLayoutCard
+                        linkedMarkerCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 14)
@@ -192,6 +193,44 @@ struct ChartSettingsView: View {
 
                 secondaryActionButton(title: "Reset Marker Layout") {
                     markerLayoutSettings.resetToDefaults()
+                }
+            }
+        }
+    }
+
+    /// Connector appearance for linked markers. Changes apply to the chart as
+    /// the slider moves, since the chart observes the same settings object.
+    private var linkedMarkerCard: some View {
+        AdminSectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle(
+                    "Linked Markers",
+                    subtitle: "Thickness and curve of the lines joining a thesis."
+                )
+
+                sliderRow(
+                    title: "Line Thickness",
+                    valueText: String(format: "%.1f pt", settings.linkLineWidth),
+                    value: Binding(
+                        get: { Double(settings.linkLineWidth) },
+                        set: { settings.linkLineWidth = CGFloat($0) }
+                    ),
+                    range: Double(ChartSettings.linkLineWidthRange.lowerBound)...Double(ChartSettings.linkLineWidthRange.upperBound),
+                    step: 0.25
+                )
+                sliderRow(
+                    title: "Curvature",
+                    valueText: String(format: "%.0f%%", settings.linkCurvature * 100),
+                    value: Binding(
+                        get: { Double(settings.linkCurvature) },
+                        set: { settings.linkCurvature = CGFloat($0) }
+                    ),
+                    range: Double(ChartSettings.linkCurvatureRange.lowerBound)...Double(ChartSettings.linkCurvatureRange.upperBound),
+                    step: 0.1
+                )
+
+                secondaryActionButton(title: "Reset Connector Style") {
+                    settings.resetLinkAppearance()
                 }
             }
         }

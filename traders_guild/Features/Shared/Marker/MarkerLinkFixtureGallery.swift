@@ -176,6 +176,50 @@ enum MarkerLinkFixtures {
         return positioned([parent, supports, challenges, buildsOn, stranger])
     }
 
+    /// The owner's report: a parent stacked *above* a candle, its response
+    /// stacked *below* the same candle, with strangers in the slots between —
+    /// and the response's own response one slot further down. Every edge of
+    /// the thesis must draw, none may cross a stranger, and the long one has
+    /// to leave the column at once rather than bulge through the middle.
+    static func oppositeStacks() -> [ChartMarkerUI] {
+        let parent = marker(
+            1, author: "alex", intent: .setup, candle: baseCandle, price: 64_000,
+            title: "BTC breakout", responses: 1, likes: 3
+        )
+        let strangerAbove = marker(
+            2, author: "sam", intent: .news, candle: baseCandle, price: 64_000,
+            title: "CPI print", likes: 1
+        )
+        let strangerBelow = marker(
+            3, author: "lee", intent: .reaction, candle: baseCandle, price: 64_000,
+            title: nil, likes: 2
+        )
+        let response = marker(
+            4, author: "jamie", intent: .analysis, candle: baseCandle, price: 64_000,
+            title: "Agree, higher target", parent: 1, relationship: "supports", responses: 1
+        )
+        let grandchild = marker(
+            5, author: "kit", intent: .analysis, candle: baseCandle, price: 64_000,
+            title: "Next leg from here", parent: 4, relationship: "builds_on"
+        )
+        var laid = positioned([parent, strangerAbove, strangerBelow, response, grandchild])
+        // The position calculator keeps one candle's markers on one side; the
+        // real chart ends up with both sides populated over time, which is the
+        // shape being reviewed here. Place the second half below explicitly.
+        func place(_ n: Int, below: Bool, stack: Int) {
+            guard let index = laid.firstIndex(where: { $0.id == uuid(n) }) else { return }
+            laid[index].positionedBelow = below
+            laid[index].stackIndex = stack
+            laid[index].hasStableLayout = true
+        }
+        place(2, below: false, stack: 0)
+        place(1, below: false, stack: 1)
+        place(3, below: true, stack: 0)
+        place(4, below: true, stack: 1)
+        place(5, below: true, stack: 2)
+        return laid
+    }
+
     /// A crowded chart: many markers, several theses, deep stacks.
     static func denseChart() -> [ChartMarkerUI] {
         var dtos: [RLChartMarkerDTO] = []
@@ -286,6 +330,7 @@ struct MarkerLinkFixtureGallery: View {
 
     enum FixtureCase: String, CaseIterable, Identifiable {
         case parentUnrelatedResponse = "Parent → unrelated → response"
+        case oppositeStacks = "Opposite stacks"
         case allRelationships = "All three relationships"
         case dense = "Dense chart"
 
@@ -294,6 +339,7 @@ struct MarkerLinkFixtureGallery: View {
         var markers: [ChartMarkerUI] {
             switch self {
             case .parentUnrelatedResponse: return MarkerLinkFixtures.parentUnrelatedResponse()
+            case .oppositeStacks: return MarkerLinkFixtures.oppositeStacks()
             case .allRelationships: return MarkerLinkFixtures.allRelationships()
             case .dense: return MarkerLinkFixtures.denseChart()
             }
@@ -542,7 +588,12 @@ struct MarkerLinkFixtureCanvas: View {
         guard let low = lows.min(), let high = highs.max(), high > low else {
             return (0, 1)
         }
-        return (low, high + (high - low) * 2.4)
+        // A scene with markers stacked *below* the candle needs the same room
+        // underneath, or the below stack is clamped to the canvas edge and
+        // piles up — which is not the geometry under review.
+        let hasBelowStack = markers.contains(where: \.positionedBelow)
+        let floor = hasBelowStack ? low - (high - low) * 1.8 : low
+        return (floor, high + (high - low) * 2.4)
     }
 }
 

@@ -2829,12 +2829,14 @@ struct ChartMarkerSystem {
                 edges: linkRender.focus.candidateEdges,
                 glyphs: linkGlyphBounds,
                 plotRect: linkRender.plotRect,
-                selectedId: linkRender.focus.selectedId
+                selectedId: linkRender.focus.selectedId,
+                curvature: linkRender.curvature
             )
             MarkerLinkRenderer.drawConnectors(
                 context: context,
                 plan: plan,
-                revealProgress: linkRender.revealProgress
+                revealProgress: linkRender.revealProgress,
+                lineWidth: linkRender.lineWidth
             )
         }
 

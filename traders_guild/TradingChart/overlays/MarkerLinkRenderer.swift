@@ -94,17 +94,29 @@ struct MarkerLinkRenderContext {
     let revealProgress: CGFloat
     /// The plot rectangle connectors must stay inside.
     let plotRect: CGRect
+    /// Connector stroke width, from chart settings.
+    let lineWidth: CGFloat
+    /// Multiplier on every bow and bracket offset, from chart settings.
+    let curvature: CGFloat
 
+    /// The two appearance values default to the persisted chart settings, so
+    /// a caller that does not name them gets the user's choice rather than a
+    /// constant. `TradingChartView` observes that same object, so a slider
+    /// change re-renders the canvas with the new values through this path.
     init(
         focus: MarkerFocusState,
         ringStyles: [UUID: MarkerLinkRingStyle],
         revealProgress: CGFloat,
-        plotRect: CGRect
+        plotRect: CGRect,
+        lineWidth: CGFloat = ChartSettings.shared.linkLineWidth,
+        curvature: CGFloat = ChartSettings.shared.linkCurvature
     ) {
         self.focus = focus
         self.ringStyles = ringStyles
         self.revealProgress = revealProgress
         self.plotRect = plotRect
+        self.lineWidth = lineWidth
+        self.curvature = curvature
     }
 
     func isDimmed(_ markerId: UUID) -> Bool {
@@ -156,6 +168,7 @@ enum MarkerLinkRenderer {
     static let ringInset: CGFloat = -1.25
     static let ringOpacity: Double = 0.9
 
+    /// Default stroke width; the persisted setting overrides it per frame.
     static let connectorWidth: CGFloat = 1.5
     static let connectorOpacity: Double = 0.75
 
@@ -175,14 +188,20 @@ enum MarkerLinkRenderer {
     static func drawConnectors(
         context: GraphicsContext,
         plan: MarkerLinkRoutePlan,
-        revealProgress: CGFloat
+        revealProgress: CGFloat,
+        lineWidth: CGFloat = connectorWidth
     ) {
         let progress = max(0, min(1, revealProgress))
         guard progress > 0 else { return }
+        let width = min(max(lineWidth, ChartSettings.linkLineWidthRange.lowerBound),
+                        ChartSettings.linkLineWidthRange.upperBound)
 
         for route in plan.routes {
             let relationship = route.relationship
             let color = relationship?.accentColor ?? AppColors.greyText
+            // Dash patterns are the relationship's own and are not scaled with
+            // the width: a thicker "challenges" line is still the same
+            // rhythm, which is what keeps it readable as the same relationship.
             let dash = relationship?.dashPattern ?? [4, 3]
 
             let path = trimmedPath(for: route, progress: progress)
@@ -190,7 +209,7 @@ enum MarkerLinkRenderer {
                 path,
                 with: .color(color.opacity(connectorOpacity)),
                 style: StrokeStyle(
-                    lineWidth: connectorWidth,
+                    lineWidth: width,
                     lineCap: .round,
                     lineJoin: .round,
                     dash: dash
@@ -211,18 +230,30 @@ enum MarkerLinkRenderer {
         guard t > 0 else { return path }
         // One real curve, not 32 chords of one. The flattened version put up to
         // 38 degrees of turn into a single miter join on a short bowed span,
-        // which is what the connector's angular look actually was. A quadratic
-        // is exactly representable here, so there is nothing to approximate.
-        path.addQuadCurve(
-            to: route.point(at: t),
-            control: MarkerLinkGeometry.subCurveControl(
+        // which is what the connector's angular look actually was. Both
+        // families are exactly representable, so nothing is approximated.
+        if let control2 = route.control2 {
+            let piece = MarkerLinkGeometry.subCubic(
                 start: route.start,
-                control: route.control,
+                control1: route.control,
+                control2: control2,
                 end: route.end,
                 t0: 0,
                 t1: t
             )
-        )
+            path.addCurve(to: piece.end, control1: piece.control1, control2: piece.control2)
+        } else {
+            path.addQuadCurve(
+                to: route.point(at: t),
+                control: MarkerLinkGeometry.subCurveControl(
+                    start: route.start,
+                    control: route.control,
+                    end: route.end,
+                    t0: 0,
+                    t1: t
+                )
+            )
+        }
         return path
     }
 

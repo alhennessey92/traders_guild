@@ -55,18 +55,50 @@ struct MarkerGlyphBounds: Equatable {
 }
 
 /// A connector that survived routing and collision testing.
+///
+/// Quadratic by default — one control point, the shape every short connector
+/// has always had. A cubic — two controls — is what the router falls back to
+/// for a long same-column chord, where the parent sits in the stack above a
+/// candle and the response in the stack below it: no single-apex arc can clear
+/// the glyphs beside *both* endpoints, but a curve that steps sideways at once,
+/// runs beside the column and steps back can.
 struct MarkerLinkRoute: Equatable {
     let edge: MarkerLinkEdge
     /// On the parent glyph's edge.
     let start: CGPoint
     /// On the child glyph's edge.
     let end: CGPoint
-    /// Quadratic Bézier control point.
+    /// Bézier control point; for a cubic, the first of two.
     let control: CGPoint
+    /// Second control point. Nil means the route is quadratic.
+    let control2: CGPoint?
     let relationship: MarkerLinkRelationshipValue?
 
+    init(
+        edge: MarkerLinkEdge,
+        start: CGPoint,
+        end: CGPoint,
+        control: CGPoint,
+        control2: CGPoint? = nil,
+        relationship: MarkerLinkRelationshipValue?
+    ) {
+        self.edge = edge
+        self.start = start
+        self.end = end
+        self.control = control
+        self.control2 = control2
+        self.relationship = relationship
+    }
+
+    var isCubic: Bool { control2 != nil }
+
     func point(at t: CGFloat) -> CGPoint {
-        MarkerLinkGeometry.quadraticPoint(start: start, control: control, end: end, t: t)
+        if let control2 {
+            return MarkerLinkGeometry.cubicPoint(
+                start: start, control1: control, control2: control2, end: end, t: t
+            )
+        }
+        return MarkerLinkGeometry.quadraticPoint(start: start, control: control, end: end, t: t)
     }
 }
 
@@ -121,53 +153,100 @@ enum MarkerLinkGeometry {
     /// candle column, and get the fixed lateral bow ladder.
     static let sameCandleXTolerance: CGFloat = 1.5
 
+    /// Same-column chords at least this long skip the quadratic ladder and go
+    /// straight to the bracket curve. Below it a quadratic's apex is close
+    /// enough to the endpoints to clear their neighbours; above it the arc is
+    /// still hugging the column where the next stack slot sits, 40pt in.
+    static let bracketChordThreshold: CGFloat = 120
+
+    /// Lateral offsets tried for the cubic bracket, in order. The curve holds
+    /// roughly this distance from the column along its middle half, so the
+    /// first rung clears a stacked glyph (18) with its badges (to 22) and the
+    /// 3pt clearance; the later rungs clear two glyphs side by side, or a
+    /// selected glyph at 1.5x.
+    static let bracketLadder: [CGFloat] = [28, 36, 46, 58, 72]
+
+    /// Where along the chord the bracket's controls sit: this far in from each
+    /// end. Smaller steps sideways sooner and holds the offset longer.
+    static let bracketControlFraction: CGFloat = 0.22
+
+    /// User-adjustable curvature multiplier bounds. 1 is the geometry as
+    /// tuned; below it flattens every bow, above it rounds them. The bottom of
+    /// the range still clears the stack spine at the ladder's first rung.
+    static let curvatureRange: ClosedRange<CGFloat> = 0.6...1.6
+    static let defaultCurvature: CGFloat = 1.0
+
+    /// The widest lateral excursion any candidate can make, used to bound the
+    /// obstacle search. Curvature is applied by the caller.
+    static let maximumLateralExcursion: CGFloat = 72
+
     // MARK: - Entry point
 
-    /// Route as many candidate edges as can be drawn safely.
+    /// Route every candidate edge that can be drawn safely.
     ///
-    /// Priority is the contract's: the parent edge first, then children nearest
-    /// to the selected marker, capped at `maxEdges` *actually drawn* edges.
+    /// There is no cap. A thesis is whatever the reader has loaded, and every
+    /// edge between two rendered members is a fact worth a line; dropping the
+    /// thirteenth because there were twelve is not a design, it is a budget
+    /// wearing one. The budget lives elsewhere: each edge only tests the
+    /// obstacles whose bounds its own bounding box can reach, so cost is
+    /// edges × nearby glyphs, not edges × every glyph.
+    ///
+    /// Order is the selected marker's own edges first, then by distance from
+    /// the selection, so the routes that matter most are drawn first and the
+    /// reveal grows outward from the reader's tap.
     static func plan(
         edges: [MarkerLinkEdge],
         glyphs: [UUID: MarkerGlyphBounds],
         plotRect: CGRect,
         selectedId: UUID,
-        maxEdges: Int = MarkerLinkGraph.maximumEdges
+        curvature: CGFloat = defaultCurvature
     ) -> MarkerLinkRoutePlan {
-        guard maxEdges > 0 else {
-            return MarkerLinkRoutePlan(routes: [], omittedEdges: edges)
-        }
-
         let selectedCenter = glyphs[selectedId]?.center
-        let ordered = edges.sorted { lhs, rhs in
-            if (lhs.kind == .parentOfSelected) != (rhs.kind == .parentOfSelected) {
-                return lhs.kind == .parentOfSelected
+        let priority: (MarkerLinkEdgeKind) -> Int = { kind in
+            switch kind {
+            case .parentOfSelected: return 0
+            case .childOfSelected: return 1
+            case .withinThesis: return 2
             }
+        }
+        let ordered = edges.sorted { lhs, rhs in
+            let lhsPriority = priority(lhs.kind)
+            let rhsPriority = priority(rhs.kind)
+            if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
             guard let origin = selectedCenter else {
                 return lhs.childId.uuidString < rhs.childId.uuidString
             }
-            let lhsOther = lhs.parentId == selectedId ? lhs.childId : lhs.parentId
-            let rhsOther = rhs.parentId == selectedId ? rhs.childId : rhs.parentId
-            let lhsDistance = glyphs[lhsOther].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude
-            let rhsDistance = glyphs[rhsOther].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude
+            let lhsDistance = min(
+                glyphs[lhs.parentId].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude,
+                glyphs[lhs.childId].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude
+            )
+            let rhsDistance = min(
+                glyphs[rhs.parentId].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude,
+                glyphs[rhs.childId].map { distance($0.center, origin) } ?? .greatestFiniteMagnitude
+            )
             if lhsDistance != rhsDistance { return lhsDistance < rhsDistance }
+            if lhs.parentId != rhs.parentId { return lhs.parentId.uuidString < rhs.parentId.uuidString }
             return lhs.childId.uuidString < rhs.childId.uuidString
         }
 
-        let obstacles = Array(glyphs.values)
+        let clampedCurvature = min(max(curvature, curvatureRange.lowerBound), curvatureRange.upperBound)
+        let index = ObstacleIndex(glyphs: Array(glyphs.values))
         var routes: [MarkerLinkRoute] = []
         var omitted: [MarkerLinkEdge] = []
 
         for edge in ordered {
-            guard routes.count < maxEdges else {
+            guard let parent = glyphs[edge.parentId], let child = glyphs[edge.childId] else {
                 omitted.append(edge)
                 continue
             }
+            let reach = maximumLateralExcursion * clampedCurvature + clearance
+            let nearby = index.obstacles(near: parent.center, and: child.center, reach: reach)
             if let route = route(
                 edge: edge,
                 glyphs: glyphs,
-                obstacles: obstacles,
-                plotRect: plotRect
+                obstacles: nearby,
+                plotRect: plotRect,
+                curvature: clampedCurvature
             ) {
                 routes.append(route)
             } else {
@@ -176,6 +255,36 @@ enum MarkerLinkGeometry {
         }
 
         return MarkerLinkRoutePlan(routes: routes, omittedEdges: omitted)
+    }
+
+    /// Glyph bounds, queryable by the rectangle a candidate route can reach.
+    ///
+    /// A plain scan over precomputed boxes. Glyph counts on one chart are in
+    /// the hundreds at most, so a grid would not pay for itself; what matters is
+    /// that the per-edge collision sampling only sees glyphs it could touch.
+    struct ObstacleIndex {
+        private let entries: [(box: CGRect, glyph: MarkerGlyphBounds)]
+
+        init(glyphs: [MarkerGlyphBounds]) {
+            entries = glyphs.map { glyph in
+                var box = CGRect(
+                    x: glyph.center.x - glyph.radius,
+                    y: glyph.center.y - glyph.radius,
+                    width: glyph.radius * 2,
+                    height: glyph.radius * 2
+                )
+                for badge in glyph.badgeRects { box = box.union(badge) }
+                return (box, glyph)
+            }
+        }
+
+        func obstacles(near a: CGPoint, and b: CGPoint, reach: CGFloat) -> [MarkerGlyphBounds] {
+            let chord = CGRect(
+                x: min(a.x, b.x), y: min(a.y, b.y),
+                width: abs(a.x - b.x), height: abs(a.y - b.y)
+            ).insetBy(dx: -reach, dy: -reach)
+            return entries.filter { $0.box.intersects(chord) }.map(\.glyph)
+        }
     }
 
     // MARK: - Single edge
@@ -187,7 +296,8 @@ enum MarkerLinkGeometry {
         edge: MarkerLinkEdge,
         glyphs: [UUID: MarkerGlyphBounds],
         obstacles: [MarkerGlyphBounds],
-        plotRect: CGRect
+        plotRect: CGRect,
+        curvature: CGFloat = defaultCurvature
     ) -> MarkerLinkRoute? {
         guard let parent = glyphs[edge.parentId], let child = glyphs[edge.childId] else {
             return nil
@@ -197,51 +307,110 @@ enum MarkerLinkGeometry {
         guard chord >= minimumChordLength else { return nil }
 
         let isSameCandle = abs(parent.center.x - child.center.x) <= sameCandleXTolerance
-        let magnitudes: [CGFloat] = isSameCandle
-            ? bowLadder
-            : [min(chord * diagonalBowRatio, diagonalBowCap)]
 
-        // Obstacles that matter: everything except the two endpoint discs. The
-        // endpoints' *badges* still count — a connector must not run under the
-        // like badge of the marker it starts from.
+        // Obstacles that matter: everything except the two endpoint discs.
         let endpointIds: Set<UUID> = [edge.parentId, edge.childId]
         let discObstacles = obstacles.filter { !endpointIds.contains($0.id) }
-        let badgeObstacles = obstacles
+        let endpointBadges = obstacles
             .filter { endpointIds.contains($0.id) }
             .flatMap(\.badgeRects)
+        let sides = preferredSides(parent: parent, child: child, plotRect: plotRect)
 
-        // Prefer bowing away from the like badge, which always sits on the right.
-        for magnitude in magnitudes {
-            for side in preferredSides(parent: parent, child: child, plotRect: plotRect) {
-                let control = controlPoint(
-                    parent: parent.center,
-                    child: child.center,
-                    magnitude: magnitude,
-                    side: side
-                )
-                guard let trimmed = trim(
-                    start: parent.center,
-                    end: child.center,
-                    control: control,
-                    startRadius: parent.radius,
-                    endRadius: child.radius
-                ) else { continue }
+        // Two passes over the same candidates. First with the endpoints' own
+        // badges as obstacles, which is prettier: the line prefers to leave on
+        // the side without a badge. Then, only if nothing routed, without
+        // them — because a thesis parent *always* wears the response badge at
+        // its lower corner, and a response leaving it downward is otherwise
+        // rejected at its very first sample for touching its own decoration.
+        // That decoration is painted over the line's emergence in any case;
+        // the rule was meant to keep a line's *body* from running under a
+        // badge, and the middle of a route is still tested against every
+        // other glyph's badges in both passes.
+        let badgePasses: [[CGRect]] = endpointBadges.isEmpty ? [[]] : [endpointBadges, []]
 
-                let candidate = MarkerLinkRoute(
-                    edge: edge,
-                    start: trimmed.start,
-                    end: trimmed.end,
-                    control: trimmed.control,
-                    relationship: edge.relationship
-                )
+        func accept(_ candidate: MarkerLinkRoute, badgeObstacles: [CGRect]) -> MarkerLinkRoute? {
+            isSafe(
+                route: candidate,
+                discObstacles: discObstacles,
+                badgeObstacles: badgeObstacles,
+                plotRect: plotRect
+            ) ? candidate : nil
+        }
 
-                if isSafe(
-                    route: candidate,
-                    discObstacles: discObstacles,
-                    badgeObstacles: badgeObstacles,
-                    plotRect: plotRect
-                ) {
-                    return candidate
+        // A long same-column chord — the parent stacked above a candle, the
+        // response stacked below it — cannot be cleared by a single-apex arc:
+        // near either endpoint the arc is still hugging the column where the
+        // neighbouring stack slots sit. Go straight to the bracket.
+        let useBracketFirst = isSameCandle && chord >= bracketChordThreshold
+
+        for badgeObstacles in badgePasses {
+            if !useBracketFirst {
+                let magnitudes: [CGFloat] = isSameCandle
+                    ? bowLadder.map { $0 * curvature }
+                    : [min(chord * diagonalBowRatio, diagonalBowCap) * curvature]
+
+                // Prefer bowing away from the like badge, which always sits on the right.
+                for magnitude in magnitudes {
+                    for side in sides {
+                        let control = controlPoint(
+                            parent: parent.center,
+                            child: child.center,
+                            magnitude: magnitude,
+                            side: side
+                        )
+                        guard let trimmed = trim(
+                            start: parent.center,
+                            end: child.center,
+                            control: control,
+                            startRadius: parent.radius,
+                            endRadius: child.radius
+                        ) else { continue }
+
+                        if let route = accept(MarkerLinkRoute(
+                            edge: edge,
+                            start: trimmed.start,
+                            end: trimmed.end,
+                            control: trimmed.control,
+                            relationship: edge.relationship
+                        ), badgeObstacles: badgeObstacles) {
+                            return route
+                        }
+                    }
+                }
+            }
+
+            // The bracket: step sideways at once, run beside the column, step back.
+            // Tried for every same-column chord that the arc could not clear, and
+            // first for the long ones. Cross-candle chords never need it — a
+            // diagonal already leaves the column by construction.
+            guard isSameCandle else { continue }
+            for offset in bracketLadder.map({ $0 * curvature }) {
+                for side in sides {
+                    let controls = bracketControls(
+                        parent: parent.center,
+                        child: child.center,
+                        offset: offset,
+                        side: side
+                    )
+                    guard let trimmed = trimCubic(
+                        start: parent.center,
+                        end: child.center,
+                        control1: controls.0,
+                        control2: controls.1,
+                        startRadius: parent.radius,
+                        endRadius: child.radius
+                    ) else { continue }
+
+                    if let route = accept(MarkerLinkRoute(
+                        edge: edge,
+                        start: trimmed.start,
+                        end: trimmed.end,
+                        control: trimmed.control1,
+                        control2: trimmed.control2,
+                        relationship: edge.relationship
+                    ), badgeObstacles: badgeObstacles) {
+                        return route
+                    }
                 }
             }
         }
@@ -262,7 +431,7 @@ enum MarkerLinkGeometry {
         let roomLeft = midX - plotRect.minX
         let roomRight = plotRect.maxX - midX
         // Only let the plot edge override when one side is genuinely tight.
-        if roomLeft < bowLadder[bowLadder.count - 1] && roomRight > roomLeft {
+        if roomLeft < maximumLateralExcursion && roomRight > roomLeft {
             return [1, -1]
         }
         return [-1, 1]
@@ -309,6 +478,82 @@ enum MarkerLinkGeometry {
 
     static func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
         CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+    }
+
+    /// Two control points for the bracket: each `bracketControlFraction` of
+    /// the way in from its end, offset laterally by `offset` on `side`.
+    ///
+    /// A cubic with both controls displaced the same way to the same side
+    /// leaves its endpoints tangentially *toward* the offset, holds close to it
+    /// through the middle, and returns — a "D" beside the column rather than a
+    /// bulge in the middle of it. The lateral distance actually held through
+    /// the middle half is about ¾ of `offset` for these fractions, which the
+    /// ladder's rungs are sized for.
+    static func bracketControls(
+        parent: CGPoint,
+        child: CGPoint,
+        offset: CGFloat,
+        side: CGFloat
+    ) -> (CGPoint, CGPoint) {
+        let dx = child.x - parent.x
+        let dy = child.y - parent.y
+        let length = max(sqrt(dx * dx + dy * dy), 0.0001)
+        let px = -dy / length
+        let py = dx / length
+        // Cubic controls pull the curve to about ¾ of their offset at its
+        // widest, so scale up to make `offset` the held clearance.
+        let scaled = offset * 4 / 3
+        let along = bracketControlFraction
+        let c1 = CGPoint(
+            x: parent.x + dx * along + px * scaled * side,
+            y: parent.y + dy * along + py * scaled * side
+        )
+        let c2 = CGPoint(
+            x: parent.x + dx * (1 - along) + px * scaled * side,
+            y: parent.y + dy * (1 - along) + py * scaled * side
+        )
+        return (c1, c2)
+    }
+
+    static func cubicPoint(
+        start: CGPoint,
+        control1: CGPoint,
+        control2: CGPoint,
+        end: CGPoint,
+        t: CGFloat
+    ) -> CGPoint {
+        let inv = 1 - t
+        let a = inv * inv * inv
+        let b = 3 * inv * inv * t
+        let c = 3 * inv * t * t
+        let d = t * t * t
+        return CGPoint(
+            x: a * start.x + b * control1.x + c * control2.x + d * end.x,
+            y: a * start.y + b * control1.y + c * control2.y + d * end.y
+        )
+    }
+
+    /// The sub-curve of a cubic between `t0` and `t1`: de Casteljau, split at
+    /// `t0` and then the right-hand piece split at the rescaled `t1`.
+    static func subCubic(
+        start: CGPoint,
+        control1: CGPoint,
+        control2: CGPoint,
+        end: CGPoint,
+        t0: CGFloat,
+        t1: CGFloat
+    ) -> (start: CGPoint, control1: CGPoint, control2: CGPoint, end: CGPoint) {
+        // Split at t0, keep the right piece.
+        let a1 = lerp(start, control1, t0), b1 = lerp(control1, control2, t0), c1 = lerp(control2, end, t0)
+        let a2 = lerp(a1, b1, t0), b2 = lerp(b1, c1, t0)
+        let p = lerp(a2, b2, t0)
+        let rStart = p, rC1 = b2, rC2 = c1, rEnd = end
+        // Split the right piece at the rescaled t1, keep the left piece.
+        let u = t0 >= 1 ? 0 : (t1 - t0) / (1 - t0)
+        let d1 = lerp(rStart, rC1, u), e1 = lerp(rC1, rC2, u), f1 = lerp(rC2, rEnd, u)
+        let d2 = lerp(d1, e1, u), e2 = lerp(e1, f1, u)
+        let q = lerp(d2, e2, u)
+        return (rStart, d1, d2, q)
     }
 
     static func quadraticPoint(
@@ -372,6 +617,45 @@ enum MarkerLinkGeometry {
             trimmedEnd,
             subCurveControl(start: start, control: control, end: end, t0: tS, t1: tE)
         )
+    }
+
+    /// The cubic counterpart of `trim`: walk in from both ends until the curve
+    /// clears each glyph, and return the true sub-curve.
+    static func trimCubic(
+        start: CGPoint,
+        end: CGPoint,
+        control1: CGPoint,
+        control2: CGPoint,
+        startRadius: CGFloat,
+        endRadius: CGFloat
+    ) -> (start: CGPoint, end: CGPoint, control1: CGPoint, control2: CGPoint)? {
+        let steps = 96
+        var tStart: CGFloat?
+        var tEnd: CGFloat?
+
+        for step in 0...steps {
+            let t = CGFloat(step) / CGFloat(steps)
+            let point = cubicPoint(start: start, control1: control1, control2: control2, end: end, t: t)
+            if distance(point, start) >= startRadius {
+                tStart = t
+                break
+            }
+        }
+        for step in 0...steps {
+            let t = 1 - CGFloat(step) / CGFloat(steps)
+            let point = cubicPoint(start: start, control1: control1, control2: control2, end: end, t: t)
+            if distance(point, end) >= endRadius {
+                tEnd = t
+                break
+            }
+        }
+
+        guard let tS = tStart, let tE = tEnd, tE > tS else { return nil }
+        let piece = subCubic(
+            start: start, control1: control1, control2: control2, end: end, t0: tS, t1: tE
+        )
+        guard distance(piece.start, piece.end) >= minimumDrawnSpan else { return nil }
+        return (piece.start, piece.end, piece.control1, piece.control2)
     }
 
     /// Sample the drawn span and reject any path that grazes another glyph, a

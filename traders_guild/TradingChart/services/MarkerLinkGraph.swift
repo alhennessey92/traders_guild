@@ -41,11 +41,19 @@ struct MarkerLinkNode: Equatable, Hashable {
 }
 
 /// How a drawn edge relates to the selected marker.
+///
+/// Only used for ordering and for the reveal. Every loaded edge of the focused
+/// thesis is a candidate — a response-of-a-response is a connection the reader
+/// needs to see just as much as the selected marker's own — so the kinds are
+/// priorities, not a filter.
 enum MarkerLinkEdgeKind: Equatable {
     /// From the selected marker up to the marker it answers.
     case parentOfSelected
     /// From the selected marker down to one of its direct responses.
     case childOfSelected
+    /// Any other parent→child edge inside the focused thesis: a sibling's
+    /// response, a grandchild, a branch two levels away.
+    case withinThesis
 }
 
 /// A candidate connector. Geometry decides whether it can actually be drawn.
@@ -85,7 +93,9 @@ struct MarkerFocusState: Equatable {
     let visibleMemberIds: Set<UUID>
     /// Whether unrelated markers should drop to the dim opacity.
     let shouldFadeUnrelated: Bool
-    /// Candidate connectors, parent first then children. Geometry may drop some.
+    /// Candidate connectors: the selected marker's parent edge, then its child
+    /// edges, then every other loaded edge of the thesis. Geometry may drop an
+    /// edge only when no safe path exists for it.
     let candidateEdges: [MarkerLinkEdge]
 
     /// A selection that participates in no thesis: the chart must behave exactly
@@ -112,9 +122,6 @@ struct MarkerLinkGraph: Equatable {
     /// dimming the rest of the chart would communicate nothing and would read as
     /// a rendering fault. The selected marker counts toward this.
     static let minimumVisibleMembersForFade = 2
-
-    /// Hard ceiling on drawn connectors, before geometry rejects any.
-    static let maximumEdges = 12
 
     private let nodesById: [UUID: MarkerLinkNode]
     private let childIdsByParent: [UUID: [UUID]]
@@ -185,6 +192,33 @@ struct MarkerLinkGraph: Equatable {
         return seen
     }
 
+    /// Members of a component in breadth-first order from `origin`, so edges
+    /// nearer the selection are listed — and therefore drawn — before farther
+    /// ones. Deterministic: ties break on id.
+    func membersByDistance(from origin: UUID, within members: Set<UUID>) -> [UUID] {
+        guard members.contains(origin) else { return [] }
+        var order: [UUID] = [origin]
+        var seen: Set<UUID> = [origin]
+        var frontier: [UUID] = [origin]
+        while !frontier.isEmpty {
+            var next: [UUID] = []
+            for current in frontier {
+                var neighbours: [UUID] = []
+                if let parent = nodesById[current]?.parentId, members.contains(parent) {
+                    neighbours.append(parent)
+                }
+                neighbours.append(contentsOf: (childIdsByParent[current] ?? []).filter { members.contains($0) })
+                for neighbour in neighbours.sorted(by: { $0.uuidString < $1.uuidString })
+                where seen.insert(neighbour).inserted {
+                    order.append(neighbour)
+                    next.append(neighbour)
+                }
+            }
+            frontier = next
+        }
+        return order
+    }
+
     // MARK: - Focus
 
     /// Derive the focus decision for a selection.
@@ -207,26 +241,44 @@ struct MarkerLinkGraph: Equatable {
         let members = connectedComponent(containing: selectedId)
         let visibleMembers = members.intersection(visibleIds)
 
+        // The selected marker's own edges first, so they draw first and read
+        // first; then every other loaded edge of the thesis, nearest branches
+        // first. "Loaded" is the whole condition — this never reaches for the
+        // network, and an edge whose parent is off-window simply is not here.
         var edges: [MarkerLinkEdge] = []
+        var covered: Set<MarkerLinkEdge> = []
         if let parent = loadedParent(of: selectedId) {
-            edges.append(
-                MarkerLinkEdge(
-                    parentId: parent.id,
-                    childId: selectedId,
-                    relationship: selected.relationship,
-                    kind: .parentOfSelected
-                )
+            let edge = MarkerLinkEdge(
+                parentId: parent.id,
+                childId: selectedId,
+                relationship: selected.relationship,
+                kind: .parentOfSelected
             )
+            edges.append(edge)
+            covered.insert(edge)
         }
         for child in loadedChildren(of: selectedId) {
-            edges.append(
-                MarkerLinkEdge(
-                    parentId: selectedId,
+            let edge = MarkerLinkEdge(
+                parentId: selectedId,
+                childId: child.id,
+                relationship: child.relationship,
+                kind: .childOfSelected
+            )
+            edges.append(edge)
+            covered.insert(edge)
+        }
+        for memberId in membersByDistance(from: selectedId, within: members) {
+            for child in loadedChildren(of: memberId) {
+                let edge = MarkerLinkEdge(
+                    parentId: memberId,
                     childId: child.id,
                     relationship: child.relationship,
-                    kind: .childOfSelected
+                    kind: .withinThesis
                 )
-            )
+                if covered.insert(edge).inserted {
+                    edges.append(edge)
+                }
+            }
         }
 
         return MarkerFocusState(

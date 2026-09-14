@@ -24,7 +24,23 @@ class ChartSettings: ObservableObject {
         static let viewportWindowStyle = "chartViewportWindowStyle"
         static let viewportWindowOpacity = "chartViewportWindowOpacity"
         static let useSemiTransparentBullishCandles = "chartUseSemiTransparentBullishCandles"
+        static let linkLineWidth = "chartLinkLineWidth"
+        static let linkCurvature = "chartLinkCurvature"
     }
+
+    // MARK: - Linked-marker connectors
+
+    /// Stroke width of thesis connectors, in points. 1.5 matches the stack
+    /// spine it sits beside; 3 is as heavy as a dashed line can go before the
+    /// dashes stop reading as a pattern.
+    static let linkLineWidthRange: ClosedRange<CGFloat> = 1.0...3.0
+    static let defaultLinkLineWidth: CGFloat = 1.5
+
+    /// Multiplier on how far a connector bows away from the stack. Below 1
+    /// flattens, above rounds. Bounded so the flattest setting still clears
+    /// the spine and the roundest does not loop back over a neighbour.
+    static let linkCurvatureRange: ClosedRange<CGFloat> = MarkerLinkGeometry.curvatureRange
+    static let defaultLinkCurvature: CGFloat = MarkerLinkGeometry.defaultCurvature
 
     // MARK: - Grid Settings
 
@@ -51,6 +67,33 @@ class ChartSettings: ObservableObject {
         didSet { UserDefaults.standard.set(viewportWindowOpacity, forKey: StorageKey.viewportWindowOpacity) }
     }
 
+    // MARK: - Linked-marker connector settings
+
+    @Published var linkLineWidth: CGFloat = ChartSettings.defaultLinkLineWidth {
+        didSet {
+            let clamped = Self.clamp(linkLineWidth, to: Self.linkLineWidthRange)
+            if clamped != linkLineWidth { linkLineWidth = clamped; return }
+            UserDefaults.standard.set(Double(linkLineWidth), forKey: StorageKey.linkLineWidth)
+        }
+    }
+    @Published var linkCurvature: CGFloat = ChartSettings.defaultLinkCurvature {
+        didSet {
+            let clamped = Self.clamp(linkCurvature, to: Self.linkCurvatureRange)
+            if clamped != linkCurvature { linkCurvature = clamped; return }
+            UserDefaults.standard.set(Double(linkCurvature), forKey: StorageKey.linkCurvature)
+        }
+    }
+
+    func resetLinkAppearance() {
+        linkLineWidth = Self.defaultLinkLineWidth
+        linkCurvature = Self.defaultLinkCurvature
+    }
+
+    private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {
+        guard value.isFinite else { return range.lowerBound }
+        return min(max(value, range.lowerBound), range.upperBound)
+    }
+
     init() {
         if UserDefaults.standard.object(forKey: StorageKey.useSemiTransparentBullishCandles) != nil {
             useSemiTransparentBullishCandles = UserDefaults.standard.bool(forKey: StorageKey.useSemiTransparentBullishCandles)
@@ -66,6 +109,21 @@ class ChartSettings: ObservableObject {
         }
         if UserDefaults.standard.object(forKey: StorageKey.viewportWindowOpacity) != nil {
             viewportWindowOpacity = UserDefaults.standard.double(forKey: StorageKey.viewportWindowOpacity)
+        }
+
+        // Connector appearance. Read through the clamp so a value written by a
+        // build with different bounds can never put the geometry out of range.
+        if UserDefaults.standard.object(forKey: StorageKey.linkLineWidth) != nil {
+            linkLineWidth = Self.clamp(
+                CGFloat(UserDefaults.standard.double(forKey: StorageKey.linkLineWidth)),
+                to: Self.linkLineWidthRange
+            )
+        }
+        if UserDefaults.standard.object(forKey: StorageKey.linkCurvature) != nil {
+            linkCurvature = Self.clamp(
+                CGFloat(UserDefaults.standard.double(forKey: StorageKey.linkCurvature)),
+                to: Self.linkCurvatureRange
+            )
         }
     }
 

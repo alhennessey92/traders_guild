@@ -320,9 +320,19 @@ struct MarkerLinkGeometryTests {
             id(3): glyph(3, responseCenter),
             id(2): glyph(2, CGPoint(x: 200, y: midY)),
         ]
-        // Wall off every lateral escape the bow ladder could use.
-        for (index, dx) in [-14, -26, -34, -44, 14, 26, 34, 44].enumerated() {
-            glyphs[id(100 + index)] = glyph(100 + index, CGPoint(x: 200 + CGFloat(dx), y: midY))
+        // Wall off every lateral escape either curve family could use: the
+        // arc ladder reaches 44, the bracket ladder 72, and the widest
+        // excursion the planner will ever search is `maximumLateralExcursion`
+        // times the top of the curvature range. A wall past all of that means
+        // there is genuinely no path — and the contract is then to omit, not
+        // to draw through a stranger.
+        let farthest = Int(MarkerLinkGeometry.maximumLateralExcursion * MarkerLinkGeometry.curvatureRange.upperBound) + 30
+        var index = 0
+        for dx in stride(from: 14, through: farthest, by: 18) {
+            for side in [-1, 1] {
+                glyphs[id(100 + index)] = glyph(100 + index, CGPoint(x: 200 + CGFloat(dx * side), y: midY))
+                index += 1
+            }
         }
 
         let route = MarkerLinkGeometry.route(
@@ -445,10 +455,228 @@ struct MarkerLinkGeometryTests {
         #expect(abs(MarkerLinkGeometry.distance(after.end, childAfter) - glyphRadius) < 6)
     }
 
-    // MARK: - Prioritisation and the cap
+    // MARK: - Opposite stacks and branches
 
+    /// The owner's report: a parent stacked above the candle and its response
+    /// stacked below it lost their connector. Both endpoints share the column,
+    /// the chord is long, and there are stacked neighbours 40pt inside *each*
+    /// end — a single-apex arc still hugs the column there. The bracket must
+    /// find a path, and that path must not pass through either neighbour.
     @Test
-    func drawsParentFirstThenNearestChildrenUpToTheCap() {
+    func oppositeStackConnectorRoutesAroundBothStacks() throws {
+        let column: CGFloat = 200
+        let parentCenter = CGPoint(x: column, y: 300)         // above the candle, slot 1
+        let aboveSlot0 = CGPoint(x: column, y: 340)           // above the candle, slot 0
+        let belowSlot0 = CGPoint(x: column, y: 560)           // below the candle, slot 0
+        let responseCenter = CGPoint(x: column, y: 600)       // below the candle, slot 1
+
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, parentCenter, likes: true, responses: true),
+            id(2): glyph(2, aboveSlot0, likes: true, responses: true),
+            id(3): glyph(3, belowSlot0, likes: true),
+            id(4): glyph(4, responseCenter),
+        ]
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 4),
+                glyphs: glyphs,
+                obstacles: Array(glyphs.values),
+                plotRect: plot
+            ),
+            "a long same-column chord past stacked neighbours must still be drawable"
+        )
+        #expect(route.isCubic, "this is the bracket case, not an arc")
+
+        for strangerId in [id(2), id(3)] {
+            let stranger = glyphs[strangerId]!
+            for step in 0...64 {
+                let point = route.point(at: CGFloat(step) / 64)
+                #expect(!stranger.contains(point, clearance: 0),
+                        "connector crossed a stacked neighbour at t=\(CGFloat(step) / 64)")
+            }
+        }
+        // It leaves the column promptly rather than bulging only at the middle:
+        // a quarter of the way along it is already clear of a glyph radius.
+        #expect(abs(route.point(at: 0.25).x - column) > glyphRadius)
+        #expect(abs(route.point(at: 0.75).x - column) > glyphRadius)
+        // And it is anchored on the two glyph edges it joins.
+        #expect(abs(MarkerLinkGeometry.distance(route.start, parentCenter) - glyphRadius) < 4)
+        #expect(abs(MarkerLinkGeometry.distance(route.end, responseCenter) - glyphRadius) < 4)
+    }
+
+    /// The second cause of the owner's missing connectors, independent of the
+    /// geometry: a thesis parent always wears the response badge at its lower
+    /// corner, and with likes it wears one at the other corner too. A line
+    /// leaving that glyph downward was rejected at its first sample for
+    /// touching its own badge — on *both* sides. The badge is painted over the
+    /// line's emergence anyway, so it must not veto the route.
+    @Test
+    func aParentWithBadgesOnBothSidesStillConnectsDownward() throws {
+        let column: CGFloat = 200
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            // likes + responses: badges at both lower corners.
+            id(1): glyph(1, CGPoint(x: column, y: 300), likes: true, responses: true),
+            id(2): glyph(2, CGPoint(x: column, y: 340), likes: true),
+            id(3): glyph(3, CGPoint(x: column, y: 560), likes: true),
+            // the response also wears its own badge, lower-left when below.
+            id(4): glyph(4, CGPoint(x: column, y: 600), responses: true),
+        ]
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 4), glyphs: glyphs,
+                obstacles: Array(glyphs.values), plotRect: plot
+            ),
+            "its own badges must not block a glyph's connector"
+        )
+        // The body still avoids every *other* glyph's badge.
+        for strangerId in [id(2), id(3)] {
+            let stranger = glyphs[strangerId]!
+            for step in 0...64 {
+                #expect(!stranger.contains(route.point(at: CGFloat(step) / 64), clearance: 0))
+            }
+        }
+    }
+
+    /// And when a badge-free side exists, it is still preferred — the softer
+    /// second pass only runs if the first finds nothing.
+    @Test
+    func aBadgeFreeSideIsStillPreferredWhenThereIsOne() throws {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 200, y: 500), likes: true),   // badge on the right only
+            id(2): glyph(2, CGPoint(x: 200, y: 460)),
+        ]
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 2), glyphs: glyphs,
+                obstacles: Array(glyphs.values), plotRect: plot
+            )
+        )
+        #expect(route.point(at: 0.5).x < 200, "bows left, away from the like badge")
+    }
+
+    /// Same as above with the response *selected* (1.5x), which is the exact
+    /// configuration the owner was looking at.
+    @Test
+    func oppositeStackConnectorSurvivesTheSelectedScale() throws {
+        let column: CGFloat = 200
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: column, y: 300)),
+            id(2): glyph(2, CGPoint(x: column, y: 340), likes: true),
+            id(3): glyph(3, CGPoint(x: column, y: 560), likes: true),
+            id(4): glyph(4, CGPoint(x: column, y: 610), radius: selectedRadius),
+        ]
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 4),
+                glyphs: glyphs,
+                obstacles: Array(glyphs.values),
+                plotRect: plot
+            )
+        )
+        for strangerId in [id(2), id(3)] {
+            let stranger = glyphs[strangerId]!
+            for step in 0...64 {
+                #expect(!stranger.contains(route.point(at: CGFloat(step) / 64), clearance: 0))
+            }
+        }
+        #expect(abs(MarkerLinkGeometry.distance(route.end, CGPoint(x: column, y: 610)) - selectedRadius) < 4)
+    }
+
+    /// A branch grandchild: root above the candle, its response below, and
+    /// that response's own response one slot further below. Both edges must
+    /// route, and neither may touch the third glyph.
+    @Test
+    func branchGrandchildGetsBothEdgesWithoutTouchingTheThird() throws {
+        let column: CGFloat = 200
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: column, y: 300)),          // root, above
+            id(2): glyph(2, CGPoint(x: column, y: 560), likes: true), // response, below slot 0
+            id(3): glyph(3, CGPoint(x: column, y: 600)),          // grandchild, below slot 1
+        ]
+        let edges = [
+            MarkerLinkEdge(parentId: id(1), childId: id(2),
+                           relationship: MarkerLinkRelationshipValue(.supports), kind: .childOfSelected),
+            MarkerLinkEdge(parentId: id(2), childId: id(3),
+                           relationship: MarkerLinkRelationshipValue(.buildsOn), kind: .withinThesis),
+        ]
+        let planned = MarkerLinkGeometry.plan(
+            edges: edges, glyphs: glyphs, plotRect: plot, selectedId: id(1)
+        )
+        #expect(planned.routes.count == 2, "both edges of the branch are drawn")
+        #expect(planned.omittedEdges.isEmpty)
+
+        let rootToResponse = try #require(planned.routes.first { $0.edge.childId == id(2) })
+        let grandchild = glyphs[id(3)]!
+        for step in 0...64 {
+            #expect(!grandchild.contains(rootToResponse.point(at: CGFloat(step) / 64), clearance: 0),
+                    "the long edge must not run through the grandchild")
+        }
+        let responseToGrandchild = try #require(planned.routes.first { $0.edge.childId == id(3) })
+        let root = glyphs[id(1)]!
+        for step in 0...64 {
+            #expect(!root.contains(responseToGrandchild.point(at: CGFloat(step) / 64), clearance: 0))
+        }
+    }
+
+    /// A short same-column pair still gets the arc it always had. The bracket
+    /// is a fallback for what the arc cannot do, not a replacement.
+    @Test
+    func shortSameColumnPairsKeepTheQuadraticArc() throws {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 200, y: 500)),
+            id(2): glyph(2, CGPoint(x: 200, y: 460)),
+        ]
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 2), glyphs: glyphs,
+                obstacles: Array(glyphs.values), plotRect: plot
+            )
+        )
+        #expect(!route.isCubic)
+    }
+
+    // MARK: - Curvature
+
+    /// The setting scales every bow. Sagitta grows with it, and the shape
+    /// family does not change.
+    @Test
+    func curvatureScalesTheBowWithoutChangingTheRoute() throws {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 120, y: 500)),
+            id(2): glyph(2, CGPoint(x: 260, y: 430)),
+        ]
+        func sag(_ curvature: CGFloat) throws -> CGFloat {
+            let r = try #require(MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 2), glyphs: glyphs,
+                obstacles: Array(glyphs.values), plotRect: plot, curvature: curvature
+            ))
+            return sagitta(of: r)
+        }
+        let flat = try sag(0.6), normal = try sag(1.0), round = try sag(1.6)
+        #expect(flat < normal && normal < round)
+        #expect(flat > 0, "the flattest setting is still a curve")
+    }
+
+    /// Out-of-range curvature is clamped by the planner, never applied raw.
+    @Test
+    func planClampsCurvatureToItsRange() {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 120, y: 500)),
+            id(2): glyph(2, CGPoint(x: 260, y: 430)),
+        ]
+        let edges = [edge(parent: 1, child: 2)]
+        let wild = MarkerLinkGeometry.plan(edges: edges, glyphs: glyphs, plotRect: plot, selectedId: id(1), curvature: 40)
+        let top = MarkerLinkGeometry.plan(edges: edges, glyphs: glyphs, plotRect: plot, selectedId: id(1),
+                                          curvature: MarkerLinkGeometry.curvatureRange.upperBound)
+        #expect(wild.routes.first?.control == top.routes.first?.control)
+    }
+
+    // MARK: - Prioritisation, and the cap that is no longer there
+
+    /// Every edge with a safe path is drawn. Twenty children is twenty lines,
+    /// the parent still first; nothing is dropped for being the thirteenth.
+    @Test
+    func drawsParentFirstThenEveryChildWithASafePath() {
         let selected = CGPoint(x: 200, y: 400)
         var glyphs: [UUID: MarkerGlyphBounds] = [
             id(1): glyph(1, selected, radius: selectedRadius),
@@ -462,25 +690,61 @@ struct MarkerLinkGeometryTests {
                 kind: .parentOfSelected
             )
         ]
-        // 20 children spread across distinct candles, increasing distance.
+        // 20 children on distinct candles, increasing distance, alternating
+        // above and below so their discs do not overlap one another.
         for index in 0..<20 {
             let n = 10 + index
-            glyphs[id(n)] = glyph(n, CGPoint(x: 200 + CGFloat(index + 1) * 9, y: 300))
+            let y: CGFloat = index % 2 == 0 ? 300 : 520
+            glyphs[id(n)] = glyph(n, CGPoint(x: 200 + CGFloat(index + 1) * 52, y: y))
             edges.append(edge(parent: 1, child: n))
         }
 
+        // Wide enough for every child to sit inside the plot, so the only
+        // thing that could omit one is a real obstacle.
+        let widePlot = CGRect(x: 0, y: 0, width: 1400, height: 800)
         let planned = MarkerLinkGeometry.plan(
             edges: edges,
             glyphs: glyphs,
-            plotRect: plot,
+            plotRect: widePlot,
             selectedId: id(1)
         )
 
-        #expect(planned.routes.count <= MarkerLinkGraph.maximumEdges)
         #expect(planned.routes.first?.edge.kind == .parentOfSelected,
                 "the parent edge is drawn first regardless of distance")
-        #expect(!planned.omittedEdges.isEmpty, "edges beyond the cap are reported, not dropped silently")
         #expect(planned.routes.count + planned.omittedEdges.count == edges.count)
+        // All twenty-one: the old cap would have stopped at twelve.
+        #expect(planned.routes.count == edges.count, "got \(planned.routes.count) of \(edges.count)")
+        #expect(planned.omittedEdges.isEmpty)
+    }
+
+    /// Spatial filtering must never change the answer: routing against every
+    /// glyph and routing against only the nearby ones agree exactly.
+    @Test
+    func obstacleFilteringDoesNotChangeAnyRoute() {
+        var glyphs: [UUID: MarkerGlyphBounds] = [:]
+        // A 6×6 lattice of markers across the plot, plus a thesis in one corner.
+        var n = 100
+        for row in 0..<6 {
+            for col in 0..<6 {
+                glyphs[id(n)] = glyph(n, CGPoint(x: 60 + CGFloat(col) * 56, y: 120 + CGFloat(row) * 110), likes: row % 2 == 0)
+                n += 1
+            }
+        }
+        glyphs[id(1)] = glyph(1, CGPoint(x: 200, y: 300))
+        glyphs[id(2)] = glyph(2, CGPoint(x: 200, y: 340), likes: true)
+        glyphs[id(3)] = glyph(3, CGPoint(x: 200, y: 600))
+        let edges = [edge(parent: 1, child: 3), edge(parent: 1, child: 2)]
+
+        let filtered = MarkerLinkGeometry.plan(edges: edges, glyphs: glyphs, plotRect: plot, selectedId: id(1))
+        let everything = edges.compactMap {
+            MarkerLinkGeometry.route(edge: $0, glyphs: glyphs, obstacles: Array(glyphs.values), plotRect: plot)
+        }
+        #expect(filtered.routes.count == everything.count)
+        for route in filtered.routes {
+            let full = everything.first { $0.edge == route.edge }
+            #expect(full?.start == route.start && full?.end == route.end
+                    && full?.control == route.control && full?.control2 == route.control2)
+        }
     }
 
     @Test
@@ -513,18 +777,29 @@ struct MarkerLinkGeometryTests {
             id(2): glyph(2, childCenter, likes: true, responses: true),
         ]
 
-        guard let route = MarkerLinkGeometry.route(
-            edge: edge(parent: 1, child: 2),
-            glyphs: glyphs,
-            obstacles: Array(glyphs.values),
-            plotRect: plot
-        ) else { return }  // omitting is an acceptable outcome here
+        // Badges at all four corners: the only way out is from under one of
+        // the glyph's own. The owner would rather have that line than none —
+        // the badge is painted over the line's emergence — so it must route.
+        let route = try #require(
+            MarkerLinkGeometry.route(
+                edge: edge(parent: 1, child: 2),
+                glyphs: glyphs,
+                obstacles: Array(glyphs.values),
+                plotRect: plot
+            )
+        )
 
-        let allBadges = glyphs.values.flatMap(\.badgeRects)
+        // What is still forbidden: a badge under the line's *body*. Emergence
+        // and arrival — within a glyph radius plus a badge of that endpoint —
+        // are the only places a badge may sit over the line.
+        let emergence = glyphRadius + 14
         for step in 0...48 {
             let point = route.point(at: CGFloat(step) / 48)
-            for badge in allBadges {
-                #expect(!badge.contains(point), "connector crossed a badge")
+            let nearAnEndpoint = MarkerLinkGeometry.distance(point, parentCenter) <= emergence
+                || MarkerLinkGeometry.distance(point, childCenter) <= emergence
+            guard !nearAnEndpoint else { continue }
+            for badge in glyphs.values.flatMap(\.badgeRects) {
+                #expect(!badge.contains(point), "connector body ran under a badge at t=\(CGFloat(step) / 48)")
             }
         }
     }
