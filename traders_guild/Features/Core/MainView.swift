@@ -3649,6 +3649,7 @@ struct ChartBottomSheet: View {
                 parentAuthorDisplayText: marker.author.username,
                 parentTitle: marker.title,
                 parentIntent: marker.intent,
+                parentTimeframe: RLChartTimeframe.fromBackendString(marker.timeframe),
                 relationship: relationship
             )
         )

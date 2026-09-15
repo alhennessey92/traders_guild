@@ -434,6 +434,8 @@ struct TradingChartView: View {
     /// Chart display settings (grid, candle colors).
     @ObservedObject private var chartSettings = ChartSettings.shared
     @State private var showChartSettingsSheet = false
+    @State private var timeframeChoicesMarker: ChartMarkerUI?
+    @State private var pendingTimeframeChoice: RLMarkerLinkPreviewDTO?
     @State private var isSubmittingViewingPollVote = false
     @State private var viewingPollVoteOptionId: UUID?
     @State private var isViewingInfoPanelCollapsed = false
@@ -962,6 +964,22 @@ struct TradingChartView: View {
         return content
             .sheet(isPresented: $showMarkerTypeFilterSheet) {
                 markerTypeFilterSheet
+            }
+            .sheet(item: $timeframeChoicesMarker, onDismiss: {
+                guard let preview = pendingTimeframeChoice else { return }
+                pendingTimeframeChoice = nil
+                guard markerManager.linkedMarkersEnabled,
+                      let target = MarkerNavigationTarget(linkPreview: preview) else { return }
+                markerManager.threadStore?.stagePendingNavigation(markerId: target.markerId)
+                let helper = MarkerNavigationHelper(chartViewModel: chartViewModel, gestureState: gestureState)
+                _ = helper.navigateToMarker(target, resolvedSymbol: nil)
+            }) { marker in
+                if let store = markerManager.threadStore {
+                    MarkerTimeframeChoicesSheet(marker: marker, markerManager: markerManager, store: store) { preview in
+                        pendingTimeframeChoice = preview
+                        timeframeChoicesMarker = nil
+                    }
+                }
             }
             .sheet(isPresented: $showChartSettingsSheet) {
                 ChartSettingsView(
@@ -4137,6 +4155,13 @@ struct TradingChartView: View {
                     jumps: markerManager.timeframeJumps
                 ) {
                     HapticFeedback.selection.trigger()
+                    if jump.requiresChoice, let selected = markerManager.selectedMarker,
+                       let store = markerManager.threadStore {
+                        pendingTimeframeChoice = nil
+                        store.setExpanded(true, forMarkerId: selected.id)
+                        timeframeChoicesMarker = selected
+                        return
+                    }
                     ChartMarkerSystem.performTimeframeJump(
                         jump,
                         chartViewModel: chartViewModel,

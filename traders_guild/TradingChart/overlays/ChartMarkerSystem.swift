@@ -3515,6 +3515,7 @@ struct ChartMarkerSystem {
         gestureState: ChartGestureState,
         markerManager: MarkerManager
     ) -> Bool {
+        guard !jump.requiresChoice else { return false }
         if let loaded = markerManager.markers.first(where: { $0.id == jump.markerId }) {
             markerManager.selectedMarker = loaded
             return true

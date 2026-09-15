@@ -8,7 +8,7 @@ import CoreGraphics
 /// glyph wears a small round badge for it instead: the target's timeframe in
 /// the middle, a circular arrow around it. Tap it to travel there; the marker
 /// you land on wears the badge back, so a thesis that spans intervals can be
-/// walked in both directions without opening the sheet.
+/// walked in both directions. Multiple response destinations open the thesis list.
 struct MarkerTimeframeJump: Equatable, Identifiable {
     enum Direction: Equatable {
         /// Up to the marker this one answers.
@@ -24,16 +24,20 @@ struct MarkerTimeframeJump: Equatable, Identifiable {
     /// a connector between the two would have had.
     let relationship: MarkerLinkRelationshipValue
     let timeframe: RLChartTimeframe
-    /// Responses on other timeframes beyond the one this badge names. The
-    /// badge points at one target; the thesis sheet lists them all.
+    /// Additional loaded response destinations. Multiple destinations use
+    /// an ellipsis badge and the thesis list instead of an arbitrary jump.
     let others: Int
     let preview: RLMarkerLinkPreviewDTO
+    /// Ambiguous or incomplete response branches open the existing thesis list.
+    var requiresChoice: Bool = false
+
+    var badgeText: String { requiresChoice ? "…" : timeframe.shortName }
 
     var id: UUID { markerId }
 }
 
 enum MarkerTimeframeJumpResolver {
-    /// Parent first, then the most recent response elsewhere.
+    /// Parent first, then one response shortcut. Multiple destinations open a list.
     ///
     /// The parent comes from the marker's own preview and needs no request.
     /// Responses live in the thesis window; until it has loaded there is no
@@ -80,7 +84,8 @@ enum MarkerTimeframeJumpResolver {
                             ?? MarkerLinkRelationshipValue(raw: ""),
                         timeframe: target.timeframe,
                         others: responses.count - 1,
-                        preview: child
+                        preview: child,
+                        requiresChoice: responses.count > 1 || thread.branchCursors[node.nodeKey] != nil
                     )
                 )
             }

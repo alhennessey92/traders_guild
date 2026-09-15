@@ -218,6 +218,11 @@ struct MarkerLinkRelationshipRow: View {
                         Text("The marker this answers isn't available to you")
                             .font(.caption2)
                             .foregroundColor(AppColors.greyText)
+                    } else if canOpen, let rawTimeframe = preview?.timeframe,
+                              let timeframe = RLChartTimeframe.fromBackendString(rawTimeframe) {
+                        Text("Open parent on \(timeframe.displayName)")
+                            .font(.caption2)
+                            .foregroundColor(AppColors.greyText)
                     } else if preview == nil {
                         Text("Loading…")
                             .font(.caption2)
@@ -320,6 +325,12 @@ struct MarkerThreadRowView: View {
                             .foregroundColor(AppColors.greyText)
                             .lineLimit(1)
                     }
+                    if let raw = row.node.timeframe,
+                       let timeframe = RLChartTimeframe.fromBackendString(raw) {
+                        Text(timeframe.displayName)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(AppColors.greyText)
+                    }
                 }
                 if isAccessibilitySize {
                     trailingMetadata
@@ -383,6 +394,9 @@ struct MarkerThreadRowView: View {
         if let relationship { parts.append(relationship.displayName) }
         if let title = row.node.titleDisplayText { parts.append(title) }
         if let author = row.node.authorDisplayText { parts.append("by \(author)") }
+        if let raw = row.node.timeframe, let timeframe = RLChartTimeframe.fromBackendString(raw) {
+            parts.append("on \(timeframe.displayName)")
+        }
         if row.isRequested { parts.append("current marker") }
         return parts.joined(separator: ", ")
     }
@@ -410,7 +424,7 @@ struct MarkerLinkPlacementBanner: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(AppColors.primaryForeground)
                         .lineLimit(2)
-                    Text("Shared with the guild")
+                    Text(context.parentTimeframe.map { "Parent on \($0.displayName) · Shared with the guild" } ?? "Shared with the guild")
                         .font(.caption2)
                         .foregroundColor(AppColors.greyText)
                 }

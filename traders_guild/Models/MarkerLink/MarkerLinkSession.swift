@@ -22,6 +22,7 @@ struct MarkerLinkContext: Equatable {
     let parentAuthorDisplayText: String?
     let parentTitle: String?
     let parentIntent: RLMarkerIntent?
+    let parentTimeframe: RLChartTimeframe?
 
     /// Creation only ever uses a relationship this build understands; the
     /// tolerant wrapper exists for *reading* values a newer server may invent.
@@ -35,6 +36,7 @@ struct MarkerLinkContext: Equatable {
         parentAuthorDisplayText: String? = nil,
         parentTitle: String? = nil,
         parentIntent: RLMarkerIntent? = nil,
+        parentTimeframe: RLChartTimeframe? = nil,
         relationship: MarkerLinkRelationship
     ) {
         self.parentMarkerId = parentMarkerId
@@ -44,6 +46,7 @@ struct MarkerLinkContext: Equatable {
         self.parentAuthorDisplayText = parentAuthorDisplayText
         self.parentTitle = parentTitle
         self.parentIntent = parentIntent
+        self.parentTimeframe = parentTimeframe
         self.relationship = relationship
     }
 

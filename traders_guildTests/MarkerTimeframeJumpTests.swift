@@ -81,13 +81,13 @@ struct MarkerTimeframeJumpTests {
         return ChartMarkerUI(marker: dto, candleIndex: 0)
     }
 
-    private func window(requested: Int, root: String, nodes: [RLMarkerLinkPreviewDTO]) -> MarkerThreadWindow {
+    private func window(requested: Int, root: String, nodes: [RLMarkerLinkPreviewDTO], branches: [RLMarkerThreadBranchDTO] = []) -> MarkerThreadWindow {
         MarkerThreadWindow(
             page: RLMarkerThreadResponseDTO(
                 requestedMarkerId: id(requested),
                 rootMarkerId: nil, rootKey: nil, rootResolved: false,
                 windowRootKey: root, nodes: nodes,
-                ancestorCursor: nil, branches: [], totalCount: nil,
+                ancestorCursor: nil, branches: branches, totalCount: nil,
                 loadedCount: nodes.count, truncated: false
             )
         )
@@ -127,7 +127,7 @@ struct MarkerTimeframeJumpTests {
     }
 
     @Test
-    func theMostRecentResponseElsewhereEarnsTheBadgeAndCountsTheRest() throws {
+    func multipleResponsesOfferAChoiceInsteadOfSilentlyJumpingToTheNewest() throws {
         let root = marker(1, timeframe: "5m", responses: 3)
         let thread = window(requested: 1, root: "r", nodes: [
             preview(key: "r", marker: 1, timeframe: "5m", relationship: nil),
@@ -145,6 +145,8 @@ struct MarkerTimeframeJumpTests {
         #expect(jump.timeframe == .h4)
         #expect(jump.relationship.known == .challenges, "the response's own relationship")
         #expect(jump.others == 1, "one more elsewhere; the same-timeframe one is a connector")
+        #expect(jump.requiresChoice)
+        #expect(jump.badgeText == "…")
     }
 
     @Test
@@ -167,6 +169,24 @@ struct MarkerTimeframeJumpTests {
 
         #expect(jumps.map(\.direction) == [.toParent, .toResponse])
         #expect(jumps.map(\.timeframe) == [.h1, .m5])
+    }
+
+    @Test
+    func oneResponseOpensDirectlyOnlyWhenItsBranchIsComplete() throws {
+        let root = marker(1, timeframe: "5m", responses: 2)
+        let nodes = [
+            preview(key: "r", marker: 1, timeframe: "5m", relationship: nil),
+            preview(key: "a", parentKey: "r", marker: 2, timeframe: "1h")
+        ]
+        let complete = window(requested: 1, root: "r", nodes: nodes)
+        let direct = try #require(MarkerTimeframeJumpResolver.jumps(for: root, currentTimeframe: .m5, thread: complete).first)
+        #expect(!direct.requiresChoice)
+        #expect(direct.badgeText == RLChartTimeframe.h1.shortName)
+        let partial = window(requested: 1, root: "r", nodes: nodes,
+                             branches: [RLMarkerThreadBranchDTO(nodeKey: "r", cursor: "more")])
+        let choice = try #require(MarkerTimeframeJumpResolver.jumps(for: root, currentTimeframe: .m5, thread: partial).first)
+        #expect(choice.requiresChoice)
+        #expect(choice.badgeText == "…")
     }
 
     // MARK: - Layout

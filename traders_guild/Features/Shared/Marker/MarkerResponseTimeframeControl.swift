@@ -40,7 +40,7 @@ struct MarkerResponseTimeframeControl: View {
             .accessibilityIdentifier("marker.response.timeframe")
             .accessibilityLabel("Response timeframe")
             .accessibilityValue(isLoading ? "Loading \(timeframe.displayName)" : timeframe.displayName)
-            Text("Your response can use a different timeframe. Your link and draft are kept.")
+            Text("Choose where to place your response. The original marker stays on its own timeframe.")
                 .font(.caption)
                 .foregroundStyle(AppColors.greyText)
         }

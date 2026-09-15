@@ -484,7 +484,7 @@ enum MarkerLinkRenderer {
             badgeContext.stroke(head, with: .color(accent), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
 
             badgeContext.draw(
-                Text(verbatim: placement.jump.timeframe.shortName)
+                Text(verbatim: placement.jump.badgeText)
                     .font(.system(size: 7.5, weight: .bold))
                     .foregroundColor(pass.onAccent),
                 at: center
