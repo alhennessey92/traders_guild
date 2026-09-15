@@ -499,13 +499,13 @@ struct StochasticPanelView: View {
             IndicatorPanelYAxisLabel(value: 100, text: "100", color: AppColors.panelYAxisLaneText),
             IndicatorPanelYAxisLabel(
                 value: stochConfig?.overboughtLevel ?? 80,
-                text: String(format: "%.0f", stochConfig?.overboughtLevel ?? 80),
+                text: IndicatorLevelFormatting.wholeNumber(stochConfig?.overboughtLevel, fallback: 80),
                 color: AppColors.statusNegative85
             ),
             IndicatorPanelYAxisLabel(value: 50, text: "50", color: AppColors.panelYAxisLaneText),
             IndicatorPanelYAxisLabel(
                 value: stochConfig?.oversoldLevel ?? 20,
-                text: String(format: "%.0f", stochConfig?.oversoldLevel ?? 20),
+                text: IndicatorLevelFormatting.wholeNumber(stochConfig?.oversoldLevel, fallback: 20),
                 color: AppColors.statusPositive85
             ),
             IndicatorPanelYAxisLabel(value: 0, text: "0", color: AppColors.panelYAxisLaneText),

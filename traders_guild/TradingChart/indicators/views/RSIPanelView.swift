@@ -623,13 +623,13 @@ struct RSIPanelView: View {
             IndicatorPanelYAxisLabel(value: 100, text: "100", color: AppColors.panelYAxisLaneText),
             IndicatorPanelYAxisLabel(
                 value: rsiConfig?.overboughtLevel ?? 70,
-                text: String(format: "%.0f", rsiConfig?.overboughtLevel ?? 70),
+                text: IndicatorLevelFormatting.wholeNumber(rsiConfig?.overboughtLevel, fallback: 70),
                 color: AppColors.statusNegative85
             ),
             IndicatorPanelYAxisLabel(value: 50, text: "50", color: AppColors.panelYAxisLaneText),
             IndicatorPanelYAxisLabel(
                 value: rsiConfig?.oversoldLevel ?? 30,
-                text: String(format: "%.0f", rsiConfig?.oversoldLevel ?? 30),
+                text: IndicatorLevelFormatting.wholeNumber(rsiConfig?.oversoldLevel, fallback: 30),
                 color: AppColors.statusPositive85
             ),
             IndicatorPanelYAxisLabel(value: 0, text: "0", color: AppColors.panelYAxisLaneText),
