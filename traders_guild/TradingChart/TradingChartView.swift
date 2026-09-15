@@ -4119,6 +4119,33 @@ struct TradingChartView: View {
                 // strip doing nothing while a thesis is focused. (The price lane
                 // is a separate matter — `yAxisGestureOverlay` sits above this
                 // gesture and takes those taps before it ever runs.)
+                // A cross-timeframe badge on the selected glyph travels rather
+                // than re-selects; it sits just outside the disc's hit radius.
+                if let jump = ChartMarkerSystem.timeframeJumpAtLocation(
+                    location,
+                    markers: markerManager.filteredMarkers,
+                    candles: chartData.candles,
+                    chartSize: geometry.size,
+                    priceRange: chartData.priceRange,
+                    priceScale: gestureState.priceScale,
+                    verticalOffset: totalVerticalOffset,
+                    totalCandleWidth: totalCandleWidth,
+                    actualCandleWidth: actualCandleWidth,
+                    totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth,
+                    selectedMarkerId: markerManager.selectedMarker?.id,
+                    selectedMarkerScale: selectionScale,
+                    jumps: markerManager.timeframeJumps
+                ) {
+                    HapticFeedback.selection.trigger()
+                    ChartMarkerSystem.performTimeframeJump(
+                        jump,
+                        chartViewModel: chartViewModel,
+                        gestureState: gestureState,
+                        markerManager: markerManager
+                    )
+                    return
+                }
+
                 let hitMarker = ChartMarkerSystem.findMarkerAtLocation(
                     location,
                     markers: markerManager.filteredMarkers,
@@ -7878,7 +7905,8 @@ struct TradingChartView: View {
             dimmed: controlViewModel.isMarkerPlacementMode,
             editingEmojiOverride: editingEmojiOverrideForMarkers,
             linkRender: linkRenderContext(plotRect: plotRect),
-            linkedMarkersEnabled: markerManager.linkedMarkersEnabled
+            linkedMarkersEnabled: markerManager.linkedMarkersEnabled,
+            timeframeJumps: markerManager.timeframeJumps
         )
     }
 
