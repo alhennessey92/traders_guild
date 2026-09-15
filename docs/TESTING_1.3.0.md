@@ -109,6 +109,35 @@ treatment, with the rotating ring held still under Reduce Motion.
    taps should match the drawn glyphs; an empty chart tap exits focus. Unsafe
    connectors may be omitted; the shared stack line remains grey.
 
+## Response and connector retest — 14 September
+
+Rebuild **traders_guild LinkedDev** with Command-R in this feature project.
+The local version remains 1.3.0 build 23, so rebuild even if the label matches.
+
+1. Open an alert, choose **Respond with marker → Builds on**. The picker
+   should dismiss into a response draft with its link banner. All three
+   choices are scrollable; the picker can also expand.
+2. In the draft’s General tab, use **Response timeframe** under the banner.
+   Enter a note first, then select another interval. The note, components and
+   relationship should survive while the chart loads the corresponding candle.
+   Creation is disabled until loading succeeds. On failure, select the
+   timeframe again to retry; the draft should remain. Cancel and confirm that
+   ordinary creation no longer carries the old link.
+3. Create a response to that response. Select any member on a chart with all
+   three visible: every safely routable connection in the loaded thesis should
+   appear, including connections between non-selected members.
+4. Test a parent above a candle and its response below, with unrelated markers
+   between them. The dedicated curve should go around the stack. A line may
+   emerge from underneath its own endpoint badge, but must avoid other glyphs
+   and badges. Completely obstructed routes can still be omitted.
+5. Select a parent with a response on another timeframe. Its round timeframe
+   badge opens that response; the response’s parent badge takes you back. The
+   response badge currently picks the newest eligible loaded response; use the
+   thread list for the other branches.
+6. Open **Chart Settings → Linked Markers**. Adjust **Line Thickness** and
+   **Curvature**; the chart should update immediately. Settings persist across
+   relaunch; **Reset** restores 1.5 pt and 100%.
+
 ## Remaining release gates
 
 - Manual VoiceOver speech and navigation order, including unavailable rows.
@@ -120,3 +149,10 @@ treatment, with the rotating ring held still under Reduce Motion.
 
 When reporting a defect, include app build, account role, symbol/timeframe,
 steps, expected/actual behavior, and a screenshot or recording where useful.
+
+
+### Local DEV recovery — 15 September
+
+The candle ingestion task had stopped while live ticks continued. It was restarted
+and fresh 1m persistence was verified. Test fresh BTC/USD markers first; some older
+fixture/history gaps may remain. No production deployment or data reset occurred.
