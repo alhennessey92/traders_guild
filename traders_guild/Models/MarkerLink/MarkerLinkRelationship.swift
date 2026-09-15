@@ -50,7 +50,7 @@ enum MarkerLinkRelationship: String, Codable, CaseIterable, Hashable {
 
     var icon: String {
         switch self {
-        case .supports: return "hand.thumbsup"
+        case .supports: return "checkmark"
         case .challenges: return "arrow.triangle.swap"
         case .buildsOn: return "arrow.triangle.branch"
         }

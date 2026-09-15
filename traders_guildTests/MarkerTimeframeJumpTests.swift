@@ -191,52 +191,205 @@ struct MarkerTimeframeJumpTests {
 
     // MARK: - Layout
 
-    @Test
-    func parentSitsRightResponseSitsLeftLevelWithTheGlyph() throws {
+    private func jumpPair() -> [MarkerTimeframeJump] {
         let parent = preview(key: "p", marker: 1, timeframe: "1h")
-        let middle = marker(2, timeframe: "30m", relationship: "supports", parent: parent)
         let child = preview(key: "c", parentKey: "m", marker: 3, timeframe: "5m", relationship: "builds_on")
-        let jumps = [
+        return [
             MarkerTimeframeJump(markerId: id(1), direction: .toParent, relationship: MarkerLinkRelationshipValue(raw: "supports"), timeframe: .h1, others: 0, preview: parent),
             MarkerTimeframeJump(markerId: id(3), direction: .toResponse, relationship: MarkerLinkRelationshipValue(raw: "builds_on"), timeframe: .m5, others: 0, preview: child),
         ]
-        _ = middle
+    }
 
+    private func footprint(_ placement: MarkerTimeframeJumpLayout.Placement) -> CGRect {
+        MarkerTimeframeJumpLayout.footprint(placement.center)
+    }
+
+    @Test
+    func badgesSplayOutwardAwayFromTheCandleParentRightResponseLeft() throws {
+        let glyph = CGPoint(x: 100, y: 100)
         let above = MarkerTimeframeJumpLayout.placements(
-            selectedCenter: CGPoint(x: 100, y: 100), scaledRadius: 27, isBelow: false, jumps: jumps
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair()
         )
         #expect(above.count == 2)
-        #expect(above[0].center.x > 100 && above[0].center.y == 100, "parent: to the right, level")
-        #expect(above[1].center.x < 100 && above[1].center.y == 100, "response: to the left, level")
-        let distance = hypot(above[0].center.x - 100, above[0].center.y - 100)
-        #expect(abs(distance - (27 + MarkerTimeframeJumpLayout.standoff)) < 0.5)
-
-        let below = MarkerTimeframeJumpLayout.placements(
-            selectedCenter: CGPoint(x: 100, y: 100), scaledRadius: 27, isBelow: true, jumps: jumps
-        )
-        #expect(below == above, "the side of the candle does not move the badges")
-
-        // The arrow ring clears the glyph's own ring (radius 27 + 1.5).
+        #expect(above[0].center.x > glyph.x && above[0].center.y < glyph.y, "parent: up and to the right")
+        #expect(above[1].center.x < glyph.x && above[1].center.y < glyph.y, "response: up and to the left")
         for placement in above {
-            let gap = hypot(placement.center.x - 100, placement.center.y - 100)
-                - MarkerTimeframeJumpLayout.arrowRadius - 1.5 - 28.5
-            #expect(gap > 2, "badge \(placement.jump.direction) touches the glyph ring")
+            let distance = hypot(placement.center.x - glyph.x, placement.center.y - glyph.y)
+            #expect(abs(distance - (27 + MarkerTimeframeJumpLayout.standoff)) < 0.5)
+            #expect(abs(abs(placement.center.x - glyph.x) - abs(placement.center.y - glyph.y)) < 0.5, "45° splay")
         }
 
-        // Badges clear the like badge (x+8…x+22, y+5…y+19 for an above glyph)
-        // and the response-count badge (x-22…x-8, same rows).
+        let below = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: true, jumps: jumpPair()
+        )
+        #expect(below[0].center.y > glyph.y && below[1].center.y > glyph.y, "a glyph under its candle hangs its badges downward")
+        #expect(below[0].center.x == above[0].center.x && below[1].center.x == above[1].center.x, "mirrored, not moved sideways")
+    }
+
+    @Test
+    func theTetherRunsFromTheGlyphRingToTheArrowRing() throws {
+        let glyph = CGPoint(x: 100, y: 100)
+        let placement = try #require(MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair()
+        ).first)
+
+        let startDistance = hypot(placement.tetherStart.x - glyph.x, placement.tetherStart.y - glyph.y)
+        let endDistance = hypot(placement.tetherEnd.x - placement.center.x, placement.tetherEnd.y - placement.center.y)
+        #expect(abs(startDistance - (27 + MarkerTimeframeJumpLayout.tetherInset)) < 0.01, "leaves the glyph just outside its ring")
+        #expect(abs(endDistance - (MarkerTimeframeJumpLayout.arrowRadius + MarkerTimeframeJumpLayout.tetherInset)) < 0.01, "meets the badge just outside the arrow")
+        // Collinear with glyph → badge, and pointing the same way.
+        let cross = (placement.tetherEnd.x - placement.tetherStart.x) * (placement.center.y - glyph.y)
+            - (placement.tetherEnd.y - placement.tetherStart.y) * (placement.center.x - glyph.x)
+        #expect(abs(cross) < 0.01)
+        let visibleLength = hypot(placement.tetherEnd.x - placement.tetherStart.x, placement.tetherEnd.y - placement.tetherStart.y)
+        #expect(visibleLength > 10, "a tether too short to see is no tether")
+    }
+
+    @Test
+    func badgesClearTheStackNeighbourAndTheCandleSideBadges() throws {
+        let glyph = CGPoint(x: 100, y: 100)
+        let above = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair()
+        )
+        // The next glyph outward in the same stack, after the selection nudge.
+        let neighbour = CGRect(x: 100 - 18, y: 100 - 27 - 6 - 36, width: 36, height: 36)
+        // Like badge (x+8…x+22, y+5…y+19) and count badge (x-22…x-8) sit on the candle side.
         let likeBadge = CGRect(x: 108, y: 105, width: 14, height: 14)
         let countBadge = CGRect(x: 78, y: 105, width: 14, height: 14)
         for placement in above {
-            let badge = CGRect(
-                x: placement.center.x - MarkerTimeframeJumpLayout.arrowRadius,
-                y: placement.center.y - MarkerTimeframeJumpLayout.arrowRadius,
-                width: MarkerTimeframeJumpLayout.arrowRadius * 2,
-                height: MarkerTimeframeJumpLayout.arrowRadius * 2
-            )
-            #expect(!badge.intersects(likeBadge))
-            #expect(!badge.intersects(countBadge))
+            #expect(!footprint(placement).intersects(neighbour), "\(placement.jump.direction) lands on the stack neighbour")
+            #expect(!footprint(placement).intersects(likeBadge))
+            #expect(!footprint(placement).intersects(countBadge))
+            let gap = hypot(placement.center.x - glyph.x, placement.center.y - glyph.y)
+                - MarkerTimeframeJumpLayout.arrowRadius - 1.5 - 28.5
+            #expect(gap > 2, "arrow ring touches the glyph ring")
         }
+    }
+
+    @Test
+    func aBadgeThatWouldBeClippedAtTheTopFlipsToTheCandleSide() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let glyph = CGPoint(x: 200, y: 40)
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot
+        )
+        for placement in placements {
+            #expect(placement.center.y > glyph.y, "outward would leave the plot, so \(placement.jump.direction) flips downward")
+            #expect(plot.contains(footprint(placement)))
+        }
+        // Mirror: a glyph under its candle near the bottom flips upward.
+        let low = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: CGPoint(x: 200, y: 570), scaledRadius: 27, isBelow: true, jumps: jumpPair(), plotRect: plot
+        )
+        for placement in low {
+            #expect(placement.center.y < 570)
+            #expect(plot.contains(footprint(placement)))
+        }
+    }
+
+    @Test
+    func aBadgeAtTheSideOfThePlotSlidesBackIn() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: CGPoint(x: 390, y: 300), scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot
+        )
+        let parentBadge = try #require(placements.first { $0.jump.direction == .toParent })
+        #expect(plot.contains(footprint(parentBadge)), "slid in from the right edge")
+        #expect(parentBadge.center.y < 300, "still outward — clamping sideways does not flip")
+        #expect(parentBadge.tetherStart != parentBadge.tetherEnd, "the tether follows the badge to its final spot")
+    }
+
+    @Test
+    func aBadgeBlockedOnItsOwnSideCrossesToTheOtherSideBeforeLeavingTheOutwardBand() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let glyph = CGPoint(x: 200, y: 300)
+        // A card covering the whole left half of the outward band.
+        let leftCard = CGRect(x: 0, y: 200, width: 200, height: 80)
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, avoidRect: leftCard
+        )
+        let parent = try #require(placements.first { $0.jump.direction == .toParent })
+        let response = try #require(placements.first { $0.jump.direction == .toResponse })
+
+        #expect(parent.center.x > glyph.x && parent.center.y < glyph.y, "parent keeps its own outward spot")
+        #expect(response.center.y < glyph.y, "response stays outward…")
+        #expect(response.center.x > glyph.x, "…by crossing to the free side")
+        #expect(!footprint(response).intersects(leftCard))
+        #expect(!footprint(response).intersects(footprint(parent)), "and does not sit on the parent badge")
+        #expect(plot.contains(footprint(response)))
+    }
+
+    @Test
+    func aBadgeUnderTheInfoCardSlidesOutwardThenFlips() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let glyph = CGPoint(x: 200, y: 200)
+        let free = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot
+        )
+        let parentFree = try #require(free.first { $0.jump.direction == .toParent })
+
+        // A card whose right edge crosses the parent badge by a few points:
+        // sliding outward is enough.
+        let narrowCard = CGRect(x: 0, y: 100, width: parentFree.center.x - MarkerTimeframeJumpLayout.outerRadius + 6, height: 80)
+        let slid = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, avoidRect: narrowCard
+        )
+        let parentSlid = try #require(slid.first { $0.jump.direction == .toParent })
+        #expect(!footprint(parentSlid).intersects(narrowCard))
+        #expect(parentSlid.center.y == parentFree.center.y, "kept outward")
+        #expect(parentSlid.center.x > parentFree.center.x, "moved away from the glyph, not toward it")
+
+        // A card covering the whole outward band on both sides: nowhere to
+        // slide, so the candle side is the only band left.
+        let wideCard = CGRect(x: 0, y: 100, width: 400, height: 80)
+        let flipped = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, avoidRect: wideCard
+        )
+        for placement in flipped {
+            #expect(!footprint(placement).intersects(wideCard))
+            #expect(placement.center.y > glyph.y, "\(placement.jump.direction) flipped to the candle side")
+        }
+    }
+
+    @Test
+    func aBadgeNeverSitsOnANeighbouringGlyph() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let glyph = CGPoint(x: 200, y: 300)
+        let free = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot
+        )
+        let responseFree = try #require(free.first { $0.jump.direction == .toResponse })
+        // A marker on an earlier candle whose disc covers the response badge's
+        // preferred spot — the shape of a neighbour a connector would join.
+        let neighbour = CGRect(x: responseFree.center.x - 18, y: responseFree.center.y - 18, width: 36, height: 36)
+
+        let placed = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: glyph, scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, obstacles: [neighbour]
+        )
+        let response = try #require(placed.first { $0.jump.direction == .toResponse })
+        let parent = try #require(placed.first { $0.jump.direction == .toParent })
+        #expect(!footprint(response).intersects(neighbour))
+        #expect(!footprint(response).intersects(footprint(parent)))
+        #expect(response.center.y < glyph.y, "still outward — it slid, it did not flip")
+        #expect(parent == free.first { $0.jump.direction == .toParent }, "the unblocked badge does not move")
+    }
+
+    @Test
+    func drawAndHitTestShareOnePlacement() throws {
+        // The renderer and the tap resolve through the same function with the
+        // same inputs, so the same call twice must be identical — including
+        // after avoidance moved a badge.
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let card = CGRect(x: 0, y: 100, width: 400, height: 80)
+        let a = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: CGPoint(x: 200, y: 200), scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, avoidRect: card
+        )
+        let b = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: CGPoint(x: 200, y: 200), scaledRadius: 27, isBelow: false, jumps: jumpPair(), plotRect: plot, avoidRect: card
+        )
+        #expect(a == b)
+        let hit = try #require(MarkerTimeframeJumpLayout.placement(at: a[0].center, in: b))
+        #expect(hit.jump == a[0].jump)
     }
 
     @Test

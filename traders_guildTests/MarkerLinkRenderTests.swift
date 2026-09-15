@@ -455,4 +455,54 @@ struct MarkerLinkRenderTests {
         #expect(names.count == 3)
         #expect(icons.count == 3)
     }
+
+    // MARK: - Badges ride out with a selected glyph
+
+    @Test
+    func restingBadgesAreExactlyWhereTheyAlwaysWere() {
+        let center = CGPoint(x: 100, y: 100)
+        #expect(MarkerLinkRenderer.badgeOutset(scale: 1) == 0)
+        #expect(MarkerLinkRenderer.likeBadgeRect(center: center, isBelow: false) == CGRect(x: 108, y: 105, width: 14, height: 14))
+        #expect(MarkerLinkRenderer.likeBadgeRect(center: center, isBelow: true) == CGRect(x: 108, y: 83, width: 14, height: 14))
+        #expect(MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: false) == CGRect(x: 78, y: 105, width: 14, height: 14))
+        #expect(MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: true) == CGRect(x: 78, y: 83, width: 14, height: 14))
+    }
+
+    @Test
+    func selectedBadgesStraddleTheEnlargedDiscInsteadOfSinkingIntoIt() {
+        let center = CGPoint(x: 100, y: 100)
+        let scale: CGFloat = 1.5
+        let radius = (MarkerVisualSpec.baseCanvasDiameter / 2) * scale
+        let outset = MarkerLinkRenderer.badgeOutset(scale: scale)
+        #expect(abs(outset - (radius - MarkerVisualSpec.baseCanvasDiameter / 2) * 0.7071) < 0.01)
+
+        for isBelow in [false, true] {
+            let like = MarkerLinkRenderer.likeBadgeRect(center: center, isBelow: isBelow, scale: scale)
+            let count = MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: isBelow, scale: scale)
+            for rect in [like, count] {
+                // Inner corner inside the disc, outer corner outside: the
+                // badge sits on the edge, the way it does at rest on the
+                // smaller disc.
+                let corners = [
+                    CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                    CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.maxY),
+                ]
+                let distances = corners.map { hypot($0.x - center.x, $0.y - center.y) }
+                #expect(distances.min()! < radius, "badge lost contact with the disc")
+                #expect(distances.max()! > radius, "badge swallowed by the disc")
+            }
+            // Mirrored about the glyph's vertical axis, and on the candle side.
+            #expect(abs((like.midX - center.x) + (count.midX - center.x)) < 0.01)
+            #expect(like.midY == count.midY)
+            #expect(isBelow ? like.midY < center.y : like.midY > center.y)
+        }
+        // The connector obstacle rects are the same rects the badges are drawn in.
+        let rects = MarkerLinkRenderer.badgeRects(
+            center: center, isBelow: false, likeCount: 3, badge: .rootCount(2), scale: scale
+        )
+        #expect(rects == [
+            MarkerLinkRenderer.likeBadgeRect(center: center, isBelow: false, scale: scale),
+            MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: false, scale: scale),
+        ])
+    }
 }

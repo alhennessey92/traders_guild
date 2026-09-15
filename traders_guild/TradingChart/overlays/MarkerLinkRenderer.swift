@@ -361,11 +361,33 @@ enum MarkerLinkRenderer {
         return responseCount > 0 ? .rootCount(responseCount) : nil
     }
 
-    /// Mirror of the like badge, on the opposite side of the glyph.
-    static func responseBadgeRect(center: CGPoint, isBelow: Bool) -> CGRect {
-        let badgeOffset: CGFloat = isBelow ? -17 : 5
+    /// How far a badge moves out along its diagonal when the glyph is drawn
+    /// at `scale`, so it keeps straddling the disc's edge instead of sinking
+    /// inside the enlarged disc of a selected marker. The resting geometry
+    /// (scale 1) is unchanged.
+    static func badgeOutset(scale: CGFloat) -> CGFloat {
+        let baseRadius = MarkerVisualSpec.baseCanvasDiameter / 2
+        return max(0, baseRadius * scale - baseRadius) * 0.7071
+    }
+
+    /// Like badge on the right, candle side; response badge mirrors it on the left.
+    static func likeBadgeRect(center: CGPoint, isBelow: Bool, scale: CGFloat = 1) -> CGRect {
+        let outset = badgeOutset(scale: scale)
+        let badgeOffset: CGFloat = isBelow ? -17 - outset : 5 + outset
         return CGRect(
-            x: center.x - badgeLeadingInset,
+            x: center.x + 8 + outset,
+            y: center.y + badgeOffset,
+            width: badgeSize,
+            height: badgeSize
+        )
+    }
+
+    /// Mirror of the like badge, on the opposite side of the glyph.
+    static func responseBadgeRect(center: CGPoint, isBelow: Bool, scale: CGFloat = 1) -> CGRect {
+        let outset = badgeOutset(scale: scale)
+        let badgeOffset: CGFloat = isBelow ? -17 - outset : 5 + outset
+        return CGRect(
+            x: center.x - badgeLeadingInset - outset,
             y: center.y + badgeOffset,
             width: badgeSize,
             height: badgeSize
@@ -377,10 +399,11 @@ enum MarkerLinkRenderer {
         center: CGPoint,
         isBelow: Bool,
         badge: BadgeKind?,
+        scale: CGFloat = 1,
         pass: inout MarkerDrawPass
     ) {
         guard let badge else { return }
-        let rect = responseBadgeRect(center: center, isBelow: isBelow)
+        let rect = responseBadgeRect(center: center, isBelow: isBelow, scale: scale)
 
         let fill: Color
         switch badge {
@@ -409,17 +432,14 @@ enum MarkerLinkRenderer {
                 at: CGPoint(x: rect.midX, y: rect.midY)
             )
         case let .leafIcon(relationship):
-            var icon = pass.symbol(named: relationship.icon, in: context)
-            icon.shading = .color(pass.onAccent)
-            let side = min(badgeSize - 5, max(icon.size.width, icon.size.height))
+            // Drawn as text so the symbol takes a weight: at nine points a
+            // regular-weight outline glyph reads as a hollow smudge, a heavy
+            // one reads as a mark.
             context.draw(
-                icon,
-                in: CGRect(
-                    x: rect.midX - side / 2,
-                    y: rect.midY - side / 2,
-                    width: side,
-                    height: side
-                )
+                Text(Image(systemName: relationship.icon))
+                    .font(.system(size: 8, weight: .heavy))
+                    .foregroundColor(pass.onAccent),
+                at: CGPoint(x: rect.midX, y: rect.midY)
             )
         }
     }
@@ -449,6 +469,18 @@ enum MarkerLinkRenderer {
             let accent = pass.accent(for: placement.jump.relationship)
             let disc = MarkerTimeframeJumpLayout.badgeRadius
             let ring = MarkerTimeframeJumpLayout.arrowRadius
+
+            // The tether: a thin dotted line from the glyph's ring to the
+            // arrow ring, so a badge floating clear of the candle still
+            // reads as belonging to this glyph and not to a neighbour.
+            var tether = Path()
+            tether.move(to: placement.tetherStart)
+            tether.addLine(to: placement.tetherEnd)
+            badgeContext.stroke(
+                tether,
+                with: .color(accent.opacity(0.85)),
+                style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [1, 3])
+            )
 
             // A hairline of chart background under the disc and the arrow so
             // they stay legible over a candle or another glyph.
@@ -502,17 +534,15 @@ enum MarkerLinkRenderer {
         center: CGPoint,
         isBelow: Bool,
         likeCount: Int,
-        badge: BadgeKind?
+        badge: BadgeKind?,
+        scale: CGFloat = 1
     ) -> [CGRect] {
-        let badgeOffset: CGFloat = isBelow ? -17 : 5
         var rects: [CGRect] = []
         if likeCount > 0 {
-            rects.append(
-                CGRect(x: center.x + 8, y: center.y + badgeOffset, width: badgeSize, height: badgeSize)
-            )
+            rects.append(likeBadgeRect(center: center, isBelow: isBelow, scale: scale))
         }
         if badge != nil {
-            rects.append(responseBadgeRect(center: center, isBelow: isBelow))
+            rects.append(responseBadgeRect(center: center, isBelow: isBelow, scale: scale))
         }
         return rects
     }

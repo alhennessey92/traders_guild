@@ -2775,7 +2775,9 @@ struct ChartMarkerSystem {
         editingEmojiOverride: (markerId: UUID, emoji: String)? = nil,
         linkRender: MarkerLinkRenderContext? = nil,
         linkedMarkersEnabled: Bool = false,
-        timeframeJumps: [MarkerTimeframeJump] = []
+        timeframeJumps: [MarkerTimeframeJump] = [],
+        markerPlotRect: CGRect? = nil,
+        infoCardRect: CGRect? = nil
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2864,7 +2866,8 @@ struct ChartMarkerSystem {
                                 linkedMarkersEnabled: linkedMarkersEnabled,
                                 responseCount: entry.marker.responseCount,
                                 relationship: entry.marker.linkRelationship
-                            )
+                            ),
+                            scale: isSelected ? selectedMarkerScale : 1.0
                         )
                     )
                 }
@@ -3009,7 +3012,24 @@ struct ChartMarkerSystem {
                 selectedCenter: selected.position,
                 scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * selected.scale,
                 isBelow: selected.marker.positionedBelow,
-                jumps: timeframeJumps
+                jumps: timeframeJumps,
+                plotRect: markerPlotRect ?? linkRender?.plotRect,
+                avoidRect: infoCardRect,
+                // Recomputed from the same inputs the tap uses, rather than read
+                // off the render queue, so both passes see identical obstacles.
+                obstacles: timeframeJumpObstacles(
+                    selectedMarkerId: selected.marker.id,
+                    markers: markers,
+                    candles: candles,
+                    chartSize: chartSize,
+                    priceRange: priceRange,
+                    priceScale: priceScale,
+                    verticalOffset: verticalOffset,
+                    totalCandleWidth: totalCandleWidth,
+                    actualCandleWidth: actualCandleWidth,
+                    totalOffset: totalOffset,
+                    selectedMarkerScale: selected.scale
+                )
             )
             // Ride the selection pop: fully in once the glyph reaches its
             // selected scale, invisible while it is still resting.
@@ -3175,15 +3195,11 @@ struct ChartMarkerSystem {
             }
         }
 
-        // 6. Like count badge
+        // 6. Like count badge — rides out with the disc when the glyph is
+        // scaled, so it straddles the edge of a selected marker rather than
+        // sinking inside it.
         if marker.likeCount > 0 {
-            let badgeOffset: CGFloat = isBelow ? -17 : 5
-            let badgeRect = CGRect(
-                x: position.x + 8,
-                y: position.y + badgeOffset,
-                width: 14,
-                height: 14
-            )
+            let badgeRect = MarkerLinkRenderer.likeBadgeRect(center: position, isBelow: isBelow, scale: scale)
             drawContext.fill(Path(roundedRect: badgeRect, cornerRadius: 7), with: .color(pass.heartBadge))
             // `verbatim:` for the same reason as the response badge: a like
             // count is a number, and the localised-key path resolved arguments
@@ -3193,7 +3209,7 @@ struct ChartMarkerSystem {
                 Text(verbatim: "\(marker.likeCount)")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(pass.onAccent),
-                at: CGPoint(x: position.x + 15, y: position.y + badgeOffset + 7)
+                at: CGPoint(x: badgeRect.midX, y: badgeRect.midY)
             )
         }
 
@@ -3211,6 +3227,7 @@ struct ChartMarkerSystem {
                 responseCount: marker.responseCount,
                 relationship: marker.linkRelationship
             ),
+            scale: scale,
             pass: &pass
         )
 
@@ -3451,6 +3468,67 @@ struct ChartMarkerSystem {
     /// **Otherwise** the 1.2.1 behaviour, verbatim: recomputed centres,
     /// creation order reversed, fixed radius. A standalone marker outside any
     /// thesis behaves exactly as it always has.
+    /// Discs of the glyphs near the selected marker, as the badge layout must
+    /// avoid them. One function for the draw pass and the tap hit-test, so the
+    /// two resolve against the same obstacles; positions include the selection
+    /// nudge the frame applies to stack neighbours.
+    static func timeframeJumpObstacles(
+        selectedMarkerId: UUID,
+        markers: [ChartMarkerUI],
+        candles: [RLCandleDTO],
+        chartSize: CGSize,
+        priceRange: (min: Double, max: Double),
+        priceScale: CGFloat,
+        verticalOffset: CGFloat,
+        totalCandleWidth: CGFloat,
+        actualCandleWidth: CGFloat,
+        totalOffset: CGFloat,
+        selectedMarkerScale: CGFloat
+    ) -> [CGRect] {
+        guard let selected = markers.first(where: { $0.id == selectedMarkerId }) else { return [] }
+        // Wide enough for every spot the layout can reach from the glyph.
+        let reach = (MarkerVisualSpec.baseCanvasDiameter / 2) * Swift.max(selectedMarkerScale, 1)
+            + MarkerTimeframeJumpLayout.standoff + MarkerTimeframeJumpLayout.maximumAvoidanceShift
+            + MarkerTimeframeJumpLayout.outerRadius * 2
+        let candleReach = Int(ceil(reach / Swift.max(totalCandleWidth, 1))) + 1
+        let scaledHeight = chartSize.height * priceScale
+        let radius = MarkerVisualSpec.baseCanvasDiameter / 2
+        var rects: [CGRect] = []
+
+        let grouped = Dictionary(grouping: markers.filter { $0.isVisible }) { $0.candleIndex }
+        for candleIndex in (selected.candleIndex - candleReach)...(selected.candleIndex + candleReach) {
+            guard let group = grouped[candleIndex], candleIndex >= 0, candleIndex < candles.count else { continue }
+            let candle = candles[candleIndex]
+            let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
+            let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+            let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+            var positions: [(marker: ChartMarkerUI, position: CGPoint)] = group
+                .sorted { $0.createdAt < $1.createdAt }
+                .map { marker in
+                    (marker, MarkerPositionCalculator.computeMarkerScreenPosition(
+                        marker: marker,
+                        candleHighY: candleHighY,
+                        candleLowY: candleLowY,
+                        centerX: x + actualCandleWidth / 2,
+                        priceScale: priceScale,
+                        viewportHeight: chartSize.height
+                    ))
+                }
+            MarkerStackLayout.applySelectionNudge(
+                to: &positions,
+                selectedMarkerId: selectedMarkerId,
+                selectedMarkerScale: selectedMarkerScale
+            )
+            for entry in positions where entry.marker.id != selectedMarkerId {
+                rects.append(CGRect(
+                    x: entry.position.x - radius, y: entry.position.y - radius,
+                    width: radius * 2, height: radius * 2
+                ))
+            }
+        }
+        return rects
+    }
+
     /// The cross-timeframe badge under a tap, if the selected glyph wears one.
     ///
     /// Checked before glyph hit-testing: the badges sit just outside the
@@ -3470,7 +3548,9 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         selectedMarkerId: UUID?,
         selectedMarkerScale: CGFloat,
-        jumps: [MarkerTimeframeJump]
+        jumps: [MarkerTimeframeJump],
+        plotRect: CGRect? = nil,
+        avoidRect: CGRect? = nil
     ) -> MarkerTimeframeJump? {
         guard !jumps.isEmpty,
               let selectedMarkerId,
@@ -3497,7 +3577,22 @@ struct ChartMarkerSystem {
             selectedCenter: position,
             scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * Swift.max(selectedMarkerScale, 1.0),
             isBelow: selected.positionedBelow,
-            jumps: jumps
+            jumps: jumps,
+            plotRect: plotRect,
+            avoidRect: avoidRect,
+            obstacles: timeframeJumpObstacles(
+                selectedMarkerId: selectedMarkerId,
+                markers: markers,
+                candles: candles,
+                chartSize: chartSize,
+                priceRange: priceRange,
+                priceScale: priceScale,
+                verticalOffset: verticalOffset,
+                totalCandleWidth: totalCandleWidth,
+                actualCandleWidth: actualCandleWidth,
+                totalOffset: totalOffset,
+                selectedMarkerScale: selectedMarkerScale
+            )
         )
         return MarkerTimeframeJumpLayout.placement(at: location, in: placements)?.jump
     }

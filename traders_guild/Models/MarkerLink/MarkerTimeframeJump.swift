@@ -116,11 +116,23 @@ enum MarkerTimeframeJumpLayout {
     static let badgeRadius: CGFloat = 11
     /// The circular arrow runs just outside the disc.
     static let arrowRadius: CGFloat = 14.5
+    /// Arrow ring plus its halo — the footprint used for clipping and avoidance.
+    static let outerRadius: CGFloat = 16
     /// Disc plus arrow plus a finger's worth of slack.
     static let hitRadius: CGFloat = 18
-    /// Gap between the glyph's (scaled) edge and the badge centre — enough
-    /// for the arrow ring to clear the glyph's own ring.
-    static let standoff: CGFloat = 22
+    /// Glyph centre to badge centre, beyond the glyph's scaled radius. Long
+    /// enough that a tether is visible between glyph ring and arrow ring.
+    static let standoff: CGFloat = 36
+    /// How far the badges splay off the outward vertical: 45° keeps them out
+    /// of the stack column (neighbours sit straight above or below the
+    /// selected glyph) while still reading as "away from the candle".
+    static let splayAngle: CGFloat = .pi / 4
+    /// How far a badge may slide sideways, from its preferred spot, to get
+    /// out from under the info card or past a badge already placed — enough
+    /// to clear one badge's full width and a little more.
+    static let maximumAvoidanceShift: CGFloat = 44
+    /// Gap between the glyph's ring / the arrow ring and the tether's ends.
+    static let tetherInset: CGFloat = 1.5
     /// The scale a selected glyph settles at (`selectionScale` in the chart);
     /// the badges are fully revealed once the pop reaches it.
     static let selectedGlyphScale: CGFloat = 1.5
@@ -133,27 +145,97 @@ enum MarkerTimeframeJumpLayout {
     struct Placement: Equatable {
         let jump: MarkerTimeframeJump
         let center: CGPoint
+        /// The dotted tether: leaves the glyph's ring, meets the arrow ring.
+        let tetherStart: CGPoint
+        let tetherEnd: CGPoint
     }
 
-    /// Level with the glyph: a parent jump to its right, a response jump to
-    /// its left. The like and response-count badges sit on the candle-facing
-    /// side below the centre line, the stack spine runs on that side too, and
-    /// the info card floats above — the horizontal axis is the one lane that
-    /// stays clear on both sides of the candle. `isBelow` is accepted so the
-    /// hit-test and the draw pass share one signature; it does not change
-    /// the placement today.
+    /// Outward, away from the candle: above a glyph that sits above its candle,
+    /// below one that sits below. Each badge splays 45° off that vertical — a
+    /// parent jump to the right, a response jump to the left — so neither
+    /// lands on the stack neighbour directly outward of the selected glyph,
+    /// and a thin dotted tether ties each one back to the glyph it belongs
+    /// to. The like and count badges live on the candle side, so nothing
+    /// competes for this lane.
+    ///
+    /// When the preferred spot is taken, the search runs in this order and
+    /// stops at the first free one: slide outward on the same side; take the
+    /// other side of the outward band (sliding past a badge already there);
+    /// and only then the candle side. The tether makes attribution clear
+    /// wherever a badge ends up, so keeping it *outward* matters more than
+    /// keeping parent-right / response-left.
+    ///
+    /// - Parameter plotRect: the marker layer's clip. A badge that would be
+    ///   cut off at the top or bottom cannot use that band; one that would
+    ///   leave the sides is slid back in.
+    /// - Parameter avoidRect: the info card's frame in the same space, so the
+    ///   card never hides a control.
+    /// - Parameter obstacles: other glyphs' discs nearby. A badge never sits
+    ///   on a neighbouring marker — that would read as belonging to it.
     static func placements(
         selectedCenter center: CGPoint,
         scaledRadius: CGFloat,
         isBelow: Bool,
-        jumps: [MarkerTimeframeJump]
+        jumps: [MarkerTimeframeJump],
+        plotRect: CGRect? = nil,
+        avoidRect: CGRect? = nil,
+        obstacles: [CGRect] = []
     ) -> [Placement] {
-        _ = isBelow
         let distance = scaledRadius + standoff
+        let along = distance * cos(splayAngle)
+        let across = distance * sin(splayAngle)
+        let outwardSign: CGFloat = isBelow ? 1 : -1
+        var taken: [CGRect] = obstacles
+
         return jumps.map { jump in
-            let dx: CGFloat = jump.direction == .toParent ? distance : -distance
-            return Placement(jump: jump, center: CGPoint(x: center.x + dx, y: center.y))
+            let ownSide: CGFloat = jump.direction == .toParent ? 1 : -1
+            let preferred = CGPoint(x: center.x + ownSide * across, y: center.y + outwardSign * along)
+
+            var chosen: CGPoint?
+            search: for verticalSign in [outwardSign, -outwardSign] {
+                let y = center.y + verticalSign * along
+                if let plotRect, y - outerRadius < plotRect.minY || y + outerRadius > plotRect.maxY {
+                    continue
+                }
+                for sideSign in [ownSide, -ownSide] {
+                    var shift: CGFloat = 0
+                    while shift <= maximumAvoidanceShift {
+                        var point = CGPoint(x: center.x + sideSign * (across + shift), y: y)
+                        if let plotRect {
+                            point.x = min(max(point.x, plotRect.minX + outerRadius), plotRect.maxX - outerRadius)
+                        }
+                        let box = footprint(point)
+                        let blockedByCard = avoidRect.map { !$0.isEmpty && box.intersects($0) } ?? false
+                        let blockedByBadge = taken.contains { box.intersects($0) }  // badges placed so far and neighbouring glyphs
+                        if !blockedByCard && !blockedByBadge {
+                            chosen = point
+                            break search
+                        }
+                        shift += 4
+                    }
+                }
+            }
+
+            let final = chosen ?? preferred
+            taken.append(footprint(final))
+
+            let dx = final.x - center.x
+            let dy = final.y - center.y
+            let length = max(1, hypot(dx, dy))
+            let unit = CGPoint(x: dx / length, y: dy / length)
+            let startDistance = scaledRadius + tetherInset
+            let endDistance = arrowRadius + tetherInset
+            return Placement(
+                jump: jump,
+                center: final,
+                tetherStart: CGPoint(x: center.x + unit.x * startDistance, y: center.y + unit.y * startDistance),
+                tetherEnd: CGPoint(x: final.x - unit.x * endDistance, y: final.y - unit.y * endDistance)
+            )
         }
+    }
+
+    static func footprint(_ center: CGPoint) -> CGRect {
+        CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)
     }
 
     static func placement(
