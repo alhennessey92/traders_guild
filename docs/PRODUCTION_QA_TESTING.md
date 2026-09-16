@@ -11,3 +11,5 @@ Email/password login is the supported QA path. Push registration is disabled in 
 Continue local testing with **traders_guild LinkedDev**. Its endpoint, identity and retained data are unchanged. Do not archive or submit the Prod QA app to Apple. The normal production Release scheme remains the shipping path after acceptance.
 
 Final production readiness still requires backend CI/full-schema/admin/client gates, current live preflight, physical-device performance and manual accessibility acceptance. The unreproduced sheet-presentation warning from the owner's previous log remains a tracked diagnostic item; code 9 alone does not establish why iOS terminated a process.
+
+Verified 16 September: integrated iOS suite 669/669 passed; both ProdQA and shipping production-scheme Release simulator builds succeeded. Built ProdQA plist confirms the separate bundle/display name and custom scheme, with no DEV gateway key. Device signing/provisioning and production account login remain to be exercised.
