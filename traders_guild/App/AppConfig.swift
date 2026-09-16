@@ -22,7 +22,9 @@ struct AppConfig {
 
     // Routing mode for dev-first direct services vs future gateway
     static var apiRoutingMode: APIRoutingMode {
-        #if TG_ISOLATED_DEV
+        #if TG_PROD_QA
+        return .apiGateway
+        #elseif TG_ISOLATED_DEV
         // Unconditional, and deliberately not configurable. Reading the baked
         // value and falling through when it is absent would leave the one path
         // this build exists to make impossible — an environment variable, a
@@ -54,7 +56,9 @@ struct AppConfig {
     }
 
     static var developmentGatewayBaseURL: String {
-        #if TG_ISOLATED_DEV
+        #if TG_PROD_QA
+        return "https://api.tradersguild.co/api/v1"
+        #elseif TG_ISOLATED_DEV
         return isolatedDevGatewayBaseURL
         #else
         let devDefault = "http://localhost:30080/api/v1"
@@ -73,7 +77,9 @@ struct AppConfig {
     }
 
     static var productionGatewayBaseURL: String {
-        #if TG_ISOLATED_DEV
+        #if TG_PROD_QA
+        return "https://api.tradersguild.co/api/v1"
+        #elseif TG_ISOLATED_DEV
         // The isolated build has no production endpoint at all. Not "prefers the
         // local one" — every path that would otherwise resolve to
         // api.tradersguild.co resolves to loopback, and no environment variable

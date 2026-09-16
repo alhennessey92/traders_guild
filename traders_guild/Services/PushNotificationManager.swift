@@ -154,6 +154,9 @@ final class PushNotificationManager: ObservableObject {
 
     /// Request notification permission only when the user has not made a decision yet.
     func requestPermissionIfNeeded() async -> Bool {
+        #if TG_PROD_QA
+        return false // Production push is verified with the shipping-signed candidate.
+        #endif
         await refreshPermissionStatus()
         guard permissionStatus == .notDetermined else {
             return permissionStatus.supportsRemoteNotifications
@@ -179,6 +182,9 @@ final class PushNotificationManager: ObservableObject {
         reason: PushRegistrationReason,
         allowPermissionPrompt: Bool = false
     ) async {
+        #if TG_PROD_QA
+        return // This isolated QA bundle has no production APNs entitlement.
+        #endif
         let canRegister: Bool
         if allowPermissionPrompt {
             canRegister = await requestPermissionIfNeeded()
@@ -225,6 +231,9 @@ final class PushNotificationManager: ObservableObject {
 
     /// Register the token with the backend.
     private func registerTokenWithBackend(_ token: String, reason: PushRegistrationReason) async {
+        #if TG_PROD_QA
+        return // Production push is verified with the shipping-signed candidate.
+        #endif
         guard let api = apiService else {
             recordError("Push token registration skipped because the API service is unavailable.")
             return
@@ -257,6 +266,9 @@ final class PushNotificationManager: ObservableObject {
 
     /// Deregister the current token (call on logout).
     func deregisterToken() async {
+        #if TG_PROD_QA
+        return // Production push is verified with the shipping-signed candidate.
+        #endif
         guard let api = apiService, let token = currentDeviceToken else { return }
         do {
             try await api.deregisterDeviceToken(deviceToken: token)

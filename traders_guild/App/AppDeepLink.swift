@@ -26,7 +26,9 @@ enum AppDeepLink: Equatable, Sendable {
     /// isolated configurations, so this array compiles down to the single
     /// original scheme everywhere else.
     private static var acceptedCustomSchemes: [String] {
-        #if TG_ISOLATED_DEV
+        #if TG_PROD_QA
+        return ["tradersguild-prodqa"]
+        #elseif TG_ISOLATED_DEV
         return [customScheme, "\(customScheme)-linkeddev"]
         #else
         return [customScheme]
