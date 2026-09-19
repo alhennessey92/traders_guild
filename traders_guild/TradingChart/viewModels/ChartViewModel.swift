@@ -298,7 +298,7 @@ class ChartViewModel: ObservableObject {
             dataManager.currentTimeframe = timeframe
 
             if mergeWithExisting, !dataManager.candles.isEmpty {
-                let mergeResult = mergeHistoricalCandles(
+                mergeHistoricalCandles(
                     chartData.candles,
                     preservePriceRangeForPurePrepend: false
                 )
@@ -617,7 +617,7 @@ class ChartViewModel: ObservableObject {
 
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
-            let mergeResult = mergeHistoricalCandles(
+            mergeHistoricalCandles(
                 candlesResponse.candles,
                 preservePriceRangeForPurePrepend: false
             )
