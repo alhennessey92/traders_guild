@@ -92,7 +92,8 @@ struct MarkerLinkRenderContext {
     let ringStyles: [UUID: MarkerLinkRingStyle]
     /// 0…1 stroke reveal. Callers pass 1 immediately under Reduce Motion.
     let revealProgress: CGFloat
-    /// The plot rectangle connectors must stay inside.
+    /// The plot rectangle the layer is clipped to. Routing never reads it;
+    /// it only orders the idle cap.
     let plotRect: CGRect
     /// Connector stroke width, from chart settings.
     let lineWidth: CGFloat

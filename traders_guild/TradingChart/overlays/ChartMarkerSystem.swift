@@ -2996,38 +2996,53 @@ struct ChartMarkerSystem {
         // and before any glyph — so they pass behind the glass rather than over
         // it, and so they attach to post-nudge centres.
         //
-        // An edge whose far end was culled still gets bounds for that end,
-        // computed the same way, so the line can run to the plot edge and
-        // leave — the reader's cue that a linked marker lies beyond the
-        // viewport. Only edge endpoints are added, never the whole loaded set.
-        func addOffscreenEndpoints(for edges: [MarkerLinkEdge]) {
-            for edge in edges {
-                for id in [edge.parentId, edge.childId] where linkGlyphBounds[id] == nil {
-                    guard let marker = markers.first(where: { $0.id == id && $0.isVisible }),
-                          marker.candleIndex >= 0, marker.candleIndex < candles.count else { continue }
-                    let candle = candles[marker.candleIndex]
-                    let x = CGFloat(marker.candleIndex) * totalCandleWidth + totalOffset
-                    let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
-                    let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
-                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
-                        marker: marker,
-                        candleHighY: candleHighY,
-                        candleLowY: candleLowY,
-                        centerX: x + actualCandleWidth / 2,
-                        priceScale: priceScale,
-                        viewportHeight: chartSize.height
-                    )
-                    linkGlyphBounds[id] = MarkerGlyphBounds(
-                        id: id,
+        // Every loaded glyph gets bounds, not only the ones inside the cull:
+        // a route must not depend on which markers happen to be near the
+        // viewport, or panning re-routes it. A culled endpoint is where its
+        // line leaves the plot; a culled bystander is an obstacle the line
+        // bends around the same way whether or not it is on screen. The
+        // positions are the same arithmetic as the loop above, minus the
+        // selection nudge, which only moves a selected marker's candle-mates
+        // and is applied in the loop when that candle is in view.
+        func addOffscreenGlyphBounds() {
+            let priceSpan = CGFloat(priceRange.max - priceRange.min)
+            for marker in markers where marker.isVisible && linkGlyphBounds[marker.id] == nil {
+                guard marker.candleIndex >= 0, marker.candleIndex < candles.count else { continue }
+                let candle = candles[marker.candleIndex]
+                let x = CGFloat(marker.candleIndex) * totalCandleWidth + totalOffset
+                let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / priceSpan) * scaledHeight - verticalOffset
+                let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / priceSpan) * scaledHeight - verticalOffset
+                let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                    marker: marker,
+                    candleHighY: candleHighY,
+                    candleLowY: candleLowY,
+                    centerX: x + actualCandleWidth / 2,
+                    priceScale: priceScale,
+                    viewportHeight: chartSize.height
+                )
+                let isSelected = selectedMarkerId == marker.id
+                let scale = isSelected ? selectedMarkerScale : 1.0
+                linkGlyphBounds[marker.id] = MarkerGlyphBounds(
+                    id: marker.id,
+                    center: position,
+                    radius: (MarkerVisualSpec.baseCanvasDiameter / 2) * scale,
+                    badgeRects: MarkerLinkRenderer.badgeRects(
                         center: position,
-                        radius: MarkerVisualSpec.baseCanvasDiameter / 2
+                        isBelow: marker.positionedBelow,
+                        likeCount: marker.likeCount,
+                        badge: MarkerLinkRenderer.badgeKind(
+                            linkedMarkersEnabled: linkedMarkersEnabled,
+                            responseCount: marker.responseCount,
+                            relationship: marker.linkRelationship
+                        ),
+                        scale: scale
                     )
-                }
+                )
             }
         }
 
         if let linkRender {
-            addOffscreenEndpoints(for: linkRender.focus.candidateEdges)
+            addOffscreenGlyphBounds()
             let plan = MarkerLinkGeometry.plan(
                 edges: linkRender.focus.candidateEdges,
                 glyphs: linkGlyphBounds,
@@ -3045,7 +3060,7 @@ struct ChartMarkerSystem {
             // The response being placed: one connector from the parent to the
             // ghost, on the undimmed context so it reads at full strength over
             // the dimmed layer. The ghost is routed like any glyph.
-            addOffscreenEndpoints(for: [placementLink.edge])
+            addOffscreenGlyphBounds()
             var routingGlyphs = linkGlyphBounds
             routingGlyphs[MarkerPlacementLinkContext.ghostId] = MarkerGlyphBounds(
                 id: MarkerPlacementLinkContext.ghostId,
@@ -3066,12 +3081,24 @@ struct ChartMarkerSystem {
                 lineWidth: placementLink.lineWidth
             )
         } else if let idleLinks, !isDimmed, !idleLinks.edges.isEmpty {
-            // At rest: the faint lines. Edges with neither end near the
-            // viewport are not worth routing; the plan orders the rest nearest
-            // the viewport centre first and the cap keeps those.
-            let culledIds = Set(linkGlyphBounds.keys)
-            let nearby = idleLinks.edges.filter { culledIds.contains($0.parentId) || culledIds.contains($0.childId) }
-            addOffscreenEndpoints(for: nearby)
+            // At rest: the faint lines. Only edges that can cross the plot are
+            // routed — judged by the chord's box, not by which ends are on
+            // screen, so a long line between two off-screen markers still
+            // crosses the viewport it spans instead of vanishing while both
+            // ends are out of view. The plan orders them nearest the viewport
+            // centre first and the cap keeps those.
+            addOffscreenGlyphBounds()
+            let reach = MarkerLinkGeometry.maximumLateralExcursion * idleLinks.curvature + MarkerLinkGeometry.clearance
+            let plotReach = idleLinks.plotRect.insetBy(dx: -reach, dy: -reach)
+            let nearby = idleLinks.edges.filter { edge in
+                guard let a = linkGlyphBounds[edge.parentId]?.center,
+                      let b = linkGlyphBounds[edge.childId]?.center else { return false }
+                let chord = CGRect(
+                    x: Swift.min(a.x, b.x), y: Swift.min(a.y, b.y),
+                    width: abs(a.x - b.x), height: abs(a.y - b.y)
+                )
+                return chord.intersects(plotReach)
+            }
             let plan = MarkerLinkGeometry.plan(
                 edges: nearby,
                 glyphs: linkGlyphBounds,

@@ -165,8 +165,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
 
@@ -197,8 +196,7 @@ struct MarkerLinkGeometryTests {
                 MarkerLinkGeometry.route(
                     edge: edge(parent: 1, child: 2),
                     glyphs: glyphs,
-                    obstacles: Array(glyphs.values),
-                    plotRect: plot
+                    obstacles: Array(glyphs.values)
                 )
             )
             let samples = (0...32).map { route.point(at: CGFloat($0) / 32) }
@@ -221,8 +219,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
         let samples = (0...32).map { route.point(at: CGFloat($0) / 32) }
@@ -285,8 +282,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 3),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             ),
             "a safe lateral route exists around a single stacked stranger"
         )
@@ -338,8 +334,7 @@ struct MarkerLinkGeometryTests {
         let route = MarkerLinkGeometry.route(
             edge: edge(parent: 1, child: 3),
             glyphs: glyphs,
-            obstacles: Array(glyphs.values),
-            plotRect: plot
+            obstacles: Array(glyphs.values)
         )
         #expect(route == nil)
     }
@@ -359,8 +354,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
 
@@ -394,8 +388,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             ),
             "an adjacent stacked pair must still connect at selection scale"
         )
@@ -415,8 +408,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             ) == nil
         )
     }
@@ -441,8 +433,7 @@ struct MarkerLinkGeometryTests {
                 MarkerLinkGeometry.route(
                     edge: edge(parent: 1, child: 2),
                     glyphs: glyphs,
-                    obstacles: Array(glyphs.values),
-                    plotRect: plot
+                    obstacles: Array(glyphs.values)
                 )
             )
         }
@@ -480,8 +471,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 4),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             ),
             "a long same-column chord past stacked neighbours must still be drawable"
         )
@@ -524,7 +514,7 @@ struct MarkerLinkGeometryTests {
         let route = try #require(
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 4), glyphs: glyphs,
-                obstacles: Array(glyphs.values), plotRect: plot
+                obstacles: Array(glyphs.values)
             ),
             "its own badges must not block a glyph's connector"
         )
@@ -548,7 +538,7 @@ struct MarkerLinkGeometryTests {
         let route = try #require(
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2), glyphs: glyphs,
-                obstacles: Array(glyphs.values), plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
         #expect(route.point(at: 0.5).x < 200, "bows left, away from the like badge")
@@ -569,8 +559,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 4),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
         for strangerId in [id(2), id(3)] {
@@ -629,7 +618,7 @@ struct MarkerLinkGeometryTests {
         let route = try #require(
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2), glyphs: glyphs,
-                obstacles: Array(glyphs.values), plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
         #expect(!route.isCubic)
@@ -648,7 +637,7 @@ struct MarkerLinkGeometryTests {
         func sag(_ curvature: CGFloat) throws -> CGFloat {
             let r = try #require(MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2), glyphs: glyphs,
-                obstacles: Array(glyphs.values), plotRect: plot, curvature: curvature
+                obstacles: Array(glyphs.values), curvature: curvature
             ))
             return sagitta(of: r)
         }
@@ -737,33 +726,13 @@ struct MarkerLinkGeometryTests {
 
         let filtered = MarkerLinkGeometry.plan(edges: edges, glyphs: glyphs, plotRect: plot, selectedId: id(1))
         let everything = edges.compactMap {
-            MarkerLinkGeometry.route(edge: $0, glyphs: glyphs, obstacles: Array(glyphs.values), plotRect: plot)
+            MarkerLinkGeometry.route(edge: $0, glyphs: glyphs, obstacles: Array(glyphs.values))
         }
         #expect(filtered.routes.count == everything.count)
         for route in filtered.routes {
             let full = everything.first { $0.edge == route.edge }
             #expect(full?.start == route.start && full?.end == route.end
                     && full?.control == route.control && full?.control2 == route.control2)
-        }
-    }
-
-    @Test
-    func staysWithinThePlotRect() {
-        // Parent hard against the left edge, so a left bow would leave the plot.
-        let glyphs: [UUID: MarkerGlyphBounds] = [
-            id(1): glyph(1, CGPoint(x: 20, y: 500)),
-            id(2): glyph(2, CGPoint(x: 20, y: 500 - stackSpacing * 2)),
-        ]
-        let planned = MarkerLinkGeometry.plan(
-            edges: [edge(parent: 1, child: 2)],
-            glyphs: glyphs,
-            plotRect: plot,
-            selectedId: id(1)
-        )
-        for route in planned.routes {
-            for step in 0...32 {
-                #expect(plot.contains(route.point(at: CGFloat(step) / 32)))
-            }
         }
     }
 
@@ -784,8 +753,7 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             )
         )
 
@@ -811,80 +779,122 @@ struct MarkerLinkGeometryTests {
             MarkerLinkGeometry.route(
                 edge: edge(parent: 1, child: 2),
                 glyphs: glyphs,
-                obstacles: Array(glyphs.values),
-                plotRect: plot
+                obstacles: Array(glyphs.values)
             ) == nil
         )
     }
 
-    // MARK: - Off-screen endpoints (production feedback: "far-away response, no line")
+    // MARK: - The viewport plays no part (production feedback: "lines jump sides while panning")
 
-    /// A linked marker beyond the viewport used to mean no line at all. The
-    /// route now runs to the edge and leaves; the far endpoint is pulled to
-    /// just outside the plot along the chord, so what is drawn inside the plot
-    /// points where the marker really is.
+    /// A route is a function of the glyphs alone. Move every glyph by the
+    /// same offset — which is what a pan does — and the route moves with
+    /// them, whichever plot rect is handed in and wherever the plot edges
+    /// fall relative to the pair. An earlier planner pulled off-plot ends to
+    /// the edge and refused bows that left the plot, so the same two markers
+    /// wore a different line at every pan position.
     @Test
-    func anEndpointBeyondThePlotStillGetsARouteThatLeavesThroughTheEdge() throws {
+    func aRouteMovesWithItsGlyphsAndNeverWithThePlot() throws {
+        // A pair with a bystander the line must bend around, plus badges.
+        let base: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 200, y: 400), likes: true, responses: true),
+            id(2): glyph(2, CGPoint(x: 330, y: 250), likes: true),
+            id(3): glyph(3, CGPoint(x: 262, y: 322)),
+        ]
+        let reference = try #require(MarkerLinkGeometry.plan(
+            edges: [edge(parent: 1, child: 2)], glyphs: base, plotRect: plot, selectedId: id(1)
+        ).routes.first)
+
+        // Pans that put one or both ends off the plot, and the pair hard
+        // against an edge where the old planner flipped the bow.
+        let offsets = [CGPoint(x: -450, y: 0), CGPoint(x: 300, y: -500), CGPoint(x: -190, y: 0),
+                       CGPoint(x: 120, y: 300), CGPoint(x: 2000, y: -3000)]
+        for offset in offsets {
+            var moved: [UUID: MarkerGlyphBounds] = [:]
+            for (key, glyph) in base {
+                moved[key] = MarkerGlyphBounds(
+                    id: glyph.id,
+                    center: CGPoint(x: glyph.center.x + offset.x, y: glyph.center.y + offset.y),
+                    radius: glyph.radius,
+                    badgeRects: glyph.badgeRects.map { $0.offsetBy(dx: offset.x, dy: offset.y) }
+                )
+            }
+            let planned = MarkerLinkGeometry.plan(
+                edges: [edge(parent: 1, child: 2)], glyphs: moved, plotRect: plot, selectedId: id(1)
+            )
+            let route = try #require(planned.routes.first, "pan \(offset): the line is still there")
+            for step in 0...16 {
+                let t = CGFloat(step) / 16
+                let expected = reference.point(at: t)
+                let actual = route.point(at: t)
+                #expect(abs(actual.x - expected.x - offset.x) < 0.01 && abs(actual.y - expected.y - offset.y) < 0.01,
+                        "pan \(offset): the route is the reference route, translated")
+            }
+        }
+    }
+
+    /// The same pair, the same plot, a different plot rect: identical route.
+    @Test
+    func thePlotRectDoesNotShapeARoute() throws {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 20, y: 500)),
+            id(2): glyph(2, CGPoint(x: 20, y: 500 - stackSpacing * 2)),
+        ]
+        let narrow = try #require(MarkerLinkGeometry.plan(
+            edges: [edge(parent: 1, child: 2)], glyphs: glyphs, plotRect: plot, selectedId: id(1)
+        ).routes.first)
+        let wide = try #require(MarkerLinkGeometry.plan(
+            edges: [edge(parent: 1, child: 2)], glyphs: glyphs,
+            plotRect: CGRect(x: -1000, y: -1000, width: 3000, height: 3000), selectedId: id(1)
+        ).routes.first)
+        #expect(narrow == wide, "hard against the left edge or nowhere near one, the bow is the same")
+    }
+
+    /// An endpoint beyond the plot is routed to where it really is. The clip
+    /// trims the line at the edge; what remains inside points at the marker.
+    @Test
+    func anEndpointBeyondThePlotIsRoutedToWhereItIs() throws {
         let inside = CGPoint(x: 200, y: 400)
         let farRight = CGPoint(x: 1400, y: 300)
         let glyphs: [UUID: MarkerGlyphBounds] = [id(1): glyph(1, inside), id(2): glyph(2, farRight)]
-
-        let planned = MarkerLinkGeometry.plan(
-            edges: [edge(parent: 1, child: 2)], glyphs: glyphs, plotRect: plot, selectedId: id(1)
-        )
-        let route = try #require(planned.routes.first, "an off-screen endpoint is not a reason to omit")
-        #expect(planned.omittedEdges.isEmpty)
-
-        // Starts on the plot at the parent, ends just outside the right edge.
-        #expect(plot.contains(route.start))
-        #expect(route.end.x > plot.maxX, "the drawn end lies past the edge, so the clip cuts a line that continues")
-        #expect(route.end.x < plot.maxX + 60, "…but not far past it: the route stays local")
-        // Nothing drawn inside the plot strays outside it except by leaving
-        // once, to the right.
-        var left = false
-        for step in 0...32 {
-            let point = route.point(at: CGFloat(step) / 32)
-            if point.x > plot.maxX { left = true; continue }
-            #expect(!left, "once past the edge the route does not come back")
-            #expect(plot.insetBy(dx: -1, dy: -1).contains(point))
-        }
-        #expect(left)
-        // The line heads toward the real marker: it leaves at the far endpoint's
-        // height, not somewhere arbitrary.
-        let exit = try #require((0...64).map { route.point(at: CGFloat($0) / 64) }.first { $0.x >= plot.maxX })
-        let expectedY = inside.y + (farRight.y - inside.y) * (plot.maxX - inside.x) / (farRight.x - inside.x)
-        #expect(abs(exit.y - expectedY) < 40, "exit near where the straight chord would cross the edge")
-    }
-
-    @Test
-    func anEndpointAboveThePlotLeavesThroughTheTop() throws {
-        let glyphs: [UUID: MarkerGlyphBounds] = [
-            id(1): glyph(1, CGPoint(x: 200, y: 200)),
-            id(2): glyph(2, CGPoint(x: 260, y: -900)),
-        ]
         let planned = MarkerLinkGeometry.plan(
             edges: [edge(parent: 1, child: 2)], glyphs: glyphs, plotRect: plot, selectedId: id(1)
         )
         let route = try #require(planned.routes.first)
-        #expect(route.end.y < plot.minY)
-        #expect(route.end.y > plot.minY - 60)
+        #expect(planned.omittedEdges.isEmpty)
+        #expect(plot.contains(route.start))
+        let endGap = MarkerLinkGeometry.distance(route.end, farRight)
+        #expect(endGap >= glyphRadius && endGap < glyphRadius + 12,
+                "ends at the far glyph's disc, a thousand points past the plot's edge")
+        // Inside the plot the line heads for the real marker.
+        let exit = try #require((0...256).map { route.point(at: CGFloat($0) / 256) }.first { $0.x >= plot.maxX })
+        let expectedY = inside.y + (farRight.y - inside.y) * (plot.maxX - inside.x) / (farRight.x - inside.x)
+        #expect(abs(exit.y - expectedY) < 40)
     }
 
+    /// A cross-candle line that can clear nothing is drawn anyway, as its
+    /// plainest arc, rather than omitted: it is painted behind the glyphs,
+    /// and a line that depends on what is loaded around it is worse than one
+    /// that passes under a stranger.
     @Test
-    func clampingLeavesAnOnPlotEndpointAlone() {
-        let onPlot = glyph(1, CGPoint(x: 100, y: 100), likes: true)
-        let same = MarkerLinkGeometry.clampedEndpoint(onPlot, toward: CGPoint(x: 300, y: 300), plotRect: plot)
-        #expect(same == onPlot, "badges and centre untouched")
-
-        let justOutside = glyph(2, CGPoint(x: -10, y: 100))
-        let kept = MarkerLinkGeometry.clampedEndpoint(justOutside, toward: CGPoint(x: 300, y: 100), plotRect: plot)
-        #expect(kept.center == justOutside.center, "within the margin it is already close enough")
-
-        let far = glyph(3, CGPoint(x: -500, y: 100), likes: true)
-        let pulled = MarkerLinkGeometry.clampedEndpoint(far, toward: CGPoint(x: 300, y: 100), plotRect: plot)
-        #expect(pulled.center.x < plot.minX && pulled.center.x > -60)
-        #expect(pulled.center.y == 100)
-        #expect(pulled.badgeRects.isEmpty, "an off-screen glyph's badges are not obstacles")
+    func aCrossCandleChordThatClearsNothingIsStillDrawn() throws {
+        var glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 100, y: 500)),
+            id(2): glyph(2, CGPoint(x: 300, y: 300)),
+        ]
+        // A wall of glyphs across the chord's whole neighbourhood.
+        var n = 100
+        for x in stride(from: 120, through: 280, by: 24) {
+            for y in stride(from: 200, through: 600, by: 24) {
+                glyphs[id(n)] = glyph(n, CGPoint(x: CGFloat(x), y: CGFloat(y)))
+                n += 1
+            }
+        }
+        let route = try #require(MarkerLinkGeometry.route(
+            edge: edge(parent: 1, child: 2), glyphs: glyphs, obstacles: Array(glyphs.values)
+        ))
+        #expect(!MarkerLinkGeometry.isSafe(route: route, discObstacles: Array(glyphs.values).filter { $0.id != id(1) && $0.id != id(2) }, badgeObstacles: []),
+                "the wall is genuinely impassable — this is the fallback, not a found path")
+        #expect(route.control2 == nil, "the plain quadratic arc")
     }
 
     @Test

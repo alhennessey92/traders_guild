@@ -194,6 +194,16 @@ enum MarkerLinkGeometry {
     /// Order is the selected marker's own edges first, then by distance from
     /// the selection, so the routes that matter most are drawn first and the
     /// reveal grows outward from the reader's tap.
+    ///
+    /// **A route depends only on the glyphs, never on the viewport.** Every
+    /// candidate is built from the two endpoints' real positions and tested
+    /// against every glyph it could touch, wherever the plot edges happen to
+    /// be; `plotRect` orders the idle cap and nothing else. So panning slides
+    /// a line with its markers instead of re-routing it — an earlier version
+    /// pulled an off-plot endpoint to the edge and rejected any bow that left
+    /// the plot, and the lines visibly flipped sides as the chart moved. Only
+    /// zooming, which changes where glyphs sit relative to each other, may
+    /// change a route. The canvas clip trims whatever lies outside the plot.
     static func plan(
         edges: [MarkerLinkEdge],
         glyphs: [UUID: MarkerGlyphBounds],
@@ -241,27 +251,20 @@ enum MarkerLinkGeometry {
                 omitted.append(edge)
                 continue
             }
-            guard let realParent = glyphs[edge.parentId], let realChild = glyphs[edge.childId] else {
+            guard let parent = glyphs[edge.parentId], let child = glyphs[edge.childId] else {
                 omitted.append(edge)
                 continue
             }
-            // An endpoint off the plot is not a reason to draw nothing: the
-            // line runs to the edge and leaves, which is how a reader learns a
-            // linked marker lies beyond the viewport. The far endpoint is
-            // pulled to just outside the plot along the chord, so the route —
-            // and the obstacle search around it — stays local.
-            let parent = clampedEndpoint(realParent, toward: realChild.center, plotRect: plotRect)
-            let child = clampedEndpoint(realChild, toward: realParent.center, plotRect: plotRect)
-            var routingGlyphs = glyphs
-            routingGlyphs[edge.parentId] = parent
-            routingGlyphs[edge.childId] = child
+            // An endpoint off the plot is not a reason to draw nothing, nor to
+            // route any differently: the line runs to the edge and leaves,
+            // which is how a reader learns a linked marker lies beyond the
+            // viewport, and it is the same line they see once they pan there.
             let reach = maximumLateralExcursion * clampedCurvature + clearance
             let nearby = index.obstacles(near: parent.center, and: child.center, reach: reach)
             if let route = route(
                 edge: edge,
-                glyphs: routingGlyphs,
+                glyphs: glyphs,
                 obstacles: nearby,
-                plotRect: plotRect,
                 curvature: clampedCurvature
             ) {
                 routes.append(route)
@@ -271,46 +274,6 @@ enum MarkerLinkGeometry {
         }
 
         return MarkerLinkRoutePlan(routes: routes, omittedEdges: omitted)
-    }
-
-    /// How far beyond the plot a clamped endpoint sits: its own disc, the
-    /// route clearance, and a little more, so the trimmed line still reaches
-    /// the plot edge from outside it.
-    static let offscreenEndpointMargin: CGFloat = 8
-
-    /// The glyph itself when it is on the plot; otherwise a copy moved along
-    /// the chord to the boundary of the plot grown by the glyph's radius plus
-    /// clearance, with its badges dropped (they are not on screen either).
-    static func clampedEndpoint(
-        _ glyph: MarkerGlyphBounds,
-        toward other: CGPoint,
-        plotRect: CGRect
-    ) -> MarkerGlyphBounds {
-        guard !plotRect.contains(glyph.center) else { return glyph }
-        let margin = glyph.radius + clearance + offscreenEndpointMargin
-        let outer = plotRect.insetBy(dx: -margin, dy: -margin)
-        guard !outer.contains(glyph.center) else { return glyph }
-
-        // Walk from the on-plot end toward the glyph and stop where the
-        // outer rect is left. The chord's direction is what the reader sees.
-        let dx = glyph.center.x - other.x
-        let dy = glyph.center.y - other.y
-        var tExit: CGFloat = 1
-        if dx != 0 {
-            let edgeX = dx > 0 ? outer.maxX : outer.minX
-            tExit = min(tExit, (edgeX - other.x) / dx)
-        }
-        if dy != 0 {
-            let edgeY = dy > 0 ? outer.maxY : outer.minY
-            tExit = min(tExit, (edgeY - other.y) / dy)
-        }
-        tExit = max(0, min(1, tExit))
-        return MarkerGlyphBounds(
-            id: glyph.id,
-            center: CGPoint(x: other.x + dx * tExit, y: other.y + dy * tExit),
-            radius: glyph.radius,
-            badgeRects: []
-        )
     }
 
     /// Glyph bounds, queryable by the rectangle a candidate route can reach.
@@ -352,7 +315,6 @@ enum MarkerLinkGeometry {
         edge: MarkerLinkEdge,
         glyphs: [UUID: MarkerGlyphBounds],
         obstacles: [MarkerGlyphBounds],
-        plotRect: CGRect,
         curvature: CGFloat = defaultCurvature
     ) -> MarkerLinkRoute? {
         guard let parent = glyphs[edge.parentId], let child = glyphs[edge.childId] else {
@@ -370,11 +332,11 @@ enum MarkerLinkGeometry {
         let endpointBadges = obstacles
             .filter { endpointIds.contains($0.id) }
             .flatMap(\.badgeRects)
-        let sides = preferredSides(parent: parent, child: child, plotRect: plotRect)
-        // A route must stay on the plot — unless an endpoint is off it, in
-        // which case the plot is widened just enough to hold that endpoint's
-        // disc; the canvas clip trims the drawn line at the real edge.
-        let safeRect = containmentRect(parent: parent, child: child, plotRect: plotRect)
+        // Left first, always: the like badge sits on the right of a glyph, so
+        // a line leaving leftward has one obstacle fewer. The order is fixed
+        // rather than read off the plot — a side chosen for the room the
+        // viewport had would flip as the chart is panned.
+        let sides: [CGFloat] = [-1, 1]
 
         // Two passes over the same candidates. First with the endpoints' own
         // badges as obstacles, which is prettier: the line prefers to leave on
@@ -392,10 +354,18 @@ enum MarkerLinkGeometry {
             isSafe(
                 route: candidate,
                 discObstacles: discObstacles,
-                badgeObstacles: badgeObstacles,
-                plotRect: safeRect
+                badgeObstacles: badgeObstacles
             ) ? candidate : nil
         }
+
+        // A cross-candle chord that clears nothing is still drawn, as its
+        // plainest arc. Connectors are painted behind every glyph, so a line
+        // passing under a stranger's disc is a small cost; a line that comes
+        // and goes with what happens to be loaded is a larger one, and every
+        // glyph on the chart is an obstacle now, wherever the viewport is.
+        // Same-column pairs keep the omission: the stack spine already joins
+        // them, and a line through the glyph between them says the wrong thing.
+        var fallback: MarkerLinkRoute?
 
         // A long same-column chord — the parent stacked above a candle, the
         // response stacked below it — cannot be cleared by a single-apex arc:
@@ -426,14 +396,18 @@ enum MarkerLinkGeometry {
                             endRadius: child.radius
                         ) else { continue }
 
-                        if let route = accept(MarkerLinkRoute(
+                        let candidate = MarkerLinkRoute(
                             edge: edge,
                             start: trimmed.start,
                             end: trimmed.end,
                             control: trimmed.control,
                             relationship: edge.relationship
-                        ), badgeObstacles: badgeObstacles) {
+                        )
+                        if let route = accept(candidate, badgeObstacles: badgeObstacles) {
                             return route
+                        }
+                        if !isSameCandle, fallback == nil {
+                            fallback = candidate
                         }
                     }
                 }
@@ -475,47 +449,10 @@ enum MarkerLinkGeometry {
             }
         }
 
-        return nil
+        return fallback
     }
 
     // MARK: - Routing primitives
-
-    /// Which lateral side to try first. Left is preferred because the like badge
-    /// is always on the right of a glyph; the plot edge overrides that.
-    /// The rect a route must stay inside: the plot, grown to include any
-    /// endpoint disc that lies outside it.
-    static func containmentRect(
-        parent: MarkerGlyphBounds,
-        child: MarkerGlyphBounds,
-        plotRect: CGRect
-    ) -> CGRect {
-        var rect = plotRect
-        for glyph in [parent, child] where !plotRect.contains(glyph.center) {
-            let disc = CGRect(
-                x: glyph.center.x - glyph.radius - clearance,
-                y: glyph.center.y - glyph.radius - clearance,
-                width: (glyph.radius + clearance) * 2,
-                height: (glyph.radius + clearance) * 2
-            )
-            rect = rect.union(disc)
-        }
-        return rect
-    }
-
-    static func preferredSides(
-        parent: MarkerGlyphBounds,
-        child: MarkerGlyphBounds,
-        plotRect: CGRect
-    ) -> [CGFloat] {
-        let midX = (parent.center.x + child.center.x) / 2
-        let roomLeft = midX - plotRect.minX
-        let roomRight = plotRect.maxX - midX
-        // Only let the plot edge override when one side is genuinely tight.
-        if roomLeft < maximumLateralExcursion && roomRight > roomLeft {
-            return [1, -1]
-        }
-        return [-1, 1]
-    }
 
     static func controlPoint(
         parent: CGPoint,
@@ -738,19 +675,18 @@ enum MarkerLinkGeometry {
         return (piece.start, piece.end, piece.control1, piece.control2)
     }
 
-    /// Sample the drawn span and reject any path that grazes another glyph, a
-    /// badge, or leaves the plot.
+    /// Sample the drawn span and reject any path that grazes another glyph or
+    /// a badge. Leaving the plot is not a fault: the clip trims it, and a rule
+    /// that read the plot edges made routes depend on where the chart was
+    /// panned to.
     static func isSafe(
         route: MarkerLinkRoute,
         discObstacles: [MarkerGlyphBounds],
-        badgeObstacles: [CGRect],
-        plotRect: CGRect
+        badgeObstacles: [CGRect]
     ) -> Bool {
         for step in 0...collisionSamples {
             let t = CGFloat(step) / CGFloat(collisionSamples)
             let point = route.point(at: t)
-
-            if !plotRect.contains(point) { return false }
 
             for obstacle in discObstacles where obstacle.contains(point, clearance: clearance) {
                 return false
