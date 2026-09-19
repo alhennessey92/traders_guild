@@ -3309,7 +3309,22 @@ struct ChartMarkerSystem {
             }
         }
 
-        // 6. Like count badge — rides out with the disc when the glyph is
+        // 6. Thesis ring. Colour lives here and nowhere else in the resting
+        // chart, so deselecting restores the 1.2.1 appearance exactly. Drawn
+        // before the badges: it runs just inside the glass edge, exactly where
+        // both badges straddle the disc, and stroked after them it cut each
+        // one in half.
+        if let linkRing {
+            MarkerLinkRenderer.drawRing(
+                context: drawContext,
+                center: position,
+                radius: scaledRadius,
+                style: linkRing,
+                progress: linkRingProgress
+            )
+        }
+
+        // 7. Like count badge — rides out with the disc when the glyph is
         // scaled, so it straddles the edge of a selected marker rather than
         // sinking inside it.
         if marker.likeCount > 0 {
@@ -3327,7 +3342,7 @@ struct ChartMarkerSystem {
             )
         }
 
-        // 7. The single left-hand badge — mirror of the like badge, so the two
+        // 8. The single left-hand badge — mirror of the like badge, so the two
         // can never collide. Drawn in every state, not only in focus: this is
         // the affordance that says a thesis exists before you tap. Gated on the
         // capability inside `badgeKind`, because linked DTOs outlive the flag
@@ -3345,17 +3360,6 @@ struct ChartMarkerSystem {
             pass: &pass
         )
 
-        // 8. Thesis ring. Colour lives here and nowhere else in the resting
-        // chart, so deselecting restores the 1.2.1 appearance exactly.
-        if let linkRing {
-            MarkerLinkRenderer.drawRing(
-                context: drawContext,
-                center: position,
-                radius: scaledRadius,
-                style: linkRing,
-                progress: linkRingProgress
-            )
-        }
     }
 
     // drawPaletteSymbol removed — canvas now uses single monochrome icons (Point 93 fix).
