@@ -352,16 +352,24 @@ class MarkerNavigationHelper {
                 timeout: 5.0
             )
             guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
-            if matchedMarker == nil {
+            var targetWasDeleted = false
+            if matchedMarker == nil, let manager = capturedChartViewModel.markerManager {
                 // The window fetch is bounded by the candles the chart loaded, so
                 // a marker on the live candle — or on one the persisted series
                 // had not reached — is not in it. We know the id; ask for it
                 // directly before giving up. Positioned against the candles as
                 // they are *now*, which by this point include the live one.
-                matchedMarker = await capturedChartViewModel.markerManager?.loadMarker(
+                switch await manager.loadMarkerOutcome(
                     id: targetMarker.markerId,
                     candles: capturedChartViewModel.dataManager.candles
-                )
+                ) {
+                case .loaded(let marker):
+                    matchedMarker = marker
+                case .notFound:
+                    targetWasDeleted = true
+                case .notOnThisChart, .failed:
+                    break
+                }
                 guard capturedChartViewModel.isMarkerNavigationSessionActive(sessionId) else { return }
             }
             if let matchedMarker {
@@ -398,7 +406,7 @@ class MarkerNavigationHelper {
             if matchedMarker == nil {
                 capturedChartViewModel.finishMarkerNavigation(
                     sessionId: sessionId,
-                    phase: .failed("Marker data did not load")
+                    phase: .failed(targetWasDeleted ? "This marker was deleted" : "Marker data did not load")
                 )
             } else {
                 capturedChartViewModel.finishMarkerNavigation(

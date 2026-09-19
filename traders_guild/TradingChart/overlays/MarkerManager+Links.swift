@@ -381,6 +381,29 @@ extension MarkerManager {
         selectedMarker = marker
     }
 
+    // MARK: - Deleted parents
+
+    /// A marker is gone; every loaded marker that answered it now answers a
+    /// tombstone.
+    ///
+    /// Called for the author's own delete and for the realtime event alike.
+    /// The sheet's parent row reads the preview's availability, and the
+    /// cross-timeframe badge resolver refuses an unavailable preview, so both
+    /// stop offering a trip to a marker that is not there. A later list
+    /// refresh brings the server's own tombstone, which says the same thing.
+    func markParentUnavailable(_ deletedId: UUID) {
+        var touched = false
+        for index in markers.indices where markers[index].parentMarkerId == deletedId {
+            markers[index] = markers[index].withMarker(markers[index].marker.withUnavailableParent())
+            touched = true
+        }
+        guard touched else { return }
+        if let selected = selectedMarker,
+           let refreshed = markers.first(where: { $0.id == selected.id }) {
+            selectedMarker = refreshed
+        }
+    }
+
     // MARK: - Cross-timeframe jumps
 
     /// Badges the selected glyph wears for linked markers on other timeframes.

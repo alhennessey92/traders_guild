@@ -154,6 +154,35 @@ struct MarkerDeleteLifecycleTests {
         #expect(manager.selectedMarker == nil, "the deleted marker cannot stay selected")
     }
 
+    /// Production finding: after a parent was deleted, its response's sheet
+    /// still offered "Open parent" and the trip ended in a 404 card. The
+    /// deletion must turn every loaded child's parent into a tombstone at once,
+    /// not wait for the next list refresh.
+    @Test
+    func deletingAParentTombstonesItsLoadedChildren() async {
+        let api = DeleteFakeAPI()
+        api.acknowledgement = RLMarkerDeleteResponseDTO(detail: "deleted", markerId: id(1))
+        let navigableParent = RLMarkerLinkPreviewDTO(
+            nodeKey: "p", markerId: id(1), linkRelationship: nil, guildId: guildId, symbolId: symbolId,
+            ticker: "BTC/USD", timeframe: "1h", candleTimestamp: Date(timeIntervalSince1970: 1_700_000_000), price: 100
+        )
+        var child = dto(2, author: 1, canDelete: true, parent: 1, relationship: "supports")
+        child = child.updating(parentPreview: navigableParent)
+        #expect(child.parentPreview?.canNavigate == true, "fixture: the child can open its parent")
+        let manager = manager(with: [dto(1, author: 1, canDelete: true, responses: 1, hasResponses: true), child], api: api)
+        manager.selectedMarker = manager.markers.first { $0.id == id(2) }
+
+        #expect(await manager.deleteMarker(id: id(1)) == .deleted)
+
+        let orphan = manager.markers.first { $0.id == id(2) }
+        #expect(orphan?.hasUnavailableParent == true)
+        #expect(orphan?.parentPreview?.canNavigate == false, "no trip to a marker that is gone")
+        #expect(orphan?.parentPreview?.isUnavailable == true)
+        #expect(orphan?.parentMarkerId == id(1), "the link itself is kept, as a soft delete keeps the row")
+        #expect(orphan?.linkRelationship?.raw == "supports")
+        #expect(manager.selectedMarker?.hasUnavailableParent == true, "the open sheet sees the same marker")
+    }
+
     /// The acceptance bug, at the seam: the parent's active count correctly
     /// falls to zero, and without the structural flag that also erased the only
     /// evidence that the thesis — and the grandchild under the tombstone — still

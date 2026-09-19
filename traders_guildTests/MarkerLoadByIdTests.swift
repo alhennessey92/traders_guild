@@ -175,11 +175,66 @@ struct MarkerLoadByIdTests {
         #expect(await manager.loadMarker(id: id(16), candles: data.candles) == nil)
         #expect(manager.markers.isEmpty)
     }
+
+    /// A 404 is not "did not load": the marker is gone. Navigation says so,
+    /// and any loaded child of it stops offering the trip — the production
+    /// case where a response's "Open parent" ended in a "Marker unavailable"
+    /// card because the parent had been deleted on another device.
+    @Test
+    func aMissingMarkerIsReportedAsDeletedAndItsChildrenAreTombstoned() async throws {
+        let persisted = candles(4, from: t0)
+        let api = LoadByIdFakeAPI()
+        let parentPreview = RLMarkerLinkPreviewDTO(
+            nodeKey: "p", markerId: id(17), linkRelationship: nil, guildId: guildId, symbolId: symbolId,
+            ticker: "BTC/USD", timeframe: "1h", candleTimestamp: t0, price: 100
+        )
+        var child = marker(id: id(18), at: t0.addingTimeInterval(hour))
+        child = RLChartMarkerDTO(
+            id: child.id, symbolId: child.symbolId, guildId: child.guildId, author: child.author,
+            candleTimestamp: child.candleTimestamp, timeframe: child.timeframe, price: child.price,
+            intent: child.intent, title: child.title, note: child.note, visibility: child.visibility,
+            confidence: nil, trackingEnabled: false, trackingState: nil, alertSeverity: nil,
+            createdAt: child.createdAt, createdAtFormatted: "now", isVisible: true,
+            likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [],
+            isCurrentUserMarker: false, canEdit: false, canDelete: false,
+            components: [], primaryComponentId: nil,
+            pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil,
+            parentMarkerId: id(17), linkRelationship: "builds_on", parentPreview: parentPreview
+        )
+        api.windowMarkers = [child]
+        let (manager, data) = await loadedManager(persisted: persisted, api: api)
+        #expect(manager.markers.first?.parentPreview?.canNavigate == true, "fixture: the child can open its parent")
+
+        // Parent id 17 is not registered with the fake: it throws a 404.
+        let outcome = await manager.loadMarkerOutcome(id: id(17), candles: data.candles)
+        guard case .notFound = outcome else {
+            Issue.record("expected .notFound, got \(outcome)")
+            return
+        }
+        #expect(manager.markers.count == 1, "nothing removed — the child itself still exists")
+        #expect(manager.markers.first?.hasUnavailableParent == true)
+        #expect(manager.markers.first?.parentPreview?.canNavigate == false)
+    }
+
+    @Test
+    func aNetworkFailureIsNotADeletion() async throws {
+        let persisted = candles(4, from: t0)
+        let api = LoadByIdFakeAPI()
+        api.failure = APIError.networkError("offline")
+        let (manager, data) = await loadedManager(persisted: persisted, api: api)
+        let outcome = await manager.loadMarkerOutcome(id: id(19), candles: data.candles)
+        guard case .failed = outcome else {
+            Issue.record("expected .failed, got \(outcome)")
+            return
+        }
+    }
 }
 
 private final class LoadByIdFakeAPI: MarkerAPIClient, @unchecked Sendable {
     var windowMarkers: [RLChartMarkerDTO] = []
     var markersById: [UUID: RLChartMarkerDTO] = [:]
+    /// When set, every by-id fetch throws this instead of a 404.
+    var failure: Error?
     private(set) var getMarkerCalls: [UUID] = []
 
     func getMarkers(
@@ -190,6 +245,7 @@ private final class LoadByIdFakeAPI: MarkerAPIClient, @unchecked Sendable {
     }
     func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO {
         getMarkerCalls.append(markerId)
+        if let failure { throw failure }
         guard let dto = markersById[markerId] else {
             throw APIError.serverError(404, "Marker not found")
         }

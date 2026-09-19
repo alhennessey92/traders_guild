@@ -313,10 +313,16 @@ extension RLChartMarkerDTO {
         hasResponses: Bool? = nil,
         isCurrentUserMarker: Bool? = nil,
         canEdit: Bool? = nil,
-        canDelete: Bool? = nil
+        canDelete: Bool? = nil,
+        parentPreview: RLMarkerLinkPreviewDTO? = nil
     ) -> RLChartMarkerDTO {
         guard var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
             return self
+        }
+        if let parentPreview,
+           let encoded = try? JSONEncoder().encode(parentPreview),
+           let previewDict = try? JSONSerialization.jsonObject(with: encoded) {
+            dict["parentPreview"] = previewDict
         }
         if let intent = intent { dict["intent"] = intent }
         if let title = title { dict["title"] = title }
@@ -372,5 +378,29 @@ extension RLChartMarkerDTO {
             return self
         }
         return updated
+    }
+
+    /// This marker's parent is gone: the same DTO with its parent preview
+    /// turned into a tombstone.
+    ///
+    /// A deletion event only names the deleted marker; a loaded child would
+    /// otherwise keep the navigable preview it was hydrated with, and its
+    /// "Open parent" row would still try — and reach a 404. The tombstone
+    /// keeps the link relationship and the parent id (a soft delete leaves the
+    /// row), drops every navigation field, and marks itself unavailable, which
+    /// is exactly the shape the server sends for a parent it will not show.
+    func withUnavailableParent() -> RLChartMarkerDTO {
+        guard parentMarkerId != nil || linkRelationship != nil else { return self }
+        let existing = parentPreview
+        let tombstone = RLMarkerLinkPreviewDTO(
+            nodeKey: existing?.nodeKey ?? "tombstone:\(parentMarkerId?.uuidString ?? id.uuidString)",
+            parentKey: existing?.parentKey,
+            parentMarkerId: existing?.parentMarkerId,
+            linkRelationship: existing?.linkRelationship,
+            isUnavailable: true,
+            directResponseCount: existing?.directResponseCount ?? 0,
+            depth: existing?.depth ?? 0
+        )
+        return updating(parentPreview: tombstone)
     }
 }

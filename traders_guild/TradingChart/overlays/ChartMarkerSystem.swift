@@ -553,36 +553,61 @@ class MarkerManager: ObservableObject {
     /// timestamp — a candle the backend never persisted is not conjured.
     @discardableResult
     func loadMarker(id: UUID, candles: [RLCandleDTO]) async -> ChartMarkerUI? {
+        if case let .loaded(marker) = await loadMarkerOutcome(id: id, candles: candles) {
+            return marker
+        }
+        return nil
+    }
+
+    /// Why a by-id load did not produce a marker. Navigation tells the user
+    /// something different for a marker that was deleted than for one that
+    /// merely did not load, and a deletion learned this way is applied to the
+    /// loaded children the same as a realtime event would be.
+    enum MarkerLoadOutcome {
+        case loaded(ChartMarkerUI)
+        /// The server has no such marker any more.
+        case notFound
+        /// Exists, but belongs to another chart, is private to someone else,
+        /// or has no loaded candle to sit on.
+        case notOnThisChart
+        case failed
+    }
+
+    func loadMarkerOutcome(id: UUID, candles: [RLCandleDTO]) async -> MarkerLoadOutcome {
         if let existing = markers.first(where: { $0.id == id }) {
-            return existing
+            return .loaded(existing)
         }
         guard let api,
               let currentSymbolId,
               let currentTf = currentTimeframe,
-              candleArrayMatchesTimeframe(candles, currentTf) else { return nil }
+              candleArrayMatchesTimeframe(candles, currentTf) else { return .notOnThisChart }
         let requestedContext = layoutContext
 
         let dto: RLChartMarkerDTO
         do {
             dto = try await api.getMarker(markerId: id)
+        } catch APIError.serverError(let status, _) where status == 404 {
+            print("Marker \(id) no longer exists")
+            await MainActor.run { markParentUnavailable(id) }
+            return .notFound
         } catch {
             print("Failed to load marker \(id): \(error)")
-            return nil
+            return .failed
         }
 
         guard layoutContext == requestedContext,
               dto.symbolId == currentSymbolId,
               dto.guildId == currentGuildId,
               dto.timeframe == currentTf.toBackendString(),
-              canRenderMarker(dto) else { return nil }
+              canRenderMarker(dto) else { return .notOnThisChart }
 
-        return await MainActor.run { () -> ChartMarkerUI? in
+        return await MainActor.run { () -> MarkerLoadOutcome in
             // The window fetch or a realtime create may have landed it meanwhile.
             if let existing = markers.first(where: { $0.id == id }) {
-                return existing
+                return .loaded(existing)
             }
             guard let candleIndex = findCandleIndex(timestamp: dto.candleTimestamp, in: candles) else {
-                return nil
+                return .notOnThisChart
             }
             // A by-id read carries the viewer's own flags, unlike the create
             // broadcast, so nothing needs re-deriving here.
@@ -597,7 +622,7 @@ class MarkerManager: ObservableObject {
             marker.stackIndex = positioning.stackIndex
             marker.hasStableLayout = true
             markers.append(marker)
-            return marker
+            return .loaded(marker)
         }
     }
 
@@ -629,7 +654,7 @@ class MarkerManager: ObservableObject {
         subscribeToMarkerChannel(guildId: guildId)
 
         do {
-            let fetchedMarkers = try await fetchMarkerDTOs(
+            let page = try await fetchMarkerPages(
                 api: api,
                 guildId: guildId,
                 symbolId: symbolId,
@@ -637,13 +662,27 @@ class MarkerManager: ObservableObject {
                 startTime: startTime,
                 endTime: endTime
             )
-            let newMarkers = positionedMarkers(from: fetchedMarkers, candles: candles)
+            let newMarkers = positionedMarkers(from: page.markers, candles: candles)
 
             guard layoutContext == requestedContext else { return }
 
             await MainActor.run {
+                // A merge is a union by id, so a marker the server has stopped
+                // returning — deleted, or made private — survived every
+                // resync. Inside a window this fetch covered completely, a
+                // loaded marker the server did not send is gone; outside it,
+                // nothing is known and nothing is dropped.
+                let fetchedIds = Set(page.markers.map(\.id))
+                var dropped: Set<UUID> = []
+                if page.isComplete, let startTime, let endTime {
+                    for marker in self.markers
+                    where (startTime...endTime).contains(marker.candleTimestamp) && !fetchedIds.contains(marker.id) {
+                        dropped.insert(marker.id)
+                    }
+                }
+
                 var mergedById: [UUID: ChartMarkerUI] = [:]
-                for marker in self.markers {
+                for marker in self.markers where !dropped.contains(marker.id) {
                     mergedById[marker.id] = marker
                 }
                 for marker in newMarkers {
@@ -675,9 +714,16 @@ class MarkerManager: ObservableObject {
                     candles: candles
                 )
                 self.markers = mergedMarkers
-                if let selected = self.selectedMarker,
-                   let refreshed = mergedMarkers.first(where: { $0.id == selected.id }) {
-                    self.selectedMarker = refreshed
+                if let selected = self.selectedMarker {
+                    if let refreshed = mergedMarkers.first(where: { $0.id == selected.id }) {
+                        self.selectedMarker = refreshed
+                    } else if dropped.contains(selected.id) {
+                        self.selectedMarker = nil
+                    }
+                }
+                for id in dropped {
+                    self.markParentUnavailable(id)
+                    self.responseCounts.forget(id)
                 }
             }
         } catch {
@@ -693,11 +739,29 @@ class MarkerManager: ObservableObject {
         startTime: Date?,
         endTime: Date?
     ) async throws -> [RLChartMarkerDTO] {
+        try await fetchMarkerPages(
+            api: api, guildId: guildId, symbolId: symbolId, timeframe: timeframe,
+            startTime: startTime, endTime: endTime
+        ).markers
+    }
+
+    /// Every page of the window, and whether that was all of them. A fetch cut
+    /// off by the page cap is not a complete picture of the window, and must
+    /// not be treated as one when deciding what the server no longer has.
+    private func fetchMarkerPages(
+        api: any MarkerAPIClient,
+        guildId: UUID,
+        symbolId: UUID,
+        timeframe: RLChartTimeframe,
+        startTime: Date?,
+        endTime: Date?
+    ) async throws -> (markers: [RLChartMarkerDTO], isComplete: Bool) {
         let timeframeString = timeframe.toBackendString()
         var cursor: String?
         var pageCount = 0
         let maxPages = 10
         var fetchedMarkers: [RLChartMarkerDTO] = []
+        var isComplete = false
 
         repeat {
             let markersListDTO = try await api.getMarkers(
@@ -714,11 +778,12 @@ class MarkerManager: ObservableObject {
             pageCount += 1
 
             if !markersListDTO.hasMore || cursor == nil {
+                isComplete = true
                 break
             }
         } while pageCount < maxPages
 
-        return fetchedMarkers
+        return (fetchedMarkers, isComplete)
     }
 
     private func positionedMarkers(
@@ -1130,6 +1195,7 @@ class MarkerManager: ObservableObject {
         invalidateThreadsTouched(byDeletionOf: payload)
 
         markers.removeAll { $0.id == markerId }
+        markParentUnavailable(markerId)
         responseCounts.forget(markerId)
         if selectedMarker?.id == markerId {
             selectedMarker = nil
@@ -1507,6 +1573,7 @@ class MarkerManager: ObservableObject {
         }
 
         markers.removeAll { $0.id == id }
+        markParentUnavailable(id)
         // Only clear a selection that is still the marker we deleted: the user
         // may have tapped another marker while the request was in flight, and
         // dropping that selection would be a second surprise.
