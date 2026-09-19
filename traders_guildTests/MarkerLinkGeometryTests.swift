@@ -816,4 +816,94 @@ struct MarkerLinkGeometryTests {
             ) == nil
         )
     }
+
+    // MARK: - Off-screen endpoints (production feedback: "far-away response, no line")
+
+    /// A linked marker beyond the viewport used to mean no line at all. The
+    /// route now runs to the edge and leaves; the far endpoint is pulled to
+    /// just outside the plot along the chord, so what is drawn inside the plot
+    /// points where the marker really is.
+    @Test
+    func anEndpointBeyondThePlotStillGetsARouteThatLeavesThroughTheEdge() throws {
+        let inside = CGPoint(x: 200, y: 400)
+        let farRight = CGPoint(x: 1400, y: 300)
+        let glyphs: [UUID: MarkerGlyphBounds] = [id(1): glyph(1, inside), id(2): glyph(2, farRight)]
+
+        let planned = MarkerLinkGeometry.plan(
+            edges: [edge(parent: 1, child: 2)], glyphs: glyphs, plotRect: plot, selectedId: id(1)
+        )
+        let route = try #require(planned.routes.first, "an off-screen endpoint is not a reason to omit")
+        #expect(planned.omittedEdges.isEmpty)
+
+        // Starts on the plot at the parent, ends just outside the right edge.
+        #expect(plot.contains(route.start))
+        #expect(route.end.x > plot.maxX, "the drawn end lies past the edge, so the clip cuts a line that continues")
+        #expect(route.end.x < plot.maxX + 60, "…but not far past it: the route stays local")
+        // Nothing drawn inside the plot strays outside it except by leaving
+        // once, to the right.
+        var left = false
+        for step in 0...32 {
+            let point = route.point(at: CGFloat(step) / 32)
+            if point.x > plot.maxX { left = true; continue }
+            #expect(!left, "once past the edge the route does not come back")
+            #expect(plot.insetBy(dx: -1, dy: -1).contains(point))
+        }
+        #expect(left)
+        // The line heads toward the real marker: it leaves at the far endpoint's
+        // height, not somewhere arbitrary.
+        let exit = try #require((0...64).map { route.point(at: CGFloat($0) / 64) }.first { $0.x >= plot.maxX })
+        let expectedY = inside.y + (farRight.y - inside.y) * (plot.maxX - inside.x) / (farRight.x - inside.x)
+        #expect(abs(exit.y - expectedY) < 40, "exit near where the straight chord would cross the edge")
+    }
+
+    @Test
+    func anEndpointAboveThePlotLeavesThroughTheTop() throws {
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): glyph(1, CGPoint(x: 200, y: 200)),
+            id(2): glyph(2, CGPoint(x: 260, y: -900)),
+        ]
+        let planned = MarkerLinkGeometry.plan(
+            edges: [edge(parent: 1, child: 2)], glyphs: glyphs, plotRect: plot, selectedId: id(1)
+        )
+        let route = try #require(planned.routes.first)
+        #expect(route.end.y < plot.minY)
+        #expect(route.end.y > plot.minY - 60)
+    }
+
+    @Test
+    func clampingLeavesAnOnPlotEndpointAlone() {
+        let onPlot = glyph(1, CGPoint(x: 100, y: 100), likes: true)
+        let same = MarkerLinkGeometry.clampedEndpoint(onPlot, toward: CGPoint(x: 300, y: 300), plotRect: plot)
+        #expect(same == onPlot, "badges and centre untouched")
+
+        let justOutside = glyph(2, CGPoint(x: -10, y: 100))
+        let kept = MarkerLinkGeometry.clampedEndpoint(justOutside, toward: CGPoint(x: 300, y: 100), plotRect: plot)
+        #expect(kept.center == justOutside.center, "within the margin it is already close enough")
+
+        let far = glyph(3, CGPoint(x: -500, y: 100), likes: true)
+        let pulled = MarkerLinkGeometry.clampedEndpoint(far, toward: CGPoint(x: 300, y: 100), plotRect: plot)
+        #expect(pulled.center.x < plot.minX && pulled.center.x > -60)
+        #expect(pulled.center.y == 100)
+        #expect(pulled.badgeRects.isEmpty, "an off-screen glyph's badges are not obstacles")
+    }
+
+    @Test
+    func aRouteCapKeepsTheEdgesNearestTheViewportCentre() {
+        // Five edges at increasing distance from the centre of the plot.
+        var glyphs: [UUID: MarkerGlyphBounds] = [:]
+        var edges: [MarkerLinkEdge] = []
+        for n in 0..<5 {
+            let x = CGFloat(200 + n * 40)
+            glyphs[id(10 + n)] = glyph(10 + n, CGPoint(x: x, y: 400 - CGFloat(n) * 60))
+            glyphs[id(20 + n)] = glyph(20 + n, CGPoint(x: x, y: 400 - CGFloat(n) * 60 - stackSpacing * 2))
+            edges.append(edge(parent: 10 + n, child: 20 + n))
+        }
+        let planned = MarkerLinkGeometry.plan(
+            edges: edges, glyphs: glyphs, plotRect: plot, selectedId: nil, maximumRoutes: 2
+        )
+        #expect(planned.routes.count == 2)
+        #expect(planned.omittedEdges.count == 3)
+        let kept = Set(planned.routes.map { $0.edge.parentId })
+        #expect(kept == [id(10), id(11)], "the two nearest the plot centre survive the cap")
+    }
 }

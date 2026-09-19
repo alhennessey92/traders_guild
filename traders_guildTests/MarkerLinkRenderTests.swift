@@ -505,4 +505,48 @@ struct MarkerLinkRenderTests {
             MarkerLinkRenderer.responseBadgeRect(center: center, isBelow: false, scale: scale),
         ])
     }
+
+    // MARK: - Idle lines and bridges over deleted markers
+
+    /// The resting lines are the same routed curve, drawn faint, thin and
+    /// without a reveal. The style constants are the contract with the design:
+    /// close to the focus dim so "not in focus" reads as one idiom.
+    @Test
+    func idleLinesAreFaintThinAndFullyDrawn() {
+        #expect(MarkerLinkRenderer.idleConnectorOpacity == 0.22)
+        #expect(MarkerLinkRenderer.idleConnectorOpacity == MarkerLinkGraph.unrelatedOpacity)
+        #expect(MarkerLinkRenderer.idleDash == [3, 3])
+        #expect(MarkerIdleLinkContext.maximumEdges == 60)
+        // The idle path is the full route, not a trimmed one.
+        let full = MarkerLinkRenderer.trimmedPath(for: route(), progress: 1)
+        #expect(elements(of: full) == ["move", "quad"])
+        #expect(full.currentPoint == route().end)
+    }
+
+    @Test
+    func idleContextDefaultsToThePersistedAppearance() {
+        let context = MarkerIdleLinkContext(edges: [], plotRect: CGRect(x: 0, y: 0, width: 400, height: 800))
+        #expect(context.lineWidth == ChartSettings.shared.linkLineWidth)
+        #expect(context.curvature == ChartSettings.shared.linkCurvature)
+    }
+
+    /// A bridge over a deleted marker keeps its relationship's colour but is
+    /// fainter and more broken than any direct answer, in both passes.
+    @Test
+    func aBridgeIsFainterAndMoreBrokenThanAnyRelationship() {
+        #expect(MarkerLinkRenderer.viaUnavailableOpacityFactor == 0.5)
+        for relationship in MarkerLinkRelationship.allCases {
+            let dash = relationship.dashPattern
+            let gapRatio = dash[1] / dash[0]
+            let bridgeGapRatio = MarkerLinkRenderer.viaUnavailableDash[1] / MarkerLinkRenderer.viaUnavailableDash[0]
+            #expect(bridgeGapRatio > gapRatio, "sparser than \(relationship)")
+        }
+        var edge = MarkerLinkEdge(
+            parentId: id(1), childId: id(2), relationship: MarkerLinkRelationshipValue(.supports), kind: .withinThesis
+        )
+        #expect(!edge.viaUnavailable, "a plain edge is a direct answer")
+        edge.viaUnavailable = true
+        #expect(edge == MarkerLinkEdge(parentId: id(1), childId: id(2), relationship: nil, kind: .withinThesis),
+                "identity is still the pair — the flag is presentation")
+    }
 }

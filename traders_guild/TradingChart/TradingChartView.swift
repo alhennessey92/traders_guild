@@ -7946,7 +7946,24 @@ struct TradingChartView: View {
             linkedMarkersEnabled: markerManager.linkedMarkersEnabled,
             timeframeJumps: markerManager.timeframeJumps,
             markerPlotRect: plotRect,
-            infoCardRect: chartInfoColumnFrame
+            infoCardRect: chartInfoColumnFrame,
+            idleLinks: idleLinkContext(plotRect: plotRect)
+        )
+    }
+
+    /// The resting link lines: every loaded parent→child pair, faint, only
+    /// while nothing is focused and the layer is not dimmed for placement.
+    private func idleLinkContext(plotRect: CGRect) -> MarkerIdleLinkContext? {
+        guard markerManager.linkedMarkersEnabled,
+              markerManager.linkFocus == nil,
+              !controlViewModel.isMarkerPlacementMode else { return nil }
+        let edges = markerManager.linkGraph.allEdges
+        guard !edges.isEmpty else { return nil }
+        return MarkerIdleLinkContext(
+            edges: edges,
+            plotRect: plotRect,
+            lineWidth: chartSettings.linkLineWidth,
+            curvature: chartSettings.linkCurvature
         )
     }
 

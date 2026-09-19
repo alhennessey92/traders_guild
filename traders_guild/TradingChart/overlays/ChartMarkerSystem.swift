@@ -2868,7 +2868,8 @@ struct ChartMarkerSystem {
         linkedMarkersEnabled: Bool = false,
         timeframeJumps: [MarkerTimeframeJump] = [],
         markerPlotRect: CGRect? = nil,
-        infoCardRect: CGRect? = nil
+        infoCardRect: CGRect? = nil,
+        idleLinks: MarkerIdleLinkContext? = nil
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2940,7 +2941,7 @@ struct ChartMarkerSystem {
 
             // Captured after the nudge above, so connectors attach where the
             // glyphs actually land rather than where they would have.
-            if linkRender != nil {
+            if linkRender != nil || idleLinks != nil {
                 for entry in markerPositions {
                     let isSelected = selectedMarkerId == entry.marker.id
                     let radius = (MarkerVisualSpec.baseCanvasDiameter / 2)
@@ -2993,7 +2994,39 @@ struct ChartMarkerSystem {
         // Connectors are routed and drawn here — after every position is final,
         // and before any glyph — so they pass behind the glass rather than over
         // it, and so they attach to post-nudge centres.
+        //
+        // An edge whose far end was culled still gets bounds for that end,
+        // computed the same way, so the line can run to the plot edge and
+        // leave — the reader's cue that a linked marker lies beyond the
+        // viewport. Only edge endpoints are added, never the whole loaded set.
+        func addOffscreenEndpoints(for edges: [MarkerLinkEdge]) {
+            for edge in edges {
+                for id in [edge.parentId, edge.childId] where linkGlyphBounds[id] == nil {
+                    guard let marker = markers.first(where: { $0.id == id && $0.isVisible }),
+                          marker.candleIndex >= 0, marker.candleIndex < candles.count else { continue }
+                    let candle = candles[marker.candleIndex]
+                    let x = CGFloat(marker.candleIndex) * totalCandleWidth + totalOffset
+                    let candleHighY = chartSize.height - (CGFloat(candle.high - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+                    let candleLowY = chartSize.height - (CGFloat(candle.low - priceRange.min) / CGFloat(priceRange.max - priceRange.min)) * scaledHeight - verticalOffset
+                    let position = MarkerPositionCalculator.computeMarkerScreenPosition(
+                        marker: marker,
+                        candleHighY: candleHighY,
+                        candleLowY: candleLowY,
+                        centerX: x + actualCandleWidth / 2,
+                        priceScale: priceScale,
+                        viewportHeight: chartSize.height
+                    )
+                    linkGlyphBounds[id] = MarkerGlyphBounds(
+                        id: id,
+                        center: position,
+                        radius: MarkerVisualSpec.baseCanvasDiameter / 2
+                    )
+                }
+            }
+        }
+
         if let linkRender {
+            addOffscreenEndpoints(for: linkRender.focus.candidateEdges)
             let plan = MarkerLinkGeometry.plan(
                 edges: linkRender.focus.candidateEdges,
                 glyphs: linkGlyphBounds,
@@ -3006,6 +3039,26 @@ struct ChartMarkerSystem {
                 plan: plan,
                 revealProgress: linkRender.revealProgress,
                 lineWidth: linkRender.lineWidth
+            )
+        } else if let idleLinks, !isDimmed, !idleLinks.edges.isEmpty {
+            // At rest: the faint lines. Edges with neither end near the
+            // viewport are not worth routing; the plan orders the rest nearest
+            // the viewport centre first and the cap keeps those.
+            let culledIds = Set(linkGlyphBounds.keys)
+            let nearby = idleLinks.edges.filter { culledIds.contains($0.parentId) || culledIds.contains($0.childId) }
+            addOffscreenEndpoints(for: nearby)
+            let plan = MarkerLinkGeometry.plan(
+                edges: nearby,
+                glyphs: linkGlyphBounds,
+                plotRect: idleLinks.plotRect,
+                selectedId: nil,
+                curvature: idleLinks.curvature,
+                maximumRoutes: MarkerIdleLinkContext.maximumEdges
+            )
+            MarkerLinkRenderer.drawIdleConnectors(
+                context: context,
+                plan: plan,
+                lineWidth: idleLinks.lineWidth
             )
         }
 

@@ -17,17 +17,57 @@ extension MarkerManager {
     /// so this is the widest honest definition of "on screen".
     /// Markers the renderer actually painted this frame.
     ///
-    /// Set by the chart after viewport culling. The fade rule asks whether at
-    /// least two members of the thesis are *visible*, and `filteredMarkers`
-    /// answers a different question — it includes markers scrolled far off
-    /// screen, so the rule would dim the chart around a lone glyph whose only
-    /// companion is a thousand candles away.
+    /// Set by the chart after viewport culling: which thesis members were
+    /// actually painted, as opposed to `filteredMarkers`, which includes
+    /// markers scrolled a thousand candles away.
     var focusVisibleIds: Set<UUID> {
         renderedMarkerIds ?? Set(filteredMarkers.map(\.id))
     }
 
     var linkGraph: MarkerLinkGraph {
-        MarkerLinkGraph(nodes: markers.map(\.linkNode))
+        MarkerLinkGraph(nodes: markers.map(\.linkNode), bridges: linkBridges)
+    }
+
+    // MARK: - Bridges over deleted markers
+
+    /// For every loaded marker whose parent is not on this chart, the nearest
+    /// loaded ancestor reachable through *unavailable* nodes only.
+    ///
+    /// A soft-deleted middle marker leaves its parent and its response with
+    /// no drawable edge, though the thesis still holds all three. The server's
+    /// tombstone preview carries no grandparent id, but the thesis window
+    /// lists the tombstone with its `parentKey`, so the chain can be walked
+    /// there. Only unavailable nodes are stepped over: a middle marker that
+    /// merely lives on another timeframe is reached by its badge, and bridging
+    /// past it would misstate what the response answers.
+    var linkBridges: [MarkerLinkBridge] {
+        guard linkedMarkersEnabled else { return [] }
+        let loadedIds = Set(markers.map(\.id))
+        var bridges: [MarkerLinkBridge] = []
+        for marker in markers {
+            guard let parentId = marker.parentMarkerId, !loadedIds.contains(parentId) else { continue }
+            // A hydrated grandparent id, should the server ever send one.
+            if let grandparent = marker.parentPreview?.parentMarkerId, loadedIds.contains(grandparent) {
+                bridges.append(MarkerLinkBridge(childId: marker.id, ancestorId: grandparent))
+                continue
+            }
+            guard let window = threadStore?.window(forMarkerId: marker.id),
+                  let node = window.nodes.first(where: { $0.markerId == marker.id }) else { continue }
+            var key = node.parentKey
+            var steps = 0
+            while let current = key, steps < 32 {
+                steps += 1
+                guard let ancestor = window.nodesByKey[current] else { break }
+                if let ancestorId = ancestor.markerId, !ancestor.isUnavailable {
+                    if loadedIds.contains(ancestorId) {
+                        bridges.append(MarkerLinkBridge(childId: marker.id, ancestorId: ancestorId))
+                    }
+                    break
+                }
+                key = ancestor.parentKey
+            }
+        }
+        return bridges
     }
 
     /// Recompute focus for the current selection.
@@ -387,20 +427,20 @@ extension MarkerManager {
         )
     }
 
-    /// Fetch the selected marker's thesis window if a response badge could
-    /// need it and nothing has loaded it yet.
+    /// Fetch the selected marker's thesis window if a response badge or a
+    /// bridge over a deleted marker could need it and nothing has loaded it.
     ///
     /// The sheet's disclosure normally fetches the same window and both go
     /// through the store, which refuses a page from a superseded generation;
-    /// this just stops the badge depending on whether the sheet happened to be
-    /// built. Only responded-to markers fetch — a leaf or an unlinked marker
-    /// has no response to jump to.
+    /// this just stops the chart depending on whether the sheet happened to
+    /// be built. Any thesis member fetches — a leaf whose parent was deleted
+    /// needs the window to find the ancestor it is still linked to.
     func loadThreadForTimeframeJumps() {
         timeframeJumpThreadTask?.cancel()
         timeframeJumpThreadTask = nil
         guard linkedMarkersEnabled,
               let selected = selectedMarker,
-              selected.hasAnyResponses,
+              selected.participatesInThesis,
               let store = threadStore,
               store.window(forMarkerId: selected.id) == nil else { return }
         let markerId = selected.id
@@ -412,7 +452,10 @@ extension MarkerManager {
                   let store, store.generation == generation,
                   self.selectedMarker?.id == markerId else { return }
             _ = store.ingest(page: page, requestedMarkerId: markerId, expectedGeneration: generation)
-            // Nothing observes the window itself; nudge the layer to redraw.
+            // The window can add a bridge to the graph, so focus is derived
+            // again; nothing observes the window itself, so the layer is
+            // nudged to redraw either way.
+            self.refreshLinkFocus()
             self.objectWillChange.send()
         }
     }

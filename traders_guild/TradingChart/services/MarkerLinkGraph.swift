@@ -65,6 +65,10 @@ struct MarkerLinkEdge: Equatable, Hashable {
     /// The child's relationship to the parent; nil when unknown to this build.
     let relationship: MarkerLinkRelationshipValue?
     let kind: MarkerLinkEdgeKind
+    /// The child's real parent is gone (soft-deleted) and `parentId` is the
+    /// nearest surviving ancestor. Drawn fainter, so the reader sees "linked
+    /// through a deleted marker" rather than a direct answer.
+    var viaUnavailable: Bool = false
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(parentId)
@@ -117,6 +121,15 @@ struct MarkerFocusState: Equatable {
     var isActive: Bool { shouldFadeUnrelated || memberIds.count > 1 || !candidateEdges.isEmpty }
 }
 
+/// A loaded marker whose real parent is gone, tied to the nearest ancestor
+/// that is loaded. Resolved by the manager from the thesis window (which
+/// still lists the deleted marker as a tombstone) and handed to the graph,
+/// which treats it as the child's parent link for topology and drawing.
+struct MarkerLinkBridge: Equatable, Hashable {
+    let childId: UUID
+    let ancestorId: UUID
+}
+
 /// Link topology over a set of loaded markers.
 struct MarkerLinkGraph: Equatable {
     /// Opacity applied to markers outside the focused thesis.
@@ -124,10 +137,13 @@ struct MarkerLinkGraph: Equatable {
 
     private let nodesById: [UUID: MarkerLinkNode]
     private let childIdsByParent: [UUID: [UUID]]
+    /// Child → ancestor for every bridge in effect.
+    private let bridgedParentById: [UUID: UUID]
 
-    init(nodes: [MarkerLinkNode]) {
+    init(nodes: [MarkerLinkNode], bridges: [MarkerLinkBridge] = []) {
         var byId: [UUID: MarkerLinkNode] = [:]
         var children: [UUID: [UUID]] = [:]
+        var bridged: [UUID: UUID] = [:]
         byId.reserveCapacity(nodes.count)
         for node in nodes {
             byId[node.id] = node
@@ -138,18 +154,60 @@ struct MarkerLinkGraph: Equatable {
             guard let parentId = node.parentId, byId[parentId] != nil else { continue }
             children[parentId, default: []].append(node.id)
         }
+        // A bridge stands in for a parent that is not here. Never for one that
+        // is: the real edge wins, and a loaded parent is not a tombstone.
+        for bridge in bridges {
+            guard let child = byId[bridge.childId],
+                  byId[bridge.ancestorId] != nil,
+                  bridge.ancestorId != bridge.childId,
+                  let realParent = child.parentId,
+                  byId[realParent] == nil,
+                  bridged[bridge.childId] == nil else { continue }
+            bridged[bridge.childId] = bridge.ancestorId
+            children[bridge.ancestorId, default: []].append(bridge.childId)
+        }
         nodesById = byId
         childIdsByParent = children
+        bridgedParentById = bridged
     }
 
     // MARK: - Topology
 
     func node(_ id: UUID) -> MarkerLinkNode? { nodesById[id] }
 
-    /// The parent, only when it is itself loaded.
+    /// The parent this graph draws for `id`: the real one when loaded, else the
+    /// bridged ancestor, else nil.
+    private func effectiveParentId(of id: UUID) -> UUID? {
+        if let ancestor = bridgedParentById[id] { return ancestor }
+        guard let parentId = nodesById[id]?.parentId, nodesById[parentId] != nil else { return nil }
+        return parentId
+    }
+
+    func isBridged(_ id: UUID) -> Bool { bridgedParentById[id] != nil }
+
+    /// The parent, only when it is itself loaded — or the bridged ancestor.
     func loadedParent(of id: UUID) -> MarkerLinkNode? {
-        guard let parentId = nodesById[id]?.parentId else { return nil }
+        guard let parentId = effectiveParentId(of: id) else { return nil }
         return nodesById[parentId]
+    }
+
+    /// Every drawable parent→child edge among the loaded markers, bridges
+    /// included: the idle chart's faint lines. Order is deterministic.
+    var allEdges: [MarkerLinkEdge] {
+        var edges: [MarkerLinkEdge] = []
+        for parentId in childIdsByParent.keys.sorted(by: { $0.uuidString < $1.uuidString }) {
+            for childId in childIdsByParent[parentId] ?? [] {
+                guard let child = nodesById[childId] else { continue }
+                edges.append(MarkerLinkEdge(
+                    parentId: parentId,
+                    childId: childId,
+                    relationship: child.relationship,
+                    kind: .withinThesis,
+                    viaUnavailable: isBridged(childId)
+                ))
+            }
+        }
+        return edges
     }
 
     func loadedChildren(of id: UUID) -> [MarkerLinkNode] {
@@ -179,8 +237,7 @@ struct MarkerLinkGraph: Equatable {
         var queue: [UUID] = [id]
 
         while let current = queue.popLast() {
-            if let parent = nodesById[current]?.parentId,
-               nodesById[parent] != nil,
+            if let parent = effectiveParentId(of: current),
                seen.insert(parent).inserted {
                 queue.append(parent)
             }
@@ -203,7 +260,7 @@ struct MarkerLinkGraph: Equatable {
             var next: [UUID] = []
             for current in frontier {
                 var neighbours: [UUID] = []
-                if let parent = nodesById[current]?.parentId, members.contains(parent) {
+                if let parent = effectiveParentId(of: current), members.contains(parent) {
                     neighbours.append(parent)
                 }
                 neighbours.append(contentsOf: (childIdsByParent[current] ?? []).filter { members.contains($0) })
@@ -251,7 +308,8 @@ struct MarkerLinkGraph: Equatable {
                 parentId: parent.id,
                 childId: selectedId,
                 relationship: selected.relationship,
-                kind: .parentOfSelected
+                kind: .parentOfSelected,
+                viaUnavailable: isBridged(selectedId)
             )
             edges.append(edge)
             covered.insert(edge)
@@ -261,7 +319,8 @@ struct MarkerLinkGraph: Equatable {
                 parentId: selectedId,
                 childId: child.id,
                 relationship: child.relationship,
-                kind: .childOfSelected
+                kind: .childOfSelected,
+                viaUnavailable: isBridged(child.id)
             )
             edges.append(edge)
             covered.insert(edge)
@@ -272,7 +331,8 @@ struct MarkerLinkGraph: Equatable {
                     parentId: memberId,
                     childId: child.id,
                     relationship: child.relationship,
-                    kind: .withinThesis
+                    kind: .withinThesis,
+                    viaUnavailable: isBridged(child.id)
                 )
                 if covered.insert(edge).inserted {
                     edges.append(edge)

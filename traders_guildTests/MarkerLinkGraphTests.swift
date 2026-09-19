@@ -253,4 +253,81 @@ struct MarkerLinkGraphTests {
     func unrelatedOpacityMatchesContract() {
         #expect(MarkerLinkGraph.unrelatedOpacity == 0.22)
     }
+
+    // MARK: - Bridges over a deleted marker, and the idle edge set
+
+    /// A soft-deleted middle marker split the thesis into two islands on the
+    /// chart. Handed a bridge, the graph draws the grandchild as answering the
+    /// nearest surviving ancestor — fainter, and marked as such.
+    @Test
+    func aBridgeStandsInForAParentThatIsNotLoaded() {
+        let graph = MarkerLinkGraph(
+            nodes: [
+                MarkerLinkNode(id: id(1), directResponseCount: 1),
+                // 3 answers 2, which was deleted and is not loaded.
+                MarkerLinkNode(id: id(3), parentId: id(2), relationship: supports()),
+                MarkerLinkNode(id: id(9)),
+            ],
+            bridges: [MarkerLinkBridge(childId: id(3), ancestorId: id(1))]
+        )
+        #expect(graph.isBridged(id(3)))
+        #expect(graph.loadedParent(of: id(3))?.id == id(1))
+        #expect(graph.connectedComponent(containing: id(1)) == [id(1), id(3)])
+        #expect(graph.isRoot(id(1)), "the surviving ancestor reads as the root")
+
+        let focus = graph.focusState(selectedId: id(3), visibleIds: [id(1), id(3), id(9)])
+        #expect(focus.memberIds == [id(1), id(3)])
+        let parentEdge = focus.candidateEdges.first { $0.kind == .parentOfSelected }
+        #expect(parentEdge?.parentId == id(1))
+        #expect(parentEdge?.viaUnavailable == true)
+        #expect(parentEdge?.relationship == supports(), "coloured by the child's own relationship")
+
+        let fromAbove = graph.focusState(selectedId: id(1), visibleIds: [id(1), id(3)])
+        #expect(fromAbove.candidateEdges.first { $0.childId == id(3) }?.viaUnavailable == true)
+    }
+
+    @Test
+    func aBridgeNeverOverridesALoadedParentOrPointsAtAnUnloadedAncestor() {
+        let graph = MarkerLinkGraph(
+            nodes: [
+                MarkerLinkNode(id: id(1), directResponseCount: 1),
+                MarkerLinkNode(id: id(2), parentId: id(1), relationship: supports(), directResponseCount: 1),
+                MarkerLinkNode(id: id(3), parentId: id(2), relationship: supports()),
+                MarkerLinkNode(id: id(5), parentId: id(4), relationship: supports()),
+            ],
+            bridges: [
+                MarkerLinkBridge(childId: id(3), ancestorId: id(1)),   // 2 is loaded: ignored
+                MarkerLinkBridge(childId: id(5), ancestorId: id(99)),  // 99 is not loaded: ignored
+                MarkerLinkBridge(childId: id(5), ancestorId: id(5)),   // self: ignored
+            ]
+        )
+        #expect(!graph.isBridged(id(3)))
+        #expect(graph.loadedParent(of: id(3))?.id == id(2))
+        #expect(!graph.isBridged(id(5)))
+        #expect(graph.loadedParent(of: id(5)) == nil)
+        #expect(graph.allEdges.allSatisfy { !$0.viaUnavailable })
+    }
+
+    /// Every drawable loaded edge, once, in a stable order — what the chart
+    /// draws faintly when nothing is selected.
+    @Test
+    func allEdgesListsEveryLoadedParentChildPairOnce() {
+        let graph = MarkerLinkGraph(
+            nodes: [
+                MarkerLinkNode(id: id(1), directResponseCount: 2),
+                MarkerLinkNode(id: id(2), parentId: id(1), relationship: supports(), directResponseCount: 1),
+                MarkerLinkNode(id: id(3), parentId: id(1), relationship: supports()),
+                MarkerLinkNode(id: id(4), parentId: id(2), relationship: supports()),
+                MarkerLinkNode(id: id(6), parentId: id(99), relationship: supports()),  // parent unloaded
+                MarkerLinkNode(id: id(7)),
+            ],
+            bridges: [MarkerLinkBridge(childId: id(6), ancestorId: id(7))]
+        )
+        let edges = graph.allEdges
+        #expect(edges.count == 4)
+        #expect(Set(edges.map { [$0.parentId, $0.childId] }) == [[id(1), id(2)], [id(1), id(3)], [id(2), id(4)], [id(7), id(6)]])
+        #expect(edges.allSatisfy { $0.kind == .withinThesis })
+        #expect(edges.first { $0.childId == id(6) }?.viaUnavailable == true)
+        #expect(edges == graph.allEdges, "deterministic")
+    }
 }

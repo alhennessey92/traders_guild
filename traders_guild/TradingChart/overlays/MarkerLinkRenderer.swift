@@ -124,6 +124,37 @@ struct MarkerLinkRenderContext {
     }
 }
 
+/// Everything the marker layer needs to draw the chart's resting link lines.
+///
+/// With nothing selected, every direct parent→child pair on the chart wears a
+/// faint dotted line — enough to see that markers belong together without
+/// tapping, never enough to compete with the candles. Focus replaces it with
+/// the full-strength connectors; placement's dim suppresses it.
+struct MarkerIdleLinkContext {
+    /// Every drawable loaded edge, bridges included.
+    let edges: [MarkerLinkEdge]
+    let plotRect: CGRect
+    let lineWidth: CGFloat
+    let curvature: CGFloat
+
+    init(
+        edges: [MarkerLinkEdge],
+        plotRect: CGRect,
+        lineWidth: CGFloat = ChartSettings.shared.linkLineWidth,
+        curvature: CGFloat = ChartSettings.shared.linkCurvature
+    ) {
+        self.edges = edges
+        self.plotRect = plotRect
+        self.lineWidth = lineWidth
+        self.curvature = curvature
+    }
+
+    /// Lines beyond this many are not routed at rest; the plan orders edges
+    /// nearest the viewport centre first, so the ones the reader is looking
+    /// at are the ones kept.
+    static let maximumEdges = 60
+}
+
 /// How the connector/ring reveal behaves, extracted so Reduce Motion is a
 /// tested rule rather than an inspected one.
 enum MarkerLinkRevealPolicy {
@@ -202,17 +233,56 @@ enum MarkerLinkRenderer {
             // Dash patterns are the relationship's own and are not scaled with
             // the width: a thicker "challenges" line is still the same
             // rhythm, which is what keeps it readable as the same relationship.
-            let dash = relationship?.dashPattern ?? [4, 3]
+            // A bridge over a deleted marker is fainter and more broken: still
+            // the relationship's colour, but plainly not a direct answer.
+            let bridged = route.edge.viaUnavailable
+            let dash = bridged ? viaUnavailableDash : (relationship?.dashPattern ?? [4, 3])
+            let opacity = bridged ? connectorOpacity * viaUnavailableOpacityFactor : connectorOpacity
 
             let path = trimmedPath(for: route, progress: progress)
             context.stroke(
                 path,
-                with: .color(color.opacity(connectorOpacity)),
+                with: .color(color.opacity(opacity)),
                 style: StrokeStyle(
                     lineWidth: width,
                     lineCap: .round,
                     lineJoin: .round,
                     dash: dash
+                )
+            )
+        }
+    }
+
+    /// Dash for an edge that passes over a deleted marker: sparser than any
+    /// relationship's own, so it reads as a gap rather than a rhythm.
+    static let viaUnavailableDash: [CGFloat] = [2, 4]
+    static let viaUnavailableOpacityFactor: Double = 0.5
+
+    /// Opacity of the resting lines. Deliberately close to the focus dim
+    /// (0.22), so the two read as one idiom: what is not in focus is faint.
+    static let idleConnectorOpacity: Double = 0.22
+    static let idleDash: [CGFloat] = [3, 3]
+
+    /// The resting lines: one pass, no reveal, no gradient, one weight. The
+    /// relationship still carries its colour so a supports line and a
+    /// challenges line can be told apart even at rest.
+    static func drawIdleConnectors(
+        context: GraphicsContext,
+        plan: MarkerLinkRoutePlan,
+        lineWidth: CGFloat = connectorWidth
+    ) {
+        let width = max(1, min(lineWidth, ChartSettings.linkLineWidthRange.upperBound) * 0.75)
+        for route in plan.routes {
+            let color = route.relationship?.accentColor ?? AppColors.greyText
+            let bridged = route.edge.viaUnavailable
+            context.stroke(
+                trimmedPath(for: route, progress: 1),
+                with: .color(color.opacity(bridged ? idleConnectorOpacity * viaUnavailableOpacityFactor : idleConnectorOpacity)),
+                style: StrokeStyle(
+                    lineWidth: width,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: bridged ? viaUnavailableDash : idleDash
                 )
             )
         }
