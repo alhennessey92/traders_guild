@@ -34,55 +34,20 @@ extension MarkerManager {
     ///
     /// Runs synchronously off loaded markers — never a network round-trip — so
     /// a selection can never leave the chart half-dimmed waiting on a request.
-    /// The fade decision is latched per selection: progressive thread pages and
-    /// realtime arrivals change how many members are visible, and re-evaluating
-    /// would toggle the dim on and off underneath the user.
     func refreshLinkFocus() {
         guard linkedMarkersEnabled, let selected = selectedMarker else {
             linkFocus = nil
-            clearFadeLatch()
             return
         }
 
         let state = linkGraph.focusState(selectedId: selected.id, visibleIds: focusVisibleIds)
 
-        guard state.isActive else {
-            linkFocus = nil
-            clearFadeLatch()
-            return
-        }
-
-        // The latch exists so progressive pages cannot flicker the dim, but it
-        // must not capture a guess. Until the renderer has reported which
-        // members it painted for THIS selection, the visible set is a fallback,
-        // and latching it would freeze the wrong answer for the whole selection.
-        //
-        // It also must not outlive the fact it was derived from. "Suppress the
-        // fade below two visible members" is an invariant of the design, not a
-        // preference the latch may override: panning a second member off screen
-        // has to undim the chart, or a lone glyph sits in a darkened chart with
-        // nothing to compare it to. So a latched decision is still floored by
-        // the current threshold — the latch may suppress a fade, never resurrect
-        // one. `reportRenderedMarkers` drops the latch outright when the painted
-        // set changes, so this floor is a second line rather than the only one.
-        let meetsVisibilityThreshold = state.shouldFadeUnrelated
-        let shouldFade: Bool
-        if let latch = fadeLatch, latch.selectionId == selected.id {
-            shouldFade = latch.shouldFade && meetsVisibilityThreshold
-        } else {
-            shouldFade = meetsVisibilityThreshold
-            if renderedMarkerIds != nil {
-                setFadeLatch(selectionId: selected.id, shouldFade: shouldFade)
-            }
-        }
-
-        linkFocus = MarkerFocusState(
-            selectedId: state.selectedId,
-            memberIds: state.memberIds,
-            visibleMemberIds: state.visibleMemberIds,
-            shouldFadeUnrelated: shouldFade,
-            candidateEdges: state.candidateEdges
-        )
+        // The fade is a constant of the selection now — any thesis member
+        // fades the rest — so the per-selection latch that once guarded a
+        // visibility-count decision against progressive pages has nothing left
+        // to guard. `visibleMemberIds` is still reported by the renderer and
+        // still describes what is painted; it just no longer gates the dim.
+        linkFocus = state.isActive ? state : nil
     }
 
     // Ring style and dim state are deliberately *not* exposed here. The

@@ -210,10 +210,11 @@ struct MarkerLinkGraphTests {
         #expect(focus.candidateEdges.first?.parentId == id(2))
     }
 
-    /// Dimming the whole chart to highlight a single glyph communicates nothing
-    /// and reads as a rendering fault, so the fade needs two visible members.
+    /// Selecting any thesis member fades the rest, whether or not its
+    /// companions are on screen: the fade is what makes a lone badge read as
+    /// a link (production feedback, 1.3.0). Visibility stays reported.
     @Test
-    func fadeSuppressedWhenOnlyOneRelatedGlyphVisible() {
+    func fadeAppliesEvenWhenOnlyOneRelatedGlyphIsVisible() {
         let graph = MarkerLinkGraph(nodes: [
             MarkerLinkNode(id: id(1), directResponseCount: 1),
             MarkerLinkNode(id: id(2), parentId: id(1), relationship: supports()),
@@ -221,12 +222,31 @@ struct MarkerLinkGraphTests {
 
         // Parent filtered out (for example the "mine" visibility mode).
         let hidden = graph.focusState(selectedId: id(2), visibleIds: [id(2)])
-        #expect(!hidden.shouldFadeUnrelated)
+        #expect(hidden.shouldFadeUnrelated)
+        #expect(hidden.isActive)
         #expect(hidden.memberIds.count == 2, "membership is topological, not visual")
         #expect(hidden.visibleMemberIds == [id(2)])
 
         let shown = graph.focusState(selectedId: id(2), visibleIds: [id(1), id(2)])
         #expect(shown.shouldFadeUnrelated)
+    }
+
+    /// A response whose parent is on another timeframe has no loaded member
+    /// but itself and no edge to draw — and still fades the chart, so the
+    /// cross-timeframe badge is not the only thing saying it is linked.
+    @Test
+    func aLoneLinkedMarkerStillFocusesAndFades() {
+        let graph = MarkerLinkGraph(nodes: [
+            MarkerLinkNode(id: id(2), parentId: id(99), relationship: supports()),
+            MarkerLinkNode(id: id(5)),
+        ])
+        let focus = graph.focusState(selectedId: id(2), visibleIds: [id(2), id(5)])
+        #expect(focus.isActive)
+        #expect(focus.shouldFadeUnrelated)
+        #expect(focus.memberIds == [id(2)])
+        #expect(focus.candidateEdges.isEmpty)
+        // And a genuinely standalone marker still does not.
+        #expect(!graph.focusState(selectedId: id(5), visibleIds: [id(2), id(5)]).isActive)
     }
 
     @Test

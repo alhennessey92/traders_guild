@@ -110,18 +110,17 @@ struct MarkerFocusState: Equatable {
         )
     }
 
-    var isActive: Bool { memberIds.count > 1 || !candidateEdges.isEmpty }
+    /// A thesis selection: the chart fades what is unrelated and shows what
+    /// is. A marker whose only links are on other timeframes — or scrolled out
+    /// of the loaded window — still counts: its badge is the link, and the
+    /// fade is what makes the badge read. Only `.standalone` is inactive.
+    var isActive: Bool { shouldFadeUnrelated || memberIds.count > 1 || !candidateEdges.isEmpty }
 }
 
 /// Link topology over a set of loaded markers.
 struct MarkerLinkGraph: Equatable {
     /// Opacity applied to markers outside the focused thesis.
     static let unrelatedOpacity: Double = 0.22
-
-    /// Below this many *visible* thesis members there is nothing to compare, so
-    /// dimming the rest of the chart would communicate nothing and would read as
-    /// a rendering fault. The selected marker counts toward this.
-    static let minimumVisibleMembersForFade = 2
 
     private let nodesById: [UUID: MarkerLinkNode]
     private let childIdsByParent: [UUID: [UUID]]
@@ -281,11 +280,15 @@ struct MarkerLinkGraph: Equatable {
             }
         }
 
+        // Fade whenever a linked marker is selected. The rule used to need two
+        // painted members, which left a response whose parent was off-screen
+        // or on another timeframe sitting in an undimmed chart with nothing to
+        // say it belonged to anything (production feedback, 1.3.0).
         return MarkerFocusState(
             selectedId: selectedId,
             memberIds: members,
             visibleMemberIds: visibleMembers,
-            shouldFadeUnrelated: visibleMembers.count >= Self.minimumVisibleMembersForFade,
+            shouldFadeUnrelated: true,
             candidateEdges: edges
         )
     }

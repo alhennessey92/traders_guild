@@ -282,13 +282,11 @@ class MarkerManager: ObservableObject {
     // arrivals deliberately do *not* do this — that is what the latch prevents.
     @Published var visibleIntents: Set<RLMarkerIntent> = Set(RLMarkerIntent.allCases) {
         didSet {
-            clearFadeLatch()
             refreshLinkFocus()
         }
     }
     @Published var visibilityMode: MarkerVisibilityMode = .all {
         didSet {
-            clearFadeLatch()
             refreshLinkFocus()
         }
     }
@@ -329,20 +327,6 @@ class MarkerManager: ObservableObject {
     /// symbol/timeframe filtering.
     var responseCounts = MarkerResponseCountReconciler()
 
-    /// Latched for the life of one selection so the chart cannot flicker
-    /// between dimmed and undimmed as progressive pages arrive.
-    private var latchedFadeDecision: (selectionId: UUID, shouldFade: Bool)?
-
-    var fadeLatch: (selectionId: UUID, shouldFade: Bool)? { latchedFadeDecision }
-
-    func setFadeLatch(selectionId: UUID, shouldFade: Bool) {
-        latchedFadeDecision = (selectionId, shouldFade)
-    }
-
-    func clearFadeLatch() {
-        latchedFadeDecision = nil
-    }
-
     /// Internal accessor so the linked-marker extension, which lives in its own
     /// file, can reach the client without widening `api` itself.
     var markerAPI: (any MarkerAPIClient)? { api }
@@ -381,11 +365,6 @@ class MarkerManager: ObservableObject {
         guard selectedMarker?.id == selectionId else { return }
         guard renderedMarkerIds != ids else { return }
         renderedMarkerIds = ids
-        // The latch protects the fade decision from topology churn *between*
-        // paints — progressive pages, realtime arrivals. It must not outlive a
-        // change in what is actually painted, which is the very input the
-        // "fewer than two visible members" rule is about.
-        clearFadeLatch()
         refreshLinkFocus()
     }
 
@@ -829,7 +808,6 @@ class MarkerManager: ObservableObject {
         markers.removeAll()
         selectedMarker = nil
         linkFocus = nil
-        clearFadeLatch()
         // Counts survive a symbol or timeframe move — they are absolute and
         // keyed by marker id, so returning to a chart must not roll a badge
         // back to whatever a cached list payload happens to say. A guild change
@@ -1367,7 +1345,6 @@ class MarkerManager: ObservableObject {
         stashLayout()
         markers.removeAll()
         linkFocus = nil
-        clearFadeLatch()
         selectedMarker = nil
     }
     

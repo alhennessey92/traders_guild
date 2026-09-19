@@ -206,64 +206,14 @@ struct MarkerLinkIntegrationRepairTests {
         #expect(merged.likeCount == 9, "while the server's absolute count is adopted")
     }
 
-    // MARK: - Fade rule geometry
+    // MARK: - Painted members are reported, and never borrowed from another thesis
 
-    /// The fade rule asks whether two members are *visible*. A member scrolled
-    /// far off screen is loaded but not painted, and must not satisfy it.
+    /// `visibleMemberIds` describes what the renderer actually painted for
+    /// *this* selection. It no longer gates the fade — any thesis selection
+    /// fades — but it must still be truthful, and members of a previous thesis
+    /// must never count as companions of a new one.
     @Test
-    func fadeRuleUsesPaintedMarkersNotLoadedOnes() {
-        let graph = MarkerLinkGraph(nodes: [
-            MarkerLinkNode(id: id(1), directResponseCount: 1),
-            MarkerLinkNode(
-                id: id(2),
-                parentId: id(1),
-                relationship: MarkerLinkRelationshipValue(.supports)
-            ),
-        ])
-
-        // Both loaded, but only the selected one was painted this frame.
-        let painted = graph.focusState(selectedId: id(2), visibleIds: [id(2)])
-        #expect(!painted.shouldFadeUnrelated, "one painted member must not dim the chart")
-
-        let bothPainted = graph.focusState(selectedId: id(2), visibleIds: [id(1), id(2)])
-        #expect(bothPainted.shouldFadeUnrelated)
-    }
-
-    // MARK: - Painted-member truth is per selection
-
-    /// The fade latch must not capture a guess.
-    ///
-    /// Painted members describe one selection. Until the renderer reports for
-    /// the *current* one, the visible set is a fallback, and latching it would
-    /// freeze the wrong answer for the whole selection — so a second thesis
-    /// opened after a first would never fade.
-    @Test
-    func fadeDecisionDiffersBetweenFallbackAndPaintedTruth() {
-        let graph = MarkerLinkGraph(nodes: [
-            MarkerLinkNode(id: id(1), directResponseCount: 1),
-            MarkerLinkNode(
-                id: id(2),
-                parentId: id(1),
-                relationship: MarkerLinkRelationshipValue(.supports)
-            ),
-        ])
-
-        // Fallback: both loaded, so the rule says fade.
-        let fallback = graph.focusState(selectedId: id(2), visibleIds: [id(1), id(2)])
-        #expect(fallback.shouldFadeUnrelated)
-
-        // Painted truth: the parent is off screen, so it must not.
-        let painted = graph.focusState(selectedId: id(2), visibleIds: [id(2)])
-        #expect(!painted.shouldFadeUnrelated)
-
-        // The two disagree, which is exactly why the latch must wait for the
-        // renderer rather than freezing the fallback.
-        #expect(fallback.shouldFadeUnrelated != painted.shouldFadeUnrelated)
-    }
-
-    /// Members from a previous thesis must not satisfy the rule for a new one.
-    @Test
-    func membersOfAnotherThesisDoNotCountAsVisibleCompanions() {
+    func visibleMembersReflectPaintedMarkersOfThisThesisOnly() {
         let graph = MarkerLinkGraph(nodes: [
             MarkerLinkNode(id: id(1), directResponseCount: 1),
             MarkerLinkNode(
@@ -279,11 +229,18 @@ struct MarkerLinkIntegrationRepairTests {
             ),
         ])
 
+        let painted = graph.focusState(selectedId: id(2), visibleIds: [id(2)])
+        #expect(painted.visibleMemberIds == [id(2)])
+        #expect(painted.shouldFadeUnrelated, "the fade no longer waits for a companion")
+
+        let bothPainted = graph.focusState(selectedId: id(2), visibleIds: [id(1), id(2)])
+        #expect(bothPainted.visibleMemberIds == [id(1), id(2)])
+
         // Painted set still describes the FIRST thesis while the second is
-        // selected: no member of the second is visible, so no fade.
+        // selected: no member of the second is visible.
         let stale = graph.focusState(selectedId: id(11), visibleIds: [id(1), id(2)])
         #expect(stale.visibleMemberIds.isEmpty)
-        #expect(!stale.shouldFadeUnrelated)
+        #expect(stale.memberIds == [id(10), id(11)])
     }
 
     // MARK: - Fixture

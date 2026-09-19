@@ -669,12 +669,11 @@ struct MarkerLinkReviewQueueTests {
 
     // MARK: - The fade invariant outranks the latch
 
-    /// The rule is "suppress the fade below two visible members". The latch
-    /// existed to stop progressive pages flickering the dim, but it also froze
-    /// the decision across panning: two related glyphs visible, pan one off, and
-    /// the chart stayed dimmed around a single lonely marker.
+    /// Painting reports keep `visibleMemberIds` truthful across panning, and
+    /// the fade — a constant of any thesis selection since the 1.3.0
+    /// production pass — never flickers with them.
     @Test
-    func panningAMemberOffScreenUndimsAndBackOnRedims() throws {
+    func panningAMemberOffScreenKeepsTheFadeAndUpdatesVisibility() throws {
         let manager = manager()
         let parent = makeMarkerUI(id: id(70), author: member(1), responses: 1)
         let child = makeMarkerUI(
@@ -690,17 +689,16 @@ struct MarkerLinkReviewQueueTests {
         // Two members painted: the fade is on.
         manager.reportRenderedMarkers([id(70), id(71)], forSelection: id(70))
         #expect(try #require(manager.linkFocus).shouldFadeUnrelated)
+        #expect(try #require(manager.linkFocus).visibleMemberIds == [id(70), id(71)])
 
-        // One painted: the invariant says suppress, latch or no latch.
+        // One painted: still faded, visibility reported.
         manager.reportRenderedMarkers([id(70)], forSelection: id(70))
-        #expect(
-            !(try #require(manager.linkFocus).shouldFadeUnrelated),
-            "a lone visible member must not sit in a dimmed chart"
-        )
-
-        // Back to two: it returns.
-        manager.reportRenderedMarkers([id(70), id(71)], forSelection: id(70))
         #expect(try #require(manager.linkFocus).shouldFadeUnrelated)
+        #expect(try #require(manager.linkFocus).visibleMemberIds == [id(70)])
+
+        // Back to two.
+        manager.reportRenderedMarkers([id(70), id(71)], forSelection: id(70))
+        #expect(try #require(manager.linkFocus).visibleMemberIds == [id(70), id(71)])
     }
 
     /// The report is dispatched to the main actor from inside a draw pass, so
