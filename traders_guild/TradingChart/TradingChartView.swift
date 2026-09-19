@@ -3340,17 +3340,22 @@ struct TradingChartView: View {
         indicatorManager.recalculateIndicators(candles: chartData.candles)
     }
     
+    // Neither handler below clears or reloads markers itself any more. The
+    // view model's symbol/timeframe change (and navigation's
+    // `prepareChartContext`) always runs `loadChartData`, which swaps the
+    // candles and reloads markers in the same turn — `activateLayoutContext`
+    // empties the old set at that moment. Clearing here first blanked the
+    // layer for the whole fetch, and the 0.2 s reload raced the new candles
+    // ("Skipping load — candle array does not match timeframe") or fetched
+    // the same window twice; every switch then re-allocated stack sides
+    // from scratch. Position reset and the loading flag stay as they were.
     private func handleSymbolStringChange(oldValue: String?, newValue: String?) {
         if oldValue != newValue && oldValue != nil {
             hasInitializedPosition = false
             isChartLoading = true
             if !chartViewModel.isNavigatingToMarker {
-                markerManager.clearMarkers()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     initializeLatestPositionIfNeeded()
-                    Task {
-                        await loadMarkersFromAPI()
-                    }
                 }
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -3364,7 +3369,6 @@ struct TradingChartView: View {
         if oldValue != newValue {
             hasInitializedPosition = false
             isChartLoading = true
-            markerManager.clearMarkers()
             if placementState.isChangingResponseTimeframe {
                 // The awaited draft switch owns loading and centering. A
                 // delayed reset here would pull it back to the latest candle.
@@ -3377,9 +3381,6 @@ struct TradingChartView: View {
             if !chartViewModel.isNavigatingToMarker {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     initializeLatestPositionIfNeeded()
-                    Task {
-                        await loadMarkersFromAPI()
-                    }
                 }
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

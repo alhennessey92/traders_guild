@@ -173,6 +173,52 @@ struct MarkerRealtimeHandlerTests {
         #expect(data.candles.count == 1, "the chart data must outlive the manager's weak reference")
     }
 
+    /// `clearMarkers()` runs on every timeframe and symbol switch. It used
+    /// to drop the guild markers channel too, so a deletion that landed
+    /// between the switch and the next load was never applied — not to the
+    /// layer, and not to the parent's count either. The channel is guild-wide;
+    /// the switch must keep it.
+    @Test
+    func aDeletionArrivingWhileTheLayerIsClearedStillReconcilesTheParent() async throws {
+        let parent = marker(id: id(2), author: member(1))
+        let (manager, _, channel) = await loadedManager(viewer: 1, canModerate: false, loaded: parent)
+        #expect(manager.markers.count == 1)
+
+        manager.clearMarkers()
+        #expect(manager.markers.isEmpty, "the switch empties the layer")
+
+        // A response to the (now unloaded) parent is deleted elsewhere while
+        // this chart is between loads. The payload carries the parent's
+        // authoritative post-delete count.
+        try await send(
+            "marker_deleted",
+            [
+                "marker_id": id(3).uuidString,
+                "guild_id": guildId.uuidString,
+                "parent_marker_id": id(2).uuidString,
+                "parent_direct_response_count": 4,
+                "parent_responses_revision": "2026-09-19T10:00:00.000000Z",
+                "parent_has_responses": true,
+            ],
+            channel: channel
+        )
+
+        // The next page still says 9 for the parent; the count learned from the
+        // deletion is newer and must win when the parent is loaded again.
+        var stale = try wire(parent)
+        stale["direct_response_count"] = 9
+        stale["responses_revision"] = "2026-09-19T09:00:00.000000Z"
+        // Decode through the same seam a socket frame uses.
+        let staleDTO = try #require(
+            WSIncomingMessage(
+                type: "marker_updated", channel: channel, payload: try anyCodable(stale),
+                userId: nil, isTyping: nil, message: nil, channels: nil
+            ).payload(as: RLChartMarkerDTO.self)
+        )
+        #expect(manager.withReconciledCount(staleDTO).responseCount == 4,
+                "the deletion must have reached the handler while the layer was cleared")
+    }
+
     // MARK: - marker_updated
 
     /// The payload arrives with the *acting* member's permissions and neutral
@@ -411,6 +457,12 @@ struct MarkerRealtimeHandlerTests {
 
 private final class RealtimeFakeAPI: MarkerAPIClient, @unchecked Sendable {
     var markersResponse = RLMarkersListDTO(markers: [], totalCount: 0, hasMore: false, nextCursor: nil)
+
+    init() {}
+    convenience init(loaded: RLChartMarkerDTO) {
+        self.init()
+        markersResponse = RLMarkersListDTO(markers: [loaded], totalCount: 1, hasMore: false, nextCursor: nil)
+    }
 
     func getMarkers(
         guildId: UUID, symbolId: UUID, timeframe: String, limit: Int,

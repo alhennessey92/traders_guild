@@ -235,7 +235,7 @@ extension Color {
 
 @MainActor
 class MarkerManager: ObservableObject {
-    private struct LayoutContext: Equatable {
+    private struct LayoutContext: Hashable {
         let guildId: UUID
         let symbolId: UUID
         let timeframe: RLChartTimeframe
@@ -411,6 +411,13 @@ class MarkerManager: ObservableObject {
     /// anchor timestamp. Moving to another guild, symbol or timeframe starts a
     /// clean allocation so layout state can never leak between charts.
     private var layoutContext: LayoutContext?
+    /// The slot each marker last held, per chart context, so a marker keeps
+    /// its side and stack across a timeframe or symbol round trip. Layout is
+    /// otherwise retained only from `markers`, which a context switch empties
+    /// — every switch re-allocated from scratch and the chart appeared to
+    /// shuffle. Keyed by marker id; the anchor timestamp is checked on
+    /// restore so an edited anchor is allocated afresh, as with a live refresh.
+    private var layoutMemory: [LayoutContext: [UUID: MarkerLayoutSnapshot]] = [:]
 
     /// Real-time marker channel subscription
     private var currentMarkerChannel: String?
@@ -487,7 +494,13 @@ class MarkerManager: ObservableObject {
 
         // Update guild context so marker create/delete/like use the correct guild
         self.currentGuildId = guildId
-        
+
+        // Subscribe before the fetch, not after it. The channel is guild-wide,
+        // so it is valid for every symbol and timeframe of this guild; waiting
+        // for the fetch left a window on every switch in which a deletion
+        // arrived unsubscribed and was never reconciled.
+        subscribeToMarkerChannel(guildId: guildId)
+
         do {
             let fetchedMarkers = try await fetchMarkerDTOs(
                 api: api,
@@ -504,20 +517,20 @@ class MarkerManager: ObservableObject {
             guard layoutContext == requestedContext else { return }
 
             await MainActor.run {
-                let markersWithPreservedAssignments = shouldPreserveAssignments
-                    ? MarkerPositionCalculator.retainingStableAssignments(
-                        in: convertedMarkers,
-                        from: self.markers
-                    )
-                    : convertedMarkers
+                // Same context: the live wrappers own their slots. A context
+                // just entered: whatever this chart remembered from last time.
+                let priorLayout = shouldPreserveAssignments
+                    ? self.markers
+                    : self.rememberedLayout(for: convertedMarkers, in: requestedContext)
+                let markersWithPreservedAssignments = MarkerPositionCalculator.retainingStableAssignments(
+                    in: convertedMarkers,
+                    from: priorLayout
+                )
                 self.markers = MarkerPositionCalculator.assignStablePositions(
                     markers: markersWithPreservedAssignments,
                     candles: candles
                 )
             }
-
-            // Subscribe to real-time marker events for this guild
-            subscribeToMarkerChannel(guildId: guildId)
         } catch {
             print("Failed to load markers: \(error)")
         }
@@ -613,6 +626,7 @@ class MarkerManager: ObservableObject {
         _ = activateLayoutContext(requestedContext)
         configure(api: api, symbolId: symbolId, timeframe: timeframe)
         self.currentGuildId = guildId
+        subscribeToMarkerChannel(guildId: guildId)
 
         do {
             let fetchedMarkers = try await fetchMarkerDTOs(
@@ -666,8 +680,6 @@ class MarkerManager: ObservableObject {
                     self.selectedMarker = refreshed
                 }
             }
-
-            subscribeToMarkerChannel(guildId: guildId)
         } catch {
             print("Failed to merge markers: \(error)")
         }
@@ -747,6 +759,7 @@ class MarkerManager: ObservableObject {
         guard !shouldPreserveAssignments else { return true }
 
         let guildChanged = layoutContext?.guildId != context.guildId
+        stashLayout()
         layoutContext = context
         markers.removeAll()
         selectedMarker = nil
@@ -758,9 +771,36 @@ class MarkerManager: ObservableObject {
         // is a different scope entirely and clears them.
         if guildChanged {
             responseCounts.removeAll()
+            layoutMemory.removeAll()
             unsubscribeFromMarkerChannel()
         }
         return false
+    }
+
+    /// Remember where every loaded marker sits before the array is emptied.
+    private func stashLayout() {
+        guard let context = layoutContext, !markers.isEmpty else { return }
+        var slots = layoutMemory[context] ?? [:]
+        for marker in markers where marker.hasStableLayout {
+            slots[marker.id] = snapshotLayout(for: marker)
+        }
+        layoutMemory[context] = slots
+    }
+
+    /// The remembered slot for each refreshed marker in this context, as
+    /// throwaway wrappers `retainingStableAssignments` can read. Only markers
+    /// whose anchor has not moved are offered; the rest allocate afresh.
+    private func rememberedLayout(for refreshed: [ChartMarkerUI], in context: LayoutContext) -> [ChartMarkerUI] {
+        guard let slots = layoutMemory[context], !slots.isEmpty else { return [] }
+        return refreshed.compactMap { marker in
+            guard let slot = slots[marker.id], slot.candleTimestamp == marker.candleTimestamp else { return nil }
+            var remembered = marker
+            remembered.positionedBelow = slot.positionedBelow
+            remembered.proximityTier = slot.proximityTier
+            remembered.stackIndex = slot.stackIndex
+            remembered.hasStableLayout = true
+            return remembered
+        }
     }
 
     private func candleIndexMap(for candles: [RLCandleDTO]) -> [Date: Int] {
@@ -1252,12 +1292,17 @@ class MarkerManager: ObservableObject {
         refreshLinkFocus()
     }
 
+    /// Empty the layer for a context change. The guild markers channel stays
+    /// subscribed — it is guild-wide, and dropping it here lost every
+    /// `marker_deleted` that arrived before the next load re-subscribed. A
+    /// guild change unsubscribes in `activateLayoutContext`; logout goes
+    /// through `resetForLogout`.
     func clearMarkers() {
+        stashLayout()
         markers.removeAll()
         linkFocus = nil
         clearFadeLatch()
         selectedMarker = nil
-        unsubscribeFromMarkerChannel()
     }
     
     // MARK: - Duplicate Type Check
@@ -1481,6 +1526,7 @@ class MarkerManager: ObservableObject {
 
     private struct MarkerLayoutSnapshot {
         let candleIndex: Int
+        let candleTimestamp: Date
         let positionedBelow: Bool
         let proximityTier: Int
         let stackIndex: Int
@@ -1494,6 +1540,7 @@ class MarkerManager: ObservableObject {
     private func snapshotLayout(for marker: ChartMarkerUI) -> MarkerLayoutSnapshot {
         MarkerLayoutSnapshot(
             candleIndex: marker.candleIndex,
+            candleTimestamp: marker.candleTimestamp,
             positionedBelow: marker.positionedBelow,
             proximityTier: marker.proximityTier,
             stackIndex: marker.stackIndex,
