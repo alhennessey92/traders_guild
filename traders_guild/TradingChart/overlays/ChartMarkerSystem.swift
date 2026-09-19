@@ -1306,6 +1306,20 @@ class MarkerManager: ObservableObject {
         )
     }
 
+    /// Candles were prepended: every loaded marker's index moves with its
+    /// candle, now, before the array is published — not after the fetch that
+    /// follows. Layout is untouched; the marker is on the same candle.
+    func shiftCandleIndices(by prependedCount: Int) {
+        guard prependedCount > 0, !markers.isEmpty else { return }
+        for i in markers.indices {
+            markers[i].candleIndex += prependedCount
+        }
+        if var selected = selectedMarker {
+            selected.candleIndex += prependedCount
+            selectedMarker = selected
+        }
+    }
+
     func recalculateCandleIndices(candles: [RLCandleDTO]) {
         let indexByTimestamp = candleIndexMap(for: candles)
         // Remove markers whose candles no longer exist in the visible window
@@ -2867,8 +2881,6 @@ struct ChartMarkerSystem {
         linkRender: MarkerLinkRenderContext? = nil,
         linkedMarkersEnabled: Bool = false,
         timeframeJumps: [MarkerTimeframeJump] = [],
-        markerPlotRect: CGRect? = nil,
-        infoCardRect: CGRect? = nil,
         idleLinks: MarkerIdleLinkContext? = nil,
         placementLink: MarkerPlacementLinkContext? = nil
     ) {
@@ -3216,8 +3228,6 @@ struct ChartMarkerSystem {
                 scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * selected.scale,
                 isBelow: selected.marker.positionedBelow,
                 jumps: timeframeJumps,
-                plotRect: markerPlotRect ?? linkRender?.plotRect,
-                avoidRect: infoCardRect,
                 // Recomputed from the same inputs the tap uses, rather than read
                 // off the render queue, so both passes see identical obstacles.
                 obstacles: timeframeJumpObstacles(
@@ -3675,10 +3685,14 @@ struct ChartMarkerSystem {
     /// **Otherwise** the 1.2.1 behaviour, verbatim: recomputed centres,
     /// creation order reversed, fixed radius. A standalone marker outside any
     /// thesis behaves exactly as it always has.
-    /// Discs of the glyphs near the selected marker, as the badge layout must
-    /// avoid them. One function for the draw pass and the tap hit-test, so the
-    /// two resolve against the same obstacles; positions include the selection
-    /// nudge the frame applies to stack neighbours.
+    /// Discs of the selected marker's stack neighbours — its own candle
+    /// column only — as the badge layout must avoid them. One function for
+    /// the draw pass and the tap hit-test, so the two resolve against the
+    /// same obstacles; positions include the selection nudge the frame
+    /// applies to those neighbours. Glyphs on other candles are deliberately
+    /// not obstacles: their distance changes with every zoom, and a badge
+    /// that hopped between spots as the chart was pinched is what the owner
+    /// reported. Column-mates sit a fixed stack spacing away at any zoom.
     static func timeframeJumpObstacles(
         selectedMarkerId: UUID,
         markers: [ChartMarkerUI],
@@ -3693,17 +3707,12 @@ struct ChartMarkerSystem {
         selectedMarkerScale: CGFloat
     ) -> [CGRect] {
         guard let selected = markers.first(where: { $0.id == selectedMarkerId }) else { return [] }
-        // Wide enough for every spot the layout can reach from the glyph.
-        let reach = (MarkerVisualSpec.baseCanvasDiameter / 2) * Swift.max(selectedMarkerScale, 1)
-            + MarkerTimeframeJumpLayout.standoff + MarkerTimeframeJumpLayout.maximumAvoidanceShift
-            + MarkerTimeframeJumpLayout.outerRadius * 2
-        let candleReach = Int(ceil(reach / Swift.max(totalCandleWidth, 1))) + 1
         let scaledHeight = chartSize.height * priceScale
         let radius = MarkerVisualSpec.baseCanvasDiameter / 2
         var rects: [CGRect] = []
 
         let grouped = Dictionary(grouping: markers.filter { $0.isVisible }) { $0.candleIndex }
-        for candleIndex in (selected.candleIndex - candleReach)...(selected.candleIndex + candleReach) {
+        for candleIndex in [selected.candleIndex] {
             guard let group = grouped[candleIndex], candleIndex >= 0, candleIndex < candles.count else { continue }
             let candle = candles[candleIndex]
             let x = CGFloat(candleIndex) * totalCandleWidth + totalOffset
@@ -3755,9 +3764,7 @@ struct ChartMarkerSystem {
         totalOffset: CGFloat,
         selectedMarkerId: UUID?,
         selectedMarkerScale: CGFloat,
-        jumps: [MarkerTimeframeJump],
-        plotRect: CGRect? = nil,
-        avoidRect: CGRect? = nil
+        jumps: [MarkerTimeframeJump]
     ) -> MarkerTimeframeJump? {
         guard !jumps.isEmpty,
               let selectedMarkerId,
@@ -3785,8 +3792,6 @@ struct ChartMarkerSystem {
             scaledRadius: (MarkerVisualSpec.baseCanvasDiameter / 2) * Swift.max(selectedMarkerScale, 1.0),
             isBelow: selected.positionedBelow,
             jumps: jumps,
-            plotRect: plotRect,
-            avoidRect: avoidRect,
             obstacles: timeframeJumpObstacles(
                 selectedMarkerId: selectedMarkerId,
                 markers: markers,

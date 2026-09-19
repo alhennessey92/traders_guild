@@ -298,16 +298,9 @@ class ChartViewModel: ObservableObject {
             dataManager.currentTimeframe = timeframe
 
             if mergeWithExisting, !dataManager.candles.isEmpty {
-                let mergeResult = dataManager.mergeHistoricalMarketData(
+                let mergeResult = mergeHistoricalCandles(
                     chartData.candles,
-                    preservePriceRangeForPurePrepend: false,
-                    beforePublishingPrepend: { [weak self] prependedCount in
-                        guard let self, !self.isNavigatingToMarker else { return }
-                        self.gestureState.applyHistoricalPrepend(
-                            count: prependedCount,
-                            totalCandleWidth: self.totalCandleWidth
-                        )
-                    }
+                    preservePriceRangeForPurePrepend: false
                 )
                 hasMoreHistoricalCandles = hasMoreHistoricalCandles || chartData.hasMoreCandles
             } else {
@@ -624,16 +617,9 @@ class ChartViewModel: ObservableObject {
 
             dataManager.currentSymbol = symbol
             dataManager.currentTimeframe = targetTimeframe
-            let mergeResult = dataManager.mergeHistoricalMarketData(
+            let mergeResult = mergeHistoricalCandles(
                 candlesResponse.candles,
-                preservePriceRangeForPurePrepend: false,
-                beforePublishingPrepend: { [weak self] prependedCount in
-                    guard let self, !self.isNavigatingToMarker else { return }
-                    self.gestureState.applyHistoricalPrepend(
-                        count: prependedCount,
-                        totalCandleWidth: self.totalCandleWidth
-                    )
-                }
+                preservePriceRangeForPurePrepend: false
             )
             earliestHistoricalCandleTimestamp = dataManager.candles.first?.timestamp
             hasMoreHistoricalCandles = candlesResponse.hasMore
@@ -798,16 +784,9 @@ class ChartViewModel: ObservableObject {
             let mergeStartedAt = CFAbsoluteTimeGetCurrent()
             #endif
 
-            let mergeResult = dataManager.mergeHistoricalMarketData(
+            let mergeResult = mergeHistoricalCandles(
                 candlesResponse.candles,
-                preservePriceRangeForPurePrepend: preservePriceRangeForPurePrepend,
-                beforePublishingPrepend: { [weak self] prependedCount in
-                    guard let self, !self.isNavigatingToMarker else { return }
-                    self.gestureState.applyHistoricalPrepend(
-                        count: prependedCount,
-                        totalCandleWidth: self.totalCandleWidth
-                    )
-                }
+                preservePriceRangeForPurePrepend: preservePriceRangeForPurePrepend
             )
 
             #if DEBUG
@@ -941,6 +920,38 @@ class ChartViewModel: ObservableObject {
         currentSymbol?.id == symbolId &&
             appState.currentGuild?.id == guildId &&
             currentTimeframe == timeframe
+    }
+
+    /// Merge a page of candles into the chart, keeping everything that
+    /// indexes into the candle array consistent in the same frame.
+    ///
+    /// A prepend moves every existing candle `prependedCount` places to the
+    /// right. The gesture state is told so the viewport does not jump — and
+    /// so are the markers, because they hold candle indices too and the
+    /// layer draws from them the very next frame. Their indices used to be
+    /// re-derived only after the marker fetch that follows a prepend, so for
+    /// the length of a network round-trip every loaded marker sat
+    /// `prependedCount` candles to the left: a page of 5m history is 500
+    /// candles, which is off the screen and back — the "flash" reported at
+    /// first start, when history is still streaming in as the chart is panned.
+    @discardableResult
+    private func mergeHistoricalCandles(
+        _ candles: [RLCandleDTO],
+        preservePriceRangeForPurePrepend: Bool
+    ) -> HistoricalMergeResult {
+        dataManager.mergeHistoricalMarketData(
+            candles,
+            preservePriceRangeForPurePrepend: preservePriceRangeForPurePrepend,
+            beforePublishingPrepend: { [weak self] prependedCount in
+                guard let self else { return }
+                self.markerManager?.shiftCandleIndices(by: prependedCount)
+                guard !self.isNavigatingToMarker else { return }
+                self.gestureState.applyHistoricalPrepend(
+                    count: prependedCount,
+                    totalCandleWidth: self.totalCandleWidth
+                )
+            }
+        )
     }
 
     private func scheduleHistoricalMarkerHydration(

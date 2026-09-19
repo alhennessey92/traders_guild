@@ -466,10 +466,6 @@ struct TradingChartView: View {
 
     /// Track if chart is loading (waiting for data)
     @State private var isChartLoading = true
-    /// The top-left info column's frame in chart coordinates, so the
-    /// cross-timeframe badges can keep clear of the card that would hide them.
-    @State private var chartInfoColumnFrame: CGRect = .zero
-
     /// Breathing animation for marker-navigation loading state.
     @State private var markerNavigationPulse = false
     
@@ -4156,9 +4152,7 @@ struct TradingChartView: View {
                     totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth,
                     selectedMarkerId: markerManager.selectedMarker?.id,
                     selectedMarkerScale: selectionScale,
-                    jumps: markerManager.timeframeJumps,
-                    plotRect: plotRect,
-                    avoidRect: chartInfoColumnFrame
+                    jumps: markerManager.timeframeJumps
                 ) {
                     HapticFeedback.selection.trigger()
                     if jump.requiresChoice, let selected = markerManager.selectedMarker,
@@ -6933,12 +6927,6 @@ struct TradingChartView: View {
                         viewingInfoPanel
                     }
                 }
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { frame in
-                    let origin = geometry.frame(in: .global).origin
-                    chartInfoColumnFrame = frame.offsetBy(dx: -origin.x, dy: -origin.y)
-                }
                 Spacer()
             }
             .padding(.leading, 8)
@@ -7945,8 +7933,6 @@ struct TradingChartView: View {
             linkRender: linkRenderContext(plotRect: plotRect),
             linkedMarkersEnabled: markerManager.linkedMarkersEnabled,
             timeframeJumps: markerManager.timeframeJumps,
-            markerPlotRect: plotRect,
-            infoCardRect: chartInfoColumnFrame,
             idleLinks: idleLinkContext(plotRect: plotRect),
             placementLink: placementLinkContext(size: size, plotRect: plotRect)
         )

@@ -121,6 +121,42 @@ struct MarkerMergeReconciliationTests {
         #expect(Set(manager.markers.map(\.id)) == [id(1), id(3), id(7)])
     }
 
+    /// A history page prepends candles, and every marker's index must move
+    /// with its candle in the same frame — not after the fetch that follows.
+    /// The layer draws from those indices immediately; left stale, every
+    /// marker sat a page to the left for a network round-trip.
+    @Test
+    func aPrependShiftsEveryLoadedIndexBeforeAnyFetch() async {
+        let api = MergeFakeAPI()
+        let manager = await loadedManager(api: api)
+        let before = Dictionary(uniqueKeysWithValues: manager.markers.map { ($0.id, ($0.candleIndex, $0.positionedBelow, $0.stackIndex)) })
+        manager.selectedMarker = manager.markers.first { $0.id == id(3) }
+
+        manager.shiftCandleIndices(by: 5)
+
+        for marker in manager.markers {
+            let was = before[marker.id]!
+            #expect(marker.candleIndex == was.0 + 5, "index follows the candle")
+            #expect(marker.positionedBelow == was.1 && marker.stackIndex == was.2, "layout untouched")
+        }
+        #expect(manager.selectedMarker?.candleIndex == before[id(3)]!.0 + 5)
+
+        // The merge that follows, against the longer array, finds the same candles.
+        let older = (0..<5).map { i in
+            RLCandleDTO(timestamp: t0.addingTimeInterval(Double(i - 5) * hour), open: 1, high: 2, low: 0.5, close: 1.5, volume: nil)
+        }
+        api.pages = [[]]
+        await manager.mergeMarkersFromAPI(
+            api: api, symbolId: symbolId, symbol: "BTCUSD",
+            guildId: guildId, timeframe: .h1, candles: older + candles(10),
+            startTime: older.first?.timestamp, endTime: older.last?.timestamp
+        )
+        for marker in manager.markers {
+            #expect(marker.candleIndex == before[marker.id]!.0 + 5)
+        }
+        #expect(manager.markers.count == 3, "nothing inside the older window was loaded, so nothing is dropped")
+    }
+
     @Test
     func aMergeWithoutAWindowDropsNothing() async {
         let api = MergeFakeAPI()

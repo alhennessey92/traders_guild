@@ -145,8 +145,8 @@ enum MarkerTimeframeJumpLayout {
     /// selected glyph) while still reading as "away from the candle".
     static let splayAngle: CGFloat = .pi / 4
     /// How far a badge may slide sideways, from its preferred spot, to get
-    /// out from under the info card or past a badge already placed — enough
-    /// to clear one badge's full width and a little more.
+    /// past a stack neighbour or a badge already placed — enough to clear one
+    /// badge's full width and a little more.
     static let maximumAvoidanceShift: CGFloat = 44
     /// Gap between the glyph's ring / the arrow ring and the tether's ends.
     static let tetherInset: CGFloat = 1.5
@@ -182,20 +182,25 @@ enum MarkerTimeframeJumpLayout {
     /// wherever a badge ends up, so keeping it *outward* matters more than
     /// keeping parent-right / response-left.
     ///
-    /// - Parameter plotRect: the marker layer's clip. A badge that would be
-    ///   cut off at the top or bottom cannot use that band; one that would
-    ///   leave the sides is slid back in.
-    /// - Parameter avoidRect: the info card's frame in the same space, so the
-    ///   card never hides a control.
-    /// - Parameter obstacles: other glyphs' discs nearby. A badge never sits
-    ///   on a neighbouring marker — that would read as belonging to it.
+    /// **A badge is placed relative to its glyph and nothing else.** An
+    /// earlier layout slid a badge back inside the plot and out from under
+    /// the info card, which meant the badge crept along the screen edge as
+    /// the chart was panned and jumped as the card passed over it; the
+    /// owner's verdict was that it must move only with its marker. So a badge
+    /// near the edge leaves with the glyph and comes back with it, and one
+    /// under the card is hidden with the glyph it belongs to.
+    ///
+    /// - Parameter obstacles: the discs of the selected glyph's own stack
+    ///   neighbours — the same column, so fixed relative to the glyph at any
+    ///   zoom. A badge never sits on one of those; glyphs on other candles
+    ///   are not avoided, because their distance changes with zoom and a
+    ///   badge that hops between spots as the chart is pinched is worse than
+    ///   one that overlaps a neighbour on its tether.
     static func placements(
         selectedCenter center: CGPoint,
         scaledRadius: CGFloat,
         isBelow: Bool,
         jumps: [MarkerTimeframeJump],
-        plotRect: CGRect? = nil,
-        avoidRect: CGRect? = nil,
         obstacles: [CGRect] = []
     ) -> [Placement] {
         let distance = scaledRadius + standoff
@@ -211,20 +216,13 @@ enum MarkerTimeframeJumpLayout {
             var chosen: CGPoint?
             search: for verticalSign in [outwardSign, -outwardSign] {
                 let y = center.y + verticalSign * along
-                if let plotRect, y - outerRadius < plotRect.minY || y + outerRadius > plotRect.maxY {
-                    continue
-                }
                 for sideSign in [ownSide, -ownSide] {
                     var shift: CGFloat = 0
                     while shift <= maximumAvoidanceShift {
-                        var point = CGPoint(x: center.x + sideSign * (across + shift), y: y)
-                        if let plotRect {
-                            point.x = min(max(point.x, plotRect.minX + outerRadius), plotRect.maxX - outerRadius)
-                        }
+                        let point = CGPoint(x: center.x + sideSign * (across + shift), y: y)
                         let box = footprint(point)
-                        let blockedByCard = avoidRect.map { !$0.isEmpty && box.intersects($0) } ?? false
-                        let blockedByBadge = taken.contains { box.intersects($0) }  // badges placed so far and neighbouring glyphs
-                        if !blockedByCard && !blockedByBadge {
+                        // Badges placed so far and the stack neighbours.
+                        if !taken.contains(where: { box.intersects($0) }) {
                             chosen = point
                             break search
                         }
