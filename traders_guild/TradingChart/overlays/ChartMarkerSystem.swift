@@ -2869,7 +2869,8 @@ struct ChartMarkerSystem {
         timeframeJumps: [MarkerTimeframeJump] = [],
         markerPlotRect: CGRect? = nil,
         infoCardRect: CGRect? = nil,
-        idleLinks: MarkerIdleLinkContext? = nil
+        idleLinks: MarkerIdleLinkContext? = nil,
+        placementLink: MarkerPlacementLinkContext? = nil
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -2941,7 +2942,7 @@ struct ChartMarkerSystem {
 
             // Captured after the nudge above, so connectors attach where the
             // glyphs actually land rather than where they would have.
-            if linkRender != nil || idleLinks != nil {
+            if linkRender != nil || idleLinks != nil || placementLink != nil {
                 for entry in markerPositions {
                     let isSelected = selectedMarkerId == entry.marker.id
                     let radius = (MarkerVisualSpec.baseCanvasDiameter / 2)
@@ -3040,6 +3041,30 @@ struct ChartMarkerSystem {
                 revealProgress: linkRender.revealProgress,
                 lineWidth: linkRender.lineWidth
             )
+        } else if let placementLink {
+            // The response being placed: one connector from the parent to the
+            // ghost, on the undimmed context so it reads at full strength over
+            // the dimmed layer. The ghost is routed like any glyph.
+            addOffscreenEndpoints(for: [placementLink.edge])
+            var routingGlyphs = linkGlyphBounds
+            routingGlyphs[MarkerPlacementLinkContext.ghostId] = MarkerGlyphBounds(
+                id: MarkerPlacementLinkContext.ghostId,
+                center: placementLink.ghostPoint,
+                radius: MarkerVisualSpec.baseCanvasDiameter / 2
+            )
+            let plan = MarkerLinkGeometry.plan(
+                edges: [placementLink.edge],
+                glyphs: routingGlyphs,
+                plotRect: placementLink.plotRect,
+                selectedId: placementLink.parentId,
+                curvature: placementLink.curvature
+            )
+            MarkerLinkRenderer.drawConnectors(
+                context: context,
+                plan: plan,
+                revealProgress: 1,
+                lineWidth: placementLink.lineWidth
+            )
         } else if let idleLinks, !isDimmed, !idleLinks.edges.isEmpty {
             // At rest: the faint lines. Edges with neither end near the
             // viewport are not worth routing; the plan orders the rest nearest
@@ -3126,10 +3151,17 @@ struct ChartMarkerSystem {
 
         for rendered in glyphQueue {
             // Use original undimmed context for selected markers so they stay at full opacity
-            var drawContext = (isDimmed && rendered.isSelected) ? context : markerContext
+            let isPlacementParent = placementLink?.parentId == rendered.marker.id
+            var drawContext = (isDimmed && (rendered.isSelected || isPlacementParent)) ? context : markerContext
             if !isDimmed, linkRender?.isDimmed(rendered.marker.id) == true {
                 drawContext = focusDimmedContext
             }
+            // The marker being answered wears the relationship's ring while the
+            // response is placed — the same colour its connector has.
+            let ring: MarkerLinkRingStyle? = isPlacementParent
+                ? .response(placementLink?.relationship)
+                : linkRender?.ringStyles[rendered.marker.id]
+            let ringProgress: CGFloat = isPlacementParent ? 1 : (linkRender?.revealProgress ?? 0)
             let emojiOverride: String? = (editingEmojiOverride != nil && rendered.marker.id == editingEmojiOverride?.markerId)
                 ? editingEmojiOverride?.emoji : nil
             drawSingleMarker(
@@ -3141,8 +3173,8 @@ struct ChartMarkerSystem {
                 isSelected: rendered.isSelected,
                 rotation: rendered.rotation,
                 emojiOverride: emojiOverride,
-                linkRing: linkRender?.ringStyles[rendered.marker.id],
-                linkRingProgress: linkRender?.revealProgress ?? 0,
+                linkRing: ring,
+                linkRingProgress: ringProgress,
                 linkedMarkersEnabled: linkedMarkersEnabled,
                 pass: &pass
             )

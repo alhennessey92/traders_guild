@@ -549,4 +549,35 @@ struct MarkerLinkRenderTests {
         #expect(edge == MarkerLinkEdge(parentId: id(1), childId: id(2), relationship: nil, kind: .withinThesis),
                 "identity is still the pair — the flag is presentation")
     }
+
+    // MARK: - Response placement
+
+    /// While a response is placed, the parent and the ghost are joined by one
+    /// ordinary connector: the ghost takes part in routing as a glyph under a
+    /// stable id, so the same geometry (trim to the disc, avoid neighbours,
+    /// leave the plot toward an off-screen parent) applies.
+    @Test
+    func thePlacementLinkIsARoutableEdgeFromParentToGhost() throws {
+        let plot = CGRect(x: 0, y: 0, width: 400, height: 800)
+        let link = MarkerPlacementLinkContext(
+            parentId: id(1), relationship: MarkerLinkRelationshipValue(.buildsOn),
+            ghostPoint: CGPoint(x: 260, y: 430), plotRect: plot
+        )
+        #expect(link.edge.parentId == id(1))
+        #expect(link.edge.childId == MarkerPlacementLinkContext.ghostId)
+        #expect(link.edge.relationship?.known == .buildsOn)
+        #expect(link.lineWidth == ChartSettings.shared.linkLineWidth)
+
+        let glyphs: [UUID: MarkerGlyphBounds] = [
+            id(1): MarkerGlyphBounds(id: id(1), center: CGPoint(x: 120, y: 500), radius: 18),
+            MarkerPlacementLinkContext.ghostId: MarkerGlyphBounds(
+                id: MarkerPlacementLinkContext.ghostId, center: link.ghostPoint, radius: 18
+            ),
+        ]
+        let plan = MarkerLinkGeometry.plan(edges: [link.edge], glyphs: glyphs, plotRect: plot, selectedId: id(1))
+        let route = try #require(plan.routes.first)
+        // Trimmed to both discs, so the line meets the ghost's edge, not its centre.
+        #expect(abs(hypot(route.end.x - link.ghostPoint.x, route.end.y - link.ghostPoint.y) - 18) < 1.5)
+        #expect(abs(hypot(route.start.x - 120, route.start.y - 500) - 18) < 1.5)
+    }
 }

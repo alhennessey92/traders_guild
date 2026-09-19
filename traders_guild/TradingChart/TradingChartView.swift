@@ -7947,7 +7947,35 @@ struct TradingChartView: View {
             timeframeJumps: markerManager.timeframeJumps,
             markerPlotRect: plotRect,
             infoCardRect: chartInfoColumnFrame,
-            idleLinks: idleLinkContext(plotRect: plotRect)
+            idleLinks: idleLinkContext(plotRect: plotRect),
+            placementLink: placementLinkContext(size: size, plotRect: plotRect)
+        )
+    }
+
+    /// The link being drawn while a response is placed: the parent, and the
+    /// ghost's current centre — the drag position while dragging, else the
+    /// same snap position the ghost view itself is placed at.
+    private func placementLinkContext(size: CGSize, plotRect: CGRect) -> MarkerPlacementLinkContext? {
+        guard controlViewModel.isMarkerPlacementMode,
+              let link = placementState.linkSession.context,
+              !placementState.isEditingExistingMarker else { return nil }
+        let coordinateSystem = ChartCoordinateSystem(
+            chartData: chartData,
+            gestureState: gestureState,
+            chartSize: size,
+            baseCandleWidth: baseCandleWidth,
+            candleSpacing: candleSpacing
+        )
+        coordinateSystem.updateLiveState(dragState: dragState, pinchScale: 1.0)
+        guard let ghost = markerDragPosition ?? previewMarkerSnapPosition(coordinateSystem: coordinateSystem),
+              ghost.x.isFinite, ghost.y.isFinite else { return nil }
+        return MarkerPlacementLinkContext(
+            parentId: link.parentMarkerId,
+            relationship: MarkerLinkRelationshipValue(link.relationship),
+            ghostPoint: ghost,
+            plotRect: plotRect,
+            lineWidth: chartSettings.linkLineWidth,
+            curvature: chartSettings.linkCurvature
         )
     }
 

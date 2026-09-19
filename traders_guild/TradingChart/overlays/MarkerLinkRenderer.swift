@@ -155,6 +155,47 @@ struct MarkerIdleLinkContext {
     static let maximumEdges = 60
 }
 
+/// While a response is being placed: the marker it answers, and where the
+/// ghost currently is.
+///
+/// The placement dim used to take the parent down with everything else, and
+/// the only statement of the relationship was a banner in the panel below.
+/// With this the parent stays lit and ringed in the relationship's colour, and
+/// one full-strength connector runs from it to the ghost — re-routed every
+/// frame, so it follows the drag.
+struct MarkerPlacementLinkContext {
+    /// A stable id for the ghost, so it can take part in routing as a glyph.
+    static let ghostId = UUID(uuidString: "9A05B0D9-6E2A-4C7E-9E8F-000000000001")!
+
+    let parentId: UUID
+    let relationship: MarkerLinkRelationshipValue
+    /// The ghost glyph's centre in chart coordinates.
+    let ghostPoint: CGPoint
+    let plotRect: CGRect
+    let lineWidth: CGFloat
+    let curvature: CGFloat
+
+    init(
+        parentId: UUID,
+        relationship: MarkerLinkRelationshipValue,
+        ghostPoint: CGPoint,
+        plotRect: CGRect,
+        lineWidth: CGFloat = ChartSettings.shared.linkLineWidth,
+        curvature: CGFloat = ChartSettings.shared.linkCurvature
+    ) {
+        self.parentId = parentId
+        self.relationship = relationship
+        self.ghostPoint = ghostPoint
+        self.plotRect = plotRect
+        self.lineWidth = lineWidth
+        self.curvature = curvature
+    }
+
+    var edge: MarkerLinkEdge {
+        MarkerLinkEdge(parentId: parentId, childId: Self.ghostId, relationship: relationship, kind: .childOfSelected)
+    }
+}
+
 /// How the connector/ring reveal behaves, extracted so Reduce Motion is a
 /// tested rule rather than an inspected one.
 enum MarkerLinkRevealPolicy {

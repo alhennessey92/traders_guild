@@ -1112,6 +1112,10 @@ struct MarkerPlacementChecklistPanel: View {
                 ForEach(placementState.placementChecklistItems) { item in
                     checklistRow(item)
                 }
+
+                if let link = placementState.linkSession.context {
+                    linkRow(link)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1154,6 +1158,32 @@ struct MarkerPlacementChecklistPanel: View {
 
     private var completedChecklistItemCount: Int {
         placementState.placementChecklistItems.filter { $0.isComplete }.count
+    }
+
+    /// What this response is, stated on the chart beside the checklist: the
+    /// relationship's icon and name in its colour, and whose marker it
+    /// answers. The parent glyph is lit and tethered on the canvas; this is
+    /// the words for it, without leaving the chart for the panel.
+    private func linkRow(_ link: MarkerLinkContext) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: link.relationship.icon)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(link.relationship.accentColor)
+                .frame(width: 12)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(link.relationship.displayName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(link.relationship.accentColor)
+                Text(link.parentAuthorDisplayText.map { "@\($0)'s marker" } ?? "a linked marker")
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(AppColors.surfaceWhite80)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(link.relationship.displayName) \(link.parentAuthorDisplayText ?? "a linked marker")")
     }
 
     private func checklistRow(_ item: MarkerPlacementChecklistItem) -> some View {
