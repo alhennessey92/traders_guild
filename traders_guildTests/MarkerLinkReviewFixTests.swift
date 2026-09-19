@@ -15,7 +15,8 @@ struct MarkerLinkReviewFixTests {
         marker: Int? = nil,
         depth: Int = 0,
         responses: Int = 0,
-        unavailable: Bool = false
+        unavailable: Bool = false,
+        created: TimeInterval? = nil
     ) -> RLMarkerLinkPreviewDTO {
         RLMarkerLinkPreviewDTO(
             nodeKey: key,
@@ -25,6 +26,7 @@ struct MarkerLinkReviewFixTests {
             isUnavailable: unavailable,
             authorUsername: unavailable ? nil : "t\(key)",
             title: unavailable ? nil : "Node \(key)",
+            createdAt: created.map { Date(timeIntervalSinceReferenceDate: $0) },
             directResponseCount: responses,
             depth: depth
         )
@@ -100,6 +102,73 @@ struct MarkerLinkReviewFixTests {
             window.displayRows().map(\.node.nodeKey) == ["root", "c1", "c2", "c3"],
             "earlier siblings must precede the late one the deep link brought in"
         )
+    }
+
+    /// The other direction, which the anchored merge got backwards: the initial
+    /// window holds the first children, and a branch continuation returns the
+    /// *later* ones (the server pages oldest-first and a cursor is strictly
+    /// "after"). Those must follow what is held, not lead it.
+    @Test
+    func laterSiblingsFromAContinuationLandAfterWhatIsHeld() {
+        var window = MarkerThreadWindow(
+            page: page(
+                requested: 1,
+                windowRoot: "root",
+                nodes: [
+                    node("root", marker: 1, responses: 4),
+                    node("c1", parent: "root", marker: 11, depth: 1, created: 10),
+                    node("c2", parent: "root", marker: 12, depth: 1, created: 20),
+                ],
+                branches: [RLMarkerThreadBranchDTO(nodeKey: "root", cursor: "after-c2")],
+                rootMarker: 1,
+                rootKey: "root",
+                rootResolved: true
+            )
+        )
+        window.merge(
+            page: page(
+                requested: 1,
+                windowRoot: "root",
+                nodes: [
+                    node("root", marker: 1, responses: 4),
+                    node("c3", parent: "root", marker: 13, depth: 1, created: 30),
+                    node("c4", parent: "root", marker: 14, depth: 1, created: 40),
+                ]
+            ),
+            consumedBranchKey: "root"
+        )
+        #expect(window.displayRows().map(\.node.nodeKey) == ["root", "c1", "c2", "c3", "c4"])
+    }
+
+    /// And with timestamps present the deep-link case still files earlier
+    /// siblings ahead — the decision is by time, not by which page came first.
+    @Test
+    func earlierSiblingsWithTimestampsStillLandAhead() {
+        var window = MarkerThreadWindow(
+            page: page(
+                requested: 3,
+                windowRoot: "root",
+                nodes: [
+                    node("root", marker: 1, responses: 3),
+                    node("c3", parent: "root", marker: 3, depth: 1, created: 30),
+                ],
+                branches: [RLMarkerThreadBranchDTO(nodeKey: "root", cursor: "b1")],
+                rootMarker: 1, rootKey: "root", rootResolved: true
+            )
+        )
+        window.merge(
+            page: page(
+                requested: 3,
+                windowRoot: "root",
+                nodes: [
+                    node("root", marker: 1, responses: 3),
+                    node("c1", parent: "root", marker: 11, depth: 1, created: 10),
+                    node("c2", parent: "root", marker: 12, depth: 1, created: 20),
+                ]
+            ),
+            consumedBranchKey: "root"
+        )
+        #expect(window.displayRows().map(\.node.nodeKey) == ["root", "c1", "c2", "c3"])
     }
 
     /// Tombstones carry no timestamp, so ordering cannot fall back to sorting.

@@ -317,14 +317,38 @@ struct MarkerThreadWindow: Equatable {
         }
 
         for (parentKey, incoming) in sequences {
-            childKeysByParent[parentKey] = Self.anchoredMerge(
-                existing: childKeysByParent[parentKey] ?? [],
-                incoming: incoming
-            )
+            let existing = childKeysByParent[parentKey] ?? []
+            childKeysByParent[parentKey] = Self.pageArrivesAfter(existing: existing, incoming: incoming, nodes: nodesByKey)
+                ? existing + incoming.filter { !existing.contains($0) }
+                : Self.anchoredMerge(existing: existing, incoming: incoming)
         }
         if !rootSequence.isEmpty {
             orphanRootKeys = Self.anchoredMerge(existing: orphanRootKeys, incoming: rootSequence)
         }
+    }
+
+    /// Whether a page that shares no sibling with what is held is a
+    /// *continuation* — later siblings — rather than the deep-link case of
+    /// earlier ones.
+    ///
+    /// `anchoredMerge` cannot tell: with no overlap it files the page ahead,
+    /// which is right for earlier siblings and reversed the order for a true
+    /// continuation (the server pages children oldest-first, and a branch
+    /// cursor returns strictly later ones). Timestamps settle it when both
+    /// sides carry any: if everything arriving was created after everything
+    /// held, the page follows. Tombstones carry no timestamp and are simply
+    /// not consulted; a page of tombstones alone keeps the anchored path.
+    static func pageArrivesAfter(
+        existing: [String],
+        incoming: [String],
+        nodes: [String: RLMarkerLinkPreviewDTO]
+    ) -> Bool {
+        guard !existing.isEmpty, !incoming.isEmpty,
+              Set(existing).isDisjoint(with: incoming) else { return false }
+        let held = existing.compactMap { nodes[$0]?.createdAt }
+        let arriving = incoming.compactMap { nodes[$0]?.createdAt }
+        guard let latestHeld = held.max(), let earliestArriving = arriving.min() else { return false }
+        return earliestArriving > latestHeld
     }
 
     /// Merge two orderings of the same sibling set, preserving both.

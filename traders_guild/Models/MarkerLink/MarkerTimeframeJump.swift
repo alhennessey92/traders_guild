@@ -88,6 +88,23 @@ enum MarkerTimeframeJumpResolver {
                         requiresChoice: responses.count > 1 || thread.branchCursors[node.nodeKey] != nil
                     )
                 )
+            } else if thread.branchCursors[node.nodeKey] != nil {
+                // Responses exist that this window has not paged in, and none
+                // of the loaded ones is elsewhere. The badge cannot say where
+                // it goes, so it says "more": the ellipsis opens the thesis
+                // list, which loads the branch. Without this a marker whose
+                // count badge showed responses wore no badge at all.
+                jumps.append(
+                    MarkerTimeframeJump(
+                        markerId: marker.id,
+                        direction: .toResponse,
+                        relationship: MarkerLinkRelationshipValue(raw: ""),
+                        timeframe: currentTimeframe,
+                        others: 0,
+                        preview: node,
+                        requiresChoice: true
+                    )
+                )
             }
         }
 

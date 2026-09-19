@@ -577,7 +577,12 @@ enum MarkerLinkRenderer {
 
         for placement in placements {
             let center = placement.center
-            let accent = pass.accent(for: placement.jump.relationship)
+            // "Choose" is not a relationship. The ellipsis badge used to borrow
+            // the newest response's colour and read as that relationship; it
+            // takes the neutral badge fill instead, like a root's count.
+            let accent = placement.jump.requiresChoice
+                ? pass.neutralBadgeFill
+                : pass.accent(for: placement.jump.relationship)
             let disc = MarkerTimeframeJumpLayout.badgeRadius
             let ring = MarkerTimeframeJumpLayout.arrowRadius
 

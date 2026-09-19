@@ -149,6 +149,41 @@ struct MarkerTimeframeJumpTests {
         #expect(jump.badgeText == "…")
     }
 
+    /// The window has loaded, says the branch continues, and none of the
+    /// loaded children is elsewhere: the badge cannot name a destination, so
+    /// it says "more" and opens the list. Before this there was no badge at
+    /// all under a count badge that plainly showed responses.
+    @Test
+    func anUnloadedBranchEarnsAnEllipsisThatOpensTheList() throws {
+        let root = marker(1, timeframe: "5m", responses: 3)
+        let thread = window(
+            requested: 1, root: "r",
+            nodes: [
+                preview(key: "r", marker: 1, timeframe: "5m", relationship: nil),
+                // One loaded child, on this timeframe: a connector, not a badge.
+                preview(key: "a", parentKey: "r", marker: 2, timeframe: "5m", relationship: "supports"),
+            ],
+            branches: [RLMarkerThreadBranchDTO(nodeKey: "r", cursor: "more")]
+        )
+        let jumps = MarkerTimeframeJumpResolver.jumps(for: root, currentTimeframe: .m5, thread: thread)
+        let jump = try #require(jumps.first)
+        #expect(jump.direction == .toResponse)
+        #expect(jump.requiresChoice)
+        #expect(jump.badgeText == "…")
+        #expect(jump.markerId == root.id, "it points at the marker itself; the chooser loads the branch")
+        #expect(jump.relationship.known == nil, "no relationship to colour it with")
+    }
+
+    @Test
+    func aCompleteBranchWithOnlyLocalChildrenEarnsNoBadge() {
+        let root = marker(1, timeframe: "5m", responses: 1)
+        let thread = window(requested: 1, root: "r", nodes: [
+            preview(key: "r", marker: 1, timeframe: "5m", relationship: nil),
+            preview(key: "a", parentKey: "r", marker: 2, timeframe: "5m", relationship: "supports"),
+        ])
+        #expect(MarkerTimeframeJumpResolver.jumps(for: root, currentTimeframe: .m5, thread: thread).isEmpty)
+    }
+
     @Test
     func noThreadWindowMeansNoResponseBadge() {
         let root = marker(1, timeframe: "5m", responses: 3)
