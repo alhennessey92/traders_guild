@@ -3726,11 +3726,18 @@ struct ChartMarkerSystem {
         _ jump: MarkerTimeframeJump,
         chartViewModel: ChartViewModel,
         gestureState: ChartGestureState,
-        markerManager: MarkerManager
+        markerManager: MarkerManager,
+        centerOnMarker: ((ChartMarkerUI) -> Void)? = nil
     ) -> Bool {
         guard !jump.requiresChoice else { return false }
         if let loaded = markerManager.markers.first(where: { $0.id == jump.markerId }) {
-            markerManager.selectedMarker = loaded
+            // Already on this chart: bring it to the centre like a tap would,
+            // rather than selecting it wherever it happens to sit.
+            if let centerOnMarker {
+                centerOnMarker(loaded)
+            } else {
+                markerManager.selectedMarker = loaded
+            }
             return true
         }
         guard let target = MarkerNavigationTarget(linkPreview: jump.preview) else { return false }

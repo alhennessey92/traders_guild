@@ -3674,7 +3674,13 @@ struct ChartBottomSheet: View {
 
         if let loaded = markerManager.markers.first(where: { $0.id == markerId }) {
             HapticFeedback.selection.trigger()
-            markerManager.selectedMarker = loaded
+            // Centre it as a glyph tap would; selecting alone left the target
+            // wherever it sat, often off to one side or under the sheet.
+            if let center = controlViewModel.centerOnMarkerAction {
+                center(loaded)
+            } else {
+                markerManager.selectedMarker = loaded
+            }
             return
         }
 

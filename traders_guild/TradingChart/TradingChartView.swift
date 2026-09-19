@@ -4172,7 +4172,8 @@ struct TradingChartView: View {
                         jump,
                         chartViewModel: chartViewModel,
                         gestureState: gestureState,
-                        markerManager: markerManager
+                        markerManager: markerManager,
+                        centerOnMarker: { self.centerAndSelect($0) }
                     )
                     return
                 }
@@ -8403,9 +8404,35 @@ struct TradingChartView: View {
         isChartLoading = false
     }
 
+    /// The glyph tap's centring, as one call: animate the viewport to the
+    /// marker's candle and price, then stage the selection so the pop lands
+    /// after the move. `centerOnMarkerAction` hands this to the detail sheet
+    /// and the badge for targets that are already loaded.
+    private func centerAndSelect(_ marker: ChartMarkerUI) {
+        let candles = chartData.candles
+        guard !candles.isEmpty else {
+            markerManager.selectedMarker = marker
+            return
+        }
+        let index = Self.findCandleIndexForTimestamp(marker.candleTimestamp, in: candles) ?? max(0, candles.count - 50)
+        var focusMarker = markerManager.markers.first(where: { $0.id == marker.id }) ?? marker
+        focusMarker.candleIndex = index
+        animateHistoricalMarkerEntry(
+            focusMarker: focusMarker,
+            candleIndex: index,
+            chartWidth: chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width,
+            chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
+            candleWidth: totalCandleWidth
+        )
+        stageMarkerSelection(focusMarker)
+    }
+
     private func setupControlActions() {
         controlViewModel.focusResponseAnchorAction = {
             self.focusResponseAnchor()
+        }
+        controlViewModel.centerOnMarkerAction = { marker in
+            self.centerAndSelect(marker)
         }
         controlViewModel.resetChartAction = {
             self.gestureState.reset()

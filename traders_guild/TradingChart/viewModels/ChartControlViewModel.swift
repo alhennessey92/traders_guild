@@ -36,6 +36,11 @@ class ChartControlViewModel: ObservableObject {
     var resetChartAction: (() -> Void)?
     var resetToLatestAction: (() -> Void)?
     var focusResponseAnchorAction: (() -> Void)?
+    /// Bring a loaded marker to the centre of the chart and select it — the
+    /// glyph-tap feel, offered to callers outside the chart view (the detail
+    /// sheet's parent and thesis rows, the cross-timeframe badge) that could
+    /// previously only set the selection and leave the marker wherever it was.
+    var centerOnMarkerAction: ((ChartMarkerUI) -> Void)?
     var jumpToStartAction: (() -> Void)?
     var jumpToLatestAction: (() -> Void)?
     var toggleAutoScrollAction: (() -> Void)?
