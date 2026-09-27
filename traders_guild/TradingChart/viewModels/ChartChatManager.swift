@@ -66,6 +66,7 @@ class ChartChatManager: ObservableObject {
                         let isMine = newMessage.author.userId == currentUserId
                         newMessage = newMessage.withCurrentUser(isMine)
                     }
+                    MemberAvatarDirectory.shared.note(members: [newMessage.author])
                     messages.append(newMessage)
                 }
             }
@@ -189,6 +190,7 @@ class ChartChatManager: ObservableObject {
                 limit: 50,
                 cursor: cursor
             )
+            MemberAvatarDirectory.shared.note(members: messagesListDTO.messages.map(\.author))
             messages = messagesListDTO.messages
         } catch {
             print("⚠️ Failed to load chart chat messages: \(error)")

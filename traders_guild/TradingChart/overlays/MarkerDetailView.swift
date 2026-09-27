@@ -1438,7 +1438,8 @@ struct MarkerDetailHeaderView: View {
                 initials: marker.author.initials,
                 avatarURL: marker.author.avatarUrl,
                 isOnline: marker.author.isOnline,
-                size: 38
+                size: 38,
+                userId: marker.author.userId
             )
             .allowsHitTesting(false)
 

@@ -641,7 +641,8 @@ struct RLMessagingSheet: View {
                 initials: thread.participant.initials,
                 avatarURL: thread.participant.avatarUrl,
                 isOnline: isOnline,
-                size: 36
+                size: 36,
+                userId: thread.participant.userId
             )
             
             VStack(alignment: .leading, spacing: 2) {
@@ -1003,11 +1004,22 @@ struct RLMessagingSheet: View {
     }
 
     private func normalizeChatroomMessages(_ messages: [RLChatroomMessageDTO]) -> [RLChatroomMessageDTO] {
-        messages.sorted { $0.timestamp < $1.timestamp }
+        noteAuthorAvatars(messages.map(\.author))
+        return messages.sorted { $0.timestamp < $1.timestamp }
     }
 
     private func normalizeDMMessages(_ messages: [RLDMMessageDTO]) -> [RLDMMessageDTO] {
-        messages.sorted { $0.timestamp < $1.timestamp }
+        noteAuthorAvatars(messages.map(\.author))
+        return messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// Every message page and every live message carries its author as the server sees them
+    /// *now*, so the newest payload wins for every row that user already has on screen.
+    private func noteAuthorAvatars(_ authors: [RLGuildMemberDTO]) {
+        guard !authors.isEmpty else { return }
+        Task { @MainActor in
+            MemberAvatarDirectory.shared.note(members: authors)
+        }
     }
 
     private func toggleChatroomReaction(messageId: UUID, emoji: String) async {
@@ -1965,12 +1977,15 @@ extension RLMessagingManager {
     }
 
     private func normalizeChatroomMessage(_ message: RLChatroomMessageDTO) -> RLChatroomMessageDTO {
+        // Live messages carry the author as the server sees them now — newest payload wins.
+        MemberAvatarDirectory.shared.note(members: [message.author])
         guard let currentUserId = appState?.currentUser?.id else { return message }
         let isCurrent = message.author.userId == currentUserId
         return message.isCurrentUserMessage == isCurrent ? message : message.withCurrentUser(isCurrent)
     }
 
     private func normalizeDMMessage(_ message: RLDMMessageDTO) -> RLDMMessageDTO {
+        MemberAvatarDirectory.shared.note(members: [message.author])
         guard let currentUserId = appState?.currentUser?.id else { return message }
         let isCurrent = message.author.userId == currentUserId
         return message.isCurrentUserMessage == isCurrent ? message : message.withCurrentUser(isCurrent)

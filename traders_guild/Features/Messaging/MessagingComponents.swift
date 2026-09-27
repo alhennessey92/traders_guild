@@ -86,28 +86,24 @@ struct ChatAvatar: View {
     let isOnline: Bool
     var size: CGFloat = 32
     var showOnlineIndicator: Bool = true
-    
+    /// When known, the row prefers the freshest avatar the app has seen for this user over the
+    /// one its message was fetched with — see `MemberAvatarDirectory`.
+    var userId: UUID? = nil
+
+    @ObservedObject private var avatarDirectory = MemberAvatarDirectory.shared
+
+    private var resolvedAvatarURL: String? {
+        avatarDirectory.resolved(userId: userId, fallback: avatarURL)
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            if let avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Circle()
-                            .fill(AppColors.accentColor.opacity(0.3))
-                            .overlay(
-                                Text(initials.uppercased())
-                                    .font(size > 40 ? .caption : .caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(AppColors.accentColor)
-                            )
-                    }
-                }
-                .frame(width: size, height: size)
-                .clipShape(Circle())
+            // The same loader every other avatar in the app uses. Chat had its own
+            // `AsyncImage`, which meant a chat row could not reuse the image the member
+            // list had already fetched: every row refetched, and showed initials while it
+            // did — so in a busy chatroom the custom avatars looked like they were missing.
+            if let avatarURL = resolvedAvatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
+                CachedAvatarImage(url: url, size: size, initials: initials.uppercased())
             } else {
                 Circle()
                     .fill(AppColors.accentColor.opacity(0.3))
@@ -711,7 +707,8 @@ struct ChatInputFooter: View {
                                     initials: member.initials,
                                     avatarURL: member.avatarUrl,
                                     isOnline: member.isOnline,
-                                    size: 28
+                                    size: 28,
+                                    userId: member.userId
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(member.username)
@@ -2773,7 +2770,8 @@ struct RLChatMessageBubble<Message: RLChatMessageDisplayable>: View {
                 initials: message.authorInitials,
                 avatarURL: message.authorAvatarUrl,
                 isOnline: message.authorIsOnline,
-                size: 32
+                size: 32,
+                userId: message.authorUserId
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -3646,7 +3644,8 @@ private struct ChatReactionReactorsCard: View {
                 initials: reactor.initials,
                 avatarURL: reactor.avatarUrl,
                 isOnline: appState.effectiveOnlineStatus(userId: reactor.userId, fallback: reactor.isOnline),
-                size: 32
+                size: 32,
+                userId: reactor.userId
             )
 
             VStack(alignment: .leading, spacing: 1) {
