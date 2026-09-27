@@ -86,6 +86,7 @@ struct MarkerSharePromptSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showRecipientPicker = false
+    @State private var showChatDestinationPicker = false
     @State private var showDiscordDestination = false
     @State private var caption = ""
     @State private var discordChannels: [RLGuildDiscordChannelDTO] = []
@@ -98,7 +99,7 @@ struct MarkerSharePromptSheet: View {
     /// again — see `ShareChannel`.
     private static let channels: [ShareChannel] = [
         .x, .discord, .reddit, .telegram,
-        .guildDM, .copyLink, .more,
+        .guildChat, .guildDM, .copyLink, .more,
     ]
 
     /// `alert_severity` is not a backend field — it survives as a `[Prefix] `
@@ -212,6 +213,17 @@ struct MarkerSharePromptSheet: View {
         .task {
             await loadDiscordState()
         }
+        .sheet(isPresented: $showChatDestinationPicker) {
+            MarkerChatDestinationPicker(
+                marker: context.marker,
+                symbolTicker: context.symbolTicker,
+                caption: caption,
+                appState: appState
+            ) {
+                // After the picker sends/cancels, close the whole prompt too.
+                dismiss()
+            }
+        }
         .sheet(isPresented: $showRecipientPicker) {
             MarkerDMRecipientPicker(
                 marker: context.marker,
@@ -251,6 +263,10 @@ struct MarkerSharePromptSheet: View {
     @ViewBuilder
     private func channelTile(_ kind: ShareChannel) -> some View {
         switch kind {
+        case .guildChat:
+            channel(kind: .guildChat, label: kind.title, spec: kind.spec) {
+                showChatDestinationPicker = true
+            }
         case .guildDM:
             channel(kind: .guildDM, label: kind.title, spec: kind.spec) {
                 showRecipientPicker = true

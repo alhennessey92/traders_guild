@@ -47,6 +47,9 @@ enum ShareChannel: CaseIterable {
     case x, discord, reddit, telegram
     /// Send it to one person, inside the app. Only one of these appears per surface.
     case guildDM, messages
+    /// Post it into a conversation inside the guild — a chatroom, or the symbol's chart chat.
+    /// Marker surfaces only: there is no guild conversation to put an invite in.
+    case guildChat
     /// Utilities, always last.
     case copyLink, qrCode, more
 
@@ -57,12 +60,13 @@ enum ShareChannel: CaseIterable {
     /// Everything else sits underneath.
     static let canonicalOrder: [ShareChannel] = [
         .x, .discord, .reddit, .telegram,
-        .guildDM, .messages,
+        .guildChat, .guildDM, .messages,
         .copyLink, .qrCode, .more,
     ]
 
     var spec: ShareChannelSpec {
         switch self {
+        case .guildChat: return ShareChannelStyle.guildChat
         case .guildDM:  return ShareChannelStyle.guildDM
         case .messages: return ShareChannelStyle.messages
         case .x:        return ShareChannelStyle.x
@@ -79,6 +83,7 @@ enum ShareChannel: CaseIterable {
     /// sheet names a connected Discord channel).
     var title: String {
         switch self {
+        case .guildChat: return "Send to chat"
         case .guildDM:  return "Guild DM"
         case .messages: return "Messages"
         case .x:        return "X"
@@ -107,6 +112,7 @@ enum ShareChannelStyle {
     static var telegram: ShareChannelSpec { .init(icon: .asset("TelegramLogo"), tint: AppColors.whiteText) }
 
     // Utility channels.
+    static var guildChat: ShareChannelSpec { .init(icon: .system("bubble.left.and.bubble.right.fill"), tint: AppColors.accentColor) }
     static var guildDM: ShareChannelSpec { .init(icon: .system("person.2.fill"), tint: AppColors.accentColor) }
     static var messages: ShareChannelSpec { .init(icon: .system("message.fill"), tint: AppColors.statusPositive70) }
     static var copyLink: ShareChannelSpec { .init(icon: .system("doc.on.doc.fill"), tint: AppColors.guildReputationAccent) }

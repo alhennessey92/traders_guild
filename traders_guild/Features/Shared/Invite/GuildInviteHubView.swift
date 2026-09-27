@@ -272,8 +272,9 @@ struct GuildInviteHubView: View {
             }
         case .more:
             channelButton(kind: kind, title: kind.title, spec: kind.spec) { shareMore() }
-        case .guildDM:
-            // Not offered here: an invite goes to someone who is not in the guild yet.
+        case .guildDM, .guildChat:
+            // Not offered here: an invite goes to someone who is not in the guild yet, so
+            // neither a guild DM nor a guild conversation is a destination for it.
             EmptyView()
         }
     }

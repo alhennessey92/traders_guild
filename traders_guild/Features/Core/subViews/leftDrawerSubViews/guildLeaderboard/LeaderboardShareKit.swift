@@ -469,7 +469,7 @@ struct MemberStatsShareSheet: View {
             LeaderboardShareTile(kind: .discord, isBusy: false) {
                 showDiscordDestination = true
             }
-        case .guildDM, .messages, .qrCode:
+        case .guildChat, .guildDM, .messages, .qrCode:
             EmptyView()
         }
     }
@@ -678,7 +678,7 @@ struct LeaderboardShareSheet: View {
             LeaderboardShareTile(kind: .more, isBusy: false) {
                 LeaderboardShare.presentSystemShareSheet(text: messageText, url: shareURL)
             }
-        case .guildDM, .messages, .qrCode:
+        case .guildChat, .guildDM, .messages, .qrCode:
             EmptyView()
         }
     }
