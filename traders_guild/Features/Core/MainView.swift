@@ -113,6 +113,7 @@ struct MainView: View {
             markerOverlayState: markerOverlayState,
             timeframePanelManager: timeframePanelManager,
             selectedDetent: $selectedDetent,
+            selectedView: $chartSheetTab,
             onNavigateToMarker: { marker in
                 leftDrawerViewModel.requestNavigationToMarker(marker)
             },
@@ -169,8 +170,27 @@ struct MainView: View {
 
     @State private var fadeIn: Bool = false
 
-    // MARK: - Tutorial State
-    @StateObject private var tutorialManager = TutorialManager()
+    // MARK: - Walkthrough State
+    /// Which presentation of the walkthrough is up, if any. First run and the
+    /// Settings replay differ only in what happens afterwards.
+    private enum WalkthroughPresentation: String, Identifiable {
+        case firstRun
+        case replay
+        var id: String { rawValue }
+    }
+    @State private var walkthroughPresentation: WalkthroughPresentation?
+    /// Holds the chart sheet down while the walkthrough (or the biometric offer
+    /// that follows it) owns the single sheet slot — same idea as
+    /// `guildArrivalReservesSheetSlot`.
+    @State private var walkthroughSlotReserved: Bool = false
+    /// Set by the sheet's buttons before it dismisses; nil on a swipe-down.
+    @State private var walkthroughOutcome: WalkthroughOutcome?
+    /// The outcome whose follow-up is waiting for the biometric offer to clear.
+    @State private var pendingWalkthroughCTA: WalkthroughOutcome?
+    @State private var didScheduleWalkthrough: Bool = false
+    /// The chart sheet's tab, lifted out of `ChartBottomSheet` so the
+    /// walkthrough's "Place your first marker" can land on the Markers tab.
+    @State private var chartSheetTab: ChartBottomSheet.ChartView = .symbol
 
     // MARK: - Drawer State Management
     @State private var showLeftDrawer: Bool = false
@@ -223,8 +243,6 @@ struct MainView: View {
     @State private var presentedCelebrationRequestID: UUID?
     @State private var presentedWelcomeRequestID: UUID?
 
-    // MARK: - Tutorial Auto-Start Gate
-    @State private var didScheduleTutorialAutoStart: Bool = false
     // MARK: - Computed Properties
     private var screenSize: CGSize {
         UIScreen.main.bounds.size
@@ -592,7 +610,6 @@ struct MainView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    guard !tutorialManager.isActive else { return }
                                     dismissRightSheetsSignal = true
                                     if showLeftDrawer && value.translation.width < 0 {
                                         leftDragTranslation = value.translation.width
@@ -601,7 +618,6 @@ struct MainView: View {
                                     }
                                 }
                                 .onEnded { value in
-                                    guard !tutorialManager.isActive else { return }
                                     handleDrawerDragEnd(currentPosition: showLeftDrawer ? leftDragTranslation : rightDragTranslation)
                                 }
                         )
@@ -625,11 +641,6 @@ struct MainView: View {
 
             }
             .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
-            .onPreferenceChange(SpotlightFrameKey.self) { frames in
-                guard tutorialManager.isActive else { return }
-                guard tutorialManager.spotlightFrames != frames else { return }
-                tutorialManager.spotlightFrames = frames
-            }
             .ignoresSafeArea()
             .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
             
@@ -652,10 +663,9 @@ struct MainView: View {
             // and queued ("Currently, only presenting a single sheet is supported", logged
             // hundreds of times), then shown only once this one goes away. Standing the
             // bottom sheet down for them is the same thing already done for the drawers.
-            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !tutorialManager.shouldHideBottomSheet && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder && !guildArrivalReservesSheetSlot)) {
+            .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !walkthroughSlotReserved && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder && !guildArrivalReservesSheetSlot)) {
                 chartBottomSheet
                 .environmentObject(rlAppState)
-                .environmentObject(tutorialManager)
                 .id(appThemeStorage)
                 .presentationDetents([.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)],
                                       selection: $selectedDetent)
@@ -703,15 +713,8 @@ struct MainView: View {
             }
             .sensoryFeedback(.impact(weight: .light), trigger: showLeftDrawer)
             .sensoryFeedback(.impact(weight: .light), trigger: showRightDrawer)
-            .onChange(of: tutorialManager.isActive) { _, isActive in
-                if isActive {
-                    TutorialWindowManager.shared.show(tutorialManager: tutorialManager)
-                } else {
-                    TutorialWindowManager.shared.dismiss()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .startTutorial)) { notification in
-                let fromBeginning = notification.userInfo?["fromBeginning"] as? Bool ?? true
+            .onReceive(NotificationCenter.default.publisher(for: .presentWalkthrough)) { _ in
+                guard walkthroughPresentation == nil else { return }
                 // Dismiss any presented sheets first (profile, settings, etc.)
                 dismissLeftSheetsSignal = true
                 dismissRightSheetsSignal = true
@@ -724,17 +727,26 @@ struct MainView: View {
                     leftDragTranslation = 0
                     rightDragTranslation = 0
                 }
-                // Wait for sheets and drawers to fully dismiss before starting tutorial
+                // Stand the chart sheet down now so the slot is free once the
+                // drawers and their sheets have gone.
+                walkthroughSlotReserved = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    tutorialManager.startTutorial(fromBeginning: fromBeginning)
+                    guard walkthroughPresentation == nil else { return }
+                    rlAppState.walkthroughWillPresent()
+                    walkthroughPresentation = .replay
                 }
             }
             
             .environmentObject(leftDrawerViewModel)
             .environmentObject(rightDrawerViewModel)
             .environmentObject(notificationNavigationManager)
-            .environmentObject(tutorialManager)
             .task {
+                // Reserve the sheet slot before the transition lifts, or the chart
+                // sheet presents into the gap 0.5 s after appear and the
+                // walkthrough is refused behind it.
+                walkthroughSlotReserved = rlAppState.shouldAutoStartInitialTutorial(for: user.id)
+                    && !rlAppState.hasTutorialCompleted(for: user.id)
+
                 notificationNavigationManager.configure(
                     rlAppState: rlAppState,
                     messagingManager: rlMessagingManager,
@@ -799,34 +811,38 @@ struct MainView: View {
                 // and landing on "now" with no explanation.
                 await handlePendingPushNotificationTapIfNeeded()
 
-                // Configure tutorial manager with drawer control closures
-                configureTutorialManager()
-
-                // Auto-launch tutorial for new users. Gated on welcome sheets
-                // being dismissed so the tutorial doesn't start underneath them.
-                scheduleTutorialAutoStartIfEligible(for: user.id)
-
-                // Belt-and-braces: ensure the beta welcome sheet actually
-                // surfaces after the chart settles. The existing chain
-                // (finishTransition → presentPendingBetaWelcomeIfNeeded) can
-                // miss when chart-ready races with the transition fade or
-                // when state propagation only kicks in after a user touch.
-                // A direct delayed call here gives the user the welcome
-                // 4 seconds after they land on the chart, every time.
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    guard rlAppState.currentUser?.id == user.id else { return }
-                    rlAppState.presentPendingBetaWelcomeIfNeeded()
-                }
-            }
-            .onChange(of: rlAppState.showBetaWelcomeSheet) { _, isShowing in
-                if !isShowing, let userId = rlAppState.currentUser?.id {
-                    scheduleTutorialAutoStartIfEligible(for: userId)
-                }
+                // First-run walkthrough for new accounts, once the transition
+                // and any guild arrival sheets are out of the way.
+                scheduleWalkthroughIfEligible(for: user.id)
             }
             .onChange(of: rlAppState.showingTransition) { _, isShowing in
                 if !isShowing, let userId = rlAppState.currentUser?.id {
-                    scheduleTutorialAutoStartIfEligible(for: userId)
+                    scheduleWalkthroughIfEligible(for: userId)
+                }
+            }
+            .onChange(of: welcomedGuild) { _, guild in
+                if guild == nil, let userId = rlAppState.currentUser?.id {
+                    scheduleWalkthroughIfEligible(for: userId)
+                }
+            }
+            .onChange(of: celebratedGuild) { _, guild in
+                if guild == nil, let userId = rlAppState.currentUser?.id {
+                    scheduleWalkthroughIfEligible(for: userId)
+                }
+            }
+            .onChange(of: selectedViewingMarkerAuthorRoute?.id) { _, routeID in
+                if routeID == nil, let userId = rlAppState.currentUser?.id {
+                    scheduleWalkthroughIfEligible(for: userId)
+                }
+            }
+            .onChange(of: rlAppState.showBiometricEnrollment) { _, isShowing in
+                guard !isShowing else { return }
+                // The biometric offer that followed the walkthrough has gone:
+                // hand the slot back (and run the CTA that was waiting on it).
+                if walkthroughSlotReserved, walkthroughPresentation == nil, pendingWalkthroughCTA != nil {
+                    releaseWalkthroughSlot(outcome: pendingWalkthroughCTA ?? .skipped)
+                } else if let userId = rlAppState.currentUser?.id {
+                    scheduleWalkthroughIfEligible(for: userId)
                 }
             }
             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
@@ -1033,6 +1049,17 @@ struct MainView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(item: $walkthroughPresentation, onDismiss: handleWalkthroughDismissed) { _ in
+                WalkthroughSheetView { outcome in
+                    walkthroughOutcome = outcome
+                    walkthroughPresentation = nil
+                }
+                .environmentObject(rlAppState)
+                .presentationDetents([.large])
+                // The sheet is a floating card, so the presentation itself paints nothing and
+                // the dimmed chart shows around it.
+                .presentationBackground(.clear)
+            }
             .onChange(of: rlAppState.showingTransition) { _, _ in
                 presentPendingGuildSheetsIfReady()
             }
@@ -1102,6 +1129,10 @@ struct MainView: View {
                 showDiscordSetupReminder = false
                 celebratedGuild = nil
                 welcomedGuild = nil
+                walkthroughPresentation = nil
+                // The tab used to be the sheet's own @State and reset every time
+                // it re-presented; keep that behaviour across a guild switch.
+                chartSheetTab = .symbol
                 dismissLeftSheetsSignal = true
                 dismissRightSheetsSignal = true
                 withAnimation(AnimationConstants.standard) {
@@ -1203,6 +1234,7 @@ struct MainView: View {
             || markerSharePromptContext != nil
             || selectedViewingMarkerAuthorRoute != nil
             || rlAppState.showingTransition
+            || walkthroughSlotReserved
             // The prompt follows the celebration; it must never race it. Both
             // pending values count, not just what is on screen — the celebration
             // is claimed the moment the guild is created and presented later.
@@ -1456,33 +1488,29 @@ struct MainView: View {
         }
     }
 
-    /// Schedules the first-run tutorial once the welcome sheets are out of the way.
-    /// Called from `.task` and re-evaluated when the beta welcome sheet or the
-    /// loading transition dismiss. Re-checks inside the delayed closure because
-    /// the welcome sheet may be presented *after* MainView appears, so conditions
-    /// can change between scheduling and firing.
-    private func scheduleTutorialAutoStartIfEligible(for userId: UUID) {
-        guard !didScheduleTutorialAutoStart else { return }
+    /// Presents the first-run walkthrough once the shell is quiet: the loading
+    /// transition has lifted and no guild arrival sheet, author profile, share
+    /// prompt, Discord reminder or biometric offer is up or pending. Re-evaluated
+    /// from every `onChange` that clears one of those, and re-checked inside the
+    /// delay because they can appear between scheduling and firing.
+    private func scheduleWalkthroughIfEligible(for userId: UUID) {
+        guard !didScheduleWalkthrough else { return }
+        guard walkthroughPresentation == nil else { return }
         guard rlAppState.shouldAutoStartInitialTutorial(for: userId) else { return }
         guard !rlAppState.hasTutorialCompleted(for: userId) else { return }
-        guard rlAppState.getTutorialProgress(for: userId) == nil else { return }
-        guard !rlAppState.showBetaWelcomeSheet else { return }
-        guard !rlAppState.showingTransition else { return }
+        guard walkthroughSchedulerIsClear else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        // The root fades the transition over 0.5 s; let it finish.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            guard !didScheduleWalkthrough, walkthroughPresentation == nil else { return }
             guard rlAppState.currentUser?.id == userId else { return }
-            guard !tutorialManager.isActive else { return }
-            // Re-verify — the welcome sheet may have been presented during the delay.
-            guard !rlAppState.showBetaWelcomeSheet,
-                  !rlAppState.showingTransition else {
-                return
-            }
-            didScheduleTutorialAutoStart = true
+            guard rlAppState.shouldAutoStartInitialTutorial(for: userId) else { return }
+            guard walkthroughSchedulerIsClear else { return }
+            didScheduleWalkthrough = true
+            rlAppState.markInitialTutorialAutoStartShown(for: userId)
 
-            // Close any open drawers and dismiss any sheet overlays so the
-            // tutorial overlay raises over a quiet view tree. TutorialManager
-            // resets currentDrawerState to .center on start, so the actual UI
-            // must match or the manager and the real shell desync.
+            // A quiet view tree underneath: no drawer or drawer sheet competing
+            // for the presentation.
             dismissLeftSheetsSignal = true
             dismissRightSheetsSignal = true
             withAnimation(AnimationConstants.standard) {
@@ -1493,77 +1521,62 @@ struct MainView: View {
                 leftDragTranslation = 0
                 rightDragTranslation = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                guard rlAppState.currentUser?.id == userId else { return }
-                rlAppState.markInitialTutorialAutoStartShown(for: userId)
-                tutorialManager.startTutorial(fromBeginning: true)
+            walkthroughSlotReserved = true
+            rlAppState.walkthroughWillPresent()
+            walkthroughPresentation = .firstRun
+        }
+    }
+
+    private var walkthroughSchedulerIsClear: Bool {
+        !rlAppState.showingTransition
+            && !guildArrivalReservesSheetSlot
+            && selectedViewingMarkerAuthorRoute == nil
+            && markerSharePromptContext == nil
+            && !showDiscordSetupReminder
+            && !rlAppState.showBiometricEnrollment
+    }
+
+    /// The walkthrough sheet's onDismiss: runs for its buttons (which set
+    /// `walkthroughOutcome` first) and for a swipe-down (which does not, and
+    /// counts as a skip). Every outcome marks the walkthrough complete.
+    private func handleWalkthroughDismissed() {
+        let outcome = walkthroughOutcome ?? .skipped
+        walkthroughOutcome = nil
+        if let userId = rlAppState.currentUser?.id {
+            rlAppState.markTutorialCompleted(for: userId)
+        }
+        let biometricFollows = rlAppState.walkthroughDidDismiss(outcome: outcome)
+        guard biometricFollows else {
+            releaseWalkthroughSlot(outcome: outcome)
+            return
+        }
+        // Keep the chart sheet down until the biometric sheet has come and gone;
+        // the follow-up runs then (see the showBiometricEnrollment onChange). The
+        // offer presents 1.5 s after being scheduled, so a 4 s failsafe covers
+        // it never appearing.
+        pendingWalkthroughCTA = outcome
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            if let pending = pendingWalkthroughCTA, !rlAppState.showBiometricEnrollment {
+                releaseWalkthroughSlot(outcome: pending)
             }
         }
     }
 
-    private func configureTutorialManager() {
-        tutorialManager.configure(
-            openLeftDrawer: {
-                withAnimation(AnimationConstants.standard) {
-                    dismissKeyboard()
-                    selectedDetent = .fraction(0.11)
-                    showLeftDrawer = true
-                    showRightDrawer = false
-                    showOverlay = true
-                }
-            },
-            closeLeftDrawer: {
-                withAnimation(AnimationConstants.standard) {
-                    showLeftDrawer = false
-                    showOverlay = false
-                }
-            },
-            openRightDrawer: {
-                withAnimation(AnimationConstants.standard) {
-                    dismissKeyboard()
-                    selectedDetent = .fraction(0.11)
-                    showRightDrawer = true
-                    showLeftDrawer = false
-                    showOverlay = true
-                }
-            },
-            closeRightDrawer: {
-                withAnimation(AnimationConstants.standard) {
-                    showRightDrawer = false
-                    showOverlay = false
-                }
-            },
-            closeAllDrawers: {
-                withAnimation(AnimationConstants.standard) {
-                    showLeftDrawer = false
-                    showRightDrawer = false
-                    showOverlay = false
-                    leftDragTranslation = 0
-                    rightDragTranslation = 0
-                }
-            },
-            expandSheetToTab: { tabName in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    selectedDetent = .fraction(0.5)
-                }
-                // Post notification to switch tab in ChartBottomSheet
-                NotificationCenter.default.post(
-                    name: .tutorialSwitchSheetTab,
-                    object: nil,
-                    userInfo: ["tab": tabName]
-                )
-            },
-            collapseSheet: {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    selectedDetent = .fraction(0.11)
-                }
-            },
-            appState: rlAppState
-        )
+    /// Hands the sheet slot back to the chart sheet — on the Markers tab at
+    /// half height when the user asked to place their first marker, which is
+    /// the type grid the walkthrough just described.
+    private func releaseWalkthroughSlot(outcome: WalkthroughOutcome) {
+        pendingWalkthroughCTA = nil
+        if outcome == .placeFirstMarker {
+            // Both are read when the sheet presents, so they must be set before
+            // the reservation flips and the sheet condition becomes true.
+            chartSheetTab = .markers
+            selectedDetent = .fraction(0.5)
+        }
+        walkthroughSlotReserved = false
     }
 
     private func toggleLeftDrawerFromToolbar() {
-        guard !tutorialManager.isActive else { return }
         withAnimation(AnimationConstants.standard) {
             dismissKeyboard()
             selectedDetent = .fraction(0.11)
@@ -1574,7 +1587,6 @@ struct MainView: View {
     }
 
     private func toggleRightDrawerFromToolbar() {
-        guard !tutorialManager.isActive else { return }
         withAnimation(AnimationConstants.standard) {
             dismissKeyboard()
             selectedDetent = .fraction(0.11)
@@ -1699,13 +1711,11 @@ struct MainView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        guard !tutorialManager.isActive else { return }
                         if value.translation.width < 0 {
                             leftDragTranslation = value.translation.width
                         }
                     }
                     .onEnded { value in
-                        guard !tutorialManager.isActive else { return }
                         handleDrawerDragEnd(currentPosition: leftDragTranslation)
                     }
             )
@@ -1742,13 +1752,11 @@ struct MainView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        guard !tutorialManager.isActive else { return }
                         if value.translation.width > 0 {
                             rightDragTranslation = value.translation.width
                         }
                     }
                     .onEnded { value in
-                        guard !tutorialManager.isActive else { return }
                         handleDrawerDragEnd(currentPosition: rightDragTranslation)
                     }
             )
@@ -2768,7 +2776,8 @@ enum ChartBottomSheetStateReducer {
 // MARK: - Chart Bottom Sheet (IMPROVED CHAT VERSION)
 // When in chat mode, the tab bar is replaced with chat input + back button
 struct ChartBottomSheet: View {
-    @State private var selectedView: ChartView = .symbol
+    /// Owned by MainView so the walkthrough can open the sheet on Markers.
+    @Binding var selectedView: ChartView
     @ObservedObject var controlViewModel: ChartControlViewModel
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var placementState: MarkerPlacementState
@@ -2776,7 +2785,6 @@ struct ChartBottomSheet: View {
     @ObservedObject var timeframePanelManager: TimeframePanelManager
     @Binding var selectedDetent: PresentationDetent
     @EnvironmentObject var rlAppState: RLAppState
-    @EnvironmentObject var tutorialManager: TutorialManager
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
     var onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
@@ -2801,6 +2809,7 @@ struct ChartBottomSheet: View {
         markerOverlayState: MarkerOverlayState,
         timeframePanelManager: TimeframePanelManager,
         selectedDetent: Binding<PresentationDetent>,
+        selectedView: Binding<ChartView>,
         onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
         onPlaceMarker: (() -> Void)? = nil,
         onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil,
@@ -2813,6 +2822,7 @@ struct ChartBottomSheet: View {
         self.markerOverlayState = markerOverlayState
         self.timeframePanelManager = timeframePanelManager
         self._selectedDetent = selectedDetent
+        self._selectedView = selectedView
         self.onNavigateToMarker = onNavigateToMarker
         self.onPlaceMarker = onPlaceMarker
         self.onViewingAuthorTap = onViewingAuthorTap
@@ -2882,20 +2892,6 @@ struct ChartBottomSheet: View {
                 }
             }
         }
-        .background {
-            if tutorialManager.isActive {
-                GeometryReader { geo in
-                    let frame = geo.frame(in: .global)
-                    Color.clear
-                        .onAppear {
-                            tutorialManager.spotlightFrames["bottom-sheet"] = frame
-                        }
-                        .onChange(of: frame) { _, newFrame in
-                            tutorialManager.spotlightFrames["bottom-sheet"] = newFrame
-                        }
-                }
-            }
-        }
         .animation(.easeInOut(duration: 0.3), value: selectedView)
         .animation(.easeInOut(duration: 0.3), value: isMarkerDetailActive)
         .animation(nil, value: shouldIgnoreKeyboardSafeArea)
@@ -2935,14 +2931,6 @@ struct ChartBottomSheet: View {
         }
         .onChange(of: viewingIndicatorFingerprint) { _, _ in
             refreshViewingIndicatorsIfNeeded()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .tutorialSwitchSheetTab)) { notification in
-            if let tabName = notification.userInfo?["tab"] as? String,
-               let tab = ChartView.allCases.first(where: { $0.rawValue == tabName }) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    selectedView = tab
-                }
-            }
         }
     }
 
@@ -3222,20 +3210,6 @@ struct ChartBottomSheet: View {
         .frame(height: isExpanded ? 70 : 68)
         .ignoresSafeArea(.keyboard)
         .background(bottomTabBarContainerBackground)
-        .background {
-            if tutorialManager.isActive {
-                GeometryReader { geo in
-                    let frame = geo.frame(in: .global)
-                    Color.clear
-                        .onAppear {
-                            tutorialManager.spotlightFrames["bottom-bar"] = frame
-                        }
-                        .onChange(of: frame) { _, newFrame in
-                            tutorialManager.spotlightFrames["bottom-bar"] = newFrame
-                        }
-                }
-            }
-        }
     }
 
     // MARK: - Placement Tab Bar

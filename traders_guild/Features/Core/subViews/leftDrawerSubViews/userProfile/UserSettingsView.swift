@@ -625,22 +625,17 @@ struct UserSettingsSheetView: View {
         }
     }
     
-    // MARK: - Tutorial Section
+    // MARK: - Walkthrough Section
 
-    private var tutorialCompleted: Bool {
+    private var walkthroughCompleted: Bool {
         guard let userId = rlAppState.currentUser?.id else { return false }
         return rlAppState.hasTutorialCompleted(for: userId)
     }
 
-    private var tutorialSubtitle: String {
-        if tutorialCompleted {
-            return "Review the guided tour"
-        }
-        guard let userId = rlAppState.currentUser?.id,
-              rlAppState.getTutorialProgress(for: userId) != nil else {
-            return "Take a guided tour of the app"
-        }
-        return "Continue the guided tour"
+    private var walkthroughSubtitle: String {
+        walkthroughCompleted
+            ? "Watch it again"
+            : "A 60-second tour of the chart, markers and guilds"
     }
 
     private var tutorialSection: some View {
@@ -649,29 +644,16 @@ struct UserSettingsSheetView: View {
                 .background(AppColors.whiteText.opacity(0.2))
                 .padding(.horizontal, 16)
 
-            SettingsSectionHeader(title: "Help & Support")
+            SettingsSectionHeader(title: "Getting Started")
 
             VStack(alignment: .leading, spacing: 8) {
                 SettingsButtonRow(
-                    icon: "graduationcap.fill",
-                    title: "App Tutorial",
-                    subtitle: tutorialSubtitle,
+                    icon: "play.rectangle.fill",
+                    title: "How Traders Guild works",
+                    subtitle: walkthroughSubtitle,
                     iconColor: AppColors.accentColor
                 ) {
-                    NotificationCenter.default.post(
-                        name: .startTutorial,
-                        object: nil,
-                        userInfo: ["fromBeginning": tutorialCompleted]
-                    )
-                }
-
-                SettingsButtonRow(
-                    icon: "flask.fill",
-                    title: "Beta Welcome",
-                    subtitle: "Review the beta program overview",
-                    iconColor: AppColors.accentColor
-                ) {
-                    rlAppState.presentBetaWelcomeFromSettings()
+                    NotificationCenter.default.post(name: .presentWalkthrough, object: nil)
                 }
             }
         }

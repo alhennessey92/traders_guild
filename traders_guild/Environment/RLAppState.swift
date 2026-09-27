@@ -205,7 +205,12 @@ class RLAppState: ObservableObject {
     private var isConsumingPendingEmailVerificationToken: Bool = false
     
     @Published var showGuildSelectionSheet: Bool = false
-    @Published var showBetaWelcomeSheet: Bool = false
+
+    /// True while the first-run walkthrough sheet is on screen. The biometric
+    /// enrollment offer (a root sheet) is deferred behind it — see
+    /// `offerBiometricEnrollmentIfNeeded()`.
+    @Published private(set) var isWalkthroughPresented: Bool = false
+    private var deferredBiometricOffer: Bool = false
 
     /// The guild just created, waiting for the transition to lift before it is
     /// celebrated. Presented at the app root — see the note in `createGuild`.
@@ -322,7 +327,6 @@ class RLAppState: ObservableObject {
     /// an immediate recovery when connectivity returns. Defaults to reachable.
     @Published private(set) var isNetworkReachable: Bool = true
     private var hasShownOfflineToastForCurrentEpisode = false
-    private var pendingBetaWelcomeUserId: UUID?
     private let reportedUserStore = ReportedUserStore()
     private let reportedContentStore = ReportedContentStore()
 
@@ -463,7 +467,6 @@ class RLAppState: ObservableObject {
         showingTransition = false
         hasCompletedInitialLoad = true
         transitionMinimumDismissAt = nil
-        presentPendingBetaWelcomeIfNeeded()
         return true
     }
 
@@ -749,7 +752,6 @@ class RLAppState: ObservableObject {
             if beginOnboarding {
                 isOnboardingFlowActive = true
             } else {
-                queueBetaWelcomeIfNeeded()
                 queueInitialTutorialAutoStartIfNeeded()
                 showTransitionForChartLoad()
             }
@@ -989,20 +991,29 @@ class RLAppState: ObservableObject {
     // MARK: - Biometric Authentication
 
     /// Offer biometric enrollment if available and not already set up
-    func offerBiometricEnrollmentIfNeeded() {
+    /// Returns true when the offer has been scheduled to present. A first-run
+    /// walkthrough that is pending or on screen takes precedence: the offer is
+    /// remembered and made by `walkthroughDidDismiss(outcome:)` instead.
+    @discardableResult
+    func offerBiometricEnrollmentIfNeeded() -> Bool {
         let manager = BiometricAuthManager.shared
         let declined = KeychainPreferences.bool(forKey: "traders_guild_biometric_declined")
             || UserDefaults.standard.bool(forKey: "traders_guild_biometric_declined")
         guard manager.isBiometricAvailable,
               !manager.isBiometricEnabled,
               !declined else {
-            return
+            return false
+        }
+        if isWalkthroughPresented || isWalkthroughPendingForCurrentUser {
+            deferredBiometricOffer = true
+            return false
         }
         // Delay so the guild selection sheet fully dismisses before presenting this sheet
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             guard let self = self, !self.showGuildSelectionSheet else { return }
             self.showBiometricEnrollment = true
         }
+        return true
     }
 
     /// Attempt to restore session using biometric authentication
@@ -1160,16 +1171,14 @@ class RLAppState: ObservableObject {
             accountCreatedDuringOnboarding = false
             isOnboardingFlowActive = false
             showTransitionForChartLoad(minimumDuration: 0.6)
-            queueBetaWelcomeIfNeeded()
             queueInitialTutorialAutoStartIfNeeded()
 
-            // The beta welcome sheet is presented exclusively by
-            // finishTransition(requestID:) once the chart is ready and the view
-            // tree has settled. Presenting it here as well caused the
-            // fullScreenCover to flicker and re-present during the
-            // ContentView→MainView reconciliation.
+            // The walkthrough is presented by MainView once the chart is ready
+            // and the view tree has settled (see scheduleWalkthroughIfEligible).
 
-            // Offer biometric enrollment after the chart transition finishes
+            // Offer biometric enrollment after the chart transition finishes.
+            // While the walkthrough is pending or up this defers itself and is
+            // flushed by walkthroughDidDismiss(outcome:).
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
                 self?.offerBiometricEnrollmentIfNeeded()
             }
@@ -1500,17 +1509,6 @@ class RLAppState: ObservableObject {
         }
     }
 
-    func dismissBetaWelcomeSheet() {
-        showBetaWelcomeSheet = false
-        presentPendingBetaWelcomeIfNeeded()
-    }
-
-    /// Re-opens the beta welcome screen on demand (e.g. from Settings).
-    func presentBetaWelcomeFromSettings() {
-        guard !showBetaWelcomeSheet else { return }
-        showBetaWelcomeSheet = true
-    }
-
     func refreshRuntimeFlags() async {
         guard isAuthenticated, accessToken != nil else {
             runtimeFlags = .disabled
@@ -1519,7 +1517,6 @@ class RLAppState: ObservableObject {
 
         do {
             runtimeFlags = try await realApi.getRuntimeFlags()
-            presentPendingBetaWelcomeIfNeeded()
         } catch is CancellationError {
             return
         } catch {
@@ -2674,12 +2671,14 @@ class RLAppState: ObservableObject {
         search: String? = nil
     ) async throws -> RLGuildMembersListDTO {
         do {
-            return try await realApi.getGuildMembers(
+            let list = try await realApi.getGuildMembers(
                 guildId: guildId,
                 skip: skip,
                 limit: limit,
                 search: search
             )
+            MemberAvatarDirectory.shared.note(members: list.members)
+            return list
         } catch {
             showError(error, title: "Failed to Load Members", style: .toast)
             throw error
@@ -2689,7 +2688,9 @@ class RLAppState: ObservableObject {
     /// Fetch a specific guild member's info with relationship data
     func fetchGuildMember(guildId: UUID, userId: UUID) async throws -> RLGuildMemberDTO {
         do {
-            return try await realApi.getGuildMember(guildId: guildId, userId: userId)
+            let member = try await realApi.getGuildMember(guildId: guildId, userId: userId)
+            MemberAvatarDirectory.shared.note(members: [member])
+            return member
         } catch {
             showError(error, title: "Failed to Load Member", style: .toast)
             throw error
@@ -3182,6 +3183,9 @@ class RLAppState: ObservableObject {
         AvatarImageCache.shared.removeImage(forURLString: currentUser?.avatarUrl)
         AvatarImageCache.shared.removeImage(forURLString: updatedUser.avatarUrl)
         currentUser = updatedUser
+        // Your own messages carry the avatar they were fetched with, so without this your
+        // existing messages keep the old one until the app is relaunched.
+        MemberAvatarDirectory.shared.note(userId: updatedUser.id, avatarURL: updatedUser.avatarUrl)
     }
 
     /// Update trading interests using the extended profile endpoint
@@ -3544,7 +3548,8 @@ class RLAppState: ObservableObject {
         userGuilds = []
         notificationStats = nil
         showGuildSelectionSheet = false
-        showBetaWelcomeSheet = false
+        isWalkthroughPresented = false
+        deferredBiometricOffer = false
         pendingGuildCelebration = nil
         pendingGuildWelcome = nil
         openCurrentUserProfileRequest = nil
@@ -3557,7 +3562,7 @@ class RLAppState: ObservableObject {
         reportedUserStateVersion = 0
         reportedContentStateVersion = 0
         clearBiometricAppLock()
-        pendingBetaWelcomeUserId = nil
+        MemberAvatarDirectory.shared.clear()
         pendingPasswordResetToken = nil
         onboardingState = nil
         accountCreatedDuringOnboarding = false
@@ -3744,66 +3749,6 @@ class RLAppState: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)onboarding_state")
     }
 
-    /// Queue the beta welcome sheet after first registration only.
-    /// Normal login, biometric login, and session restore intentionally do not call this.
-    func queueBetaWelcomeIfNeeded() {
-        guard let userId = currentUser?.id else { return }
-        guard !hasSeenBetaWelcome(for: userId) else { return }
-        pendingBetaWelcomeUserId = userId
-    }
-
-    func presentPendingBetaWelcomeIfNeeded() {
-        if let betaUserId = pendingBetaWelcomeUserId {
-            guard currentUser?.id == betaUserId else {
-                pendingBetaWelcomeUserId = nil
-                return
-            }
-            guard currentGuild != nil,
-                  !showGuildSelectionSheet,
-                  !showingTransition else {
-                return
-            }
-            if !hasSeenBetaWelcome(for: betaUserId) {
-                guard !showBetaWelcomeSheet else { return }
-                markBetaWelcomeSeen(for: betaUserId)
-                pendingBetaWelcomeUserId = nil
-                showBetaWelcomeSheet = true
-                return
-            }
-            pendingBetaWelcomeUserId = nil
-        }
-    }
-
-    private func hasSeenBetaWelcome(for userId: UUID) -> Bool {
-        let keys = [
-            betaWelcomeKey(for: userId),
-            globalBetaWelcomeKey(for: userId)
-        ]
-        if keys.contains(where: { KeychainPreferences.bool(forKey: $0) || UserDefaults.standard.bool(forKey: $0) }) {
-            return true
-        }
-
-        let suffix = "beta_welcome_seen_\(userId.uuidString)"
-        return UserDefaults.standard.dictionaryRepresentation().contains { entry in
-            entry.key.hasSuffix(suffix) && ((entry.value as? Bool) == true)
-        }
-    }
-
-    private func markBetaWelcomeSeen(for userId: UUID) {
-        [betaWelcomeKey(for: userId), globalBetaWelcomeKey(for: userId)].forEach { key in
-            KeychainPreferences.setBool(true, forKey: key)
-            UserDefaults.standard.set(true, forKey: key)
-        }
-    }
-
-    private func betaWelcomeKey(for userId: UUID) -> String {
-        "\(keychainPrefix)beta_welcome_seen_\(userId.uuidString)"
-    }
-
-    private func globalBetaWelcomeKey(for userId: UUID) -> String {
-        "traders_guild_beta_welcome_seen_\(userId.uuidString)"
-    }
-
     func hasReportedUser(guildId: UUID, userId: UUID) -> Bool {
         guard let reporterUserId = currentUser?.id else { return false }
         return reportedUserStore.isReported(
@@ -3972,20 +3917,8 @@ class RLAppState: ObservableObject {
         let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
         KeychainPreferences.setBool(true, forKey: key)
         UserDefaults.standard.set(true, forKey: key)
-        clearTutorialProgress(for: userId)
-    }
-
-    func saveTutorialProgress(step: Int, for userId: UUID) {
-        UserDefaults.standard.set(step, forKey: "\(keychainPrefix)tutorial_step_\(userId.uuidString)")
-    }
-
-    func getTutorialProgress(for userId: UUID) -> Int? {
-        let key = "\(keychainPrefix)tutorial_step_\(userId.uuidString)"
-        guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
-        return UserDefaults.standard.integer(forKey: key)
-    }
-
-    func clearTutorialProgress(for userId: UUID) {
+        // The 16-step tour saved a resumable step under tutorial_step_<userId>;
+        // the walkthrough has no resume, so any leftover value is just dropped.
         UserDefaults.standard.removeObject(forKey: "\(keychainPrefix)tutorial_step_\(userId.uuidString)")
     }
 
@@ -3993,7 +3926,36 @@ class RLAppState: ObservableObject {
         let key = "\(keychainPrefix)tutorial_completed_\(userId.uuidString)"
         KeychainPreferences.removeValue(forKey: key)
         UserDefaults.standard.removeObject(forKey: key)
-        clearTutorialProgress(for: userId)
+    }
+
+    // MARK: - Walkthrough presentation
+
+    /// Called by MainView the moment the walkthrough sheet is presented, whether
+    /// on first run or replayed from Settings.
+    func walkthroughWillPresent() {
+        isWalkthroughPresented = true
+    }
+
+    /// Called once the walkthrough sheet has fully dismissed. Flushes a biometric
+    /// enrollment offer that deferred itself behind the walkthrough — except when
+    /// the user chose "Place your first marker", where a second sheet would
+    /// interrupt the very action the walkthrough just set up; that offer is made
+    /// again on the next session (see `selectGuild`).
+    ///
+    /// Returns true when a biometric offer is about to present, so the caller can
+    /// keep the chart sheet slot reserved until it has come and gone.
+    @discardableResult
+    func walkthroughDidDismiss(outcome: WalkthroughOutcome) -> Bool {
+        isWalkthroughPresented = false
+        guard deferredBiometricOffer else { return false }
+        deferredBiometricOffer = false
+        guard outcome != .placeFirstMarker else { return false }
+        return offerBiometricEnrollmentIfNeeded()
+    }
+
+    private var isWalkthroughPendingForCurrentUser: Bool {
+        guard let userId = currentUser?.id else { return false }
+        return shouldAutoStartInitialTutorial(for: userId)
     }
 
     private func tutorialAutoStartPendingKey(for userId: UUID) -> String {

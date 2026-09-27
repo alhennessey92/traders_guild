@@ -760,7 +760,6 @@ struct MainDrawerView: View {
             .padding(.trailing, 25)
             .padding(.bottom, 4)
             .padding(.top, 12)
-            .spotlightTarget("guild-header")
 
                 VStack(spacing: 8) {
                     ForEach(menuItems, id: \.title) { item in
@@ -779,13 +778,11 @@ struct MainDrawerView: View {
                                 }
                             }
                         )
-                        .spotlightTarget("menu-\(item.title)")
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 20)
-                .spotlightTarget("guild-menu-area")
             }
             }
             .scrollDismissesKeyboard(.interactively)

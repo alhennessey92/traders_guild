@@ -51,8 +51,8 @@ class ToastWindowManager: ObservableObject {
         // bad resolution at launch meant every later toast was misplaced too:
         // the bar would render behind modals instead of above them.
         //
-        // `TutorialWindowManager` and `keyWindowBottomInset()` below both
-        // already do this correctly; this was the odd one out.
+        // `keyWindowBottomInset()` below already does this correctly; this was
+        // the odd one out.
         guard let scene = Self.foregroundWindowScene() else {
             print("🍞 [Toast] dropped — no foreground window scene: \(alert.title)")
             return
@@ -62,7 +62,7 @@ class ToastWindowManager: ObservableObject {
         // reviving the cached one.
         //
         // Windows at the same level are ordered by when they were added, and
-        // this one shares `.alert + 1` with the tutorial overlay. Re-showing a
+        // this one sits at `.alert + 1`. Re-showing a
         // long-lived hidden window left it wherever it had been, which is how a
         // confirmation raised from inside a sheet could end up underneath one.
         // Reusing it only while a toast is already up keeps the slide-in/out

@@ -140,10 +140,6 @@ struct traders_guildApp: App {
                 BiometricEnrollmentView()
                     .environmentObject(rlAppState)
             }
-            .fullScreenCover(isPresented: $rlAppState.showBetaWelcomeSheet) {
-                BetaWelcomeSheetView()
-                    .environmentObject(rlAppState)
-            }
             .task(id: rlAppState.isAuthenticated) {
                 guard rlAppState.isAuthenticated else { return }
                 await rlAppState.refreshRuntimeFlags()
@@ -209,6 +205,12 @@ struct traders_guildApp: App {
     private var wantsMarkerLinkFixtures: Bool {
         ProcessInfo.processInfo.arguments.contains("-MarkerLinkFixtures")
     }
+
+    /// Same idea for the first-run walkthrough: `-WalkthroughPreview` presents it
+    /// straight away, so clips and crops can be checked without a fresh account.
+    private var wantsWalkthroughPreview: Bool {
+        ProcessInfo.processInfo.arguments.contains("-WalkthroughPreview")
+    }
     #endif
 
     @ViewBuilder
@@ -216,6 +218,8 @@ struct traders_guildApp: App {
         #if DEBUG
         if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
+        } else if wantsWalkthroughPreview {
+            WalkthroughPreviewHarness()
         } else {
             authenticatedContent
         }

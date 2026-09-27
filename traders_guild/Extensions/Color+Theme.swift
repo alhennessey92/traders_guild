@@ -1904,20 +1904,6 @@ enum AppColors {
         isLightGrey ? LightGreyPalette.highlightYellowAnchor : systemYellow
     }
 
-    /// Tutorial step accents — saturated on dark; deeper on light grey (audit 32).
-    static var tutorialAccentOrange: Color {
-        isLightGrey ? LightGreyPalette.warningOrangeAnchor : Color(red: 1.0, green: 0.58, blue: 0.0)
-    }
-    static var tutorialAccentYellow: Color {
-        isLightGrey ? LightGreyPalette.highlightYellowAnchor : Color(red: 1.0, green: 0.84, blue: 0.0)
-    }
-    static var tutorialAccentPurple: Color {
-        isLightGrey ? LightGreyPalette.secondaryPurpleAnchor : systemPurple
-    }
-    static var tutorialAccentCyan: Color {
-        isLightGrey ? LightGreyPalette.accentCyanAnchor : systemCyan
-    }
-
     /// Marker viewing “Components” tab section tints — deeper on light grey (audit 33).
     static var markerViewingTintIndicator: Color {
         isLightGrey ? LightGreyPalette.warningOrangeAnchor : Color(red: 245.0 / 255, green: 158.0 / 255, blue: 11.0 / 255)
