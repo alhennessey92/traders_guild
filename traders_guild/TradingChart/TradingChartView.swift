@@ -438,7 +438,8 @@ struct TradingChartView: View {
     @State private var pendingTimeframeChoice: RLMarkerLinkPreviewDTO?
     @State private var isSubmittingViewingPollVote = false
     @State private var viewingPollVoteOptionId: UUID?
-    @State private var isViewingInfoPanelCollapsed = false
+    /// The marker details card opens collapsed to its badge strip; a tap on the strip expands it.
+    @State private var isViewingInfoPanelCollapsed = true
     @State private var drawingTextEditorContext: DrawingTextEditorContext?
     
 
@@ -1021,7 +1022,7 @@ struct TradingChartView: View {
             }
             .onChange(of: controlViewModel.isMarkerViewingMode) { _, isViewing in
                 if isViewing {
-                    isViewingInfoPanelCollapsed = false
+                    isViewingInfoPanelCollapsed = true
                 } else {
                     settleHistoricalPriceRangeAfterMarkerExit()
                 }

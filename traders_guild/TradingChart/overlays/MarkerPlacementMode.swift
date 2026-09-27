@@ -194,7 +194,8 @@ final class MarkerPlacementState: ObservableObject {
     @Published var pollOptions: [String] = ["", ""]
     @Published var alertSeverity: MarkerAlertSeverity?
     @Published var newsURL: String = ""
-    @Published var isChecklistCollapsed: Bool = false
+    /// The placement checklist starts collapsed to its progress strip ("3/5"); a tap expands it.
+    @Published var isChecklistCollapsed: Bool = true
     @Published var isTextInputFocused: Bool = false
     /// Placement-local color overrides keep UI edits stable while payloads are replaced.
     @Published var drawingColorOverrides: [UUID: String] = [:]
@@ -809,7 +810,7 @@ final class MarkerPlacementState: ObservableObject {
         self.pollOptions = ["", ""]
         self.alertSeverity = nil
         self.newsURL = ""
-        self.isChecklistCollapsed = false
+        self.isChecklistCollapsed = true
         self.isTextInputFocused = false
         self.drawingColorOverrides = [:]
         resetDrawingInteraction()
@@ -1697,7 +1698,7 @@ final class MarkerPlacementState: ObservableObject {
         pollOptions = nonEmptyPollOptions.count >= 2 ? nonEmptyPollOptions : ["", ""]
 
         alertSeverity = marker.alertSeverity
-        isChecklistCollapsed = false
+        isChecklistCollapsed = true
         isTextInputFocused = false
         emojiScaleOverrides = [:]
 
