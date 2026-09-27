@@ -250,7 +250,7 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         // `cgImage != nil` but still handed UIImage to NSItemProvider, which
         // re-serialises it on the share sheet's own terms — and still crashed
         // with "Need an imageRef". Data has no backing-image to lose.
-        if let icon = Self.appIconImage(), let png = icon.pngData() {
+        if let png = ShareLinkIcon.bitmap().pngData() {
             metadata.iconProvider = NSItemProvider(
                 item: png as NSData,
                 typeIdentifier: UTType.png.identifier,
@@ -262,116 +262,4 @@ final class GuildInviteActivityItemSource: NSObject, UIActivityItemSource {
         return metadata
     }
 
-    /// Always returns a freshly-rendered bitmap (guaranteed `cgImage`).
-    /// Asset-catalog "AppIcon" / named icons frequently lack a CGImage, which
-    /// crashes `LPLinkMetadata`/`NSItemProvider` when the share sheet renders
-    /// its preview — so any candidate is re-drawn into a renderer bitmap.
-    private static func appIconImage() -> UIImage? {
-        guard let candidate = UIImage(named: "AppIcon")
-                ?? infoPlistAppIcon()
-                ?? composedBundledAppIcon() else {
-            return renderedFallbackIcon()
-        }
-
-        let size = CGSize(width: 96, height: 96)
-        let rendered = UIGraphicsImageRenderer(size: size).image { _ in
-            candidate.draw(in: CGRect(origin: .zero, size: size))
-        }
-        return rendered.cgImage != nil ? rendered : renderedFallbackIcon()
-    }
-
-    private static func infoPlistAppIcon() -> UIImage? {
-        guard let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any],
-              let primaryIcon = icons["CFBundlePrimaryIcon"] as? [String: Any],
-              let iconFiles = primaryIcon["CFBundleIconFiles"] as? [String] else {
-            return nil
-        }
-        for name in iconFiles.reversed() {
-            if let icon = UIImage(named: name) { return icon }
-        }
-        return nil
-    }
-
-    private static func bundledImage(named name: String, subdirectory: String) -> UIImage? {
-        let url = Bundle.main.url(
-            forResource: name,
-            withExtension: "png",
-            subdirectory: subdirectory
-        ) ?? Bundle.main.url(forResource: name, withExtension: "png")
-        guard let url else { return nil }
-
-        return UIImage(contentsOfFile: url.path)
-    }
-
-    private static func composedBundledAppIcon() -> UIImage? {
-        let logo = bundledImage(named: "TG 6", subdirectory: "AppIcon.icon/Assets")
-            ?? bundledImage(named: "TG 3", subdirectory: "AppIconPreview/Assets")
-        let background = bundledImage(named: "appiconbg 2", subdirectory: "AppIcon.icon/Assets")
-            ?? bundledImage(named: "appiconbg 2", subdirectory: "AppIconPreview/Assets")
-
-        guard logo != nil || background != nil else { return nil }
-
-        let size = CGSize(width: 96, height: 96)
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            let rect = CGRect(origin: .zero, size: size)
-            if let background {
-                background.draw(in: rect)
-            } else {
-                UIColor(red: 0.06, green: 0.11, blue: 0.22, alpha: 1).setFill()
-                UIBezierPath(roundedRect: rect, cornerRadius: 22).fill()
-            }
-
-            if let logo {
-                let logoWidth = size.width * 0.72
-                let logoHeight = logoWidth * (logo.size.height / max(logo.size.width, 1))
-                let logoRect = CGRect(
-                    x: (size.width - logoWidth) / 2,
-                    y: (size.height - logoHeight) / 2 + 7,
-                    width: logoWidth,
-                    height: logoHeight
-                )
-                logo.draw(in: logoRect)
-            }
-        }
-    }
-
-    private static func renderedFallbackIcon() -> UIImage {
-        let size = CGSize(width: 96, height: 96)
-        return UIGraphicsImageRenderer(size: size).image { context in
-            let rect = CGRect(origin: .zero, size: size)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 22)
-            path.addClip()
-
-            let colors = [
-                UIColor(red: 0.08, green: 0.15, blue: 0.30, alpha: 1).cgColor,
-                UIColor(red: 0.00, green: 0.72, blue: 0.86, alpha: 1).cgColor,
-            ] as CFArray
-            if let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: colors,
-                locations: [0, 1]
-            ) {
-                context.cgContext.drawLinearGradient(
-                    gradient,
-                    start: CGPoint(x: 0, y: 0),
-                    end: CGPoint(x: size.width, y: size.height),
-                    options: []
-                )
-            }
-
-            let text = "TG" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 34, weight: .heavy),
-                .foregroundColor: UIColor.white,
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (size.width - textSize.width) / 2,
-                    y: (size.height - textSize.height) / 2
-                ),
-                withAttributes: attributes
-            )
-        }
-    }
 }

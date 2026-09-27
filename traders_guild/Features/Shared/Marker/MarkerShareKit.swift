@@ -10,6 +10,7 @@
 import SwiftUI
 import UIKit
 import LinkPresentation
+import UniformTypeIdentifiers
 
 // MARK: - Share Item
 
@@ -551,55 +552,14 @@ final class MarkerShareActivityItemSource: NSObject, UIActivityItemSource {
         metadata.originalURL = item.url
         metadata.url = item.url
 
-        // Only attach a bitmap-backed icon; a non-bitmap image crashes
-        // LinkPresentation ("Need an imageRef") — same guard as the invite kit.
-        if let icon = Self.appIconBitmap(), icon.cgImage != nil {
-            let provider = NSItemProvider(object: icon)
+        // Register PNG *data*, not a UIImage — the same lesson the invite kit
+        // learned: the share sheet re-serialises a UIImage on its own terms and
+        // can still fail with "Need an imageRef". Data has no backing image to
+        // lose. Where the icon comes from is `ShareLinkIcon`'s problem.
+        if let png = ShareLinkIcon.bitmap().pngData() {
+            let provider = NSItemProvider(item: png as NSData, typeIdentifier: UTType.png.identifier)
             metadata.iconProvider = provider
-            metadata.imageProvider = provider
         }
         return metadata
-    }
-
-    /// Re-draws the app icon into a guaranteed-bitmap image (asset-catalog icons
-    /// frequently lack a CGImage). Falls back to a rendered "TG" tile.
-    private static func appIconBitmap() -> UIImage? {
-        let size = CGSize(width: 96, height: 96)
-        if let candidate = UIImage(named: "AppIcon") {
-            let rendered = UIGraphicsImageRenderer(size: size).image { _ in
-                candidate.draw(in: CGRect(origin: .zero, size: size))
-            }
-            if rendered.cgImage != nil { return rendered }
-        }
-        return UIGraphicsImageRenderer(size: size).image { context in
-            let rect = CGRect(origin: .zero, size: size)
-            UIBezierPath(roundedRect: rect, cornerRadius: 22).addClip()
-            let colors = [
-                UIColor(red: 0.08, green: 0.15, blue: 0.30, alpha: 1).cgColor,
-                UIColor(red: 0.00, green: 0.72, blue: 0.86, alpha: 1).cgColor,
-            ] as CFArray
-            if let gradient = CGGradient(
-                colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                colors: colors,
-                locations: [0, 1]
-            ) {
-                context.cgContext.drawLinearGradient(
-                    gradient,
-                    start: .zero,
-                    end: CGPoint(x: size.width, y: size.height),
-                    options: []
-                )
-            }
-            let text = "TG" as NSString
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 34, weight: .heavy),
-                .foregroundColor: UIColor.white,
-            ]
-            let ts = text.size(withAttributes: attrs)
-            text.draw(
-                at: CGPoint(x: (size.width - ts.width) / 2, y: (size.height - ts.height) / 2),
-                withAttributes: attrs
-            )
-        }
     }
 }
