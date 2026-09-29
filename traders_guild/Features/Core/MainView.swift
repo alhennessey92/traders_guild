@@ -58,6 +58,13 @@ private struct PendingMarkerNavigationConsumptionKey: Equatable {
     let isInteractionUnlocked: Bool
 }
 
+private struct PendingNotificationMarkerNavigation: Identifiable {
+    let id = UUID()
+    let guildId: UUID
+    let payload: MarkerSharePayloadV1
+    let shareOnOpen: Bool
+}
+
 /// Pure policy for the root's single SwiftUI sheet slot. Keeping pending work
 /// in the decision is essential: it lets the persistent chart sheet finish
 /// dismissing before the next presentation begins.
@@ -209,6 +216,7 @@ struct MainView: View {
     @State private var dismissRightSheetsSignal: Bool = false
     @State private var dismissLeftSheetsSignal: Bool = false
     @State private var pendingNotificationDrawerRoute: NotificationDrawerRoute? = nil
+    @State private var pendingNotificationMarkerNavigation: PendingNotificationMarkerNavigation?
     
     // MARK: - Indicator Panel State
     @State private var rsiPanelHeight: CGFloat = 120
@@ -263,6 +271,16 @@ struct MainView: View {
     private var pendingMarkerNavigationConsumptionKey: PendingMarkerNavigationConsumptionKey {
         PendingMarkerNavigationConsumptionKey(
             requestId: rlAppState.pendingMarkerNavigationRequest?.id,
+            currentGuildId: rlAppState.currentGuild?.id,
+            isChartReady: rlAppState.isChartReady,
+            isTransitionVisible: rlAppState.showingTransition,
+            isInteractionUnlocked: !rlAppState.shouldPresentBiometricAppLock
+        )
+    }
+
+    private var pendingNotificationMarkerNavigationConsumptionKey: PendingMarkerNavigationConsumptionKey {
+        PendingMarkerNavigationConsumptionKey(
+            requestId: pendingNotificationMarkerNavigation?.id,
             currentGuildId: rlAppState.currentGuild?.id,
             isChartReady: rlAppState.isChartReady,
             isTransitionVisible: rlAppState.showingTransition,
@@ -846,6 +864,10 @@ struct MainView: View {
                 }
             }
             .onChange(of: rlAppState.currentGuild?.id) { oldValue, newValue in
+                if let request = pendingNotificationMarkerNavigation,
+                   newValue != request.guildId {
+                    pendingNotificationMarkerNavigation = nil
+                }
                 if let guildId = newValue, oldValue != newValue {
                     let transitionRequestID = rlAppState.transitionRequest.id
                     Task {
@@ -1318,6 +1340,9 @@ struct MainView: View {
         }
         .task(id: pendingMarkerNavigationConsumptionKey) {
             await consumePendingMarkerNavigationIfPossible()
+        }
+        .task(id: pendingNotificationMarkerNavigationConsumptionKey) {
+            await consumePendingNotificationMarkerNavigationIfPossible()
         }
         .onReceive(NotificationCenter.default.publisher(for: .pushNotificationTapped)) { notification in
             Task {
@@ -1994,11 +2019,48 @@ struct MainView: View {
         rlAppState.acknowledgePendingMarkerNavigation(requestId: request.id)
     }
 
+    private func consumePendingNotificationMarkerNavigationIfPossible() async {
+        guard let request = pendingNotificationMarkerNavigation,
+              MarkerDeepLinkRoutingPolicy.canNavigate(
+                requestGuildId: request.guildId,
+                currentGuildId: rlAppState.currentGuild?.id,
+                isChartReady: rlAppState.isChartReady,
+                isTransitionVisible: rlAppState.showingTransition,
+                isInteractionUnlocked: !rlAppState.shouldPresentBiometricAppLock
+              ) else { return }
+
+        let opened = await openSharedMarker(
+            request.payload,
+            expectedNotificationRequestId: request.id
+        )
+        guard pendingNotificationMarkerNavigation?.id == request.id else { return }
+        pendingNotificationMarkerNavigation = nil
+        guard opened else {
+            if rlAppState.currentGuild?.id == request.guildId {
+                rlAppState.showError(
+                    title: "Couldn’t Open Marker",
+                    message: "That marker’s chart could not be loaded. Try again in a moment.",
+                    severity: .warning,
+                    style: .toast
+                )
+            }
+            return
+        }
+        if request.shareOnOpen {
+            await presentSharePromptForNavigatedMarker()
+        }
+    }
+
     private func handleOpenSharedMarker(_ userInfo: [AnyHashable: Any]?) async {
         guard let userInfo, let payload = MarkerSharePayloadV1(userInfo) else { return }
-        switch await switchToMarkerGuildIfNeeded(
-            userInfo[NotificationNavigationManager.markerGuildKey] as? UUID
-        ) {
+        // A newer notification replaces a destination still waiting for chart readiness.
+        pendingNotificationMarkerNavigation = nil
+        guard let guildId = userInfo[NotificationNavigationManager.markerGuildKey] as? UUID
+                ?? rlAppState.currentGuild?.id else {
+            rlAppState.showInfo("Guild not ready")
+            return
+        }
+        switch switchToMarkerGuildIfNeeded(guildId) {
         case .ready:
             break
         case .notAMember:
@@ -2013,30 +2075,14 @@ struct MainView: View {
                 style: .toast
             )
             return
-        case .switchTimedOut:
-            rlAppState.showError(
-                title: "Couldn’t Open Marker",
-                message: "Switching to that marker’s guild took too long. Try opening it again.",
-                severity: .warning,
-                style: .toast
-            )
-            return
         }
-        let opened = await openSharedMarker(payload)
-        guard opened else {
-            // `openSharedMarker` only reports false when the symbol could not be
-            // resolved — previously swallowed, which looked identical to
-            // arriving on a chart with nothing on it.
-            rlAppState.showError(
-                title: "Couldn’t Open Marker",
-                message: "That marker’s chart could not be loaded. Try again in a moment.",
-                severity: .warning,
-                style: .toast
-            )
-            return
-        }
-        guard userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true else { return }
-        await presentSharePromptForNavigatedMarker()
+        // Guild selection updates currentGuild immediately, while its chart initializes
+        // later. Hold the marker until that exact guild's chart reports readiness.
+        pendingNotificationMarkerNavigation = PendingNotificationMarkerNavigation(
+            guildId: guildId,
+            payload: payload,
+            shareOnOpen: userInfo[NotificationNavigationManager.shareOnOpenKey] as? Bool == true
+        )
     }
 
     /// Why a marker deep link did or did not get somewhere it could be opened.
@@ -2045,8 +2091,6 @@ struct MainView: View {
         case ready
         /// The marker belongs to a guild this account has not joined.
         case notAMember
-        /// The switch was started but the app never settled on the new guild.
-        case switchTimedOut
     }
 
     /// Move to the guild a marker lives in before going looking for it.
@@ -2059,21 +2103,14 @@ struct MainView: View {
     /// Reports non-membership rather than silently carrying on: the caller used to
     /// open the marker anyway, against whichever guild happened to be current, and
     /// the user landed on a chart with no marker and no explanation.
-    private func switchToMarkerGuildIfNeeded(_ guildId: UUID?) async -> MarkerGuildSwitchOutcome {
-        guard let guildId, rlAppState.currentGuild?.id != guildId else { return .ready }
+    private func switchToMarkerGuildIfNeeded(_ guildId: UUID) -> MarkerGuildSwitchOutcome {
+        guard rlAppState.currentGuild?.id != guildId else { return .ready }
         guard rlAppState.userGuilds.contains(where: { $0.guild.id == guildId }) else {
             return .notAMember
         }
 
         rlAppState.selectGuild(id: guildId)
-
-        // Selection fans out asynchronously; give it a moment to settle so the marker fetch
-        // that follows is scoped to the guild we just moved to.
-        for _ in 0..<30 {
-            if rlAppState.currentGuild?.id == guildId { return .ready }
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-        return .switchTimedOut
+        return .ready
     }
 
     /// Raise the share sheet for a marker we were sent to by a result notification.
@@ -2106,7 +2143,8 @@ struct MainView: View {
     @discardableResult
     private func openSharedMarker(
         _ payload: MarkerSharePayloadV1,
-        expectedRequestId: UUID? = nil
+        expectedRequestId: UUID? = nil,
+        expectedNotificationRequestId: UUID? = nil
     ) async -> Bool {
 
         dismissKeyboard()
@@ -2137,6 +2175,12 @@ struct MainView: View {
         )
         if let expectedRequestId,
            rlAppState.pendingMarkerNavigationRequest?.id != expectedRequestId {
+            return false
+        }
+        if let expectedNotificationRequestId,
+           (pendingNotificationMarkerNavigation?.id != expectedNotificationRequestId
+            || pendingNotificationMarkerNavigation?.guildId != rlAppState.currentGuild?.id
+            || !rlAppState.isChartReady || rlAppState.showingTransition) {
             return false
         }
         return helper.navigateToMarker(
@@ -3597,9 +3641,9 @@ struct ChartBottomSheet: View {
     /// Leave the detail sheet and start composing a response.
     ///
     /// Deliberately mirrors `beginEditingSelectedMarker`: seed placement state,
-    /// clear the selection, enter placement mode. The parent's intent is the
-    /// editable default — answering a setup with a setup is the common case,
-    /// and the author can still change it.
+    /// clear the selection, enter placement mode. Every response starts as
+    /// Analysis so an older Setup parent does not invoke Setup's latest-candle
+    /// placement; the author can still choose another intent.
     private func beginRespondingToSelectedMarker(
         _ sourceMarker: ChartMarkerUI,
         relationship: MarkerLinkRelationship
@@ -3631,7 +3675,7 @@ struct ChartBottomSheet: View {
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
             chartViewModel.selectedMarkerForSheet = nil
-            controlViewModel.startMarkerPlacement(intent: marker.intent)
+            controlViewModel.startMarkerPlacement(intent: .analysis)
             selectedDetent = .fraction(0.35)
         }
     }

@@ -494,6 +494,7 @@ struct MarkerLinkFixtureGallery: View {
             )
             MarkerLinkRelationshipPicker(
                 parentSummary: "alex's BTC breakout",
+                parentIntent: .setup,
                 onSelect: { _ in },
                 onCancel: {}
             )

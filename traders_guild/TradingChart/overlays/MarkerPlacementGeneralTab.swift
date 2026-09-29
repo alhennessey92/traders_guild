@@ -116,13 +116,15 @@ struct MarkerPlacementGeneralTab: View {
             .sheet(isPresented: $showLinkRelationshipPicker) {
                 MarkerLinkRelationshipPicker(
                     parentSummary: context.bannerSentence,
+                    parentIntent: context.parentIntent,
                     onSelect: { relationship in
                         showLinkRelationshipPicker = false
                         placementState.changeLinkRelationship(relationship)
                     },
                     onCancel: { showLinkRelationshipPicker = false }
                 )
-                .presentationDetents([.height(430), .large])
+                .presentationDetents([.height(580), .large])
+                .presentationDragIndicator(.visible)
             }
         }
     }

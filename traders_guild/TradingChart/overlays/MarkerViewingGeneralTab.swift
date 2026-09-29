@@ -1,5 +1,17 @@
 import SwiftUI
 
+private enum SetupDetailDirection {
+    case long, short
+
+    var title: String { self == .long ? "Long setup" : "Short setup" }
+}
+
+private struct SetupDetailLevel {
+    let title: String
+    let price: Double?
+    let color: Color
+}
+
 struct MarkerViewingGeneralTab: View {
     @EnvironmentObject private var rlAppState: RLAppState
     @State private var showReportReasonSheet: Bool = false
@@ -66,14 +78,19 @@ struct MarkerViewingGeneralTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 heroPanel
                 linkRelationshipRow
-                markerSpecificsBox
+                if liveMarker.intent == .setup {
+                    setupDashboard
+                } else {
+                    markerSpecificsBox
+                }
+                descriptionSection
+                if canShowRespondAction {
+                    respondToMarkerButton
+                }
                 generalDisclosure
                 symbolInfoDisclosure
                 authorDisclosure
                 thesisDisclosure
-                if canShowRespondAction {
-                    respondToMarkerButton
-                }
                 if canShowShareAction {
                     shareMarkerButton
                 }
@@ -86,6 +103,11 @@ struct MarkerViewingGeneralTab: View {
             .padding(.bottom, 22)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background {
+            if liveMarker.intent == .setup {
+                AppColors.sheetBackground
+            }
+        }
         .confirmationDialog(
             "Delete this marker?",
             isPresented: $showDeleteConfirmation,
@@ -159,21 +181,33 @@ struct MarkerViewingGeneralTab: View {
             pendingResponseRelationship = nil
             showRelationshipPicker = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Respond with marker")
-                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.accentColor)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(AppColors.accentColor.opacity(0.20)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Respond with marker")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                    Text("Add your perspective to this thesis")
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(AppColors.accentColor)
             }
-            .foregroundColor(AppColors.primaryForeground)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(13)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppColors.accentColor.opacity(0.16))
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppColors.accentColor.opacity(0.13))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppColors.accentColor.opacity(0.35), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppColors.accentColor.opacity(0.42), lineWidth: 1)
                     )
             )
         }
@@ -188,6 +222,7 @@ struct MarkerViewingGeneralTab: View {
         }) {
             MarkerLinkRelationshipPicker(
                 parentSummary: respondPickerSummary,
+                parentIntent: liveMarker.intent,
                 onSelect: { relationship in
                     pendingResponseRelationship = relationship
                     showRelationshipPicker = false
@@ -197,7 +232,8 @@ struct MarkerViewingGeneralTab: View {
                     showRelationshipPicker = false
                 }
             )
-            .presentationDetents([.height(430), .large])
+            .presentationDetents([.height(580), .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -275,27 +311,204 @@ struct MarkerViewingGeneralTab: View {
             )
     }
 
+    /// The note is part of the primary reading flow, directly above Respond.
+    /// Analysis and Alert already show it in their intent-specific content.
+    @ViewBuilder
+    private var descriptionSection: some View {
+        let text = liveMarker.intent == .alert ? alertBodyText : trimmedNote
+        let questionAlreadyShowsNote = liveMarker.intent == .question && questionText == trimmedNote
+        if !text.isEmpty,
+           liveMarker.intent != .analysis,
+           liveMarker.intent != .alert,
+           !questionAlreadyShowsNote {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("DESCRIPTION")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(AppColors.greyText)
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.primaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppColors.whiteText.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private var setupDashboard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.caption)
+                    .foregroundColor(AppColors.accentColor)
+                    .accessibilityHidden(true)
+                Text("Trade setup")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Spacer(minLength: 0)
+                if !liveMarker.timeframe.isEmpty {
+                    Text(liveMarker.timeframe.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(AppColors.greyText)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 10) {
+                Text(setupDirection?.title ?? "Price levels")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Spacer(minLength: 0)
+                if let state = liveMarker.trackingState {
+                    TrackingStatePill(state: state, size: .standard)
+                }
+            }
+
+            if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
+                SetupOutcomeCard(
+                    outcome: outcome,
+                    size: .standard,
+                    riskRewardText: setupRiskRewardText,
+                    formatPrice: { formattedPrice($0) },
+                    onShare: onShareMarker
+                )
+            } else {
+                liveProgressSection
+            }
+
+            setupPriceLadder
+            setupTrackingTimeline
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.markerListCapsuleFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.markerListCapsuleStroke, lineWidth: 1)
+                )
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.guildCardBase)
+                .shadow(color: AppColors.guildCardShadow, radius: 10, x: 0, y: 3)
+        )
+    }
+
+    private var setupDirection: SetupDetailDirection? {
+        guard let entry = setupEntryPrice,
+              let target = setupTpPrice,
+              let stop = setupSlPrice else { return nil }
+        if target > entry && stop < entry { return .long }
+        if target < entry && stop > entry { return .short }
+        return nil
+    }
+
+    private var setupLevels: [SetupDetailLevel] {
+        let target = SetupDetailLevel(title: "TAKE PROFIT", price: setupTpPrice, color: RLComponentType.levelTp.color)
+        let entry = SetupDetailLevel(title: "ENTRY", price: setupEntryPrice, color: RLComponentType.levelEntry.color)
+        let stop = SetupDetailLevel(title: "STOP LOSS", price: setupSlPrice, color: RLComponentType.levelSl.color)
+        return setupDirection == .short ? [stop, entry, target] : [target, entry, stop]
+    }
+
+    private var setupPriceLadder: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("PRICE LADDER")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(AppColors.greyText)
+                Spacer()
+                if let riskReward = setupRiskRewardText {
+                    Text(riskReward)
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundColor(AppColors.primaryForeground)
+                }
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(setupLevels.enumerated()), id: \.offset) { index, level in
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(level.color)
+                            .frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(level.title)
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(0.4)
+                                .foregroundColor(level.color)
+                            Text(formattedPrice(level.price))
+                                .font(.subheadline.monospacedDigit().weight(.bold))
+                                .foregroundColor(AppColors.primaryForeground)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 8)
+                    if index < setupLevels.count - 1 {
+                        Rectangle()
+                            .fill(AppColors.whiteText.opacity(0.30))
+                            .frame(width: 2, height: 10)
+                            .padding(.leading, 16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var setupTrackingTimeline: some View {
+        if let state = liveMarker.trackingState {
+            let currentIndex = state.timelinePosition
+            let labels = ["Draft", "Tracking", "Active", state.isResolved ? state.displayName : "Result"]
+            VStack(alignment: .leading, spacing: 9) {
+                Text("TRACKING")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(AppColors.greyText)
+                HStack(alignment: .top, spacing: 4) {
+                    ForEach(0..<labels.count, id: \.self) { index in
+                        VStack(spacing: 5) {
+                            Image(systemName: index == currentIndex ? state.icon : "circle.fill")
+                                .font(.system(size: index == currentIndex ? 16 : 9, weight: .bold))
+                                .foregroundColor(index == currentIndex ? state.color : AppColors.greyText.opacity(index < currentIndex ? 0.9 : 0.4))
+                                .frame(height: 18)
+                            Text(labels[index])
+                                .font(.caption2.weight(index == currentIndex ? .bold : .regular))
+                                .foregroundColor(index == currentIndex ? AppColors.primaryForeground : AppColors.greyText)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity)
+                        if index < labels.count - 1 {
+                            Rectangle()
+                                .fill(AppColors.greyText.opacity(index < currentIndex ? 0.55 : 0.22))
+                                .frame(height: 2)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 8)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 3)
+        }
+    }
+
     @ViewBuilder
     private var requirementsContent: some View {
         switch liveMarker.intent {
         case .setup:
-            VStack(spacing: 10) {
-                if let outcome = MarkerPredictionProgress.outcomeDescription(for: liveMarker.marker) {
-                    SetupOutcomeCard(
-                        outcome: outcome,
-                        size: .standard,
-                        riskRewardText: setupRiskRewardText,
-                        formatPrice: { formattedPrice($0) },
-                        // Only where the same share affordance already exists —
-                        // the card must not offer what the panel would refuse.
-                        onShare: onShareMarker
-                    )
-                } else {
-                    setupStateHeader
-                    liveProgressSection
-                }
-                setupLevelsRow
-            }
+            EmptyView()
 
         case .analysis:
             readOnlyTextBlock(analysisText, placeholder: "No analysis provided")
@@ -450,11 +663,6 @@ struct MarkerViewingGeneralTab: View {
                     readOnlyMetaRow(title: "Title", value: title)
                 }
 
-                readOnlyMetaRow(
-                    title: "Description",
-                    value: generalDescriptionText.isEmpty ? "No description" : generalDescriptionText
-                )
-
                 HStack(spacing: 8) {
                     Text("Visibility")
                         .font(.caption)
@@ -589,68 +797,15 @@ struct MarkerViewingGeneralTab: View {
         .buttonStyle(.plain)
     }
 
-    private var setupStateHeader: some View {
-        let state = liveMarker.trackingState ?? .draft
-        return HStack(spacing: 8) {
-            TrackingStatePill(state: state, size: .standard)
-            Spacer(minLength: 0)
-            Text(liveMarker.timeframe.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(AppColors.primaryForeground)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(AppColors.whiteText.opacity(0.10))
-                        .overlay(
-                            Capsule()
-                                .stroke(AppColors.whiteText.opacity(0.16), lineWidth: 1)
-                        )
-                )
-        }
-    }
-
     private var setupRiskRewardText: String? {
-        guard let entry = setupEntryPrice,
+        guard setupDirection != nil,
+              let entry = setupEntryPrice,
               let tp = setupTpPrice,
               let sl = setupSlPrice else { return nil }
         let reward = abs(tp - entry)
         let risk = abs(entry - sl)
         guard risk > 0.000_000_1, reward > 0 else { return nil }
         return String(format: "R:R %.2f", reward / risk)
-    }
-
-    private var setupLevelsRow: some View {
-        HStack(spacing: 8) {
-            setupLevelCell(title: "Entry", value: formattedPrice(setupEntryPrice), color: RLComponentType.levelEntry.color)
-            setupLevelCell(title: "TP", value: formattedPrice(setupTpPrice), color: RLComponentType.levelTp.color)
-            setupLevelCell(title: "SL", value: formattedPrice(setupSlPrice), color: RLComponentType.levelSl.color)
-        }
-    }
-
-    private func setupLevelCell(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title.uppercased())
-                .font(.system(size: 9, weight: .heavy))
-                .foregroundColor(color)
-                .lineLimit(1)
-            Text(value)
-                .font(.system(size: 12.5, weight: .bold, design: .monospaced))
-                .foregroundColor(AppColors.primaryForeground)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(color.opacity(0.10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(color.opacity(0.22), lineWidth: 1)
-                )
-        )
     }
 
     @ViewBuilder
@@ -1207,7 +1362,7 @@ struct MarkerViewingGeneralTab: View {
     }
 
     private var setupEntryPrice: Double? {
-        liveMarker.entryPrice ?? liveMarker.anchorComponent?.payload.levelPrice ?? liveMarker.price
+        liveMarker.entryPrice
     }
 
     private var setupTpPrice: Double? {
@@ -1285,10 +1440,6 @@ struct MarkerViewingGeneralTab: View {
             }
         }
         return nil
-    }
-
-    private var generalDescriptionText: String {
-        trimmedNote
     }
 
     private var visibilityLabel: String {

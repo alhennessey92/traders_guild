@@ -289,7 +289,10 @@ class RLAppState: ObservableObject {
     @Published var userGuilds: [RLGuildWithMembership] = []
 
     var shouldPresentBiometricAppLock: Bool {
-        shouldUseBiometricAppLock && isBiometricAppLockActive
+        // The app root reads this during every view update. Check the cheap,
+        // normally-false flag first so scrolling does not repeatedly query
+        // LocalAuthentication and Keychain while the app is unlocked.
+        isBiometricAppLockActive && shouldUseBiometricAppLock
     }
 
     private var shouldUseBiometricAppLock: Bool {

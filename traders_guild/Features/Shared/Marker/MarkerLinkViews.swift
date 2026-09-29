@@ -93,52 +93,108 @@ struct MarkerLinkCapabilityObserver: ViewModifier {
 /// Support / Challenge / Build on, with one line of explanation each.
 struct MarkerLinkRelationshipPicker: View {
     let parentSummary: String?
+    let parentIntent: RLMarkerIntent?
     let onSelect: (MarkerLinkRelationship) -> Void
     let onCancel: () -> Void
 
+    private var parentAccent: Color { parentIntent?.color ?? AppColors.accentColor }
+
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Respond with a marker")
-                        .font(.headline)
-                        .foregroundColor(AppColors.primaryForeground)
-                    if let parentSummary {
-                        Text(parentSummary)
-                            .font(.subheadline)
-                            .foregroundColor(AppColors.greyText)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("RESPOND TO MARKER")
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(1.2)
+                            .foregroundColor(AppColors.accentColor)
+                        Text("Add to the thesis")
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                    }
+                    Spacer(minLength: 12)
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(AppColors.whiteText.opacity(0.10)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close response choices")
+                }
+
+                HStack(spacing: 11) {
+                    Image(systemName: "arrow.turn.up.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(parentAccent)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(parentAccent.opacity(0.16)))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("IN REPLY TO\(parentIntent.map { " · \($0.displayName.uppercased())" } ?? "")")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(0.7)
+                            .foregroundColor(parentAccent)
+                        Text(parentSummary ?? "Selected marker")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(AppColors.primaryForeground)
                             .lineLimit(2)
                     }
+                    Spacer(minLength: 0)
                 }
+                .padding(13)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(AppColors.chartPanelBackgroundInset)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(parentAccent.opacity(0.30), lineWidth: 1)
+                        )
+                )
+
+                Text("How does your marker relate?")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.primaryForeground)
 
                 ForEach(MarkerLinkRelationship.allCases, id: \.self) { relationship in
                     Button {
                         onSelect(relationship)
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: 13) {
                             Image(systemName: relationship.icon)
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(relationship.accentColor)
-                                .frame(width: 28)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 11)
+                                        .fill(relationship.accentColor.opacity(0.18))
+                                )
                                 .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(relationship.displayName)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.subheadline.weight(.bold))
                                     .foregroundColor(AppColors.primaryForeground)
                                 Text(relationship.pickerSubtitle)
                                     .font(.caption)
                                     .foregroundColor(AppColors.greyText)
                                     .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(relationship.accentColor)
+                                .accessibilityHidden(true)
                         }
-                        .padding(12)
+                        .padding(13)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(relationship.accentColor.opacity(0.10))
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(AppColors.chartPanelBackgroundInset)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(relationship.accentColor.opacity(0.30), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(relationship.accentColor.opacity(0.36), lineWidth: 1)
                                 )
                         )
                     }
@@ -147,14 +203,15 @@ struct MarkerLinkRelationshipPicker: View {
                     .accessibilityLabel("\(relationship.displayName). \(relationship.pickerSubtitle)")
                 }
 
-                Button("Cancel", action: onCancel)
-                    .font(.subheadline)
+                Text("Starts as Analysis. You can change the marker type during placement.")
+                    .font(.caption)
                     .foregroundColor(AppColors.greyText)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 2)
+                    .multilineTextAlignment(.center)
             }
-            .padding(16)
+            .padding(20)
         }
+        .background(AppColors.sheetBackground)
         .scrollBounceBehavior(.basedOnSize)
     }
 }
