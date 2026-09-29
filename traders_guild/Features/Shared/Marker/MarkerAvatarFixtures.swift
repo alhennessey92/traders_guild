@@ -147,7 +147,8 @@ extension MarkerLinkFixtures {
         trackingEnabled: Bool = false,
         trackingState: RLTrackingState? = nil,
         prediction: RLPredictionResultDTO? = nil,
-        createdOrder: Int? = nil
+        createdOrder: Int? = nil,
+        components: [RLComponentType] = []
     ) -> RLChartMarkerDTO {
         let base = marker(
             n, author: author.username, intent: intent, candle: candle(candleIndex), price: 64_000,
@@ -164,7 +165,7 @@ extension MarkerLinkFixtures {
             createdAtFormatted: base.createdAtFormatted, isVisible: true,
             likeCount: likes, isLikedByCurrentUser: false, commentCount: 0, comments: [],
             isCurrentUserMarker: false, canEdit: false, canDelete: false,
-            components: [], primaryComponentId: nil,
+            components: fixtureComponents(components, marker: n), primaryComponentId: nil,
             pollQuestion: intent == .poll ? title : nil,
             pollOptions: nil, userPollVote: nil, predictionResult: prediction,
             parentMarkerId: base.parentMarkerId, linkRelationship: relationship,
@@ -178,9 +179,12 @@ extension MarkerLinkFixtures {
     /// three by one drawn as initials.
     static func avatarIntents() -> MarkerFixtureScene {
         let dtos = [
-            authored(1, by: .alex, intent: .analysis, candleIndex: 4, title: "Higher lows holding"),
+            authored(1, by: .alex, intent: .analysis, candleIndex: 4, title: "Higher lows holding",
+                     components: [.indicator, .indicator, .drawingTrendline, .timeframeLink]),
             authored(2, by: .alex, intent: .question, candleIndex: 5, title: "Breakout or rejection?", likes: 2),
-            authored(3, by: .alex, intent: .setup, candleIndex: 6, title: "Long the retest"),
+            authored(3, by: .alex, intent: .setup, candleIndex: 6, title: "Long the retest",
+                     trackingEnabled: true, trackingState: .active,
+                     components: [.levelEntry, .levelSl, .levelTp, .indicator]),
             authored(4, by: .noor, intent: .analysis, candleIndex: 8, title: "Volume fading"),
             authored(5, by: .noor, intent: .question, candleIndex: 9, title: "Anyone see divergence?", responses: 1),
             authored(6, by: .noor, intent: .setup, candleIndex: 10, title: "Short the sweep"),
@@ -331,6 +335,28 @@ extension MarkerLinkFixtures {
                 removed.userId: "",
             ]
         )
+    }
+
+    // MARK: Component arcs
+
+    /// One marker per arc combination; select each (launch with
+    /// `-MarkerFixtureSelect <n>`) to see its arcs.
+    static func componentArcs() -> MarkerFixtureScene {
+        let dtos = [
+            authored(1, by: .alex, intent: .analysis, candleIndex: 2, title: "Indicators only",
+                     components: [.indicator, .indicator]),
+            authored(2, by: .sam, intent: .question, candleIndex: 4, title: "Drawings and links",
+                     components: [.drawingTrendline, .levelSupport, .linkURL]),
+            authored(3, by: .jamie, intent: .analysis, candleIndex: 6, title: "All three",
+                     components: [.indicator, .drawingZone, .drawingPattern, .timeframeLink, .timeframeLink]),
+            authored(4, by: .kit, intent: .setup, candleIndex: 8, title: "Levels only: no arcs",
+                     trackingEnabled: true, trackingState: .armed,
+                     components: [.anchor, .levelEntry, .levelSl, .levelTp]),
+            authored(5, by: .noor, intent: .setup, candleIndex: 10, title: "Levels plus context",
+                     trackingEnabled: true, trackingState: .active,
+                     components: [.levelEntry, .levelSl, .levelTp, .indicator, .timeframeLink]),
+        ]
+        return MarkerFixtureScene(markers: positioned(dtos), selectedId: uuid(3))
     }
 
     // MARK: Mixed legacy

@@ -168,9 +168,11 @@ enum MarkerVisualSpec {
 /// else's. It is read off what the caller hands in rather than app state, so
 /// each surface stays a pure function of its input.
 ///
-/// - `forMarker` / `forListItem` serve the SwiftUI marker badge, where only
-///   `.personal` shows a face; every other intent resolves to `.none`, so call
-///   sites can pass it unconditionally. They read the marker's author snapshot.
+/// - `forMarker` / `forListItem` serve the SwiftUI marker badge, for the
+///   intents `MarkerAvatarPresentation.live` gives a face — `.personal`, plus
+///   the prototype's three when it is on. Every other intent resolves to
+///   `.none`, so call sites can pass it unconditionally. They carry the author
+///   id so the badge can prefer the avatar directory over the snapshot.
 /// - `forAuthor` serves the chart canvas, for whichever intents
 ///   `MarkerAvatarPresentation` gives a face, and prefers the avatar directory
 ///   over the snapshot.
@@ -178,6 +180,11 @@ enum MarkerVisualSpec {
 struct MarkerAvatarIdentity: Equatable {
     let url: String?
     let initials: String?
+    /// Lets a badge prefer the avatar directory's fresher picture over `url`,
+    /// the snapshot. `nil` where there is no author to look up.
+    var authorId: UUID? = nil
+    /// For a Setup's intent badge; `.unknown` everywhere else.
+    var setupStatus: MarkerIntentBadge.SetupStatus = .unknown
 
     static let none = MarkerAvatarIdentity(url: nil, initials: nil)
 
@@ -192,10 +199,12 @@ struct MarkerAvatarIdentity: Equatable {
     }
 
     static func forMarker(_ marker: RLChartMarkerDTO) -> MarkerAvatarIdentity {
-        guard marker.intentEnum == .personal else { return .none }
+        guard MarkerAvatarPresentation.live.contains(marker.intentEnum) else { return .none }
         return MarkerAvatarIdentity(
             url: marker.author.avatarUrl,
-            initials: initials(from: marker.author.username)
+            initials: initials(from: marker.author.username),
+            authorId: marker.author.userId,
+            setupStatus: marker.intentEnum == .setup ? .from(marker) : .unknown
         )
     }
 
@@ -205,10 +214,14 @@ struct MarkerAvatarIdentity: Equatable {
 
     /// List rows carry their author on a protocol rather than a DTO.
     static func forListItem(_ marker: some MarkerListItemData) -> MarkerAvatarIdentity {
-        guard marker.intentEnum == .personal else { return .none }
+        guard MarkerAvatarPresentation.live.contains(marker.intentEnum) else { return .none }
         let identity = MarkerAvatarIdentity(
             url: marker.authorAvatarUrl,
-            initials: marker.authorInitials
+            initials: marker.authorInitials,
+            authorId: marker.authorId,
+            setupStatus: marker.intentEnum == .setup
+                ? .from(summaryTrackingState: marker.setupSummary?.trackingState)
+                : .unknown
         )
         return identity.isEmpty ? .none : identity
     }
@@ -256,6 +269,9 @@ enum MarkerAvatarPresentation {
     static func avatarIntents(experimentEnabled: Bool) -> Set<RLMarkerIntent> {
         experimentEnabled ? experimentIntents.union([.personal]) : [.personal]
     }
+
+    /// What this launch's live chart and marker badges use.
+    static let live: Set<RLMarkerIntent> = avatarIntents(experimentEnabled: MarkerAvatarExperiment.isEnabled)
 }
 
 /// Where an avatar is drawn inside its disc, at any point of the selection

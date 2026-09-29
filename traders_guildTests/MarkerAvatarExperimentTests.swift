@@ -66,11 +66,12 @@ struct MarkerAvatarExperimentTests {
 
         defaults.set(true, forKey: key)
         if hostIsIsolatedDev {
-            #expect(MarkerAvatarExperiment.isEnabled)
+            #expect(MarkerAvatarExperiment.evaluate())
             defaults.set(false, forKey: key)
-            #expect(MarkerAvatarExperiment.isEnabled == false)
+            #expect(MarkerAvatarExperiment.evaluate() == false)
         } else {
             // Release, Prod QA, GCP Public Prod and plain Debug: compiled to `false`.
+            #expect(MarkerAvatarExperiment.evaluate() == false)
             #expect(MarkerAvatarExperiment.isEnabled == false)
             #expect(MarkerAvatarExperiment.hasLaunchOverride == false)
         }

@@ -142,9 +142,12 @@ struct MarkerAvatarRenderTests {
     /// Painted at every point of the selection animation, the face fills the
     /// inner avatar circle of the disc *at that scale* — it neither overflows a
     /// disc still growing nor lags one that has grown.
+    ///
+    /// Measured on a personal marker: the same avatar path, without the
+    /// prototype's intent badge sitting over the face's corner.
     @Test(arguments: [1.0, 1.1, 1.25, 1.4, 1.5] as [CGFloat])
     func theFaceTracksTheAnimatedDisc(scale: CGFloat) throws {
-        let extent = try render(scale: scale)
+        let extent = try render(intent: .personal, scale: scale)
         let face = extent.red.union(extent.blue)
         let disc = MarkerVisualSpec.baseCanvasDiameter * scale
         let expected = MarkerVisualSpec.avatarDiameter(for: disc)
@@ -160,10 +163,16 @@ struct MarkerAvatarRenderTests {
     /// The selection wiggle turns the glyph; the face stays upright.
     @Test(arguments: [8, -6, 45] as [CGFloat])
     func theFaceStaysUprightThroughTheWiggle(rotation: CGFloat) throws {
-        let extent = try render(scale: MarkerVisualSpec.selectedScale, rotation: rotation)
+        let extent = try render(intent: .personal, scale: MarkerVisualSpec.selectedScale, rotation: rotation)
         #expect(!extent.red.isNull && !extent.blue.isNull)
         // Upright: the red half is entirely left of the blue half.
         #expect(extent.red.maxX <= extent.blue.minX + 1)
+    }
+
+    @Test(arguments: [RLMarkerIntent.analysis, .question, .setup])
+    func thePrototypesIntentsWearTheFaceWhenItIsOn(intent: RLMarkerIntent) throws {
+        let extent = try render(intent: intent, scale: 1)
+        #expect(!extent.red.isNull && !extent.blue.isNull)
     }
 
     @Test

@@ -45,6 +45,7 @@ struct MarkerDrawPass {
     private let unknownRelationship: Color
 
     private var resolvedSymbols: [String: GraphicsContext.ResolvedImage] = [:]
+    private var resolvedBadgeGlyphs: [String: GraphicsContext.ResolvedText] = [:]
 
     init() {
         markerShadow = AppColors.canvasMarkerShadow
@@ -79,6 +80,23 @@ struct MarkerDrawPass {
         let image = context.resolve(Image(systemName: name))
         resolvedSymbols[name] = image
         return image
+    }
+
+    /// A badge glyph at badge size, resolved once per pass rather than once per
+    /// marker. Heavy weight, as the leaf badge: at eight points a regular
+    /// outline reads as a smudge.
+    mutating func badgeGlyph(
+        named name: String,
+        in context: GraphicsContext
+    ) -> GraphicsContext.ResolvedText {
+        if let hit = resolvedBadgeGlyphs[name] { return hit }
+        let text = context.resolve(
+            Text(Image(systemName: name))
+                .font(.system(size: 8, weight: .heavy))
+                .foregroundColor(onAccent)
+        )
+        resolvedBadgeGlyphs[name] = text
+        return text
     }
 }
 
@@ -642,17 +660,21 @@ enum MarkerLinkRenderer {
     }
 
     /// Badge rectangles a connector must avoid for one glyph: the like badge on
-    /// the right, the response badge on the left.
+    /// the right, the response badge on the left, and an avatar-led marker's
+    /// intent badge outward.
     ///
     /// A leaf icon occupies exactly the same rect as a count, so it has to be
     /// declared here too — otherwise a connector would route straight through
-    /// the one badge that identifies a leaf as a response.
+    /// the one badge that identifies a leaf as a response. The intent badge is
+    /// declared for the same reason. None of these are tap targets: hit testing
+    /// is disc-only (`MarkerGlyphBounds.isHit`).
     static func badgeRects(
         center: CGPoint,
         isBelow: Bool,
         likeCount: Int,
         badge: BadgeKind?,
-        scale: CGFloat = 1
+        scale: CGFloat = 1,
+        intentBadge: Bool = false
     ) -> [CGRect] {
         var rects: [CGRect] = []
         if likeCount > 0 {
@@ -660,6 +682,9 @@ enum MarkerLinkRenderer {
         }
         if badge != nil {
             rects.append(responseBadgeRect(center: center, isBelow: isBelow, scale: scale))
+        }
+        if intentBadge {
+            rects.append(MarkerIntentBadge.rect(center: center, isBelow: isBelow, scale: scale))
         }
         return rects
     }

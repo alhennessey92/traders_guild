@@ -20,7 +20,7 @@ import Foundation
 /// - Launch override, for reproducible device and simulator runs:
 ///   `-TGAvatarMarkersExperiment YES` (or `NO`). Not persisted.
 /// - Persisted switch, for launches from the home screen, which carry no
-///   arguments: set from the marker fixture gallery.
+///   arguments: set from the marker fixture gallery. Read at launch.
 enum MarkerAvatarExperiment {
     static let defaultsKey = "TGAvatarMarkersExperiment"
     static let launchArgument = "-TGAvatarMarkersExperiment"
@@ -34,7 +34,13 @@ enum MarkerAvatarExperiment {
         #endif
     }
 
-    static var isEnabled: Bool {
+    /// Decided once per launch. Marker badges read this in view bodies, so it
+    /// must not touch `UserDefaults` every time; a changed saved switch takes
+    /// effect on the next launch.
+    static let isEnabled: Bool = evaluate()
+
+    /// The switch as it stands right now.
+    static func evaluate() -> Bool {
         #if TG_ISOLATED_DEV
         return resolve(
             arguments: ProcessInfo.processInfo.arguments,

@@ -480,9 +480,10 @@ struct TradingChartView: View {
     @State private var selectionRotation: CGFloat = 0
 
     /// Avatar symbols for the marker canvas, worked out off the pan path.
-    /// Personal markers only until the live-chart stage of the avatar prototype.
+    /// Personal markers always; Analysis, Question and Setup too when the
+    /// avatar prototype is on in this (isolated DEV) launch.
     @StateObject private var markerAvatarSymbols = MarkerAvatarSymbolStore(
-        avatarIntents: MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
+        avatarIntents: MarkerAvatarPresentation.live
     )
 
     // MARK: - Chart Configuration
@@ -7849,7 +7850,8 @@ struct TradingChartView: View {
             linkedMarkersEnabled: markerManager.linkedMarkersEnabled,
             timeframeJumps: markerManager.timeframeJumps,
             idleLinks: idleLinkContext(plotRect: plotRect),
-            placementLink: placementLinkContext(size: size, plotRect: plotRect)
+            placementLink: placementLinkContext(size: size, plotRect: plotRect),
+            avatarIntents: MarkerAvatarPresentation.live
         )
     }
 

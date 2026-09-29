@@ -2973,7 +2973,8 @@ struct ChartMarkerSystem {
                                 responseCount: entry.marker.responseCount,
                                 relationship: entry.marker.linkRelationship
                             ),
-                            scale: isSelected ? selectedMarkerScale : 1.0
+                            scale: isSelected ? selectedMarkerScale : 1.0,
+                            intentBadge: wearsIntentDecorations(entry.marker, avatarIntents: avatarIntents)
                         )
                     )
                 }
@@ -3048,7 +3049,8 @@ struct ChartMarkerSystem {
                             responseCount: marker.responseCount,
                             relationship: marker.linkRelationship
                         ),
-                        scale: scale
+                        scale: scale,
+                        intentBadge: wearsIntentDecorations(marker, avatarIntents: avatarIntents)
                     )
                 )
             }
@@ -3217,6 +3219,7 @@ struct ChartMarkerSystem {
                 linkRingProgress: ringProgress,
                 linkedMarkersEnabled: linkedMarkersEnabled,
                 showsAvatar: avatarIntents.contains(rendered.marker.intent),
+                showsIntentDecorations: wearsIntentDecorations(rendered.marker, avatarIntents: avatarIntents),
                 pass: &pass
             )
         }
@@ -3300,6 +3303,7 @@ struct ChartMarkerSystem {
         linkRingProgress: CGFloat = 0,
         linkedMarkersEnabled: Bool = false,
         showsAvatar: Bool = false,
+        showsIntentDecorations: Bool = false,
         pass: inout MarkerDrawPass
     ) {
         var drawContext = context
@@ -3345,6 +3349,18 @@ struct ChartMarkerSystem {
                 circlePath,
                 with: .color(severity.color.opacity(0.55)),
                 style: StrokeStyle(lineWidth: 1.5)
+            )
+        } else if let ringColor = MarkerIntentRing.strokeColor(
+            intent: marker.intent,
+            showsDecorations: showsIntentDecorations,
+            hasRelationshipRing: linkRing != nil
+        ) {
+            // The one restrained ring an avatar-led marker wears. A relationship
+            // ring, when there is one, replaces it rather than stacking with it.
+            drawContext.stroke(
+                circlePath,
+                with: .color(ringColor.opacity(MarkerIntentRing.opacity)),
+                style: StrokeStyle(lineWidth: MarkerIntentRing.lineWidth)
             )
         } else {
             drawContext.stroke(
@@ -3415,6 +3431,21 @@ struct ChartMarkerSystem {
             )
         }
 
+        // 6b. Component arcs, selected avatar-led markers only. Outside the
+        // disc, where they cannot touch the relationship ring inside it, and
+        // fainter while that ring is showing: it stays the authority.
+        if showsIntentDecorations, isSelected {
+            drawComponentArcs(
+                context: drawContext,
+                marker: marker,
+                center: position,
+                radius: scaledRadius,
+                isBelow: isBelow,
+                reveal: MarkerTimeframeJumpLayout.reveal(selectedMarkerScale: scale),
+                underRelationshipRing: linkRing != nil
+            )
+        }
+
         // 7. Like count badge — rides out with the disc when the glyph is
         // scaled, so it straddles the edge of a selected marker rather than
         // sinking inside it.
@@ -3451,6 +3482,62 @@ struct ChartMarkerSystem {
             pass: &pass
         )
 
+        // 9. Intent badge, outward — what this face is saying.
+        if showsIntentDecorations {
+            let status: MarkerIntentBadge.SetupStatus = marker.intent == .setup
+                ? .from(marker.marker)
+                : .unknown
+            if let style = MarkerIntentBadge.style(intent: marker.intent, setupStatus: status) {
+                let rect = MarkerIntentBadge.rect(center: position, isBelow: isBelow, scale: scale)
+                drawContext.fill(
+                    Path(roundedRect: rect, cornerRadius: MarkerLinkRenderer.badgeSize / 2),
+                    with: .color(style.color)
+                )
+                drawContext.draw(
+                    pass.badgeGlyph(named: style.symbol, in: drawContext),
+                    at: CGPoint(x: rect.midX, y: rect.midY)
+                )
+            }
+        }
+    }
+
+    /// Whether a marker wears the avatar prototype's badge, ring and arcs:
+    /// one of the prototype's intents, drawn with a face in this frame.
+    /// Personal markers wear a face too but keep their current presentation.
+    static func wearsIntentDecorations(_ marker: ChartMarkerUI, avatarIntents: Set<RLMarkerIntent>) -> Bool {
+        avatarIntents.contains(marker.intent)
+            && MarkerAvatarPresentation.experimentIntents.contains(marker.intent)
+    }
+
+    private static func drawComponentArcs(
+        context: GraphicsContext,
+        marker: ChartMarkerUI,
+        center: CGPoint,
+        radius: CGFloat,
+        isBelow: Bool,
+        reveal: CGFloat,
+        underRelationshipRing: Bool
+    ) {
+        guard reveal > 0.01 else { return }
+        let categories = MarkerComponentArcs.categories(of: marker.components)
+        guard !categories.isEmpty else { return }
+        let opacity = (underRelationshipRing
+            ? MarkerComponentArcs.opacityUnderRelationshipRing
+            : MarkerComponentArcs.opacity) * Double(reveal)
+        let arcRadius = radius + MarkerComponentArcs.radiusOffset
+        for category in categories {
+            let slot = MarkerComponentArcs.slot(for: category, isBelow: isBelow)
+            // Increasing screen angles run clockwise on screen, which in
+            // SwiftUI's flipped space is `clockwise: false`.
+            let arc = Path { path in
+                path.addArc(center: center, radius: arcRadius, startAngle: slot.start, endAngle: slot.end, clockwise: false)
+            }
+            context.stroke(
+                arc,
+                with: .color(category.color.opacity(opacity)),
+                style: StrokeStyle(lineWidth: MarkerComponentArcs.lineWidth, lineCap: .round)
+            )
+        }
     }
 
     /// One author's face inside a disc of `discDiameter`, clipped to its circle.

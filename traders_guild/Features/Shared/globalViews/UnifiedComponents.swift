@@ -1780,9 +1780,13 @@ struct UnifiedMarkerBadge: View {
     var emoji: String? = nil
     var textLabel: String? = nil
     var isSelected: Bool = false
-    /// Personal markers wear their author's face instead of a glyph — it is the
-    /// one marker type that is about a person rather than a chart idea.
+    /// The author's face instead of a glyph, for the intents that wear one
+    /// (`MarkerAvatarPresentation.live`): personal markers, and the avatar
+    /// prototype's Analysis, Question and Setup when it is on.
     var avatar: MarkerAvatarIdentity = .none
+
+    /// The freshest picture the app knows for the author, as chat avatars use.
+    @ObservedObject private var avatarDirectory = MemberAvatarDirectory.shared
 
     init(
         intent: RLMarkerIntent,
@@ -1805,10 +1809,24 @@ struct UnifiedMarkerBadge: View {
         self.avatar = avatar
     }
 
-    /// Whether this badge shows a face. Only `.personal` ever does, and only
-    /// once the caller has supplied something to show.
+    /// Whether this badge shows a face: an intent that wears one, once the
+    /// caller has supplied something to show.
     private var showsAvatar: Bool {
-        intent == .personal && !avatar.isEmpty
+        MarkerAvatarPresentation.live.contains(intent) && !avatar.isEmpty
+    }
+
+    /// The directory's picture for the author if it has one — including an
+    /// explicit removal — else the snapshot the caller passed.
+    private var avatarURLString: String? {
+        guard let authorId = avatar.authorId else { return avatar.url }
+        return avatarDirectory.resolved(userId: authorId, fallback: avatar.url)
+    }
+
+    /// The prototype's intent badge, beside the face. Personal keeps its
+    /// current presentation.
+    private var intentBadgeStyle: MarkerIntentBadge.Style? {
+        guard showsAvatar, MarkerAvatarPresentation.experimentIntents.contains(intent) else { return nil }
+        return MarkerIntentBadge.style(intent: intent, setupStatus: avatar.setupStatus)
     }
 
     private var avatarDiameter: CGFloat {
@@ -1848,7 +1866,7 @@ struct UnifiedMarkerBadge: View {
 
             // Icon
             if showsAvatar {
-                if let avatarURL = avatar.url, !avatarURL.isEmpty,
+                if let avatarURL = avatarURLString, !avatarURL.isEmpty,
                    let url = URL(string: avatarURL) {
                     CachedAvatarImage(
                         url: url,
@@ -1887,6 +1905,23 @@ struct UnifiedMarkerBadge: View {
             radius: MarkerVisualSpec.glassShadowRadius,
             x: 0, y: 1
         )
+        .overlay {
+            if let style = intentBadgeStyle {
+                // Straddles the rim at 45°, top-right, as on the chart.
+                let pip = max(10, size * 0.36)
+                let offset = size / 2 * 0.7071
+                Circle()
+                    .fill(style.color)
+                    .frame(width: pip, height: pip)
+                    .overlay(
+                        Image(systemName: style.symbol)
+                            .font(.system(size: pip * 0.55, weight: .heavy))
+                            .foregroundColor(AppColors.onAccentForeground)
+                    )
+                    .offset(x: offset, y: -offset)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     @ViewBuilder

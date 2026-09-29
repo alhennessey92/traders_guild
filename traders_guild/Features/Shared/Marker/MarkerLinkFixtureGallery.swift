@@ -67,7 +67,8 @@ enum MarkerLinkFixtures {
         relationship: String? = nil,
         responses: Int = 0,
         likes: Int = 0,
-        parentPreview: RLMarkerLinkPreviewDTO? = nil
+        parentPreview: RLMarkerLinkPreviewDTO? = nil,
+        components: [RLComponentType] = []
     ) -> RLChartMarkerDTO {
         RLChartMarkerDTO(
             id: uuid(n),
@@ -95,7 +96,7 @@ enum MarkerLinkFixtures {
             isCurrentUserMarker: false,
             canEdit: false,
             canDelete: false,
-            components: [],
+            components: fixtureComponents(components, marker: n),
             primaryComponentId: nil,
             pollQuestion: nil,
             pollOptions: nil,
@@ -106,6 +107,19 @@ enum MarkerLinkFixtures {
             parentPreview: parentPreview,
             directResponseCount: responses
         )
+    }
+
+    /// Components identified by type only. Nothing in the gallery draws their
+    /// payloads; the marker layer reads their types (for component arcs).
+    static func fixtureComponents(_ types: [RLComponentType], marker n: Int) -> [RLMarkerComponentDTO] {
+        types.enumerated().map { index, type in
+            RLMarkerComponentDTO(
+                id: uuid(10_000 + n * 20 + index),
+                componentType: type.rawValue,
+                payload: .unknown(type: type.rawValue, rawPayload: [:]),
+                ordering: index
+            )
+        }
     }
 
     static func preview(
@@ -163,7 +177,8 @@ enum MarkerLinkFixtures {
     static func allRelationships() -> [ChartMarkerUI] {
         let parent = marker(
             1, author: "alex", intent: .setup, candle: baseCandle, price: 64_000,
-            title: "BTC breakout", responses: 3, likes: 7
+            title: "BTC breakout", responses: 3, likes: 7,
+            components: [.levelEntry, .levelSl, .levelTp, .indicator, .drawingTrendline]
         )
         let supports = marker(
             2, author: "jamie", intent: .analysis, candle: baseCandle.addingTimeInterval(3600),
@@ -357,6 +372,7 @@ struct MarkerLinkFixtureGallery: View {
         case setupStates = "Setup: untracked / armed / live / TP / SL"
         case avatarStates = "Avatar states"
         case mixedLegacy = "Mixed with legacy markers"
+        case componentArcs = "Selected: component arcs"
 
         var id: String { rawValue }
 
@@ -376,6 +392,7 @@ struct MarkerLinkFixtureGallery: View {
             case .setupStates: return "setupStates"
             case .avatarStates: return "avatarStates"
             case .mixedLegacy: return "mixedLegacy"
+            case .componentArcs: return "componentArcs"
             }
         }
 
@@ -394,6 +411,7 @@ struct MarkerLinkFixtureGallery: View {
             case .setupStates: return MarkerLinkFixtures.setupStates()
             case .avatarStates: return MarkerLinkFixtures.avatarStates()
             case .mixedLegacy: return MarkerLinkFixtures.mixedLegacy()
+            case .componentArcs: return MarkerLinkFixtures.componentArcs()
             }
         }
 
@@ -422,15 +440,24 @@ struct MarkerLinkFixtureGallery: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                controls
-                chartSection
-                detailSection
-                threadSection
-                placementSection
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    controls
+                    chartSection
+                    badgeSection.id("badges")
+                    detailSection
+                    threadSection
+                    placementSection
+                }
+                .padding(16)
             }
-            .padding(16)
+            .onAppear {
+                // `-MarkerFixtureSection badges` opens on the badge strip.
+                if UserDefaults.standard.string(forKey: "MarkerFixtureSection") == "badges" {
+                    proxy.scrollTo("badges", anchor: .top)
+                }
+            }
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
         .onAppear { load(selectedCase, isLaunch: true) }
@@ -553,6 +580,55 @@ struct MarkerLinkFixtureGallery: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(AppColors.surfaceGray20, lineWidth: 1)
                 )
+            }
+        }
+    }
+
+    // MARK: SwiftUI marker badge
+
+    /// The shared badge that lists, the info box, marker detail and the
+    /// placement ghost use. Faces follow this launch's experiment switch.
+    private var badgeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Marker badge (lists, info box, detail, ghost) — this launch's switch")
+            badgeRow([
+                ("Analysis", .analysis, .unknown, MarkerLinkFixtures.Author.alex),
+                ("Question", .question, .unknown, .sam),
+                ("Setup live", .setup, .active, .jamie),
+                ("Untracked", .setup, .untracked, .kit),
+            ])
+            badgeRow([
+                ("TP hit", .setup, .takeProfit, .priya),
+                ("SL hit", .setup, .stopLoss, .noor),
+                ("Personal", .personal, .unknown, .alex),
+                ("Alert", .alert, .unknown, .lee),
+            ])
+        }
+    }
+
+    private func badgeRow(
+        _ items: [(String, RLMarkerIntent, MarkerIntentBadge.SetupStatus, MarkerLinkFixtures.Author)]
+    ) -> some View {
+        HStack(alignment: .top, spacing: 18) {
+            ForEach(items, id: \.0) { label, intent, status, author in
+                VStack(spacing: 6) {
+                    UnifiedMarkerBadge(
+                        intent: intent,
+                        alertSeverity: intent == .alert ? .severe : nil,
+                        sizeToken: .large,
+                        avatar: MarkerAvatarPresentation.live.contains(intent)
+                            ? MarkerAvatarIdentity(
+                                url: author.avatarUrl,
+                                initials: String(author.username.prefix(2)).uppercased(),
+                                authorId: author.userId,
+                                setupStatus: status
+                            )
+                            : .none
+                    )
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.greyText)
+                }
             }
         }
     }
