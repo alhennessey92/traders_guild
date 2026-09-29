@@ -34,7 +34,17 @@ final class MemberAvatarDirectory: ObservableObject {
 
     /// The avatar to draw: what the app last learned, else what the message carried.
     func resolved(userId: UUID?, fallback: String?) -> String? {
-        guard let userId, let known = avatarByUserId[userId] else { return fallback }
+        Self.resolve(userId: userId, fallback: fallback, in: avatarByUserId)
+    }
+
+    /// The rule behind `resolved`, over a snapshot of the directory, for callers
+    /// that hold one rather than reading the live instance.
+    nonisolated static func resolve(
+        userId: UUID?,
+        fallback: String?,
+        in avatars: [UUID: String]
+    ) -> String? {
+        guard let userId, let known = avatars[userId] else { return fallback }
         return known.isEmpty ? nil : known
     }
 

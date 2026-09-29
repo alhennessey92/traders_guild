@@ -2882,7 +2882,8 @@ struct ChartMarkerSystem {
         linkedMarkersEnabled: Bool = false,
         timeframeJumps: [MarkerTimeframeJump] = [],
         idleLinks: MarkerIdleLinkContext? = nil,
-        placementLink: MarkerPlacementLinkContext? = nil
+        placementLink: MarkerPlacementLinkContext? = nil,
+        avatarIntents: Set<RLMarkerIntent> = MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
     ) {
         guard priceRange.max > priceRange.min,
               chartSize.width > 0,
@@ -3215,6 +3216,7 @@ struct ChartMarkerSystem {
                 linkRing: ring,
                 linkRingProgress: ringProgress,
                 linkedMarkersEnabled: linkedMarkersEnabled,
+                showsAvatar: avatarIntents.contains(rendered.marker.intent),
                 pass: &pass
             )
         }
@@ -3297,6 +3299,7 @@ struct ChartMarkerSystem {
         linkRing: MarkerLinkRingStyle? = nil,
         linkRingProgress: CGFloat = 0,
         linkedMarkersEnabled: Bool = false,
+        showsAvatar: Bool = false,
         pass: inout MarkerDrawPass
     ) {
         var drawContext = context
@@ -3362,26 +3365,15 @@ struct ChartMarkerSystem {
                     .foregroundColor(iconColor),
                 at: position
             )
-        } else if marker.intent == .personal,
-                  let avatar = drawContext.resolveSymbol(
-                      id: MarkerVisualSpec.avatarSymbolTag(
-                          authorId: marker.author.userId.uuidString,
-                          isSelected: isSelected
-                      )
+        } else if showsAvatar,
+                  let avatar = context.resolveSymbol(
+                      id: MarkerVisualSpec.avatarSymbolTag(authorId: marker.author.userId.uuidString)
                   ) {
-            // A personal marker is the one that is about a person, so it wears their face —
-            // its author's, which is not always the viewer's now that one can be shared
-            // with the guild.
-            let size = avatar.size
-            drawContext.draw(
-                avatar,
-                in: CGRect(
-                    x: position.x - size.width / 2,
-                    y: position.y - size.height / 2,
-                    width: size.width,
-                    height: size.height
-                )
-            )
+            // The marker wears its author's face. Drawn on the unrotated
+            // context so the face stays upright through the selection wiggle,
+            // and sized from the disc's current diameter so it tracks the
+            // animated scale instead of jumping to its selected size.
+            drawAvatar(avatar, in: context, center: position, discDiameter: diameter)
         } else {
             let symbolId = MarkerSymbolID(intent: marker.intent, alertSeverity: markerSeverity, isSelected: isSelected)
             if let resolved = drawContext.resolveSymbol(id: symbolId.tag) {
@@ -3459,6 +3451,23 @@ struct ChartMarkerSystem {
             pass: &pass
         )
 
+    }
+
+    /// One author's face inside a disc of `discDiameter`, clipped to its circle.
+    private static func drawAvatar(
+        _ avatar: GraphicsContext.ResolvedSymbol,
+        in context: GraphicsContext,
+        center: CGPoint,
+        discDiameter: CGFloat
+    ) {
+        let rect = MarkerAvatarLayout.avatarRect(center: center, discDiameter: discDiameter)
+        let scale = MarkerAvatarLayout.drawScale(symbolSize: avatar.size, discDiameter: discDiameter)
+        guard rect.width > 0, scale > 0 else { return }
+        var avatarContext = context
+        avatarContext.clip(to: Path(ellipseIn: rect))
+        avatarContext.translateBy(x: center.x, y: center.y)
+        avatarContext.scaleBy(x: scale, y: scale)
+        avatarContext.draw(avatar, at: .zero, anchor: .center)
     }
 
     // drawPaletteSymbol removed — canvas now uses single monochrome icons (Point 93 fix).

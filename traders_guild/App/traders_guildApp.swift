@@ -196,16 +196,19 @@ struct traders_guildApp: App {
         AppDeepLinkRouter.route(url, to: rlAppState)
     }
     
-    /// Visual harness for linked markers, gated on a launch argument.
+    /// Visual harness for markers, gated on a launch argument.
     ///
-    /// DEBUG only, opt-in, and never linked from a shipping surface: it exists
-    /// so the marker canvas and linked-detail views can be looked at without a
-    /// backend or an account. Launch with `-MarkerLinkFixtures`.
-    #if DEBUG
+    /// Debug and isolated-DEV builds only (including the optimised DevProfile),
+    /// opt-in, and never linked from a shipping surface: it exists so the marker
+    /// canvas and linked-detail views can be looked at without a backend or an
+    /// account. Launch with `-MarkerLinkFixtures`.
+    #if DEBUG || TG_ISOLATED_DEV
     private var wantsMarkerLinkFixtures: Bool {
         ProcessInfo.processInfo.arguments.contains("-MarkerLinkFixtures")
     }
+    #endif
 
+    #if DEBUG
     /// Same idea for the first-run walkthrough: `-WalkthroughPreview` presents it
     /// straight away, so clips and crops can be checked without a fresh account.
     private var wantsWalkthroughPreview: Bool {
@@ -220,6 +223,12 @@ struct traders_guildApp: App {
             MarkerLinkFixtureGallery()
         } else if wantsWalkthroughPreview {
             WalkthroughPreviewHarness()
+        } else {
+            authenticatedContent
+        }
+        #elseif TG_ISOLATED_DEV
+        if wantsMarkerLinkFixtures {
+            MarkerLinkFixtureGallery()
         } else {
             authenticatedContent
         }

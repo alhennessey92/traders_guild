@@ -87,16 +87,21 @@ enum MarkerVisualSpec {
     /// Base diameter for chart canvas markers (matches cancel button).
     static let baseCanvasDiameter: CGFloat = 36
 
-    /// Canvas symbol tag for one author's personal-marker avatar.
+    /// The scale a selected glyph settles at. The chart animates towards it, so
+    /// anything sized for the selected state is sized from this.
+    static let selectedScale: CGFloat = 1.5
+
+    /// Canvas symbol tag for one author's avatar.
     ///
     /// `GraphicsContext` cannot render an image it was not handed up front, so each avatar
     /// is registered in the chart's `symbols:` closure and resolved by tag here — the same
     /// escape hatch the reaction emoji already uses.
     ///
-    /// Keyed by author rather than "the viewer": a personal marker may be shared with the
-    /// guild, in which case the face on it belongs to whoever placed it.
-    static func avatarSymbolTag(authorId: String, isSelected: Bool) -> String {
-        "marker.avatar.\(authorId)\(isSelected ? ".selected" : "")"
+    /// One symbol per author, rendered at selected resolution and drawn scaled to
+    /// whatever size the disc is at — see `MarkerAvatarLayout`. Keyed by author rather
+    /// than "the viewer": the face on a marker belongs to whoever placed it.
+    static func avatarSymbolTag(authorId: String) -> String {
+        "marker.avatar.\(authorId)"
     }
 
     /// The avatar sits inside the glass disc with a hairline of it left showing,
@@ -153,18 +158,23 @@ enum MarkerVisualSpec {
     }
 }
 
-// MARK: - Personal marker identity
+// MARK: - Marker avatar identity
 
-/// The face a personal marker wears in place of a glyph.
+/// The face a marker wears in place of a glyph: its author's picture, or their
+/// initials.
 ///
-/// A personal marker is private by construction — `.personal` forces
-/// `visibility == "private"`, and `ChartMarkerSystem.canRenderMarker` only shows
-/// private markers to their author — so this is always the viewer's own avatar.
-/// It is still read off the marker rather than app state, so the badge stays a
-/// pure function of what it is handed.
+/// It is always the marker's *author*, never assumed to be the viewer — a
+/// personal marker can be shared with the guild, so its face may be someone
+/// else's. It is read off what the caller hands in rather than app state, so
+/// each surface stays a pure function of its input.
 ///
-/// Every other intent resolves to `.none`, which lets call sites pass it
-/// unconditionally instead of branching on the intent themselves.
+/// - `forMarker` / `forListItem` serve the SwiftUI marker badge, where only
+///   `.personal` shows a face; every other intent resolves to `.none`, so call
+///   sites can pass it unconditionally. They read the marker's author snapshot.
+/// - `forAuthor` serves the chart canvas, for whichever intents
+///   `MarkerAvatarPresentation` gives a face, and prefers the avatar directory
+///   over the snapshot.
+/// - `forCurrentUser` serves placement, where the marker has no author yet.
 struct MarkerAvatarIdentity: Equatable {
     let url: String?
     let initials: String?
@@ -208,5 +218,77 @@ struct MarkerAvatarIdentity: Equatable {
     static func forCurrentUser(username: String?, avatarUrl: String?) -> MarkerAvatarIdentity {
         let identity = MarkerAvatarIdentity(url: avatarUrl, initials: initials(from: username))
         return identity.isEmpty ? .none : identity
+    }
+
+    /// The face for a marker's author on the chart canvas, whatever the intent.
+    ///
+    /// A marker carries its author as a snapshot from when it was fetched, which
+    /// can be older than what the app has since learned. The directory's answer
+    /// wins — including an explicit removal, which must not fall back to the
+    /// snapshot's stale picture — and the snapshot is only used for authors the
+    /// directory has never heard of. Same rule as every chat avatar:
+    /// `MemberAvatarDirectory.resolve(userId:fallback:in:)`.
+    static func forAuthor(
+        _ author: RLGuildMemberDTO,
+        directory: [UUID: String]
+    ) -> MarkerAvatarIdentity {
+        let url = MemberAvatarDirectory.resolve(
+            userId: author.userId,
+            fallback: author.avatarUrl,
+            in: directory
+        )
+        let identity = MarkerAvatarIdentity(
+            url: (url?.isEmpty ?? true) ? nil : url,
+            initials: initials(from: author.username)
+        )
+        return identity.isEmpty ? .none : identity
+    }
+}
+
+// MARK: - Avatar presentation
+
+/// Which intents wear their author's face on the chart canvas.
+enum MarkerAvatarPresentation {
+    /// The prototype's intents. Everything else keeps its glyph.
+    static let experimentIntents: Set<RLMarkerIntent> = [.analysis, .question, .setup]
+
+    /// `.personal` always has; the prototype adds its three.
+    static func avatarIntents(experimentEnabled: Bool) -> Set<RLMarkerIntent> {
+        experimentEnabled ? experimentIntents.union([.personal]) : [.personal]
+    }
+}
+
+/// Where an avatar is drawn inside its disc, at any point of the selection
+/// animation.
+///
+/// The symbol is rendered once per author at selected resolution. The disc
+/// grows continuously with the animated selection scale, so the face is drawn
+/// into bounds computed from the disc's *current* diameter — never at the
+/// symbol's native size, which overflowed a disc still growing towards 1.5x.
+enum MarkerAvatarLayout {
+    /// The disc diameter the symbol is rendered for.
+    static let symbolDiscDiameter: CGFloat = MarkerVisualSpec.baseCanvasDiameter * MarkerVisualSpec.selectedScale
+
+    /// The face's diameter inside that disc.
+    static var symbolAvatarDiameter: CGFloat {
+        MarkerVisualSpec.avatarDiameter(for: symbolDiscDiameter)
+    }
+
+    /// The face's bounds for a disc of `discDiameter` centred on `center`.
+    static func avatarRect(center: CGPoint, discDiameter: CGFloat) -> CGRect {
+        let diameter = max(0, MarkerVisualSpec.avatarDiameter(for: discDiameter))
+        return CGRect(
+            x: center.x - diameter / 2,
+            y: center.y - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+    }
+
+    /// How much to scale a symbol of `symbolSize` so it fills `avatarRect`.
+    static func drawScale(symbolSize: CGSize, discDiameter: CGFloat) -> CGFloat {
+        let native = max(symbolSize.width, symbolSize.height)
+        guard native > 0 else { return 0 }
+        return max(0, MarkerVisualSpec.avatarDiameter(for: discDiameter)) / native
     }
 }

@@ -479,6 +479,12 @@ struct TradingChartView: View {
     /// Animated rotation for selected marker wiggle effect (degrees)
     @State private var selectionRotation: CGFloat = 0
 
+    /// Avatar symbols for the marker canvas, worked out off the pan path.
+    /// Personal markers only until the live-chart stage of the avatar prototype.
+    @StateObject private var markerAvatarSymbols = MarkerAvatarSymbolStore(
+        avatarIntents: MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
+    )
+
     // MARK: - Chart Configuration
     
     /// Base width of each candle before any scaling is applied
@@ -1648,17 +1654,14 @@ struct TradingChartView: View {
         Canvas { context, size in
             drawTopPriorityMarkers(context: context, size: size)
         } symbols: {
-            ForEach(MarkerVisualSpec.allSymbolIDs, id: \.tag) { symbolId in
-                markerSymbolView(for: symbolId).tag(symbolId.tag)
-            }
-            // One avatar per author of a personal marker on screen. Not "the viewer's":
-            // a personal marker can be shared with the guild, so the face is its author's.
-            ForEach(personalMarkerAvatarSymbols, id: \.tag) { entry in
-                markerAvatarSymbolView(identity: entry.identity, isSelected: entry.isSelected)
-                    .tag(entry.tag)
-            }
+            // Precomputed by the store when markers or avatars change: this
+            // builder runs on every pan frame and must only read.
+            MarkerCanvasSymbols.content(avatars: markerAvatarSymbols.entries)
         }
         .allowsHitTesting(false)
+        .onReceive(markerManager.$markers) { markers in
+            markerAvatarSymbols.update(markers: markers)
+        }
     }
 
     /// The current user's avatar, for the placement ghost — the marker being dragged has
@@ -1668,95 +1671,6 @@ struct TradingChartView: View {
             username: rlAppState.currentUser?.username,
             avatarUrl: rlAppState.currentUser?.avatarUrl
         )
-    }
-
-    private struct MarkerAvatarSymbol {
-        let tag: String
-        let identity: MarkerAvatarIdentity
-        let isSelected: Bool
-    }
-
-    /// One entry per (author, selected) pair for the personal markers currently drawn.
-    ///
-    /// Deduplicated by author: a chart full of one person's notes registers one avatar,
-    /// not one per marker.
-    private var personalMarkerAvatarSymbols: [MarkerAvatarSymbol] {
-        var seen = Set<UUID>()
-        var symbols: [MarkerAvatarSymbol] = []
-        for marker in markerManager.filteredMarkers where marker.intent == .personal {
-            let authorId = marker.author.userId
-            guard !seen.contains(authorId) else { continue }
-            seen.insert(authorId)
-            let identity = MarkerAvatarIdentity.forMarker(marker)
-            guard !identity.isEmpty else { continue }
-            for isSelected in [false, true] {
-                symbols.append(
-                    MarkerAvatarSymbol(
-                        tag: MarkerVisualSpec.avatarSymbolTag(
-                            authorId: authorId.uuidString,
-                            isSelected: isSelected
-                        ),
-                        identity: identity,
-                        isSelected: isSelected
-                    )
-                )
-            }
-        }
-        return symbols
-    }
-
-    @ViewBuilder
-    private func markerAvatarSymbolView(
-        identity: MarkerAvatarIdentity,
-        isSelected: Bool
-    ) -> some View {
-        let disc = isSelected
-            ? MarkerVisualSpec.baseCanvasDiameter * 1.5
-            : MarkerVisualSpec.baseCanvasDiameter
-        let diameter = MarkerVisualSpec.avatarDiameter(for: disc)
-
-        if let urlString = identity.url, !urlString.isEmpty, let url = URL(string: urlString) {
-            CachedAvatarImage(url: url, size: diameter, initials: identity.initials ?? "")
-        } else {
-            // Same initials fallback as every other avatar surface, tinted to
-            // the personal marker's own palette.
-            Circle()
-                .fill(RLMarkerIntent.personal.color.opacity(0.30))
-                .frame(width: diameter, height: diameter)
-                .overlay(
-                    Text(identity.initials ?? "")
-                        .font(.system(size: diameter * 0.38, weight: .bold))
-                        .foregroundColor(
-                            MarkerVisualSpec.iconPrimaryColor(for: .personal, severity: nil)
-                        )
-                )
-        }
-    }
-
-    @ViewBuilder
-    private func markerSymbolView(for symbolId: MarkerSymbolID) -> some View {
-        let symbol = MarkerVisualSpec.symbol(for: symbolId.intent, severity: symbolId.alertSeverity)
-        let palette = MarkerVisualSpec.palette(for: symbolId.intent, severity: symbolId.alertSeverity)
-        let diameter = symbolId.isSelected
-            ? MarkerVisualSpec.baseCanvasDiameter * 1.5
-            : MarkerVisualSpec.baseCanvasDiameter
-        let iconSize = MarkerVisualSpec.iconSize(for: diameter, intent: symbolId.intent)
-
-        if palette.count >= 3 {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.palette)
-                .font(.system(size: iconSize, weight: .bold))
-                .foregroundStyle(palette[0], palette[1], palette[2])
-        } else if palette.count == 2 {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.palette)
-                .font(.system(size: iconSize, weight: .bold))
-                .foregroundStyle(palette[0], palette[1])
-        } else {
-            Image(systemName: symbol)
-                .font(.system(size: iconSize, weight: .bold))
-                .foregroundColor(palette.first ?? MarkerVisualSpec.iconBaseColor)
-        }
     }
     
     // MARK: - Price Indicator View

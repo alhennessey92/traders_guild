@@ -10,11 +10,19 @@
 //  in a dense stack, contrast at 0.22, Dynamic Type, Reduce Motion — can
 //  actually be looked at.
 //
-//  Reached by launching with `-MarkerLinkFixtures`; never compiled into a
-//  Release build, and never linked from any shipping surface.
+//  Reached by launching with `-MarkerLinkFixtures`; compiled only into Debug
+//  and the isolated DEV configurations (so it runs in the optimised
+//  DevProfile build too), and never linked from any shipping surface.
+//
+//  Review launch arguments, all optional:
+//    -MarkerFixtureScene <key>      open a case (see `FixtureCase.key`)
+//    -MarkerFixtureSelect <n>       select fixture marker n (0 = none)
+//    -MarkerFixtureScale <1.0-1.5>  the selected glyph's scale
+//    -MarkerFixtureRotation <deg>   the selection wiggle's angle
+//    -TGAvatarMarkersExperiment YES the avatar prototype (isolated DEV only)
 //
 
-#if DEBUG
+#if DEBUG || TG_ISOLATED_DEV
 
 import SwiftUI
 
@@ -25,7 +33,7 @@ enum MarkerLinkFixtures {
         UUID(uuidString: "00000000-0000-0000-0000-\(String(format: "%012d", n))")!
     }
 
-    static func member(_ n: Int, username: String) -> RLGuildMemberDTO {
+    static func member(_ n: Int, username: String, avatarUrl: String? = nil) -> RLGuildMemberDTO {
         RLGuildMemberDTO(
             membershipId: uuid(500 + n),
             role: "member",
@@ -38,7 +46,7 @@ enum MarkerLinkFixtures {
             userId: uuid(400 + n),
             username: username,
             displayName: username.capitalized,
-            avatarUrl: nil,
+            avatarUrl: avatarUrl ?? MarkerAvatarFixtureImages.defaultURL(forUsername: username),
             isOnline: true,
             globalReputation: 300,
             isFriend: false,
@@ -263,8 +271,7 @@ enum MarkerLinkFixtures {
     }
 
     /// Assign the same layout the chart would, so stacks and tiers are real.
-    static func positioned(_ dtos: [RLChartMarkerDTO]) -> [ChartMarkerUI] {
-        let candles = self.candles()
+    static func positioned(_ dtos: [RLChartMarkerDTO], candles: [RLCandleDTO] = MarkerLinkFixtures.candles()) -> [ChartMarkerUI] {
         let markers = dtos.map { dto -> ChartMarkerUI in
             let index = candles.firstIndex { $0.timestamp == dto.candleTimestamp } ?? 0
             return ChartMarkerUI(marker: dto, candleIndex: index)
@@ -324,29 +331,94 @@ enum MarkerLinkFixtures {
 
 /// Scrollable board of every visual case, so one screenshot covers a lot.
 struct MarkerLinkFixtureGallery: View {
-    @State private var selectedCase: FixtureCase = .parentUnrelatedResponse
+    @State private var selectedCase: FixtureCase = FixtureCase.launchCase ?? .parentUnrelatedResponse
     @State private var focusEnabled = true
     @State private var revealProgress: CGFloat = 1
+    @State private var avatarsEnabled = MarkerAvatarExperiment.isEnabled
+    @State private var selectedId: UUID?
+    @State private var selectionScale: CGFloat = FixtureCase.launchScale ?? MarkerVisualSpec.selectedScale
+    @State private var selectionRotation: CGFloat = FixtureCase.launchRotation ?? 0
+    @State private var scene: MarkerFixtureScene?
+    @StateObject private var avatarSymbols = MarkerAvatarSymbolStore(
+        avatarIntents: MarkerAvatarPresentation.avatarIntents(experimentEnabled: MarkerAvatarExperiment.isEnabled)
+    )
 
     enum FixtureCase: String, CaseIterable, Identifiable {
         case parentUnrelatedResponse = "Parent → unrelated → response"
         case oppositeStacks = "Opposite stacks"
         case allRelationships = "All three relationships"
         case dense = "Dense chart"
+        case avatarIntents = "Analysis · Question · Setup"
+        case authors = "Repeated and distinct authors"
+        case sameCandle = "Same-candle stacks"
+        case adjacent = "Adjacent-candle stacks"
+        case zoomedOut = "Zoomed out"
+        case edges = "Chart edges"
+        case setupStates = "Setup: untracked / armed / live / TP / SL"
+        case avatarStates = "Avatar states"
+        case mixedLegacy = "Mixed with legacy markers"
 
         var id: String { rawValue }
 
-        var markers: [ChartMarkerUI] {
+        /// Stable name for `-MarkerFixtureScene`.
+        var key: String {
             switch self {
-            case .parentUnrelatedResponse: return MarkerLinkFixtures.parentUnrelatedResponse()
-            case .oppositeStacks: return MarkerLinkFixtures.oppositeStacks()
-            case .allRelationships: return MarkerLinkFixtures.allRelationships()
-            case .dense: return MarkerLinkFixtures.denseChart()
+            case .parentUnrelatedResponse: return "parentUnrelatedResponse"
+            case .oppositeStacks: return "oppositeStacks"
+            case .allRelationships: return "relationships"
+            case .dense: return "dense"
+            case .avatarIntents: return "intents"
+            case .authors: return "authors"
+            case .sameCandle: return "sameCandle"
+            case .adjacent: return "adjacent"
+            case .zoomedOut: return "zoomedOut"
+            case .edges: return "edges"
+            case .setupStates: return "setupStates"
+            case .avatarStates: return "avatarStates"
+            case .mixedLegacy: return "mixedLegacy"
             }
         }
 
-        /// The marker focus is centred on — always the thesis root here.
-        var selectedId: UUID { MarkerLinkFixtures.uuid(1) }
+        var scene: MarkerFixtureScene {
+            switch self {
+            case .parentUnrelatedResponse: return MarkerFixtureScene(markers: MarkerLinkFixtures.parentUnrelatedResponse())
+            case .oppositeStacks: return MarkerFixtureScene(markers: MarkerLinkFixtures.oppositeStacks())
+            case .allRelationships: return MarkerFixtureScene(markers: MarkerLinkFixtures.allRelationships())
+            case .dense: return MarkerFixtureScene(markers: MarkerLinkFixtures.denseChart())
+            case .avatarIntents: return MarkerLinkFixtures.avatarIntents()
+            case .authors: return MarkerLinkFixtures.repeatedAndDistinctAuthors()
+            case .sameCandle: return MarkerLinkFixtures.sameCandleStacks()
+            case .adjacent: return MarkerLinkFixtures.adjacentCandleStacks()
+            case .zoomedOut: return MarkerLinkFixtures.zoomedOut()
+            case .edges: return MarkerLinkFixtures.chartEdges()
+            case .setupStates: return MarkerLinkFixtures.setupStates()
+            case .avatarStates: return MarkerLinkFixtures.avatarStates()
+            case .mixedLegacy: return MarkerLinkFixtures.mixedLegacy()
+            }
+        }
+
+        static var launchCase: FixtureCase? {
+            let key = UserDefaults.standard.string(forKey: "MarkerFixtureScene")
+            return allCases.first { $0.key == key }
+        }
+
+        /// `nil` when not given; `.some(nil)` for `0`, meaning no selection.
+        static var launchSelection: UUID?? {
+            guard UserDefaults.standard.object(forKey: "MarkerFixtureSelect") != nil else { return nil }
+            let n = UserDefaults.standard.integer(forKey: "MarkerFixtureSelect")
+            return .some(n > 0 ? MarkerLinkFixtures.uuid(n) : nil)
+        }
+
+        static var launchScale: CGFloat? {
+            guard UserDefaults.standard.object(forKey: "MarkerFixtureScale") != nil else { return nil }
+            let value = CGFloat(UserDefaults.standard.double(forKey: "MarkerFixtureScale"))
+            return min(max(value, 1), MarkerVisualSpec.selectedScale)
+        }
+
+        static var launchRotation: CGFloat? {
+            guard UserDefaults.standard.object(forKey: "MarkerFixtureRotation") != nil else { return nil }
+            return CGFloat(UserDefaults.standard.double(forKey: "MarkerFixtureRotation"))
+        }
     }
 
     var body: some View {
@@ -361,42 +433,127 @@ struct MarkerLinkFixtureGallery: View {
             .padding(16)
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
+        .onAppear { load(selectedCase, isLaunch: true) }
+        .onChange(of: selectedCase) { _, newCase in load(newCase, isLaunch: false) }
+        .onChange(of: avatarsEnabled) { _, enabled in
+            avatarSymbols.avatarIntents = MarkerAvatarPresentation.avatarIntents(experimentEnabled: enabled)
+        }
+    }
+
+    /// Show a case: its markers, its selection, and the avatar directory it
+    /// assumes — applied to the real shared directory, so the chart refreshes
+    /// through the same observation the app uses.
+    private func load(_ fixtureCase: FixtureCase, isLaunch: Bool) {
+        let next = fixtureCase.scene
+        scene = next
+        if isLaunch, let launchSelection = FixtureCase.launchSelection {
+            selectedId = launchSelection
+        } else {
+            selectedId = next.selectedId
+        }
+        let directory = MemberAvatarDirectory.shared
+        directory.clear()
+        for (userId, url) in next.directory {
+            directory.note(userId: userId, avatarURL: url.isEmpty ? nil : url)
+        }
+        avatarSymbols.update(markers: next.markers)
     }
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Linked marker fixtures")
+            Text("Marker fixtures")
                 .font(.headline)
                 .foregroundColor(AppColors.primaryForeground)
             Picker("Case", selection: $selectedCase) {
                 ForEach(FixtureCase.allCases) { Text($0.rawValue).tag($0) }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
+            if MarkerAvatarExperiment.isAvailable {
+                Toggle("Avatar markers experiment (saved)", isOn: $avatarsEnabled)
+                    .disabled(MarkerAvatarExperiment.hasLaunchOverride)
+                    .onChange(of: avatarsEnabled) { _, enabled in
+                        #if TG_ISOLATED_DEV
+                        if !MarkerAvatarExperiment.hasLaunchOverride {
+                            MarkerAvatarExperiment.setPersisted(enabled)
+                        }
+                        #endif
+                    }
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
             Toggle("Focus active", isOn: $focusEnabled)
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
+            HStack {
+                Text(String(format: "Selected scale %.2f", selectionScale))
+                Slider(value: $selectionScale, in: 1...MarkerVisualSpec.selectedScale)
+            }
+            .font(.caption)
+            .foregroundColor(AppColors.greyText)
+            HStack {
+                Text(String(format: "Wiggle %.0f°", selectionRotation))
+                Slider(value: $selectionRotation, in: -8...8, step: 1)
+                Button("Clear selection") { selectedId = nil }
+            }
+            .font(.caption)
+            .foregroundColor(AppColors.greyText)
+            if selectedCase == .avatarStates {
+                avatarDirectoryControls
+            }
         }
+    }
+
+    /// Change or remove an author's avatar after the markers were fetched, as
+    /// a profile edit elsewhere in the app would.
+    private var avatarDirectoryControls: some View {
+        let changed = MarkerLinkFixtures.uuid(400 + MarkerLinkFixtures.changedAuthorNumber)
+        let removed = MarkerLinkFixtures.uuid(400 + MarkerLinkFixtures.removedAuthorNumber)
+        return HStack(spacing: 12) {
+            Button("Rae: next picture") {
+                let current = MemberAvatarDirectory.shared.resolved(userId: changed, fallback: nil) ?? ""
+                let next = current.hasSuffix("rae-after.png") ? "rae-later" : "rae-after"
+                MemberAvatarDirectory.shared.note(userId: changed, avatarURL: MarkerAvatarFixtureImages.url(for: next))
+            }
+            Button("Ivy: toggle removal") {
+                let current = MemberAvatarDirectory.shared.resolved(userId: removed, fallback: "snapshot")
+                MemberAvatarDirectory.shared.note(
+                    userId: removed,
+                    avatarURL: current == nil ? MarkerAvatarFixtureImages.url(for: "ivy-new") : nil
+                )
+            }
+        }
+        .font(.caption)
     }
 
     // MARK: Chart
 
     private var chartSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionTitle("Chart — focus, rings, connectors, badges")
-            MarkerLinkFixtureCanvas(
-                markers: selectedCase.markers,
-                selectedId: selectedCase.selectedId,
-                focusEnabled: focusEnabled,
-                revealProgress: revealProgress
-            )
-            .frame(height: 420)
-            .background(
-                RoundedRectangle(cornerRadius: 12).fill(AppColors.chartPanelBackground)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppColors.surfaceGray20, lineWidth: 1)
-            )
+            sectionTitle("Chart — tap a marker to select it")
+            if let scene {
+                MarkerLinkFixtureCanvas(
+                    markers: scene.markers,
+                    candles: scene.candles,
+                    selectedId: selectedId,
+                    focusEnabled: focusEnabled,
+                    revealProgress: revealProgress,
+                    selectedMarkerScale: selectionScale,
+                    selectedMarkerRotation: selectionRotation,
+                    avatarIntents: MarkerAvatarPresentation.avatarIntents(experimentEnabled: avatarsEnabled),
+                    avatarSymbols: avatarSymbols.entries,
+                    onSelect: { selectedId = $0 }
+                )
+                // Tall enough for a four-deep stack above a candle and a
+                // three-deep one below without the viewport clamp piling them.
+                .frame(height: 520)
+                .background(
+                    RoundedRectangle(cornerRadius: 12).fill(AppColors.chartPanelBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppColors.surfaceGray20, lineWidth: 1)
+                )
+            }
         }
     }
 
@@ -518,47 +675,117 @@ struct MarkerLinkFixtureGallery: View {
 /// the same rings, connectors, badges, dimming and z-order.
 struct MarkerLinkFixtureCanvas: View {
     let markers: [ChartMarkerUI]
-    let selectedId: UUID
+    var candles: [RLCandleDTO] = MarkerLinkFixtures.candles()
+    let selectedId: UUID?
     let focusEnabled: Bool
     let revealProgress: CGFloat
+    var selectedMarkerScale: CGFloat = MarkerVisualSpec.selectedScale
+    var selectedMarkerRotation: CGFloat = 0
+    var avatarIntents: Set<RLMarkerIntent> = MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
+    var avatarSymbols: [MarkerAvatarSymbolEntry] = []
+    var onSelect: ((UUID?) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var candles: [RLCandleDTO] { MarkerLinkFixtures.candles() }
 
     private var graph: MarkerLinkGraph {
         MarkerLinkGraph(nodes: markers.map(\.linkNode))
     }
 
     var body: some View {
-        Canvas { context, size in
-            let priceRange = priceRange()
-            let totalCandleWidth = size.width / CGFloat(max(candles.count, 1))
+        GeometryReader { proxy in
+            Canvas { context, size in
+                let geometry = layout(size: size)
+                drawContextCandles(context: context, size: size, geometry: geometry)
 
-            ChartMarkerSystem.drawMarkers(
-                context: context,
-                markers: markers,
-                candles: candles,
-                chartSize: size,
-                priceRange: priceRange,
-                priceScale: 1,
-                verticalOffset: 0,
-                totalCandleWidth: totalCandleWidth,
-                actualCandleWidth: totalCandleWidth * 0.7,
-                totalOffset: 0,
-                selectedMarkerId: selectedId,
-                selectedMarkerScale: 1.5,
-                selectedMarkerRotation: 0,
-                linkRender: renderContext(size: size),
-                // The harness exists to review the decorated states, so the
-                // capability is on; the disabled state is covered by tests.
-                linkedMarkersEnabled: true
-            )
+                ChartMarkerSystem.drawMarkers(
+                    context: context,
+                    markers: markers,
+                    candles: candles,
+                    chartSize: size,
+                    priceRange: geometry.priceRange,
+                    priceScale: 1,
+                    verticalOffset: 0,
+                    totalCandleWidth: geometry.totalCandleWidth,
+                    actualCandleWidth: geometry.totalCandleWidth * 0.7,
+                    totalOffset: 0,
+                    selectedMarkerId: selectedId,
+                    selectedMarkerScale: selectedMarkerScale,
+                    selectedMarkerRotation: selectedMarkerRotation,
+                    linkRender: renderContext(size: size),
+                    // The harness exists to review the decorated states, so the
+                    // capability is on; the disabled state is covered by tests.
+                    linkedMarkersEnabled: true,
+                    avatarIntents: avatarIntents
+                )
+            } symbols: {
+                // The same symbol content the chart registers.
+                MarkerCanvasSymbols.content(avatars: avatarSymbols)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { location in
+                onSelect?(hitMarkerId(at: location, size: proxy.size))
+            }
         }
     }
 
+    private struct Layout {
+        let priceRange: (min: Double, max: Double)
+        let totalCandleWidth: CGFloat
+    }
+
+    private func layout(size: CGSize) -> Layout {
+        Layout(
+            priceRange: priceRange(),
+            totalCandleWidth: size.width / CGFloat(max(candles.count, 1))
+        )
+    }
+
+    /// Faint candles for context only; the markers are the subject.
+    private func drawContextCandles(context: GraphicsContext, size: CGSize, geometry: Layout) {
+        let span = geometry.priceRange.max - geometry.priceRange.min
+        guard span > 0 else { return }
+        func y(_ price: Double) -> CGFloat {
+            size.height - CGFloat((price - geometry.priceRange.min) / span) * size.height
+        }
+        let bodyWidth = max(1, geometry.totalCandleWidth * 0.7)
+        for (index, candle) in candles.enumerated() {
+            let x = CGFloat(index) * geometry.totalCandleWidth
+            let centerX = x + bodyWidth / 2
+            let color = (candle.close >= candle.open ? AppColors.statusPositive : AppColors.statusNegative).opacity(0.35)
+            context.stroke(
+                Path { $0.move(to: CGPoint(x: centerX, y: y(candle.high))); $0.addLine(to: CGPoint(x: centerX, y: y(candle.low))) },
+                with: .color(color), lineWidth: 1
+            )
+            let top = y(max(candle.open, candle.close))
+            let bottom = y(min(candle.open, candle.close))
+            context.fill(Path(CGRect(x: x, y: top, width: bodyWidth, height: max(1, bottom - top))), with: .color(color))
+        }
+    }
+
+    /// Selection through the production hit test, with the geometry drawn.
+    private func hitMarkerId(at location: CGPoint, size: CGSize) -> UUID? {
+        let geometry = layout(size: size)
+        let focusIds = renderContext(size: size)?.focus.memberIds ?? []
+        return ChartMarkerSystem.findMarkerAtLocation(
+            location,
+            markers: markers,
+            candles: candles,
+            chartSize: size,
+            priceRange: geometry.priceRange,
+            priceScale: 1,
+            verticalOffset: 0,
+            totalCandleWidth: geometry.totalCandleWidth,
+            actualCandleWidth: geometry.totalCandleWidth * 0.7,
+            totalOffset: 0,
+            selectedMarkerId: selectedId,
+            selectedMarkerScale: selectedMarkerScale,
+            focusMemberIds: focusIds,
+            plotRect: CGRect(origin: .zero, size: size)
+        )?.id
+    }
+
     private func renderContext(size: CGSize) -> MarkerLinkRenderContext? {
-        guard focusEnabled else { return nil }
+        guard focusEnabled, let selectedId else { return nil }
         let visible = Set(markers.map(\.id))
         let focus = graph.focusState(selectedId: selectedId, visibleIds: visible)
         guard focus.isActive else { return nil }
@@ -593,7 +820,7 @@ struct MarkerLinkFixtureCanvas: View {
         // underneath, or the below stack is clamped to the canvas edge and
         // piles up — which is not the geometry under review.
         let hasBelowStack = markers.contains(where: \.positionedBelow)
-        let floor = hasBelowStack ? low - (high - low) * 1.8 : low
+        let floor = hasBelowStack ? low - (high - low) * 2.4 : low
         return (floor, high + (high - low) * 2.4)
     }
 }
