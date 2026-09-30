@@ -89,11 +89,22 @@ extension MarkerPlacementState {
     /// The guided panel is showing, rather than the legacy tabs.
     var isGuidedFlowActive: Bool { guidedStep != nil }
 
-    /// Analysis needs a chart component everywhere except the guided flow,
-    /// where text alone is a post. The live backend only accepts that from
-    /// Stage 4 (a local-DEV validation change); until then it refuses, and the
-    /// guided Review shows the failure with the draft intact.
-    var requiresAnalysisContext: Bool { !isGuidedFlowActive }
+    /// Analysis needs a chart component except where text alone is a post: the
+    /// guided flow, and an edit the entry point allowed under the experiment.
+    /// The backend accepts a text-only Analysis on create and update only from
+    /// the Stage 4 local-DEV validation change; an older backend refuses, and
+    /// the failure is shown with the draft intact.
+    var requiresAnalysisContext: Bool {
+        !(isGuidedFlowActive || (isEditingExistingMarker && textOnlyAnalysisEditAllowed))
+    }
+
+    /// Let the edit session that has just begun keep an Analysis text-only.
+    /// Called by the edit entry point under the experiment, after
+    /// `beginEditingMarker`; outside an edit session it does nothing.
+    func allowTextOnlyAnalysisEdit() {
+        guard isEditingExistingMarker else { return }
+        textOnlyAnalysisEditAllowed = true
+    }
 
     // MARK: Lifecycle
 

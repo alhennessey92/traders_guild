@@ -246,6 +246,10 @@ final class MarkerPlacementState: ObservableObject {
     var draftID = UUID()
     /// The guided submission this draft is waiting on, if any.
     var activeSubmissionID: UUID?
+    /// This edit session may keep an Analysis text-only, as the guided flow
+    /// posts it. Set by the edit entry point under the experiment; cleared
+    /// whenever an edit session begins or ends.
+    @Published var textOnlyAnalysisEditAllowed = false
 
     @Published private(set) var responseTimeframeChangeID: UUID?
     @Published private(set) var responseTimeframeLoadFailed = false
@@ -1704,9 +1708,11 @@ final class MarkerPlacementState: ObservableObject {
         editingMarkerId = nil
         isAnchorLocked = false
         isTextInputFocused = false
+        textOnlyAnalysisEditAllowed = false
     }
 
     func beginEditingMarker(_ marker: ChartMarkerUI) {
+        textOnlyAnalysisEditAllowed = false
         // Editing an existing marker is not answering one, and a link is
         // immutable after creation, so any in-flight session ends here.
         endLinkSession(.enteredEditMode)

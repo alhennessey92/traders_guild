@@ -3689,6 +3689,11 @@ struct ChartBottomSheet: View {
         }
 
         placementState.beginEditingMarker(marker)
+        // With the avatar prototype on, an Analysis the guided flow posted as
+        // text alone stays valid as text alone when edited.
+        if MarkerAvatarExperiment.isEnabled {
+            placementState.allowTextOnlyAnalysisEdit()
+        }
 
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
