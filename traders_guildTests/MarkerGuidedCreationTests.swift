@@ -31,6 +31,7 @@ struct MarkerGuidedCreationTests {
             state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: anchorCandle.close * 1.01, label: "TP")))
             state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: anchorCandle.close * 0.99, label: "SL")))
             state.trackingEnabled = true
+            state.recordSetupLevelSeed()
         }
         state.captureDraftBaseline()
         return state

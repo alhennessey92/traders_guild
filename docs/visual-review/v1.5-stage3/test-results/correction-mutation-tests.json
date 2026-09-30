@@ -1,0 +1,156 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+      "deviceName" : "iPhone 17 Pro",
+      "modelName" : "iPhone 17 Pro",
+      "osBuildNumber" : "23A343",
+      "osVersion" : "26.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.29s",
+                  "durationInSeconds" : 0.289370059967041,
+                  "name" : "aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:277: Expectation failed: (setup → traders_guild.MarkerPlacementState).cancellingNeedsConfirmation → false: a removed Setup level is an edit",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.22s",
+                  "durationInSeconds" : 0.22368121147155762,
+                  "name" : "addedAndRemovedLevelsCount()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/addedAndRemovedLevelsCount()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/addedAndRemovedLevelsCount()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "duration" : "0.22s",
+                  "durationInSeconds" : 0.22307395935058594,
+                  "name" : "seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.25s",
+                  "durationInSeconds" : 0.24703717231750488,
+                  "name" : "whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:180: Expectation failed: (outcome → Outcome(result: traders_guild.MarkerPlacementSubmissionResult.success(Optional(traders_guild.RLChartMarkerDTO(id: 5B2E99FD-AF6A-4BAE-B82D-D0F0F5DB3899, symbolId: 00000000-0000-0000-0000-000000000001, guildId: 00000000-0000-0000-0000-000000000002, author: traders_guild.RLGuildMemberDTO(membershipId: 00000000-0000-0000-0000-000000000501, role: \"member\", reputation: 120, contributionScore: 40, dateJoined: 2001-01-01 00:00:00 +0000, accuracyRate: Optional(0.62), mutedUntil: nil, suspendedUntil: nil, userId: 00000000-0000-0000-0000-000000000401, username: \"alex\", displayName: \"Alex\", avatarUrl: Optional(\"https://fixtures.tradersguild.invalid/avatars/alex.png\"), isOnline: true, globalReputation: 300, isFriend: false, friendshipStatus: nil, isBlocked: false, isBlockedBy: false), candleTimestamp: 2026-05-09 07:13:20 +0000, timeframe: \"1h\", price: 63920.0, intent: \"analysis\", title: nil, note: Optional(\"Draft A\"), visibility: \"guild\", confidence: nil, trackingEnabled: false, trackingState: nil, alertSeverity: nil, createdAt: 2026-09-30 14:02:55 +0000, createdAtFormatted: \"just now\", isVisible: true, likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [], isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [traders_guild.RLMarkerComponentDTO(id: 1E61B3A3-F445-4245-A0CA-E81B9A70D488, componentType: \"anchor\", payload: traders_guild.MarkerComponentPayload.anchor(traders_guild.AnchorPayload(time: 2026-05-09 07:13:20 +0000, price: 63920.0)), ordering: 0)], primaryComponentId: Optional(1E61B3A3-F445-4245-A0CA-E81B9A70D488), pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil, parentMarkerId: Optional(00000000-0000-0000-0000-000000000070), linkRelationship: Optional(\"supports\"), parentPreview: nil, directResponseCount: nil, responsesRevision: nil, hasResponses: nil, parentDirectResponseCount: nil, parentResponsesRevision: nil, parentHasResponses: nil))), shareContext: Optional(traders_guild.MarkerShareContext(id: DEF1B64D-C0C7-4919-A212-3D50A3CE7B39, marker: traders_guild.RLChartMarkerDTO(id: 5B2E99FD-AF6A-4BAE-B82D-D0F0F5DB3899, symbolId: 00000000-0000-0000-0000-000000000001, guildId: 00000000-0000-0000-0000-000000000002, author: traders_guild.RLGuildMemberDTO(membershipId: 00000000-0000-0000-0000-000000000501, role: \"member\", reputation: 120, contributionScore: 40, dateJoined: 2001-01-01 00:00:00 +0000, accuracyRate: Optional(0.62), mutedUntil: nil, suspendedUntil: nil, userId: 00000000-0000-0000-0000-000000000401, username: \"alex\", displayName: \"Alex\", avatarUrl: Optional(\"https://fixtures.tradersguild.invalid/avatars/alex.png\"), isOnline: true, globalReputation: 300, isFriend: false, friendshipStatus: nil, isBlocked: false, isBlockedBy: false), candleTimestamp: 2026-05-09 07:13:20 +0000, timeframe: \"1h\", price: 63920.0, intent: \"analysis\", title: nil, note: Optional(\"Draft A\"), visibility: \"guild\", confidence: nil, trackingEnabled: false, trackingState: nil, alertSeverity: nil, createdAt: 2026-09-30 14:02:55 +0000, createdAtFormatted: \"just now\", isVisible: true, likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [], isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [traders_guild.RLMarkerComponentDTO(id: 1E61B3A3-F445-4245-A0CA-E81B9A70D488, componentType: \"anchor\", payload: traders_guild.MarkerComponentPayload.anchor(traders_guild.AnchorPayload(time: 2026-05-09 07:13:20 +0000, price: 63920.0)), ordering: 0)], primaryComponentId: Optional(1E61B3A3-F445-4245-A0CA-E81B9A70D488), pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil, parentMarkerId: Optional(00000000-0000-0000-0000-000000000070), linkRelationship: Optional(\"supports\"), parentPreview: nil, directResponseCount: nil, responsesRevision: nil, hasResponses: nil, parentDirectResponseCount: nil, parentResponsesRevision: nil, parentHasResponses: nil), symbolTicker: Optional(\"BTC\"), isNewPlacement: true, isCurrentUserMarker: true, postedToDiscord: nil)), isStale: false)).isStale → false",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:181: Expectation failed: (outcome.shareContext → MarkerShareContext(id: DEF1B64D-C0C7-4919-A212-3D50A3CE7B39, marker: traders_guild.RLChartMarkerDTO(id: 5B2E99FD-AF6A-4BAE-B82D-D0F0F5DB3899, symbolId: 00000000-0000-0000-0000-000000000001, guildId: 00000000-0000-0000-0000-000000000002, author: traders_guild.RLGuildMemberDTO(membershipId: 00000000-0000-0000-0000-000000000501, role: \"member\", reputation: 120, contributionScore: 40, dateJoined: 2001-01-01 00:00:00 +0000, accuracyRate: Optional(0.62), mutedUntil: nil, suspendedUntil: nil, userId: 00000000-0000-0000-0000-000000000401, username: \"alex\", displayName: \"Alex\", avatarUrl: Optional(\"https://fixtures.tradersguild.invalid/avatars/alex.png\"), isOnline: true, globalReputation: 300, isFriend: false, friendshipStatus: nil, isBlocked: false, isBlockedBy: false), candleTimestamp: 2026-05-09 07:13:20 +0000, timeframe: \"1h\", price: 63920.0, intent: \"analysis\", title: nil, note: Optional(\"Draft A\"), visibility: \"guild\", confidence: nil, trackingEnabled: false, trackingState: nil, alertSeverity: nil, createdAt: 2026-09-30 14:02:55 +0000, createdAtFormatted: \"just now\", isVisible: true, likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [], isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [traders_guild.RLMarkerComponentDTO(id: 1E61B3A3-F445-4245-A0CA-E81B9A70D488, componentType: \"anchor\", payload: traders_guild.MarkerComponentPayload.anchor(traders_guild.AnchorPayload(time: 2026-05-09 07:13:20 +0000, price: 63920.0)), ordering: 0)], primaryComponentId: Optional(1E61B3A3-F445-4245-A0CA-E81B9A70D488), pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil, parentMarkerId: Optional(00000000-0000-0000-0000-000000000070), linkRelationship: Optional(\"supports\"), parentPreview: nil, directResponseCount: nil, responsesRevision: nil, hasResponses: nil, parentDirectResponseCount: nil, parentResponsesRevision: nil, parentHasResponses: nil), symbolTicker: Optional(\"BTC\"), isNewPlacement: true, isCurrentUserMarker: true, postedToDiscord: nil)) == nil: nothing to present for a draft that is gone",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:185: Expectation failed: (state.linkSession.context == nextParent → false) && (state.linkSession.isActive → <not evaluated>)",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.28s",
+                  "durationInSeconds" : 0.2827920913696289,
+                  "name" : "aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:253: Expectation failed: (state → traders_guild.MarkerPlacementState).cancellingNeedsConfirmation → false: a moved target is an edit",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.23s",
+                  "durationInSeconds" : 0.23448610305786133,
+                  "name" : "levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:207: Expectation failed: (outcome → Outcome(result: traders_guild.MarkerPlacementSubmissionResult.failure(traders_guild.MarkerPlacementFailure.genericCreateFailure), shareContext: nil, isStale: false)).isStale → false",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:208: Expectation failed: (state.submissionPhase → .failed(\"Could not place marker. Try again.\")) == .idle",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedSubmissionSafetyTests.swift:209: Expectation failed: (state.linkSession.lastFailureMessage → \"Placement Failed\") == nil: no failure recorded against the new draft",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.29s",
+                  "durationInSeconds" : 0.2876110076904297,
+                  "name" : "aLateFailureCannotTouchTheNextDraft()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aLateFailureCannotTouchTheNextDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aLateFailureCannotTouchTheNextDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "duration" : "0.28s",
+                  "durationInSeconds" : 0.28246593475341797,
+                  "name" : "theLegacyFlowKeepsItsBehaviour()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/theLegacyFlowKeepsItsBehaviour()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/theLegacyFlowKeepsItsBehaviour()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedSubmissionSafetyTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "traders_guildTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "traders_guild LinkedDev",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

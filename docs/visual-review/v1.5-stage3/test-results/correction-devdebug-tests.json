@@ -1,0 +1,1511 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+      "deviceName" : "iPhone 17 Pro",
+      "modelName" : "iPhone 17 Pro",
+      "osBuildNumber" : "23A343",
+      "osVersion" : "26.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.017s",
+                  "durationInSeconds" : 0.01650094985961914,
+                  "name" : "buildCreateRequestPersistsHorizontalLineLabel()",
+                  "nodeIdentifier" : "MarkerHorizontalLinePayloadTests/buildCreateRequestPersistsHorizontalLineLabel()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerHorizontalLinePayloadTests/buildCreateRequestPersistsHorizontalLineLabel()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.017s",
+                  "durationInSeconds" : 0.01654815673828125,
+                  "name" : "horizontalLineComponentRoundTripsThroughDTOEncoding()",
+                  "nodeIdentifier" : "MarkerHorizontalLinePayloadTests/horizontalLineComponentRoundTripsThroughDTOEncoding()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerHorizontalLinePayloadTests/horizontalLineComponentRoundTripsThroughDTOEncoding()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.019s",
+                  "durationInSeconds" : 0.01937103271484375,
+                  "name" : "renderedGlyphFocusPriceUsesStackedMarkerLayoutNotCandleClose()",
+                  "nodeIdentifier" : "MarkerHorizontalLinePayloadTests/renderedGlyphFocusPriceUsesStackedMarkerLayoutNotCandleClose()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerHorizontalLinePayloadTests/renderedGlyphFocusPriceUsesStackedMarkerLayoutNotCandleClose()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerHorizontalLinePayloadTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerHorizontalLinePayloadTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.00041s",
+                  "durationInSeconds" : 0.00040912628173828125,
+                  "name" : "submittingDoesNotRestoreVisibility()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/submittingDoesNotRestoreVisibility()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/submittingDoesNotRestoreVisibility()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.002s",
+                  "durationInSeconds" : 0.001965045928955078,
+                  "name" : "guildChangeClearsTheCacheAndAdvancesGeneration()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/guildChangeClearsTheCacheAndAdvancesGeneration()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/guildChangeClearsTheCacheAndAdvancesGeneration()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00033s",
+                  "durationInSeconds" : 0.00033283233642578125,
+                  "name" : "bannerSentenceReadsAsASentence()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/bannerSentenceReadsAsASentence()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/bannerSentenceReadsAsASentence()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00038s",
+                  "durationInSeconds" : 0.0003848075866699219,
+                  "name" : "removingTheLinkRestoresPreLinkVisibility()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/removingTheLinkRestoresPreLinkVisibility()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/removingTheLinkRestoresPreLinkVisibility()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0013s",
+                  "durationInSeconds" : 0.0012881755828857422,
+                  "name" : "pendingNavigationIsDiscardedAcrossInvalidation()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/pendingNavigationIsDiscardedAcrossInvalidation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/pendingNavigationIsDiscardedAcrossInvalidation()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00039s",
+                  "durationInSeconds" : 0.00038695335388183594,
+                  "name" : "failedSubmissionKeepsTheDraft()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/failedSubmissionKeepsTheDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/failedSubmissionKeepsTheDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0018498897552490234,
+                  "name" : "invalidatingOneThesisLeavesOthersAlone()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/invalidatingOneThesisLeavesOthersAlone()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/invalidatingOneThesisLeavesOthersAlone()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00061s",
+                  "durationInSeconds" : 0.0006070137023925781,
+                  "name" : "versionedSupersedesUnversioned()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/versionedSupersedesUnversioned()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/versionedSupersedesUnversioned()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00051s",
+                  "durationInSeconds" : 0.0005090236663818359,
+                  "name" : "relationshipChangesButParentIdentityDoesNot()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/relationshipChangesButParentIdentityDoesNot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/relationshipChangesButParentIdentityDoesNot()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.002s",
+                  "durationInSeconds" : 0.0020067691802978516,
+                  "name" : "threadSurvivesTimeframeChange()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/threadSurvivesTimeframeChange()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/threadSurvivesTimeframeChange()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00066s",
+                  "durationInSeconds" : 0.0006551742553710938,
+                  "name" : "repeatedRevisionCannotFlipAValue()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/repeatedRevisionCannotFlipAValue()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/repeatedRevisionCannotFlipAValue()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0006s",
+                  "durationInSeconds" : 0.000598907470703125,
+                  "name" : "unversionedCannotSupersedeVersioned()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/unversionedCannotSupersedeVersioned()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/unversionedCannotSupersedeVersioned()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00066s",
+                  "durationInSeconds" : 0.0006570816040039062,
+                  "name" : "sessionEndsWhenTheChartLeavesTheParentsContext()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/sessionEndsWhenTheChartLeavesTheParentsContext()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/sessionEndsWhenTheChartLeavesTheParentsContext()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00062s",
+                  "durationInSeconds" : 0.0006220340728759766,
+                  "name" : "outOfOrderCountsAreRejected()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/outOfOrderCountsAreRejected()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/outOfOrderCountsAreRejected()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00031s",
+                  "durationInSeconds" : 0.0003070831298828125,
+                  "name" : "forgettingAMarkerDropsItsCount()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/forgettingAMarkerDropsItsCount()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/forgettingAMarkerDropsItsCount()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.002s",
+                  "durationInSeconds" : 0.001961946487426758,
+                  "name" : "provisionalKeyIsPromotedToConfirmedRoot()",
+                  "nodeIdentifier" : "MarkerLinkStateTests/provisionalKeyIsPromotedToConfirmedRoot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests/provisionalKeyIsPromotedToConfirmedRoot()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerLinkStateTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerLinkStateTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.000092s",
+                  "durationInSeconds" : 9.202957153320312e-05,
+                  "name" : "offWithNothingSet()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/offWithNothingSet()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/offWithNothingSet()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.000065s",
+                  "durationInSeconds" : 6.508827209472656e-05,
+                  "name" : "theSavedSwitchTurnsItOn()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/theSavedSwitchTurnsItOn()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/theSavedSwitchTurnsItOn()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00042s",
+                  "durationInSeconds" : 0.00041604042053222656,
+                  "name" : "aLaunchOverrideBeatsTheSavedSwitch()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/aLaunchOverrideBeatsTheSavedSwitch()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/aLaunchOverrideBeatsTheSavedSwitch()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.000091s",
+                  "durationInSeconds" : 9.107589721679688e-05,
+                  "name" : "anUnreadableOverrideFallsBackToTheSavedSwitch()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/anUnreadableOverrideFallsBackToTheSavedSwitch()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/anUnreadableOverrideFallsBackToTheSavedSwitch()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0035s",
+                  "durationInSeconds" : 0.003462076187133789,
+                  "name" : "theSavedSwitchIsReadFromItsOwnSuite()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/theSavedSwitchIsReadFromItsOwnSuite()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/theSavedSwitchIsReadFromItsOwnSuite()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0016s",
+                  "durationInSeconds" : 0.0015749931335449219,
+                  "name" : "onlyIsolatedDevBuildsHonourTheSavedSwitch()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/onlyIsolatedDevBuildsHonourTheSavedSwitch()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/onlyIsolatedDevBuildsHonourTheSavedSwitch()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00015s",
+                  "durationInSeconds" : 0.00015401840209960938,
+                  "name" : "thePrototypeCoversExactlyItsThreeIntents()",
+                  "nodeIdentifier" : "MarkerAvatarExperimentTests/thePrototypeCoversExactlyItsThreeIntents()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests/thePrototypeCoversExactlyItsThreeIntents()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerAvatarExperimentTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerAvatarExperimentTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.003s",
+                  "durationInSeconds" : 0.0030341148376464844,
+                  "name" : "trendlineWorkflowTransitionsThroughPlacementAndEdit()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/trendlineWorkflowTransitionsThroughPlacementAndEdit()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/trendlineWorkflowTransitionsThroughPlacementAndEdit()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.003s",
+                  "durationInSeconds" : 0.003010988235473633,
+                  "name" : "supportWorkflowUsesImmediatePlacementEditing()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/supportWorkflowUsesImmediatePlacementEditing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/supportWorkflowUsesImmediatePlacementEditing()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.003s",
+                  "durationInSeconds" : 0.003010988235473633,
+                  "name" : "horizontalLineWorkflowUsesPersistedLabelInstruction()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/horizontalLineWorkflowUsesPersistedLabelInstruction()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/horizontalLineWorkflowUsesPersistedLabelInstruction()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0034s",
+                  "durationInSeconds" : 0.003432035446166992,
+                  "name" : "chartDrawingManagerClearsWorkflowWhenActiveDrawingIsRemoved()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/chartDrawingManagerClearsWorkflowWhenActiveDrawingIsRemoved()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/chartDrawingManagerClearsWorkflowWhenActiveDrawingIsRemoved()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0025s",
+                  "durationInSeconds" : 0.0025010108947753906,
+                  "name" : "quickAddZoneEquivalentEntersEditingAndCanExit()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/quickAddZoneEquivalentEntersEditingAndCanExit()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/quickAddZoneEquivalentEntersEditingAndCanExit()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.003s",
+                  "durationInSeconds" : 0.0029909610748291016,
+                  "name" : "discardActiveDrawingRemovesDraftAndResetsWorkflow()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/discardActiveDrawingRemovesDraftAndResetsWorkflow()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/discardActiveDrawingRemovesDraftAndResetsWorkflow()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0027s",
+                  "durationInSeconds" : 0.002680063247680664,
+                  "name" : "chartDrawingManagerClearsWorkflowWhenSetDrawingsDropsActiveDrawing()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/chartDrawingManagerClearsWorkflowWhenSetDrawingsDropsActiveDrawing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/chartDrawingManagerClearsWorkflowWhenSetDrawingsDropsActiveDrawing()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0034s",
+                  "durationInSeconds" : 0.003387928009033203,
+                  "name" : "removingNonActiveDrawingDraftKeepsCurrentEditingSession()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/removingNonActiveDrawingDraftKeepsCurrentEditingSession()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/removingNonActiveDrawingDraftKeepsCurrentEditingSession()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0034s",
+                  "durationInSeconds" : 0.003378152847290039,
+                  "name" : "toolbarGuidanceUpdatesForAnnotationEditing()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/toolbarGuidanceUpdatesForAnnotationEditing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/toolbarGuidanceUpdatesForAnnotationEditing()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0034s",
+                  "durationInSeconds" : 0.0033631324768066406,
+                  "name" : "removingActiveDrawingDraftClearsWorkflowStateForLineTools()",
+                  "nodeIdentifier" : "MarkerDrawingWorkflowTests/removingActiveDrawingDraftClearsWorkflowStateForLineTools()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests/removingActiveDrawingDraftClearsWorkflowStateForLineTools()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerDrawingWorkflowTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerDrawingWorkflowTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.032s",
+                  "durationInSeconds" : 0.03226017951965332,
+                  "name" : "theLegacyFlowKeepsItsBehaviour()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/theLegacyFlowKeepsItsBehaviour()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/theLegacyFlowKeepsItsBehaviour()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.026s",
+                  "durationInSeconds" : 0.026195049285888672,
+                  "name" : "addedAndRemovedLevelsCount()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/addedAndRemovedLevelsCount()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/addedAndRemovedLevelsCount()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.04s",
+                  "durationInSeconds" : 0.039765119552612305,
+                  "name" : "aLateFailureCannotTouchTheNextDraft()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aLateFailureCannotTouchTheNextDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aLateFailureCannotTouchTheNextDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.026s",
+                  "durationInSeconds" : 0.02618098258972168,
+                  "name" : "levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/levelEditsAfterAChangeToSetupNeedConfirmation()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.026s",
+                  "durationInSeconds" : 0.026175975799560547,
+                  "name" : "seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/seedingLevelsDoesNotForgetEarlierEdits()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.039s",
+                  "durationInSeconds" : 0.03877592086791992,
+                  "name" : "whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/whilePostingTheGuidedDraftIsFrozen()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.041s",
+                  "durationInSeconds" : 0.04097104072570801,
+                  "name" : "aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aFailureUnfreezesTheDraftForEditingAndRetry()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.039s",
+                  "durationInSeconds" : 0.038568973541259766,
+                  "name" : "aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeIdentifier" : "MarkerGuidedSubmissionSafetyTests/aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests/aLateSuccessCannotTouchTheNextDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedSubmissionSafetyTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedSubmissionSafetyTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.00025s",
+                  "durationInSeconds" : 0.0002541542053222656,
+                  "name" : "switchingAwayFromPersonalReturnsToAGuildPost()",
+                  "nodeIdentifier" : "MarkerPlacementVisibilityTests/switchingAwayFromPersonalReturnsToAGuildPost()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests/switchingAwayFromPersonalReturnsToAGuildPost()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00034s",
+                  "durationInSeconds" : 0.00034499168395996094,
+                  "name" : "aPersonalMarkerKeepsTheVisibilityItsAuthorChose()",
+                  "nodeIdentifier" : "MarkerPlacementVisibilityTests/aPersonalMarkerKeepsTheVisibilityItsAuthorChose()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests/aPersonalMarkerKeepsTheVisibilityItsAuthorChose()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00034s",
+                  "durationInSeconds" : 0.0003390312194824219,
+                  "name" : "onlyPersonalMarkersOfferTheChoice()",
+                  "nodeIdentifier" : "MarkerPlacementVisibilityTests/onlyPersonalMarkersOfferTheChoice()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests/onlyPersonalMarkersOfferTheChoice()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00042s",
+                  "durationInSeconds" : 0.0004169940948486328,
+                  "name" : "everyOtherIntentIsAlwaysAGuildPost()",
+                  "nodeIdentifier" : "MarkerPlacementVisibilityTests/everyOtherIntentIsAlwaysAGuildPost()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests/everyOtherIntentIsAlwaysAGuildPost()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00042s",
+                  "durationInSeconds" : 0.00041794776916503906,
+                  "name" : "switchingToPersonalDefaultsToPrivateWithoutLockingIt()",
+                  "nodeIdentifier" : "MarkerPlacementVisibilityTests/switchingToPersonalDefaultsToPrivateWithoutLockingIt()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests/switchingToPersonalDefaultsToPrivateWithoutLockingIt()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerPlacementVisibilityTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlacementVisibilityTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.0067s",
+                  "durationInSeconds" : 0.006723165512084961,
+                  "name" : "oandaForexSymbolsUseSundayFridaySessionBoundaries()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/oandaForexSymbolsUseSundayFridaySessionBoundaries()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/oandaForexSymbolsUseSundayFridaySessionBoundaries()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.007004976272583008,
+                  "name" : "priceIndicatorLayoutHonorsExplicitTopAndBottomExclusionBands()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/priceIndicatorLayoutHonorsExplicitTopAndBottomExclusionBands()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/priceIndicatorLayoutHonorsExplicitTopAndBottomExclusionBands()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0067s",
+                  "durationInSeconds" : 0.006727933883666992,
+                  "name" : "markerEmojiNormalizationRejectsBlankAndNonEmojiPayloads()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/markerEmojiNormalizationRejectsBlankAndNonEmojiPayloads()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/markerEmojiNormalizationRejectsBlankAndNonEmojiPayloads()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.11s",
+                  "durationInSeconds" : 0.10723114013671875,
+                  "name" : "chartComponentsAdapterRemovesDrawingSnapshotAndDraftsImmediately()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterRemovesDrawingSnapshotAndDraftsImmediately()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterRemovesDrawingSnapshotAndDraftsImmediately()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.007003068923950195,
+                  "name" : "chartDrawingBridgePreservesEmojiAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartDrawingBridgePreservesEmojiAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartDrawingBridgePreservesEmojiAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0067s",
+                  "durationInSeconds" : 0.00671696662902832,
+                  "name" : "priceIndicatorLayoutStaysInlineWhenLatestPriceIsVisible()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/priceIndicatorLayoutStaysInlineWhenLatestPriceIsVisible()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/priceIndicatorLayoutStaysInlineWhenLatestPriceIsVisible()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.11s",
+                  "durationInSeconds" : 0.10719084739685059,
+                  "name" : "chartComponentsAdapterRemovesCurrentlySelectedLinkedTimeframeImmediately()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterRemovesCurrentlySelectedLinkedTimeframeImmediately()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterRemovesCurrentlySelectedLinkedTimeframeImmediately()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.0069849491119384766,
+                  "name" : "priceIndicatorLayoutClampsBelowRangeWithBearishDirection()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/priceIndicatorLayoutClampsBelowRangeWithBearishDirection()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/priceIndicatorLayoutClampsBelowRangeWithBearishDirection()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0069s",
+                  "durationInSeconds" : 0.0069179534912109375,
+                  "name" : "cryptoChartsUseDeviceTimeZoneForXAxisAndCrosshairLabels()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/cryptoChartsUseDeviceTimeZoneForXAxisAndCrosshairLabels()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/cryptoChartsUseDeviceTimeZoneForXAxisAndCrosshairLabels()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.16s",
+                  "durationInSeconds" : 0.160567045211792,
+                  "name" : "chartComponentsAdapterKeepsLinkedTimeframesInSyncAcrossAddAddRemoveSequence()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterKeepsLinkedTimeframesInSyncAcrossAddAddRemoveSequence()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterKeepsLinkedTimeframesInSyncAcrossAddAddRemoveSequence()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.006978034973144531,
+                  "name" : "cryptoYAxisFormatterClampsHighPriceLabelsToTwoDecimals()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/cryptoYAxisFormatterClampsHighPriceLabelsToTwoDecimals()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/cryptoYAxisFormatterClampsHighPriceLabelsToTwoDecimals()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.11s",
+                  "durationInSeconds" : 0.10715103149414062,
+                  "name" : "chartComponentsAdapterPreservesLinkedTimeframesWhenDrawingsChange()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterPreservesLinkedTimeframesWhenDrawingsChange()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterPreservesLinkedTimeframesWhenDrawingsChange()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.16s",
+                  "durationInSeconds" : 0.160614013671875,
+                  "name" : "chartComponentsAdapterClearsPlacementWorkflowWhenActiveHostDrawingIsRemoved()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterClearsPlacementWorkflowWhenActiveHostDrawingIsRemoved()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterClearsPlacementWorkflowWhenActiveHostDrawingIsRemoved()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0069s",
+                  "durationInSeconds" : 0.006943941116333008,
+                  "name" : "priceIndicatorLayoutClampsAboveRangeWithBullishDirection()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/priceIndicatorLayoutClampsAboveRangeWithBullishDirection()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/priceIndicatorLayoutClampsAboveRangeWithBullishDirection()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0069s",
+                  "durationInSeconds" : 0.00693511962890625,
+                  "name" : "cryptoYAxisFormatterKeepsUsefulPrecisionForSubDollarPrices()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/cryptoYAxisFormatterKeepsUsefulPrecisionForSubDollarPrices()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/cryptoYAxisFormatterKeepsUsefulPrecisionForSubDollarPrices()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.0069811344146728516,
+                  "name" : "chartDrawingBridgePreservesNoteAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartDrawingBridgePreservesNoteAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartDrawingBridgePreservesNoteAnchorCoordinatesAcrossRoundTrip()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.056s",
+                  "durationInSeconds" : 0.05569791793823242,
+                  "name" : "chartComponentsAdapterAddsLinkedTimeframesToManagerImmediately()",
+                  "nodeIdentifier" : "ChartComponentReactivityTests/chartComponentsAdapterAddsLinkedTimeframesToManagerImmediately()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests/chartComponentsAdapterAddsLinkedTimeframesToManagerImmediately()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "ChartComponentReactivityTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/ChartComponentReactivityTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.0061s",
+                  "durationInSeconds" : 0.00613093376159668,
+                  "name" : "aResponseStartsAsAnalysisAndCanBecomeASetupWithoutLosingItsLink()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/aResponseStartsAsAnalysisAndCanBecomeASetupWithoutLosingItsLink()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/aResponseStartsAsAnalysisAndCanBecomeASetupWithoutLosingItsLink()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0035s",
+                  "durationInSeconds" : 0.0034799575805664062,
+                  "name" : "changingTypeNeverRemovesContextSilently()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/changingTypeNeverRemovesContextSilently()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/changingTypeNeverRemovesContextSilently()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0035s",
+                  "durationInSeconds" : 0.0034749507904052734,
+                  "name" : "endingTheFlowClearsGuidedStateButNotTheLegacyDraft()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/endingTheFlowClearsGuidedStateButNotTheLegacyDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/endingTheFlowClearsGuidedStateButNotTheLegacyDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.018s",
+                  "durationInSeconds" : 0.018303871154785156,
+                  "name" : "aFailedPostKeepsTheDraftAndARetryPostsTheSamePayload()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/aFailedPostKeepsTheDraftAndARetryPostsTheSamePayload()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/aFailedPostKeepsTheDraftAndARetryPostsTheSamePayload()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0039s",
+                  "durationInSeconds" : 0.0038650035858154297,
+                  "name" : "theLegacyFlowStillRequiresAnalysisContext()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/theLegacyFlowStillRequiresAnalysisContext()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/theLegacyFlowStillRequiresAnalysisContext()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0039s",
+                  "durationInSeconds" : 0.0038840770721435547,
+                  "name" : "whitespaceIsNotAnAnalysis()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/whitespaceIsNotAnAnalysis()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/whitespaceIsNotAnAnalysis()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.016s",
+                  "durationInSeconds" : 0.016382932662963867,
+                  "name" : "questionKeepsItsTenCharacterMinimumAndTheDraftSurvivesTheSwitch()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/questionKeepsItsTenCharacterMinimumAndTheDraftSurvivesTheSwitch()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/questionKeepsItsTenCharacterMinimumAndTheDraftSurvivesTheSwitch()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.016s",
+                  "durationInSeconds" : 0.016395092010498047,
+                  "name" : "trackedAndUntrackedSetupsCarryTheirLevelsAndTracking()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/trackedAndUntrackedSetupsCarryTheirLevelsAndTracking()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/trackedAndUntrackedSetupsCarryTheirLevelsAndTracking()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.016s",
+                  "durationInSeconds" : 0.016399860382080078,
+                  "name" : "onlyMaterialEditsNeedAConfirmationToCancel()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/onlyMaterialEditsNeedAConfirmationToCancel()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/onlyMaterialEditsNeedAConfirmationToCancel()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.016s",
+                  "durationInSeconds" : 0.01635599136352539,
+                  "name" : "analysisGoesFromDetailsToReviewWithTextAlone()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/analysisGoesFromDetailsToReviewWithTextAlone()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/analysisGoesFromDetailsToReviewWithTextAlone()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0061s",
+                  "durationInSeconds" : 0.006059169769287109,
+                  "name" : "aSuccessfulTrackedSetupHandsOffToSharing()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/aSuccessfulTrackedSetupHandsOffToSharing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/aSuccessfulTrackedSetupHandsOffToSharing()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.016s",
+                  "durationInSeconds" : 0.016396045684814453,
+                  "name" : "contextRoundTripAndBackKeepEverything()",
+                  "nodeIdentifier" : "MarkerGuidedCreationTests/contextRoundTripAndBackKeepEverything()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests/contextRoundTripAndBackKeepEverything()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedCreationTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedCreationTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.044s",
+                  "durationInSeconds" : 0.04359602928161621,
+                  "name" : "editModePreviewDragResolverIgnoresDragCandidate()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/editModePreviewDragResolverIgnoresDragCandidate()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/editModePreviewDragResolverIgnoresDragCandidate()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.044s",
+                  "durationInSeconds" : 0.04402804374694824,
+                  "name" : "multiSeriesLegendEntriesExposeAllExpectedSwatches()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/multiSeriesLegendEntriesExposeAllExpectedSwatches()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/multiSeriesLegendEntriesExposeAllExpectedSwatches()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05858898162841797,
+                  "name" : "drawingLegendSummaryIncludesLineAndAnnotationEntries()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/drawingLegendSummaryIncludesLineAndAnnotationEntries()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/drawingLegendSummaryIncludesLineAndAnnotationEntries()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.044s",
+                  "durationInSeconds" : 0.04420900344848633,
+                  "name" : "combinedPanelLayoutUsesLastExpandedPanelForBottomAxisOwnership()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/combinedPanelLayoutUsesLastExpandedPanelForBottomAxisOwnership()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/combinedPanelLayoutUsesLastExpandedPanelForBottomAxisOwnership()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05875110626220703,
+                  "name" : "timeframeLockIsUnavailableForPanelsLowerThanMainChartTimeframe()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeLockIsUnavailableForPanelsLowerThanMainChartTimeframe()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeLockIsUnavailableForPanelsLowerThanMainChartTimeframe()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.051s",
+                  "durationInSeconds" : 0.050927162170410156,
+                  "name" : "legendSummaryIncludesPanelIndicators()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/legendSummaryIncludesPanelIndicators()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/legendSummaryIncludesPanelIndicators()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.04919695854187012,
+                  "name" : "analysisNewsQuestionAndAlertValidationFollowPlanRules()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/analysisNewsQuestionAndAlertValidationFollowPlanRules()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/analysisNewsQuestionAndAlertValidationFollowPlanRules()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.044s",
+                  "durationInSeconds" : 0.04428982734680176,
+                  "name" : "placementPreviewPositionClampsInsideViewport()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementPreviewPositionClampsInsideViewport()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementPreviewPositionClampsInsideViewport()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058934926986694336,
+                  "name" : "legacyMovingAverageEditorAssignsIdentityWithoutDuplicatingIt()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/legacyMovingAverageEditorAssignsIdentityWithoutDuplicatingIt()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/legacyMovingAverageEditorAssignsIdentityWithoutDuplicatingIt()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05878114700317383,
+                  "name" : "markerAnalysisNoteDoesNotSynthesizeTextDrawingComponent()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerAnalysisNoteDoesNotSynthesizeTextDrawingComponent()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerAnalysisNoteDoesNotSynthesizeTextDrawingComponent()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.044s",
+                  "durationInSeconds" : 0.044126033782958984,
+                  "name" : "timeframePanelSourcesStayIsolatedAcrossModeSwitches()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePanelSourcesStayIsolatedAcrossModeSwitches()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePanelSourcesStayIsolatedAcrossModeSwitches()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.04907703399658203,
+                  "name" : "timeframePanelReserveIncludesAxisStripForEveryExpandedPanel()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePanelReserveIncludesAxisStripForEveryExpandedPanel()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePanelReserveIncludesAxisStripForEveryExpandedPanel()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.04906511306762695,
+                  "name" : "setupMarkersRemainPlaceableEvenWithDirectionalMismatch()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/setupMarkersRemainPlaceableEvenWithDirectionalMismatch()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/setupMarkersRemainPlaceableEvenWithDirectionalMismatch()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.015s",
+                  "durationInSeconds" : 0.015399932861328125,
+                  "name" : "addMarkerPreflightRejectsDuplicateOpenTrackedSetupForSameSymbolAndTimeframe()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/addMarkerPreflightRejectsDuplicateOpenTrackedSetupForSameSymbolAndTimeframe()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/addMarkerPreflightRejectsDuplicateOpenTrackedSetupForSameSymbolAndTimeframe()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.04915904998779297,
+                  "name" : "tinyPanelHeightDoesNotTriggerBottomStripOrReserveJitter()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/tinyPanelHeightDoesNotTriggerBottomStripOrReserveJitter()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/tinyPanelHeightDoesNotTriggerBottomStripOrReserveJitter()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05863690376281738,
+                  "name" : "timeframeMarkerLabelHugsBottomAndStaysReadableAtEdges()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeMarkerLabelHugsBottomAndStaysReadableAtEdges()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeMarkerLabelHugsBottomAndStaysReadableAtEdges()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.049098968505859375,
+                  "name" : "pollQuestionResolutionUsesFallbackOrder()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/pollQuestionResolutionUsesFallbackOrder()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/pollQuestionResolutionUsesFallbackOrder()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.049041032791137695,
+                  "name" : "placementPreviewDragResolverKeepsLastValidIndexForInvalidCandidates()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementPreviewDragResolverKeepsLastValidIndexForInvalidCandidates()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementPreviewDragResolverKeepsLastValidIndexForInvalidCandidates()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05860304832458496,
+                  "name" : "placementPreviewUsesFirstFreeStableStackSlot()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementPreviewUsesFirstFreeStableStackSlot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementPreviewUsesFirstFreeStableStackSlot()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.049s",
+                  "durationInSeconds" : 0.04897594451904297,
+                  "name" : "editSessionLocksAnchorButAllowsIndicatorsAndDrawings()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/editSessionLocksAnchorButAllowsIndicatorsAndDrawings()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/editSessionLocksAnchorButAllowsIndicatorsAndDrawings()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05850100517272949,
+                  "name" : "markerPlacementFailureMapsTrackedSetupBackendErrors()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerPlacementFailureMapsTrackedSetupBackendErrors()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerPlacementFailureMapsTrackedSetupBackendErrors()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.018s",
+                  "durationInSeconds" : 0.017663002014160156,
+                  "name" : "reactionUpdateReconcilesSelectedEmojiAcrossPersistedMarkerState()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/reactionUpdateReconcilesSelectedEmojiAcrossPersistedMarkerState()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/reactionUpdateReconcilesSelectedEmojiAcrossPersistedMarkerState()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05822896957397461,
+                  "name" : "drawingDefaultsMatchUpdatedHorizontalAndLevelPalette()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/drawingDefaultsMatchUpdatedHorizontalAndLevelPalette()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/drawingDefaultsMatchUpdatedHorizontalAndLevelPalette()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058305978775024414,
+                  "name" : "displayableComponentCountOnlyIncludesSurfacedTypes()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/displayableComponentCountOnlyIncludesSurfacedTypes()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/displayableComponentCountOnlyIncludesSurfacedTypes()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05842995643615723,
+                  "name" : "removedCollapsedPanelDoesNotPoisonNewTimeframeEntryState()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/removedCollapsedPanelDoesNotPoisonNewTimeframeEntryState()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/removedCollapsedPanelDoesNotPoisonNewTimeframeEntryState()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05815410614013672,
+                  "name" : "timeframeVisiblePriceRangeTracksPannedCandleWindow()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeVisiblePriceRangeTracksPannedCandleWindow()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeVisiblePriceRangeTracksPannedCandleWindow()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05911993980407715,
+                  "name" : "setupSelectionPreflightRejectsDuplicateOpenTrackedSetupBeforePlacement()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/setupSelectionPreflightRejectsDuplicateOpenTrackedSetupBeforePlacement()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/setupSelectionPreflightRejectsDuplicateOpenTrackedSetupBeforePlacement()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.0584559440612793,
+                  "name" : "timeframePanelGestureStateTracksXAxisAndYAxisIndependently()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePanelGestureStateTracksXAxisAndYAxisIndependently()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePanelGestureStateTracksXAxisAndYAxisIndependently()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05934596061706543,
+                  "name" : "alertIntentDefaultsToNeutralWhenSeverityIsUnset()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/alertIntentDefaultsToNeutralWhenSeverityIsUnset()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/alertIntentDefaultsToNeutralWhenSeverityIsUnset()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05866694450378418,
+                  "name" : "copyChartDrawingsPreservesZoneAndTextColors()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/copyChartDrawingsPreservesZoneAndTextColors()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/copyChartDrawingsPreservesZoneAndTextColors()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05806994438171387,
+                  "name" : "combinedPanelLayoutCountsEveryCollapsedIndicatorHandle()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/combinedPanelLayoutCountsEveryCollapsedIndicatorHandle()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/combinedPanelLayoutCountsEveryCollapsedIndicatorHandle()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058875083923339844,
+                  "name" : "timeframeHistoricalWindowEndTimeCentersTargetTimestampInFetchedPage()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeHistoricalWindowEndTimeCentersTargetTimestampInFetchedPage()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeHistoricalWindowEndTimeCentersTargetTimestampInFetchedPage()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.0588679313659668,
+                  "name" : "movedAnchorDoesNotInheritTheOldLayoutSlot()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/movedAnchorDoesNotInheritTheOldLayoutSlot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/movedAnchorDoesNotInheritTheOldLayoutSlot()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058447837829589844,
+                  "name" : "liveSetupMetricsFallbackUsesEntryWhenLivePriceMissing()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/liveSetupMetricsFallbackUsesEntryWhenLivePriceMissing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/liveSetupMetricsFallbackUsesEntryWhenLivePriceMissing()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05820202827453613,
+                  "name" : "markerMovingAverageEditorUpdatesExactDraftWithoutDuplicatingIt()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerMovingAverageEditorUpdatesExactDraftWithoutDuplicatingIt()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerMovingAverageEditorUpdatesExactDraftWithoutDuplicatingIt()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05863308906555176,
+                  "name" : "placementOffsetMigrationOnlyRemapsLegacyDefault()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementOffsetMigrationOnlyRemapsLegacyDefault()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementOffsetMigrationOnlyRemapsLegacyDefault()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05799293518066406,
+                  "name" : "placementPreviewDragLocationStaysInsideRenderablePlot()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementPreviewDragLocationStaysInsideRenderablePlot()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementPreviewDragLocationStaysInsideRenderablePlot()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05822396278381348,
+                  "name" : "pollStyleTokensMatchSharedPaletteForAllSurfaces()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/pollStyleTokensMatchSharedPaletteForAllSurfaces()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/pollStyleTokensMatchSharedPaletteForAllSurfaces()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058233022689819336,
+                  "name" : "placementPreviewIndexLocksToInitialCenterUntilExplicitReposition()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/placementPreviewIndexLocksToInitialCenterUntilExplicitReposition()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/placementPreviewIndexLocksToInitialCenterUntilExplicitReposition()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.0588071346282959,
+                  "name" : "secondaryPriceChipMetricsStaySmallerThanCurrentPriceChip()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/secondaryPriceChipMetricsStaySmallerThanCurrentPriceChip()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/secondaryPriceChipMetricsStaySmallerThanCurrentPriceChip()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.0588078498840332,
+                  "name" : "sameContextRefreshRetainsLayoutByMarkerIDAndAnchorTimestamp()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/sameContextRefreshRetainsLayoutByMarkerIDAndAnchorTimestamp()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/sameContextRefreshRetainsLayoutByMarkerIDAndAnchorTimestamp()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05755186080932617,
+                  "name" : "updateMarkerFromPlacementUsesUpdatePathAndRollsBackOnFailure()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/updateMarkerFromPlacementUsesUpdatePathAndRollsBackOnFailure()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/updateMarkerFromPlacementUsesUpdatePathAndRollsBackOnFailure()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058524131774902344,
+                  "name" : "markerMovingAverageCreationSettingsIncludeSelectedLineWidth()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerMovingAverageCreationSettingsIncludeSelectedLineWidth()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerMovingAverageCreationSettingsIncludeSelectedLineWidth()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05860114097595215,
+                  "name" : "priceLineMaskRespectsTopExclusionHeight()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/priceLineMaskRespectsTopExclusionHeight()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/priceLineMaskRespectsTopExclusionHeight()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058193206787109375,
+                  "name" : "timeframeCenterWaitsForOlderCandlesWhenTargetTimeIsBeforeLoadedWindow()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeCenterWaitsForOlderCandlesWhenTargetTimeIsBeforeLoadedWindow()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeCenterWaitsForOlderCandlesWhenTargetTimeIsBeforeLoadedWindow()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058767080307006836,
+                  "name" : "legacyAnnotationNormalizationFreezesMissingPointAtFallbackOnce()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/legacyAnnotationNormalizationFreezesMissingPointAtFallbackOnce()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/legacyAnnotationNormalizationFreezesMissingPointAtFallbackOnce()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.03s",
+                  "durationInSeconds" : 0.029729127883911133,
+                  "name" : "optimisticCreatePreservesPollQuestionWhenServerPayloadOmitsIt()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/optimisticCreatePreservesPollQuestionWhenServerPayloadOmitsIt()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/optimisticCreatePreservesPollQuestionWhenServerPayloadOmitsIt()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05832386016845703,
+                  "name" : "chartMarkerUINormalizesMissingAnnotationAnchors()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/chartMarkerUINormalizesMissingAnnotationAnchors()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/chartMarkerUINormalizesMissingAnnotationAnchors()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05874490737915039,
+                  "name" : "rightDrawerDisclosureExpansionStatePersistsUntilCacheIsCleared()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/rightDrawerDisclosureExpansionStatePersistsUntilCacheIsCleared()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/rightDrawerDisclosureExpansionStatePersistsUntilCacheIsCleared()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05807995796203613,
+                  "name" : "indicatorPanelPresentationMatchesTimeframeCollapseRestoreRules()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/indicatorPanelPresentationMatchesTimeframeCollapseRestoreRules()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/indicatorPanelPresentationMatchesTimeframeCollapseRestoreRules()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058233022689819336,
+                  "name" : "liveSetupMetricsLongSetupUsesExpectedPositionOrdering()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/liveSetupMetricsLongSetupUsesExpectedPositionOrdering()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/liveSetupMetricsLongSetupUsesExpectedPositionOrdering()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05843710899353027,
+                  "name" : "annotationBubbleMetricsPreserveExplicitNewlinesAndWrapLongText()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/annotationBubbleMetricsPreserveExplicitNewlinesAndWrapLongText()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/annotationBubbleMetricsPreserveExplicitNewlinesAndWrapLongText()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05821990966796875,
+                  "name" : "timeframeLegendTracksOnlyTheActiveSourcePanels()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeLegendTracksOnlyTheActiveSourcePanels()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeLegendTracksOnlyTheActiveSourcePanels()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05846381187438965,
+                  "name" : "markerLayoutSurvivesAddDeleteAndHistoryPrepend()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerLayoutSurvivesAddDeleteAndHistoryPrepend()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerLayoutSurvivesAddDeleteAndHistoryPrepend()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058628082275390625,
+                  "name" : "timeframePanelLockStatePersistsForReusedEntryButResetsForReplacement()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePanelLockStatePersistsForReusedEntryButResetsForReplacement()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePanelLockStatePersistsForReusedEntryButResetsForReplacement()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05786418914794922,
+                  "name" : "markerSpacingFloorAppliesAcrossZoomLevels()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerSpacingFloorAppliesAcrossZoomLevels()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerSpacingFloorAppliesAcrossZoomLevels()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.05862998962402344,
+                  "name" : "horizontalPriceChipCenterRespectsHeaderExclusion()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/horizontalPriceChipCenterRespectsHeaderExclusion()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/horizontalPriceChipCenterRespectsHeaderExclusion()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05804300308227539,
+                  "name" : "editableMarkersUseOwnershipAndCanEditOnly()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/editableMarkersUseOwnershipAndCanEditOnly()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/editableMarkersUseOwnershipAndCanEditOnly()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05806589126586914,
+                  "name" : "prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/prePlacementSnapshotRetainsMirrorSourceAndAttachesIndicators()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.0577549934387207,
+                  "name" : "setupCorePriceLineLayoutKeepsHandlesInPlotButLetsChipReachYAxis()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/setupCorePriceLineLayoutKeepsHandlesInPlotButLetsChipReachYAxis()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/setupCorePriceLineLayoutKeepsHandlesInPlotButLetsChipReachYAxis()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05813097953796387,
+                  "name" : "timeframeLegendTextPartsSplitPrefixFromToken()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframeLegendTextPartsSplitPrefixFromToken()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframeLegendTextPartsSplitPrefixFromToken()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05824995040893555,
+                  "name" : "liveSetupMetricsShortSetupUsesExpectedPositionOrdering()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/liveSetupMetricsShortSetupUsesExpectedPositionOrdering()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/liveSetupMetricsShortSetupUsesExpectedPositionOrdering()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05770087242126465,
+                  "name" : "markerNotificationFallbackPayloadAndStopLossStylingStayRoutable()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/markerNotificationFallbackPayloadAndStopLossStylingStayRoutable()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/markerNotificationFallbackPayloadAndStopLossStylingStayRoutable()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05807304382324219,
+                  "name" : "lockedTimeframeViewportCentersVisibleDateRangeAndClampsToLoadedData()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/lockedTimeframeViewportCentersVisibleDateRangeAndClampsToLoadedData()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/lockedTimeframeViewportCentersVisibleDateRangeAndClampsToLoadedData()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.058084964752197266,
+                  "name" : "collapsedPanelReserveSkipsBottomLabelStrip()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/collapsedPanelReserveSkipsBottomLabelStrip()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/collapsedPanelReserveSkipsBottomLabelStrip()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05778312683105469,
+                  "name" : "centeredTimeframePriceRangeUsesCandlesAroundResolvedMainChartCenter()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/centeredTimeframePriceRangeUsesCandlesAroundResolvedMainChartCenter()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/centeredTimeframePriceRangeUsesCandlesAroundResolvedMainChartCenter()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05816507339477539,
+                  "name" : "timeframePanelGestureStateRecentersVerticalPanAndZoom()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePanelGestureStateRecentersVerticalPanAndZoom()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePanelGestureStateRecentersVerticalPanAndZoom()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05818605422973633,
+                  "name" : "timeframePriceViewportKeepsCandleHeightStableAcrossPanelResize()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/timeframePriceViewportKeepsCandleHeightStableAcrossPanelResize()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/timeframePriceViewportKeepsCandleHeightStableAcrossPanelResize()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05801987648010254,
+                  "name" : "switchingAwayFromReactionIntentRemovesReactionEmojiState()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/switchingAwayFromReactionIntentRemovesReactionEmojiState()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/switchingAwayFromReactionIntentRemovesReactionEmojiState()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.058s",
+                  "durationInSeconds" : 0.05804014205932617,
+                  "name" : "chartDrawingManagerCanCreateAnchoredEmojiAndNoteDrawings()",
+                  "nodeIdentifier" : "MarkerPlanFixesTests/chartDrawingManagerCanCreateAnchoredEmojiAndNoteDrawings()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests/chartDrawingManagerCanCreateAnchoredEmojiAndNoteDrawings()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerPlanFixesTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerPlanFixesTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.00052s",
+                  "durationInSeconds" : 0.0005249977111816406,
+                  "name" : "switchingIntervalUsesTheContainingCandleNotTheNearestOrOldIndex()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/switchingIntervalUsesTheContainingCandleNotTheNearestOrOldIndex()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/switchingIntervalUsesTheContainingCandleNotTheNearestOrOldIndex()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00045s",
+                  "durationInSeconds" : 0.0004458427429199219,
+                  "name" : "loadingPreservesTheDraftAndPreventsPrematureSubmission()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/loadingPreservesTheDraftAndPreventsPrematureSubmission()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/loadingPreservesTheDraftAndPreventsPrematureSubmission()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00054s",
+                  "durationInSeconds" : 0.0005409717559814453,
+                  "name" : "failedLoadRetainsDraftAndAllowsRetry()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/failedLoadRetainsDraftAndAllowsRetry()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/failedLoadRetainsDraftAndAllowsRetry()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0018181800842285156,
+                  "name" : "cancelledSwitchCannotCompleteIntoANewerDraft()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/cancelledSwitchCannotCompleteIntoANewerDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/cancelledSwitchCannotCompleteIntoANewerDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0017969608306884766,
+                  "name" : "unloadedHistoryMustBeFetchedInsteadOfMovingTheResponse()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/unloadedHistoryMustBeFetchedInsteadOfMovingTheResponse()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/unloadedHistoryMustBeFetchedInsteadOfMovingTheResponse()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0018301010131835938,
+                  "name" : "monthlyIntervalsUseCalendarMonths()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/monthlyIntervalsUseCalendarMonths()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/monthlyIntervalsUseCalendarMonths()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0018150806427001953,
+                  "name" : "submissionUsesContainingCandleWithoutMovingTheDraft()",
+                  "nodeIdentifier" : "MarkerResponseTimeframeTests/submissionUsesContainingCandleWithoutMovingTheDraft()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests/submissionUsesContainingCandleWithoutMovingTheDraft()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerResponseTimeframeTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerResponseTimeframeTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "traders_guildTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "traders_guild LinkedDev",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

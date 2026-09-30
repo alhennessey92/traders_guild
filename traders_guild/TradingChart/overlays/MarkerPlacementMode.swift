@@ -235,6 +235,17 @@ final class MarkerPlacementState: ObservableObject {
     /// What the draft looked like once placement had set it up; editing away
     /// from it is what makes cancelling need a confirmation.
     var draftBaseline: MarkerDraftFingerprint?
+    /// Where the chart last seeded a Setup's Entry / TP / SL — at the start of
+    /// a Setup placement, or when a draft changes to Setup. Kept apart from
+    /// `draftBaseline` so a mid-draft type change can record its levels
+    /// without forgetting the author's text and context.
+    var setupLevelSeed: [RLComponentType: Double]?
+    /// This draft's identity. Renewed whenever a draft starts or the guided
+    /// flow ends, so a guided submission still in flight can tell that the
+    /// draft it was posting is gone.
+    var draftID = UUID()
+    /// The guided submission this draft is waiting on, if any.
+    var activeSubmissionID: UUID?
 
     @Published private(set) var responseTimeframeChangeID: UUID?
     @Published private(set) var responseTimeframeLoadFailed = false
@@ -791,6 +802,9 @@ final class MarkerPlacementState: ObservableObject {
 
     func reset(to intent: RLMarkerIntent, anchorTime: Date, anchorPrice: Double) {
         clearMarkerEditSession()
+        draftID = UUID()
+        activeSubmissionID = nil
+        setupLevelSeed = nil
         self.intent = intent
         self.selectedPlacementTab = .general
         var resetComponents = [

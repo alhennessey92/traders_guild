@@ -543,6 +543,9 @@ struct MarkerGuidedPlacementBar: View {
                 .foregroundColor(AppColors.primaryForeground)
         }
         .buttonStyle(.plain)
+        // The draft being posted is frozen until the server answers.
+        .disabled(placementState.isGuidedSubmissionInFlight)
+        .opacity(placementState.isGuidedSubmissionInFlight ? 0.4 : 1)
         .accessibilityIdentifier("guided.back")
     }
 

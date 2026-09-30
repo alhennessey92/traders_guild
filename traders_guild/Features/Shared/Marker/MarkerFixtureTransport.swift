@@ -31,9 +31,22 @@ final class MarkerFixtureTransport: MarkerAPIClient {
     let author: RLGuildMemberDTO
     private(set) var createRequests: [RLCreateMarkerRequest] = []
 
+    /// Hold every create until `releaseHeldCreates()` — a server that is slow
+    /// to answer, for exercising what can happen while a post is in flight.
+    var holdsCreates = false
+    private var heldCreates: [CheckedContinuation<Void, Never>] = []
+    var heldCreateCount: Int { heldCreates.count }
+
     init(mode: Mode, author: RLGuildMemberDTO) {
         self.mode = mode
         self.author = author
+    }
+
+    /// Let every held create answer.
+    func releaseHeldCreates() {
+        let held = heldCreates
+        heldCreates.removeAll()
+        held.forEach { $0.resume() }
     }
 
     /// The last request as the app would send it, pretty-printed.
@@ -47,18 +60,33 @@ final class MarkerFixtureTransport: MarkerAPIClient {
     }
 
     nonisolated func createMarkerV2(guildId: UUID, request body: RLCreateMarkerRequest) async throws -> RLChartMarkerDTO {
-        try await MainActor.run {
-            createRequests.append(body)
-            switch mode {
-            case .succeed:
-                break
-            case .failFirst(let detail):
-                if createRequests.count == 1 { throw APIError.badRequest(detail) }
-            case .failAlways(let detail):
-                throw APIError.badRequest(detail)
-            }
-            return marker(from: body, guildId: guildId)
+        let attempt = await record(body)
+        await waitIfHeld()
+        return try await answer(attempt: attempt, body: body, guildId: guildId)
+    }
+
+    private func record(_ body: RLCreateMarkerRequest) -> Int {
+        createRequests.append(body)
+        return createRequests.count
+    }
+
+    private func waitIfHeld() async {
+        guard holdsCreates else { return }
+        await withCheckedContinuation { continuation in
+            heldCreates.append(continuation)
         }
+    }
+
+    private func answer(attempt: Int, body: RLCreateMarkerRequest, guildId: UUID) throws -> RLChartMarkerDTO {
+        switch mode {
+        case .succeed:
+            break
+        case .failFirst(let detail):
+            if attempt == 1 { throw APIError.badRequest(detail) }
+        case .failAlways(let detail):
+            throw APIError.badRequest(detail)
+        }
+        return marker(from: body, guildId: guildId)
     }
 
     /// What a server would hand back for `body`.

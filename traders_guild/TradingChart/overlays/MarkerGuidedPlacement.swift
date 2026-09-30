@@ -46,19 +46,25 @@ struct MarkerDraftFingerprint: Equatable {
     var contextComponents: [String]
     var setupLevels: [RLComponentType: Double]
 
-    /// Equal apart from levels, which are compared only where both drafts have
-    /// them and within float noise: the chart re-syncs level prices, and a
-    /// type change adds a Setup's defaults, neither of which the author did.
-    func matches(_ other: MarkerDraftFingerprint) -> Bool {
-        guard title == other.title,
-              note == other.note,
-              trackingEnabled == other.trackingEnabled,
-              pollQuestion == other.pollQuestion,
-              pollOptions == other.pollOptions,
-              contextComponents == other.contextComponents else { return false }
-        for (type, price) in setupLevels {
-            guard let base = other.setupLevels[type] else { continue }
-            if abs(price - base) > max(1e-9, abs(base) * 1e-7) { return false }
+    /// Equal in everything the author writes or attaches. Setup levels are
+    /// judged separately, against where the chart seeded them
+    /// (`MarkerPlacementState.setupLevelsEdited`).
+    func matchesContent(_ other: MarkerDraftFingerprint) -> Bool {
+        title == other.title
+            && note == other.note
+            && trackingEnabled == other.trackingEnabled
+            && pollQuestion == other.pollQuestion
+            && pollOptions == other.pollOptions
+            && contextComponents == other.contextComponents
+    }
+
+    /// Same level types, and each within float noise — the chart re-syncs
+    /// level prices through its line system.
+    static func levelsMatch(_ lhs: [RLComponentType: Double], _ rhs: [RLComponentType: Double]) -> Bool {
+        guard Set(lhs.keys) == Set(rhs.keys) else { return false }
+        for (type, price) in lhs {
+            guard let other = rhs[type] else { return false }
+            if abs(price - other) > max(1e-9, abs(other) * 1e-7) { return false }
         }
         return true
     }
@@ -97,14 +103,26 @@ extension MarkerPlacementState {
         guidedStep = .details
         submissionPhase = .idle
         draftBaseline = nil
+        draftID = UUID()
+        activeSubmissionID = nil
     }
 
     /// Placement ended, or the author chose a legacy type: back to the legacy
-    /// panel.
+    /// panel. A guided post still in flight is retired with the draft, so its
+    /// completion cannot close or alter whatever comes next.
     func endGuidedFlow() {
         guidedStep = nil
         submissionPhase = .idle
         draftBaseline = nil
+        setupLevelSeed = nil
+        draftID = UUID()
+        activeSubmissionID = nil
+    }
+
+    /// A guided post is on its way. Until it answers, the draft it sent is
+    /// frozen: no navigation, no type change, and no discarding.
+    var isGuidedSubmissionInFlight: Bool {
+        isGuidedFlowActive && submissionPhase.isSubmitting
     }
 
     // MARK: Navigation
@@ -112,23 +130,23 @@ extension MarkerPlacementState {
     /// Details → Review, only when the draft could be posted.
     @discardableResult
     func continueToReview() -> Bool {
-        guard guidedStep == .details, isValid else { return false }
+        guard guidedStep == .details, isValid, !isGuidedSubmissionInFlight else { return false }
         guidedStep = .review
         return true
     }
 
     func backToDetails() {
-        guard isGuidedFlowActive else { return }
+        guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         guidedStep = .details
     }
 
     func openContext() {
-        guard isGuidedFlowActive else { return }
+        guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         guidedStep = .context
     }
 
     func openTypeChooser() {
-        guard isGuidedFlowActive else { return }
+        guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         guidedStep = .chooseType
     }
 
@@ -162,7 +180,7 @@ extension MarkerPlacementState {
     ///
     /// The response session, text, title and compatible components all stay.
     func requestGuidedIntentChange(to newIntent: RLMarkerIntent) -> MarkerGuidedIntentChange? {
-        guard newIntent != intent else { return nil }
+        guard newIntent != intent, !isGuidedSubmissionInFlight else { return nil }
         let incompatible = incompatibleComponents(for: newIntent)
         guard incompatible.isEmpty else {
             let names = Array(Set(incompatible.map(\.componentType.displayName))).sorted()
@@ -179,6 +197,7 @@ extension MarkerPlacementState {
     /// The author confirmed: remove exactly what they were told about, then
     /// switch.
     func applyGuidedIntentChange(_ change: MarkerGuidedIntentChange) {
+        guard !isGuidedSubmissionInFlight else { return }
         for id in change.incompatibleComponentIDs {
             removeComponent(id: id)
         }
@@ -222,13 +241,29 @@ extension MarkerPlacementState {
         draftBaseline = draftFingerprint()
     }
 
+    /// Remember where the chart just put a Setup's levels. Called by the chart
+    /// whenever it seeds them — a new Setup, or a draft changing to Setup — and
+    /// only then, so the author's later moves are what differ from it.
+    func recordSetupLevelSeed() {
+        setupLevelSeed = draftFingerprint().setupLevels
+    }
+
+    /// Whether the Setup levels differ from where the chart last seeded them:
+    /// a moved price, or a level added or removed. Without a seed the draft's
+    /// starting levels are the reference.
+    var setupLevelsEdited: Bool {
+        let reference = setupLevelSeed ?? draftBaseline?.setupLevels ?? [:]
+        return !MarkerDraftFingerprint.levelsMatch(draftFingerprint().setupLevels, reference)
+    }
+
     /// Whether cancelling would throw away something the author did.
     var hasMaterialEdits: Bool {
         let now = draftFingerprint()
         guard let draftBaseline else {
             return !now.title.isEmpty || !now.note.isEmpty || !now.contextComponents.isEmpty
+                || setupLevelsEdited
         }
-        return !now.matches(draftBaseline)
+        return !now.matchesContent(draftBaseline) || setupLevelsEdited
     }
 
     private static func payloadKey(_ payload: MarkerComponentPayload) -> String {
@@ -255,6 +290,10 @@ enum MarkerPlacementSubmitter {
         let result: MarkerPlacementSubmissionResult
         /// For the share prompt: set for a guild-visible marker only.
         let shareContext: MarkerShareContext?
+        /// A guided post whose draft was left, or replaced, while it was in
+        /// flight. Nothing was changed on the current draft; the caller must
+        /// not end placement or present anything for it.
+        var isStale: Bool = false
     }
 
     static func submitCreate(
@@ -265,21 +304,47 @@ enum MarkerPlacementSubmitter {
         markerManager: MarkerManager,
         symbolTicker: String?
     ) async -> Outcome {
+        // A guided submission carries the identity of the draft it posted and
+        // snapshots what the share prompt needs, so a completion that arrives
+        // after the author has left cannot close, alter or mislabel a later
+        // draft. The legacy flow keeps its behaviour exactly.
+        let isGuided = placementState.isGuidedFlowActive
+        let draftID = placementState.draftID
+        let submissionID = UUID()
+        let postedToAtSubmission: String? = isGuided
+            ? request.discordChannelId.flatMap { id in
+                placementState.discordChannels.first { $0.id == id }?.displayLabel
+            }
+            : nil
+
         placementState.submissionPhase = .submitting
+        if isGuided { placementState.activeSubmissionID = submissionID }
+
         let result = await markerManager.addMarkerV2(
             request: request,
             candleIndex: candleIndex,
             candles: candles
         )
 
+        if isGuided {
+            guard placementState.draftID == draftID,
+                  placementState.activeSubmissionID == submissionID else {
+                return Outcome(result: result, shareContext: nil, isStale: true)
+            }
+            placementState.activeSubmissionID = nil
+        }
+
         switch result {
         case .success(let created):
-            // Read before the session ends: the composer's Discord choice is
-            // carried through so the prompt shows the post already went,
-            // rather than offering to send a second copy.
-            let postedTo = placementState.selectedDiscordChannelId.flatMap { id in
-                placementState.discordChannels.first { $0.id == id }?.displayLabel
-            }
+            // The legacy flow reads the composer's Discord choice now, as it
+            // always has; the guided flow uses what it sent. Either way the
+            // prompt shows the post already went rather than offering to send
+            // a second copy.
+            let postedTo = isGuided
+                ? postedToAtSubmission
+                : placementState.selectedDiscordChannelId.flatMap { id in
+                    placementState.discordChannels.first { $0.id == id }?.displayLabel
+                }
             placementState.endLinkSession(.submitted)
             placementState.submissionPhase = .idle
             guard let created, created.visibility == "guild" else {

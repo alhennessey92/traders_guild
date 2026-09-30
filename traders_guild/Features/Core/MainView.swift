@@ -1397,6 +1397,9 @@ struct MainView: View {
                     chartControlVM.cancelMarkerPlacement()
                 }
             }
+            // A guided post in flight cannot be discarded out from under
+            // itself; the legacy flow is unchanged.
+            .disabled(placementState.isGuidedSubmissionInFlight)
             .modifier(MarkerGuidedDiscardConfirmation(isPresented: $showDiscardGuidedDraftConfirmation) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     chartControlVM.cancelMarkerPlacement()

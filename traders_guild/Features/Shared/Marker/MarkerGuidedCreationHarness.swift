@@ -114,6 +114,7 @@ struct MarkerGuidedCreationHarness: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(AppColors.statusNegative55))
             }
+            .disabled(placementState.isGuidedSubmissionInFlight)
             .modifier(MarkerGuidedDiscardConfirmation(isPresented: $showDiscardConfirmation) { closed = true })
             VStack(alignment: .leading, spacing: 1) {
                 Text(placementState.guidedToolbarTitle ?? (closed ? "Closed" : "Legacy panel"))
@@ -228,7 +229,10 @@ struct MarkerGuidedCreationHarness: View {
         }
         state.prepareGuidedFlow()
         state.reset(to: isSetup ? .setup : .analysis, anchorTime: candle.timestamp, anchorPrice: candle.close)
-        if isSetup { seedSetupLevels(state, entry: candle.close, long: true) }
+        if isSetup {
+            seedSetupLevels(state, entry: candle.close, long: true)
+            state.recordSetupLevelSeed()
+        }
         state.captureDraftBaseline()
 
         switch scenario {
@@ -268,6 +272,7 @@ struct MarkerGuidedCreationHarness: View {
             state.note = "Short the failed breakout."
             _ = state.requestGuidedIntentChange(to: .setup)
             seedSetupLevels(state, entry: candle.close, long: false)
+            state.recordSetupLevelSeed()
             state.continueToReview()
         }
         return state

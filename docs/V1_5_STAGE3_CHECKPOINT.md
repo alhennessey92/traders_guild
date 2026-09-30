@@ -72,7 +72,7 @@ It is **not** the backend. The live and local backends still reject a text-only 
 - Changing to Setup applies Setup's tracked default.
 - Responses still start as Analysis and, with the experiment on, enter the guided flow. Change type → Setup keeps the link.
 
-**Cancel.**
+**Cancel** (the in-flight and Setup-level rules were corrected after review; see the section at the end).
 - The toolbar close button asks "Discard this draft?" (Discard Draft / Keep Editing) only when a guided draft has material edits:
   - trimmed title or text
   - attached context
@@ -177,3 +177,71 @@ Screenshots are in `docs/visual-review/v1.5-stage3/`:
 - **The on-chart placement checklist is still shown in guided mode.** It reads the same rules, so Analysis's component item appears as optional.
 - **No accessibility pass yet** (VoiceOver labels and actions, Dynamic Type at accessibility sizes). The key controls carry accessibility identifiers. This belongs to Stage 5 acceptance.
 - **Poll attachments, taxonomy expansion, density and private visibility** remain out of scope, as instructed.
+
+## Correction after Astra's review (separate commit)
+
+Both findings were confirmed against the app paths before fixing.
+
+### 1. A guided post in flight
+
+**Confirmed.**
+- Post disabled only itself. Edit/Back and the toolbar discard stayed live.
+- Placement can also end mid-post through chart routes: `TradingChartView.handleMarkerSheetDismiss`, `handleCancelPlacement`, and the Add-tab toggles.
+- On completion, `submitCreate` ended *whichever* link session was current, and the chart then cancelled placement. A late answer could therefore close or alter a newer draft.
+
+**Fix** (guided submissions only; experiment-off behaviour unchanged):
+- **Draft identity.** `MarkerPlacementState.draftID` is renewed by `reset` (a new draft), `prepareGuidedFlow`, and `endGuidedFlow` (placement exit). `activeSubmissionID` marks the guided post the draft is waiting on.
+- **Stale completions do nothing.** `MarkerPlacementSubmitter` checks both identities after the await. If either changed, it returns `isStale` and touches nothing: no link-session end, no phase change, no failure record, no share context.
+- **The chart ignores stale outcomes.** `TradingChartView` returns early on a stale outcome, including leaving `isSubmittingPlacement` alone, because placement exit already cleared it and a newer post may own it. The marker itself was created; it stays on the chart like any other.
+- **Discord label snapshotted.** The share prompt's Discord label comes from `request.discordChannelId`, the channel actually sent, taken at submission.
+- **Frozen while posting.** `isGuidedSubmissionInFlight` blocks every guided navigation (`continueToReview`, `backToDetails`, `openContext`, `openTypeChooser`) and type changes. The bar's Edit/Back and the toolbar close button are disabled, as is the harness close button.
+- **Unchanged in the legacy flow:** no staleness check, no lock, and the Discord label is still read at completion. A test covers this.
+
+**Not locked:** on-chart drags during the post. The request was already built, so nothing a drag changes is sent. On failure the draft simply reflects the drag, ready for an edited retry. On success placement ends.
+
+### 2. Material-edit detection for Setup levels
+
+**Confirmed.** `MarkerDraftFingerprint.matches` compared only level types present in the baseline. Astra's repro showed the gap: an untouched Analysis, changed to Setup, tracking toggled back off, TP/SL edited, empty title and note, discarded without asking.
+
+**Fix.**
+- **Separate seed.** The chart now records where it seeded a Setup's levels (`recordSetupLevelSeed()`, called at the end of `TradingChartView.initializePredictionPlacement`, which runs at a Setup start and on every change to Setup). The seed is stored apart from `draftBaseline`, so earlier text and context are never re-based away.
+- **Content is compared as before.** `matchesContent` covers title, text, tracking, poll fields and context.
+- **Levels are compared against the seed.** `setupLevelsEdited` compares against the seed, or the starting levels when there is no seed. Any moved price, or any level added or removed, counts.
+
+### Tests added
+
+`traders_guildTests/MarkerGuidedSubmissionSafetyTests.swift`, with a transport that holds creates until released:
+
+| Test | What it proves |
+|---|---|
+| `whilePostingTheGuidedDraftIsFrozen` | Navigation and type change are no-ops while posting; the post then succeeds and ends its own session |
+| `aFailureUnfreezesTheDraftForEditingAndRetry` | Frozen while pending; after the failure the draft is editable and the retry sends the edited text |
+| `aLateSuccessCannotTouchTheNextDraft` | Placement ends and a new response draft starts; the late success is stale, has no share context, and the new draft's link, phase, step and text are untouched |
+| `aLateFailureCannotTouchTheNextDraft` | The same for a late failure; no failure is recorded on the new draft |
+| `theLegacyFlowKeepsItsBehaviour` | Non-guided submission: no lock, no staleness check, share context as before |
+| `levelEditsAfterAChangeToSetupNeedConfirmation` | Astra's repro |
+| `seedingLevelsDoesNotForgetEarlierEdits` | Text written before a type change is still an edit after the seed |
+| `addedAndRemovedLevelsCount` | A removed Setup level, and an added level, need confirmation; removing the added level restores the draft |
+
+**Mutation check.** With the stale guard disabled and the old level comparison restored, 4 of the 8 fail, as intended: both late-completion tests and both level tests. The source was then restored.
+
+### Verification (bounded)
+
+`S=/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad`
+
+| Run | Result | Evidence |
+|---|---|---|
+| `LinkedDev` (DevDebug): every suite that constructs `MarkerPlacementState` (ChartComponentReactivity, MarkerDrawingWorkflow, MarkerGuidedSubmissionSafety, MarkerGuidedCreation, MarkerHorizontalLinePayload, MarkerPlacementVisibility, MarkerPlanFixes, MarkerResponseTimeframe), plus MarkerLinkState and MarkerAvatarExperiment | **155 passed, 0 failed, 0 skipped** | `$S/rb-s3c-devdebug.xcresult`, `$S/s3c-devdebug.log`; `docs/visual-review/v1.5-stage3/test-results/correction-devdebug-*.json` |
+| `Local Gateway` (plain Debug, not isolated): safety, guided creation and gate suites | **27 passed** | `$S/rb-s3c-debug.xcresult`, `$S/s3c-debug.log`; `correction-debug-*.json` |
+| Mutation run (guard disabled, old comparison) | 4 of 8 failed as intended | `$S/rb-s3c-mutation.xcresult`; `correction-mutation-*.json` |
+| `LinkedDev Profile` build | BUILD SUCCEEDED | `$S/s3c-devprofile.log` |
+| `GCP Public Prod` Release build | BUILD SUCCEEDED | `$S/s3c-release.log` |
+
+The whole unit target was not re-run for this bounded correction. The last full run is the Stage 3 run above (772 tests). No new screenshots were taken: the changes are behavioural and are covered by the tests.
+
+### Still Stage 4 follow-ups
+
+These are not claimed by the harness or its screenshots:
+- real chart, sheet and share-prompt validation
+- a real 400 and a real success on local DEV
+- in-flight behaviour against a real network

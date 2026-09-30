@@ -2859,8 +2859,14 @@ struct TradingChartView: View {
                 markerManager: markerManager,
                 symbolTicker: chartViewModel.currentSymbol?.ticker
             )
-            isSubmittingPlacement = false
 
+            // A guided post whose draft was left while it was in flight: the
+            // placement it belonged to is over, and whatever is on screen now
+            // is someone else's draft. Leave it — including the submitting
+            // flag, which placement exit already cleared and a newer post may
+            // now own.
+            if outcome.isStale { return }
+            isSubmittingPlacement = false
             switch outcome.result {
             case .success:
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -3159,6 +3165,9 @@ struct TradingChartView: View {
         )
 
         syncSetupComponentsFromPredictionPlacement()
+        // These levels are the chart's, not the author's: remember them so
+        // only later moves count as edits worth confirming.
+        placementState.recordSetupLevelSeed()
 
         // Auto-scroll to latest candle with smooth animation
         gestureState.animateCenterOnMarker(
