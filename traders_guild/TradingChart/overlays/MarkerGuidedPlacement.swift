@@ -98,6 +98,45 @@ extension MarkerPlacementState {
         !(isGuidedFlowActive || (isEditingExistingMarker && textOnlyAnalysisEditAllowed))
     }
 
+    // MARK: Setup levels
+
+    /// A Setup draft's Entry as the chart's Entry line shows it: the Entry
+    /// level. The anchor price is only a fallback — a linked Setup's anchor
+    /// sits on the parent's candle and carries that candle's old price.
+    var guidedSetupEntryPrice: Double? {
+        guard intent == .setup else { return nil }
+        return componentPrice(.levelEntry) ?? setupEntryPrice
+    }
+
+    /// Reward over risk, measured from `guidedSetupEntryPrice`.
+    var guidedSetupRiskReward: Double? {
+        guard
+            let entry = guidedSetupEntryPrice,
+            let sl = componentPrice(.levelSl),
+            let tp = componentPrice(.levelTp)
+        else { return nil }
+        let risk = abs(sl - entry)
+        guard risk > .ulpOfOne else { return nil }
+        return abs(tp - entry) / risk
+    }
+
+    /// A tracked guided Setup is posted only with its Entry strictly between
+    /// its stop and target, as the backend now requires. Untracked Setups and
+    /// the legacy flow are unaffected.
+    var guidedTrackedSetupLevelsNeedAdjusting: Bool {
+        guard isGuidedFlowActive, intent == .setup, trackingEnabled else { return false }
+        switch setupSide {
+        case .long?, .short?: return false
+        case .inconsistent?, nil: return true
+        }
+    }
+
+    /// Post / Retry: a postable draft, not already posting, and — for a
+    /// tracked Setup — levels in order against the Entry shown.
+    var canPostGuidedDraft: Bool {
+        isValid && !submissionPhase.isSubmitting && !guidedTrackedSetupLevelsNeedAdjusting
+    }
+
     /// Let the edit session that has just begun keep an Analysis text-only.
     /// Called by the edit entry point under the experiment, after
     /// `beginEditingMarker`; outside an edit session it does nothing.
@@ -141,7 +180,8 @@ extension MarkerPlacementState {
     /// Details → Review, only when the draft could be posted.
     @discardableResult
     func continueToReview() -> Bool {
-        guard guidedStep == .details, isValid, !isGuidedSubmissionInFlight else { return false }
+        guard guidedStep == .details, isValid, !isGuidedSubmissionInFlight,
+              !guidedTrackedSetupLevelsNeedAdjusting else { return false }
         guidedStep = .review
         return true
     }
@@ -320,6 +360,19 @@ enum MarkerPlacementSubmitter {
         // after the author has left cannot close, alter or mislabel a later
         // draft. The legacy flow keeps its behaviour exactly.
         let isGuided = placementState.isGuidedFlowActive
+
+        // A guided tracked Setup is checked as it will be sent — after its
+        // Entry moved to the latest price — and not sent at all if its Entry
+        // no longer sits between stop and target. The draft, its link and its
+        // timeframe stay as they are; no exit is moved. Nothing here is marked
+        // as submitting, so nothing is left pending.
+        if isGuided, trackedSetupLevelsOutOfOrder(in: request) {
+            let failure = MarkerPlacementFailure.trackedSetupLevelsOutOfOrder
+            placementState.linkSession.recordFailure(failure.toastTitle)
+            placementState.submissionPhase = .failed(failure.userMessage)
+            return Outcome(result: .failure(failure), shareContext: nil)
+        }
+
         let draftID = placementState.draftID
         let submissionID = UUID()
         let postedToAtSubmission: String? = isGuided
@@ -376,6 +429,22 @@ enum MarkerPlacementSubmitter {
             placementState.linkSession.recordFailure(failure.toastTitle)
             placementState.submissionPhase = .failed(failure.userMessage)
             return Outcome(result: result, shareContext: nil)
+        }
+    }
+
+    /// A tracked Setup request whose Entry, SL and TP — as sent — are not
+    /// ordered SL < Entry < TP or TP < Entry < SL, read with the same side
+    /// inference as the Setup editor.
+    static func trackedSetupLevelsOutOfOrder(in request: RLCreateMarkerRequest) -> Bool {
+        guard request.intent == RLMarkerIntent.setup.rawValue, request.trackingEnabled else { return false }
+        func price(_ type: RLComponentType) -> Double? {
+            let matches = request.components.filter { $0.componentType == type.rawValue }
+            guard matches.count == 1, let match = matches.first else { return nil }
+            return MarkerComponentPayload.decode(componentType: match.componentType, rawPayload: match.payload).levelPrice
+        }
+        switch MarkerSetupSide.of(entry: price(.levelEntry), takeProfit: price(.levelTp), stopLoss: price(.levelSl)) {
+        case .long?, .short?: return false
+        case .inconsistent?, nil: return true
         }
     }
 }

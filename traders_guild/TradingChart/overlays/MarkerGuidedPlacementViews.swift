@@ -207,7 +207,7 @@ struct MarkerGuidedPlacementPanel: View {
                 }
                 MarkerGuidedValueRow(
                     title: "Entry",
-                    value: MarkerGuidedFormat.price(placementState.setupEntryPrice),
+                    value: MarkerGuidedFormat.price(placementState.guidedSetupEntryPrice),
                     detail: "Latest price when you post",
                     tint: RLComponentType.levelEntry.color
                 )
@@ -215,7 +215,7 @@ struct MarkerGuidedPlacementPanel: View {
                 MarkerGuidedLevelField(title: "Stop Loss", type: .levelSl, placementState: placementState)
                 MarkerGuidedValueRow(
                     title: "Risk : Reward",
-                    value: MarkerGuidedFormat.riskReward(placementState.setupRiskReward),
+                    value: MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward),
                     detail: nil,
                     tint: AppColors.primaryForeground
                 )
@@ -434,11 +434,11 @@ struct MarkerGuidedPlacementPanel: View {
             HStack {
                 MarkerSetupSidePill(side: placementState.setupSide)
                 Spacer()
-                Text(MarkerGuidedFormat.riskReward(placementState.setupRiskReward))
+                Text(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
             }
-            MarkerGuidedValueRow(title: "Entry", value: MarkerGuidedFormat.price(placementState.setupEntryPrice),
+            MarkerGuidedValueRow(title: "Entry", value: MarkerGuidedFormat.price(placementState.guidedSetupEntryPrice),
                                  detail: "Latest price when you post", tint: RLComponentType.levelEntry.color)
             MarkerGuidedValueRow(title: "Take Profit", value: MarkerGuidedFormat.price(placementState.componentPrice(.levelTp)),
                                  detail: nil, tint: RLComponentType.levelTp.color)
@@ -475,6 +475,15 @@ struct MarkerGuidedPlacementPanel: View {
                     Text("\(message) Your draft is saved.")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
+                    if placementState.guidedTrackedSetupLevelsNeedAdjusting {
+                        Button("Adjust levels") {
+                            placementState.backToDetails()
+                        }
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(RLMarkerIntent.setup.color)
+                        .padding(.top, 4)
+                        .accessibilityIdentifier("guided.adjustLevels")
+                    }
                 }
             }
             .padding(12)
@@ -501,14 +510,23 @@ struct MarkerGuidedPlacementBar: View {
                 backButton("Back")
                 Spacer()
             case .details?:
-                if let unmet = placementState.firstUnmetRequirementTitle {
+                if placementState.guidedTrackedSetupLevelsNeedAdjusting {
+                    Text("Put Entry between your stop and target")
+                        .font(.caption)
+                        .foregroundColor(AppColors.statusWarning)
+                        .lineLimit(2)
+                } else if let unmet = placementState.firstUnmetRequirementTitle {
                     Text(unmet)
                         .font(.caption)
                         .foregroundColor(AppColors.statusWarning)
                         .lineLimit(2)
                 }
                 Spacer()
-                primaryButton("Review", enabled: placementState.isValid, identifier: "guided.review") {
+                primaryButton(
+                    "Review",
+                    enabled: placementState.isValid && !placementState.guidedTrackedSetupLevelsNeedAdjusting,
+                    identifier: "guided.review"
+                ) {
                     placementState.continueToReview()
                 }
             case .context?:
@@ -521,7 +539,7 @@ struct MarkerGuidedPlacementBar: View {
                 Spacer()
                 primaryButton(
                     placementState.submissionPhase.isFailed ? "Retry" : "Post",
-                    enabled: placementState.isValid && !placementState.submissionPhase.isSubmitting,
+                    enabled: placementState.canPostGuidedDraft,
                     identifier: "guided.post"
                 ) {
                     onPost()

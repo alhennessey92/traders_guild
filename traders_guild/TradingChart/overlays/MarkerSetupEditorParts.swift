@@ -131,9 +131,10 @@ enum MarkerSetupSide: Equatable {
 }
 
 extension MarkerPlacementState {
+    /// Read against the Entry the chart shows (`guidedSetupEntryPrice`).
     var setupSide: MarkerSetupSide? {
         MarkerSetupSide.of(
-            entry: setupEntryPrice,
+            entry: guidedSetupEntryPrice,
             takeProfit: componentPrice(.levelTp),
             stopLoss: componentPrice(.levelSl)
         )

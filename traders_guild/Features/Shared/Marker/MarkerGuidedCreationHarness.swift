@@ -24,6 +24,12 @@ struct MarkerGuidedCreationHarness: View {
         case setupTracked, setupUntracked, setupReview
         case responseChooser, responseSetupReview
         case failedPost, retrySuccess, discardConfirm
+        /// A linked Setup whose anchor keeps the parent candle's old price:
+        /// Review shows the Entry line, not the anchor.
+        case responseSetupEntry
+        /// The same Setup posted after the price rose through its stop: the
+        /// post is stopped on the device and nothing reaches the transport.
+        case setupMarketMoved
 
         static var launch: Scenario? {
             UserDefaults.standard.string(forKey: "MarkerGuidedCreationFixture").flatMap(Scenario.init(rawValue:))
@@ -42,6 +48,7 @@ struct MarkerGuidedCreationHarness: View {
             switch self {
             case .failedPost: return 1
             case .retrySuccess: return 2
+            case .setupMarketMoved: return 1
             default: return 0
             }
         }
@@ -195,6 +202,11 @@ struct MarkerGuidedCreationHarness: View {
 
     private func post() async {
         guard placementState.isValid else { return }
+        if scenario == .setupMarketMoved {
+            // What the chart does just before sending a Setup, at a latest
+            // price above the draft's stop.
+            placementState.refreshSetupEntryForPosting(latest: Self.priceRoseThroughStop)
+        }
         let outcome = await MarkerPlacementSubmitter.submitCreate(
             request: placementState.buildCreateRequest(symbolId: Self.symbolId, timeframe: "1h"),
             candleIndex: 5,
@@ -214,7 +226,7 @@ struct MarkerGuidedCreationHarness: View {
         let state = MarkerPlacementState()
         let candle = candles[5]
         let isSetup = [.setupTracked, .setupUntracked, .setupReview].contains(scenario)
-        let isResponse = [.responseChooser, .responseSetupReview].contains(scenario)
+        let isResponse = [.responseChooser, .responseSetupReview, .responseSetupEntry, .setupMarketMoved].contains(scenario)
         if isResponse {
             state.beginRespondingTo(MarkerLinkContext(
                 parentMarkerId: MarkerLinkFixtures.uuid(77),
@@ -274,8 +286,28 @@ struct MarkerGuidedCreationHarness: View {
             seedSetupLevels(state, entry: candle.close, long: false)
             state.recordSetupLevelSeed()
             state.continueToReview()
+        case .responseSetupEntry, .setupMarketMoved:
+            state.note = "Short the failed breakout."
+            _ = state.requestGuidedIntentChange(to: .setup)
+            // As on the chart: the anchor keeps the parent's candle and an
+            // old price; the Entry line is the latest price.
+            state.upsertComponent(.anchor, payload: .anchor(AnchorPayload(time: candle.timestamp, price: candle.close - 400)))
+            seedSetupLevels(state, entry: candle.close, long: false)
+            state.recordSetupLevelSeed()
+            state.continueToReview()
         }
         return state
+    }
+
+    /// The next candle, closing 200 above the fixture's Entry — above the
+    /// short's stop at Entry + 120.
+    static var priceRoseThroughStop: RLCandleDTO {
+        let candle = candles[5]
+        return RLCandleDTO(
+            timestamp: candle.timestamp.addingTimeInterval(3600),
+            open: candle.close, high: candle.close + 260, low: candle.close - 20,
+            close: candle.close + 200, volume: 1000
+        )
     }
 
     /// What the chart's Setup line system seeds.

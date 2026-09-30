@@ -2832,14 +2832,7 @@ struct TradingChartView: View {
 
         if placementState.intent == .setup,
            let lastCandle = chartData.candles.last {
-            placementState.upsertComponent(
-                .anchor,
-                payload: .anchor(AnchorPayload(time: lastCandle.timestamp, price: lastCandle.close))
-            )
-            placementState.upsertComponent(
-                .levelEntry,
-                payload: .levelEntry(LevelPayload(price: lastCandle.close, label: "Entry"))
-            )
+            placementState.refreshSetupEntryForPosting(latest: lastCandle)
         }
 
         let request = placementState.buildCreateRequest(
@@ -2883,9 +2876,23 @@ struct TradingChartView: View {
                     )
                 }
             case .failure(let failure):
+                if failure == .trackedSetupLevelsOutOfOrder {
+                    showRefreshedSetupEntryOnChart()
+                }
                 presentPlacementFailure(failure)
             }
         }
+    }
+
+    /// A guided tracked Setup was stopped before sending because the latest
+    /// price left its Entry outside the stop and target. Move the chart's
+    /// Entry line to that price, as a new candle would, so the chart and
+    /// Review agree while the author adjusts. TP and SL stay put.
+    private func showRefreshedSetupEntryOnChart() {
+        guard var prediction = predictionPlacement,
+              let entry = placementState.componentPrice(.levelEntry) else { return }
+        prediction.entryPrice = entry
+        predictionPlacement = prediction
     }
 
     private func handleLikeExistingMarker() {

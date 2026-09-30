@@ -2137,6 +2137,22 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
+    /// A Setup posts at the latest price: just before the request is built,
+    /// its anchor and Entry level move to the last candle's close. TP and SL
+    /// stay where the author put them. Called by the chart for every Setup
+    /// post, legacy and guided alike.
+    func refreshSetupEntryForPosting(latest candle: RLCandleDTO) {
+        guard intent == .setup else { return }
+        upsertComponent(
+            .anchor,
+            payload: .anchor(AnchorPayload(time: candle.timestamp, price: candle.close))
+        )
+        upsertComponent(
+            .levelEntry,
+            payload: .levelEntry(LevelPayload(price: candle.close, label: "Entry"))
+        )
+    }
+
     func buildCreateRequest(symbolId: UUID, timeframe: String, resolvedAnchorTime: Date? = nil) -> RLCreateMarkerRequest {
         let requestComponents = requestComponentsForCurrentState(resolvedAnchorTime: resolvedAnchorTime)
 
@@ -2486,7 +2502,9 @@ final class MarkerPlacementState: ObservableObject {
 
     private var isSetupDirectionValid: Bool {
         guard
-            let entry = setupEntryPrice,
+            // The guided flow reads the Entry level, as the chart's Entry line
+            // shows it; the legacy flow is unchanged.
+            let entry = isGuidedFlowActive ? guidedSetupEntryPrice : setupEntryPrice,
             let sl = componentPrice(.levelSl),
             let tp = componentPrice(.levelTp)
         else {

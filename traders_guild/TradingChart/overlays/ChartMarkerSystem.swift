@@ -41,11 +41,17 @@ enum MarkerPlacementFailure: Equatable {
     case trackedSetupLimitReached
     case genericCreateFailure
     case genericUpdateFailure
+    /// A guided tracked Setup whose Entry, refreshed to the latest price just
+    /// before posting, no longer sits between its stop and target. Found on
+    /// the device; nothing was sent.
+    case trackedSetupLevelsOutOfOrder
 
     var toastTitle: String {
         switch self {
         case .trackedSetupConflictSymbolTimeframe, .trackedSetupLimitReached:
             return "Setup Not Allowed"
+        case .trackedSetupLevelsOutOfOrder:
+            return "Adjust Your Levels"
         case .genericCreateFailure:
             return "Placement Failed"
         case .genericUpdateFailure:
@@ -55,7 +61,7 @@ enum MarkerPlacementFailure: Equatable {
 
     var toastSeverity: RLAlertSeverity {
         switch self {
-        case .trackedSetupConflictSymbolTimeframe, .trackedSetupLimitReached:
+        case .trackedSetupConflictSymbolTimeframe, .trackedSetupLimitReached, .trackedSetupLevelsOutOfOrder:
             return .warning
         case .genericCreateFailure, .genericUpdateFailure:
             return .error
@@ -72,6 +78,8 @@ enum MarkerPlacementFailure: Equatable {
             return "Could not place marker. Try again."
         case .genericUpdateFailure:
             return "Could not save changes. Try again."
+        case .trackedSetupLevelsOutOfOrder:
+            return "The price moved: Entry is no longer between your stop and target. Adjust your levels, then post again."
         }
     }
 
