@@ -121,6 +121,7 @@ struct MainView: View {
             timeframePanelManager: timeframePanelManager,
             selectedDetent: $selectedDetent,
             selectedView: $chartSheetTab,
+            guidedDiscardConfirmation: $showDiscardGuidedDraftConfirmation,
             onNavigateToMarker: { marker in
                 leftDrawerViewModel.requestNavigationToMarker(marker)
             },
@@ -1398,13 +1399,10 @@ struct MainView: View {
                 }
             }
             // A guided post in flight cannot be discarded out from under
-            // itself; the legacy flow is unchanged.
+            // itself; the legacy flow is unchanged. The confirmation itself is
+            // presented by `ChartBottomSheet`: presented from here it would
+            // pre-empt the chart sheet, which UIKit traps on.
             .disabled(placementState.isGuidedSubmissionInFlight)
-            .modifier(MarkerGuidedDiscardConfirmation(isPresented: $showDiscardGuidedDraftConfirmation) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    chartControlVM.cancelMarkerPlacement()
-                }
-            })
         } else if chartControlVM.isMarkerViewingMode {
             markerToolbarCloseButton(
                 iconColor: AppColors.whiteText.opacity(0.95),
@@ -2843,6 +2841,10 @@ struct ChartBottomSheet: View {
     @ObservedObject var markerOverlayState: MarkerOverlayState
     @ObservedObject var timeframePanelManager: TimeframePanelManager
     @Binding var selectedDetent: PresentationDetent
+    /// The toolbar asked to discard an edited guided draft. The confirmation
+    /// is presented from this sheet because the sheet is what is on screen: a
+    /// dialog presented from `MainView` would pre-empt it, and UIKit traps.
+    @Binding var guidedDiscardConfirmation: Bool
     @EnvironmentObject var rlAppState: RLAppState
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
@@ -2869,6 +2871,7 @@ struct ChartBottomSheet: View {
         timeframePanelManager: TimeframePanelManager,
         selectedDetent: Binding<PresentationDetent>,
         selectedView: Binding<ChartView>,
+        guidedDiscardConfirmation: Binding<Bool> = .constant(false),
         onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil,
         onPlaceMarker: (() -> Void)? = nil,
         onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil,
@@ -2882,6 +2885,7 @@ struct ChartBottomSheet: View {
         self.timeframePanelManager = timeframePanelManager
         self._selectedDetent = selectedDetent
         self._selectedView = selectedView
+        self._guidedDiscardConfirmation = guidedDiscardConfirmation
         self.onNavigateToMarker = onNavigateToMarker
         self.onPlaceMarker = onPlaceMarker
         self.onViewingAuthorTap = onViewingAuthorTap
@@ -2956,6 +2960,11 @@ struct ChartBottomSheet: View {
         .animation(nil, value: shouldIgnoreKeyboardSafeArea)
         .ignoresSafeArea(.keyboard, edges: shouldIgnoreKeyboardSafeArea ? .bottom : [])
         .environmentObject(chatSurfaceOverlayCoordinator)
+        .modifier(MarkerGuidedDiscardConfirmation(isPresented: $guidedDiscardConfirmation) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                controlViewModel.cancelMarkerPlacement()
+            }
+        })
         .onAppear {
             chartChatManager.configure(with: rlAppState)
         }
