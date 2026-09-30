@@ -10,7 +10,7 @@ Scope is Stage 1 only. The live chart still gives faces to `.personal` only, as 
 - The gate is available only under `TG_ISOLATED_DEV`, which covers DevDebug and the optimised DevProfile. It is off by default.
 - Launch override: `-TGAvatarMarkersExperiment YES|NO`. It is not persisted, and an unreadable value is ignored.
 - Saved switch: set from the fixture gallery. It is read only from the app's own persistent domain.
-- Every other configuration compiles `isEnabled` to `false`. In the Release binary neither the key nor any fixture strings survive.
+- Every other configuration compiles `isEnabled` to `false`, so the experiment is unreachable there. That means unreachable, not absent: shared helpers are compiled into production builds but never enabled. The Release `strings` check below is supporting evidence only (corrected at the Stage 2 correction checkpoint).
 
 **Fixture entry in optimised DEV:** `App/traders_guildApp.swift`, `Features/Shared/Marker/MarkerLinkFixtureGallery.swift`.
 - `-MarkerLinkFixtures` now works in Debug and in both isolated configurations, including DevProfile, not just in `DEBUG`.
@@ -94,7 +94,7 @@ All runs used simulator `iPhone 17 Pro` (iOS 26.0), `CODE_SIGNING_ALLOWED=NO`, a
 | Mutation: transport caching re-enabled | `removalInFlightCannotBeResurrectedByTransportCaching` failed as expected; source restored |
 | `xcodebuild build`, `LinkedDev Profile`, `DevProfile`, final source | BUILD SUCCEEDED; compiled with `-O -wmo`. Installed and ran the fixture (screenshot 19) |
 | `xcodebuild build`, `GCP Public Prod`, `Release` | BUILD SUCCEEDED |
-| `strings` on the binaries | Release: 0 fixture strings, 0 `TGAvatarMarkersExperiment`. DevProfile: fixture and experiment present |
+| `strings` on the binaries | Release: 0 fixture strings, 0 `TGAvatarMarkersExperiment`. DevProfile: fixture and experiment present. Supporting evidence only; this does not show that every experiment path is compiled out |
 | `git diff --check` | clean |
 
 Test runs need `ONLY_ACTIVE_ARCH=YES` on the command line. Without it the test target builds x86_64 against an arm64-only app module and fails with "unable to resolve module dependency". This predates Stage 1; the project's test targets carry no `ONLY_ACTIVE_ARCH` setting.

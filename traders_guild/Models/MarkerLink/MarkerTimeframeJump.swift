@@ -249,6 +249,69 @@ enum MarkerTimeframeJumpLayout {
         }
     }
 
+    /// Start each tether clear of `rects` — decoration on the selected glyph
+    /// that sits where a tether leaves it, which is the avatar prototype's
+    /// intent badge on the outward diagonal.
+    ///
+    /// Only the tether's start moves, and only along its own line, so it
+    /// emerges just past the decoration instead of running under it. Badge
+    /// centres, and so placement, tap targets and every other geometry, are
+    /// untouched; with no `rects` the placements come back exactly as given.
+    static func tethers(_ placements: [Placement], clearOf rects: [CGRect]) -> [Placement] {
+        guard !rects.isEmpty else { return placements }
+        return placements.map { placement in
+            let dx = placement.tetherEnd.x - placement.tetherStart.x
+            let dy = placement.tetherEnd.y - placement.tetherStart.y
+            let length = hypot(dx, dy)
+            guard length > 0 else { return placement }
+            let unit = CGPoint(x: dx / length, y: dy / length)
+
+            var start: CGFloat = 0
+            for rect in rects {
+                let box = rect.insetBy(dx: -tetherInset, dy: -tetherInset)
+                if let exit = exitDistance(from: placement.tetherStart, along: unit, length: length, through: box) {
+                    start = max(start, exit)
+                }
+            }
+            guard start > 0 else { return placement }
+            let trimmed = min(start, length)
+            return Placement(
+                jump: placement.jump,
+                center: placement.center,
+                tetherStart: CGPoint(
+                    x: placement.tetherStart.x + unit.x * trimmed,
+                    y: placement.tetherStart.y + unit.y * trimmed
+                ),
+                tetherEnd: placement.tetherEnd
+            )
+        }
+    }
+
+    /// Distance along the segment at which it leaves `box`, if it passes
+    /// through it at all (slab method).
+    private static func exitDistance(
+        from origin: CGPoint,
+        along unit: CGPoint,
+        length: CGFloat,
+        through box: CGRect
+    ) -> CGFloat? {
+        var enter: CGFloat = 0
+        var exit: CGFloat = length
+        for (o, d, lo, hi) in [(origin.x, unit.x, box.minX, box.maxX), (origin.y, unit.y, box.minY, box.maxY)] {
+            if abs(d) < .ulpOfOne {
+                if o < lo || o > hi { return nil }
+                continue
+            }
+            var t1 = (lo - o) / d
+            var t2 = (hi - o) / d
+            if t1 > t2 { swap(&t1, &t2) }
+            enter = max(enter, t1)
+            exit = min(exit, t2)
+            if enter > exit { return nil }
+        }
+        return exit
+    }
+
     static func footprint(_ center: CGPoint) -> CGRect {
         CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)
     }

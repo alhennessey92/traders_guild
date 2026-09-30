@@ -3249,11 +3249,17 @@ struct ChartMarkerSystem {
                     selectedMarkerScale: selected.scale
                 )
             )
+            // An avatar-led glyph's intent badge sits on the outward
+            // diagonal, where the parent jump's tether leaves the ring: start
+            // the tether past it. Badge positions are untouched.
+            let tetherClearance: [CGRect] = wearsIntentDecorations(selected.marker, avatarIntents: avatarIntents)
+                ? [MarkerIntentBadge.rect(center: selected.position, isBelow: selected.marker.positionedBelow, scale: selected.scale)]
+                : []
             // Ride the selection pop: fully in once the glyph reaches its
             // selected scale, invisible while it is still resting.
             MarkerLinkRenderer.drawTimeframeJumpBadges(
                 context: context,
-                placements: placements,
+                placements: MarkerTimeframeJumpLayout.tethers(placements, clearOf: tetherClearance),
                 reveal: MarkerTimeframeJumpLayout.reveal(selectedMarkerScale: selected.scale),
                 pass: &pass
             )

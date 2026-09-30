@@ -85,6 +85,103 @@ struct MarkerIntentDecorationTests {
         #expect(Arcs.categories(of: components([.anchor, .levelEntry, .levelSl, .levelTp])).isEmpty)
         #expect(Arcs.categories(of: components([.levelSupport, .textNote, .linkURL])) == [.drawings, .timeframesAndLinks])
         #expect(Arcs.categories(of: []).isEmpty)
+        // The plan's groups are drawings and *supporting levels*: a text note
+        // or a reaction emoji is neither.
+        #expect(Arcs.categories(of: components([.textNote, .reactionEmoji])).isEmpty)
+        #expect(Arcs.Category.of(.textNote) == nil)
+        #expect(Arcs.Category.of(.reactionEmoji) == nil)
+    }
+
+    // MARK: Cross-timeframe tethers
+
+    private func jump(_ direction: MarkerTimeframeJump.Direction, _ n: Int) -> MarkerTimeframeJump {
+        MarkerTimeframeJump(
+            markerId: MarkerLinkFixtures.uuid(n), direction: direction,
+            relationship: MarkerLinkRelationshipValue(.supports), timeframe: .h4, others: 0,
+            preview: MarkerLinkFixtures.preview(n, author: "kit", title: nil, relationship: nil)
+        )
+    }
+
+    private func tetherPoints(_ placement: MarkerTimeframeJumpLayout.Placement) -> [CGPoint] {
+        (0...64).map { step in
+            let t = CGFloat(step) / 64
+            return CGPoint(
+                x: placement.tetherStart.x + (placement.tetherEnd.x - placement.tetherStart.x) * t,
+                y: placement.tetherStart.y + (placement.tetherEnd.y - placement.tetherStart.y) * t
+            )
+        }
+    }
+
+    /// The parent jump's tether leaves the selected ring on the outward
+    /// diagonal — where the intent badge sits. It must start past the badge,
+    /// while the jump badges stay exactly where they were (placement and tap
+    /// targets), above and below the candle.
+    @Test(arguments: [false, true])
+    func tethersStartPastTheIntentBadgeWithoutMovingJumpBadges(isBelow: Bool) {
+        let scale = MarkerVisualSpec.selectedScale
+        let center = CGPoint(x: 200, y: 300)
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: center,
+            scaledRadius: diameter / 2 * scale,
+            isBelow: isBelow,
+            jumps: [jump(.toParent, 9), jump(.toResponse, 10)]
+        )
+        let badge = MarkerIntentBadge.rect(center: center, isBelow: isBelow, scale: scale)
+        let parent = placements[0], response = placements[1]
+        #expect(tetherPoints(parent).contains { badge.contains($0) }, "control: untrimmed, the parent tether crosses the badge")
+
+        let trimmed = MarkerTimeframeJumpLayout.tethers(placements, clearOf: [badge])
+        #expect(trimmed.map(\.center) == placements.map(\.center), "jump badges must not move")
+        #expect(trimmed.map(\.tetherEnd) == placements.map(\.tetherEnd))
+        #expect(!tetherPoints(trimmed[0]).contains { badge.contains($0) }, "the trimmed tether still runs under the badge")
+        let remaining = hypot(trimmed[0].tetherEnd.x - trimmed[0].tetherStart.x,
+                              trimmed[0].tetherEnd.y - trimmed[0].tetherStart.y)
+        #expect(remaining > 6, "the tether should still be visible (\(remaining)pt)")
+        #expect(trimmed[1] == response, "the response tether, on the other diagonal, is untouched")
+
+        // Tap targets resolve identically.
+        for placement in placements {
+            #expect(MarkerTimeframeJumpLayout.placement(at: placement.center, in: trimmed)?.jump == placement.jump)
+        }
+    }
+
+    /// Experiment off: no decoration to clear, geometry identical.
+    @Test
+    func withNothingToClearTethersAreUnchanged() {
+        let placements = MarkerTimeframeJumpLayout.placements(
+            selectedCenter: CGPoint(x: 200, y: 300),
+            scaledRadius: diameter / 2 * MarkerVisualSpec.selectedScale,
+            isBelow: false,
+            jumps: [jump(.toParent, 9), jump(.toResponse, 10)]
+        )
+        #expect(MarkerTimeframeJumpLayout.tethers(placements, clearOf: []) == placements)
+    }
+
+    // MARK: Thesis rows
+
+    @Test
+    func thesisRowsGetTheAuthorsFaceForThePrototypesIntentsOnly() {
+        let on = MarkerAvatarPresentation.avatarIntents(experimentEnabled: true)
+        let off = MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
+        func preview(_ intent: RLMarkerIntent, unavailable: Bool = false) -> RLMarkerLinkPreviewDTO {
+            MarkerLinkFixtures.preview(1, author: "alex", title: "t", relationship: nil,
+                                       unavailable: unavailable, intent: intent)
+        }
+
+        for intent in [RLMarkerIntent.analysis, .question, .setup] {
+            let identity = MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: on)
+            #expect(identity.authorId == MarkerLinkFixtures.uuid(401))
+            #expect(identity.url == MarkerAvatarFixtureImages.defaultURL(forUsername: "alex"))
+            #expect(identity.initials == "AL")
+            // The preview carries no tracking state: a neutral Setup badge.
+            #expect(identity.setupStatus == .unknown)
+            #expect(MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: off) == .none)
+        }
+        // Personal and legacy intents keep their thesis-row glyph either way.
+        for intent in [RLMarkerIntent.personal, .news, .poll, .alert, .reaction] {
+            #expect(MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: on) == .none)
+        }
+        #expect(MarkerAvatarIdentity.forPreview(preview(.analysis, unavailable: true), avatarIntents: on) == .none)
     }
 
     // MARK: Geometry

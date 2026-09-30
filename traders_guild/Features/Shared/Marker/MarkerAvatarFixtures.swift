@@ -102,6 +102,8 @@ struct MarkerFixtureScene {
     /// Applied to `MemberAvatarDirectory.shared` when the case is shown:
     /// user id → avatar URL, or "" for a removed avatar.
     var directory: [UUID: String] = [:]
+    /// Cross-timeframe badges for whichever marker is selected.
+    var timeframeJumps: [MarkerTimeframeJump] = []
 }
 
 extension MarkerLinkFixtures {
@@ -357,6 +359,37 @@ extension MarkerLinkFixtures {
                      components: [.levelEntry, .levelSl, .levelTp, .indicator, .timeframeLink]),
         ]
         return MarkerFixtureScene(markers: positioned(dtos), selectedId: uuid(3))
+    }
+
+    // MARK: Cross-timeframe jumps
+
+    /// A selected avatar-led marker with a parent and a response on other
+    /// timeframes — the parent jump's tether leaves on the intent badge's
+    /// diagonal. Marker 1 sits above its candle, marker 2 below; select either
+    /// (`-MarkerFixtureSelect 1|2`).
+    static func timeframeJumps() -> MarkerFixtureScene {
+        var laid = positioned([
+            authored(1, by: .alex, intent: .analysis, candleIndex: 4, title: "Above", parent: 9,
+                     relationship: "supports", responses: 1),
+            authored(2, by: .sam, intent: .setup, candleIndex: 8, title: "Below", parent: 9,
+                     relationship: "builds_on", responses: 1, trackingEnabled: true, trackingState: .active),
+        ])
+        for index in laid.indices where laid[index].id == uuid(2) {
+            laid[index].positionedBelow = true
+        }
+        let jumps = [
+            MarkerTimeframeJump(
+                markerId: uuid(9), direction: .toParent,
+                relationship: MarkerLinkRelationshipValue(.supports), timeframe: .h4, others: 0,
+                preview: preview(9, author: "kit", title: "4h thesis", relationship: nil)
+            ),
+            MarkerTimeframeJump(
+                markerId: uuid(10), direction: .toResponse,
+                relationship: MarkerLinkRelationshipValue(.challenges), timeframe: .m15, others: 0,
+                preview: preview(10, author: "jamie", title: "15m reply", relationship: "challenges")
+            ),
+        ]
+        return MarkerFixtureScene(markers: laid, selectedId: uuid(1), timeframeJumps: jumps)
     }
 
     // MARK: Mixed legacy

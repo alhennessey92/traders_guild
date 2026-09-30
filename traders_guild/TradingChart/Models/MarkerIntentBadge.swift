@@ -159,18 +159,22 @@ enum MarkerComponentArcs {
             }
         }
 
+        /// The three groups the plan names — indicators; drawings and
+        /// supporting levels; timeframes and links — and nothing else.
+        ///
         /// The anchor and a Setup's own Entry / SL / TP are structure, not
-        /// supporting context, so they never produce an arc.
+        /// supporting context. Text notes and reaction emoji are neither
+        /// drawings nor supporting levels, so they produce no arc either.
         static func of(_ type: RLComponentType) -> Category? {
             switch type {
             case .indicator:
                 return .indicators
             case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern,
-                 .levelSupport, .levelResistance, .textNote, .reactionEmoji:
+                 .levelSupport, .levelResistance:
                 return .drawings
             case .timeframeLink, .linkURL:
                 return .timeframesAndLinks
-            case .anchor, .levelEntry, .levelSl, .levelTp:
+            case .anchor, .levelEntry, .levelSl, .levelTp, .textNote, .reactionEmoji:
                 return nil
             }
         }

@@ -226,6 +226,29 @@ struct MarkerAvatarIdentity: Equatable {
         return identity.isEmpty ? .none : identity
     }
 
+    /// Thesis rows, which carry their author on a link preview.
+    ///
+    /// Only the avatar prototype's intents, and only while it is on: thesis rows
+    /// have never shown a personal marker's face, and keep not doing so. The
+    /// preview carries no tracking state, so a Setup's badge cannot show its
+    /// lifecycle here (`.unknown`).
+    static func forPreview(
+        _ preview: RLMarkerLinkPreviewDTO,
+        avatarIntents: Set<RLMarkerIntent> = MarkerAvatarPresentation.live
+    ) -> MarkerAvatarIdentity {
+        guard !preview.isUnavailable,
+              let intent = preview.intentEnum,
+              MarkerAvatarPresentation.experimentIntents.contains(intent),
+              avatarIntents.contains(intent) else { return .none }
+        let identity = MarkerAvatarIdentity(
+            url: preview.authorAvatarUrl,
+            initials: initials(from: preview.authorUsername ?? preview.authorDisplayName),
+            authorId: preview.authorId,
+            setupStatus: .unknown
+        )
+        return identity.isEmpty ? .none : identity
+    }
+
     /// For the placement picker, where no marker exists yet and the author is by
     /// definition whoever is holding the phone.
     static func forCurrentUser(username: String?, avatarUrl: String?) -> MarkerAvatarIdentity {

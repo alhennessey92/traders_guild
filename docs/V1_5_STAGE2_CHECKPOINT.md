@@ -31,7 +31,7 @@ The owner asked for Stage 2 to start before Astra had reviewed Stage 1, so Astra
 **Component arcs**, on the selected marker only.
 - Up to three separated arcs sit 3.5pt outside the disc, in fixed order and fixed slots on the left and outward rim, the only stretch no badge uses:
   - indicators, in `componentIndicatorOrange`
-  - drawings and supporting levels, in `componentSupportPurple`
+  - drawings and supporting levels, in `componentSupportPurple` (text notes and reaction emoji excluded since the correction below)
   - timeframes and links, in `componentTimeframeCyan`
 - Repeated components are grouped into one arc. The anchor and Setup Entry/SL/TP never produce an arc.
 - Arcs fade in with the selection pop and drop to 0.4 opacity under a relationship ring, which stays authoritative.
@@ -76,7 +76,7 @@ In `MarkerAvatarRenderTests`:
 | `xcodebuild test`, `LinkedDev` (DevDebug), `-only-testing:traders_guildTests`, final source | **757 tests passed (768 runs); 0 failed, 0 skipped** |
 | `xcodebuild test`, `Local Gateway` (plain Debug, not isolated): experiment, decoration, render and identity suites | 35 tests passed (46 runs). The gate is off and live intents are `[.personal]` |
 | `xcodebuild build`, `LinkedDev Profile`, `DevProfile` | BUILD SUCCEEDED (`-O -wmo`) |
-| `xcodebuild build`, `GCP Public Prod`, `Release` | BUILD SUCCEEDED; `strings` finds 0 fixture strings and 0 `TGAvatarMarkersExperiment` |
+| `xcodebuild build`, `GCP Public Prod`, `Release` | BUILD SUCCEEDED. `strings` finds 0 fixture strings and 0 `TGAvatarMarkersExperiment`, which is supporting evidence only (see the gate statement in the correction section) |
 
 The first Stage 2 run failed four tests.
 - One was real: the mirrored indicator arc slot came within the 1pt margin of the response badge for markers below the candle. The slots were narrowed to 167–203°, 215–251° and 263–299°.
@@ -112,8 +112,81 @@ Location: `docs/visual-review/v1.5-stage2/`. Captured in the isolated DevDebug s
 
 ## Known issues
 
-- Cross-timeframe jump badges splay outward at 45°. On a selected marker that has jump badges, the parent-jump tether starts under the intent badge's outer corner. The jump badge itself is 36pt further out and unaffected. Left as is; it is visible only in that state.
+- ~~On a selected marker with jump badges, the parent-jump tether starts under the intent badge's outer corner.~~ Fixed in the correction below.
 - Stage 1 issues still open: the selection-nudge 6pt overlap, and the two initials styles. Stage 1's "all Setup states look alike" is resolved by the status badges.
-- Thesis rows in marker detail (`MarkerThreadRowView`) draw their own intent icon, not `UnifiedMarkerBadge`, so they still show glyphs rather than faces.
+- ~~Thesis rows show glyphs.~~ Fixed in the correction below. The original note was also inaccurate: the rows already used `UnifiedMarkerBadge`, just without an author identity.
 - The Add-marker rows already passed the viewer's avatar to every intent. With the prototype on, Analysis, Question and Setup rows show the viewer's face plus a pip. Stage 3 replaces that screen.
 - Adjacent-candle density is unchanged by design. Faces overlap as glyphs do (see `17-zoomed-out.png`).
+
+## Correction after Astra's review (separate commit)
+
+### Changes
+
+1. **Parent-jump tether no longer runs under the intent badge.**
+   - `MarkerTimeframeJumpLayout.tethers(_:clearOf:)` moves only a tether's start, along its own line, to just past a given rectangle.
+   - The renderer passes the selected glyph's intent-badge rectangle, and only when that glyph wears the prototype decorations.
+   - Badge centres are untouched, so placement is unchanged. `timeframeJumpAtLocation` still resolves against the untrimmed `placements(...)`, so tap targets are unchanged.
+   - With the experiment off (no rectangles) the placements come back unchanged, so experiment-off geometry is identical.
+2. **Thesis rows show the author's face** for Analysis, Question and Setup while the prototype is on.
+   - New `MarkerAvatarIdentity.forPreview(_:avatarIntents:)`, passed to `UnifiedMarkerBadge` in `MarkerThreadRowView`.
+   - It uses only data already in the thread contract: `RLMarkerLinkPreviewDTO.authorId`, `authorUsername`, `authorDisplayName` and `authorAvatarUrl`. The deployed baseline `1ec0885` fills these in `shared/services/marker_links.py`, and the client reads them read-only.
+   - The preview carries **no tracking state**, so a thesis-row Setup shows the neutral Setup badge (`.unknown`, green `scope`). Astra confirmed this is correct: **no contract change**.
+   - Personal, legacy intents, unavailable nodes, and every row with the experiment off keep their existing glyph.
+3. **Arc grouping matches the plan.** The drawings group is "drawings and supporting levels", so `textNote` and `reactionEmoji` no longer produce an arc. No existing documented requirement supported including them.
+4. **Fixtures:**
+   - New scene `timeframeJumps` with a parent and a response jump, selectable above (1) or below (2) the candle.
+   - Thread-preview fixtures carry author ids and avatars, with mixed intents including a legacy News row.
+   - `-MarkerFixtureSection thread` opens on the thesis rows.
+
+### Production gate, stated precisely
+
+Outside `TG_ISOLATED_DEV`, `MarkerAvatarExperiment.evaluate()` compiles to `return false`, so `isEnabled` and `MarkerAvatarPresentation.live` are `false` and `[.personal]`. The fixture gallery entry is compiled only under `DEBUG || TG_ISOLATED_DEV`.
+
+The experiment is therefore **unreachable** in production configurations. It is not absent: shared helpers are compiled in but never enabled, among them:
+- `MarkerAvatarPresentation`
+- `MarkerIntentBadge`
+- `MarkerComponentArcs`
+- the renderer's decoration branches
+- `forPreview`
+
+Evidence:
+- The Stage 2 plain-Debug run (`/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/rb-s2-debug.xcresult`) exercises the non-isolated branch of `evaluate()`.
+- The Release build succeeds.
+- The `strings` result is supporting evidence only.
+
+### Tests added
+
+All in `MarkerIntentDecorationTests`:
+- `tethersStartPastTheIntentBadgeWithoutMovingJumpBadges(isBelow:)`, above and below the candle.
+  - Control: the untrimmed parent tether does cross the badge.
+  - After trimming: no tether point lies inside the badge, and more than 6pt of tether remains.
+  - Badge centres and tether ends are unchanged; the response tether is identical; tap resolution is identical.
+- `withNothingToClearTethersAreUnchanged`: the experiment-off geometry.
+- `arcsGroupRepeatsKeepAFixedOrderAndSkipStructure` now also asserts that text notes and reaction emoji make no arc.
+- `thesisRowsGetTheAuthorsFaceForThePrototypesIntentsOnly`:
+  - For the three intents: author id, URL and initials come from the preview, Setup status is `.unknown`, and the experiment-off result is `.none`.
+  - Personal, legacy and unavailable nodes get `.none`.
+
+### Verification (bounded, as requested)
+
+| Run | Result | Evidence |
+|---|---|---|
+| `xcodebuild test`, scheme `traders_guild LinkedDev` (DevDebug), simulator iPhone 17 Pro `9B8DAACB-DB63-4F23-A75B-3BC6C52E5705`, `ONLY_ACTIVE_ARCH=YES`, `-only-testing:` MarkerIntentDecorationTests, MarkerTimeframeJumpTests, MarkerAvatarRenderTests, MarkerGeometryInvariantTests, MarkerAvatarIdentityTests, MarkerLinkRenderTests, MarkerFocusHitTestingTests | **96 tests passed (108 runs), 0 failed, 0 skipped** | Bundle `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/rb-s2c-affected.xcresult`; log `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/s2c-affected.log`; exported copies in-repo: `docs/visual-review/v1.5-stage2-correction/test-results/affected-suites-summary.json` and `affected-suites-tests.json` |
+| `xcodebuild build`, `GCP Public Prod`, `Release`, generic iOS Simulator | BUILD SUCCEEDED | `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/s2c-release.log` |
+| `xcodebuild build`, `LinkedDev Profile`, `DevProfile`, generic iOS Simulator | BUILD SUCCEEDED (`-O -wmo`) | `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/s2c-devprofile.log` |
+
+The full unit target was not re-run for this bounded correction. The last full run is the Stage 2 final: 757 tests / 768 runs passed, bundle `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/rb-s2-final.xcresult`. That bundle, and the plain-Debug bundle `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/rb-s2-debug.xcresult`, predate this correction.
+
+The scratchpad bundles live in a session temp directory and may be cleaned up. The exported JSON in the repo is the durable copy.
+
+### Screenshots
+
+Location: `docs/visual-review/v1.5-stage2-correction/`. Built from the same DevDebug product the tests ran against.
+
+| File | Shows |
+|---|---|
+| `01-jump-tethers-above-candle-selected.png` | The 4H parent tether starts past the Analysis badge; the 15m response tether and both jump badges are unchanged |
+| `02-jump-tethers-below-candle-selected.png` | The same below the candle, with a live-Setup (bolt) badge |
+| `03-jump-tethers-experiment-off.png` | Experiment off: glyph, no intent badge, untrimmed tethers (original geometry) |
+| `04-thesis-rows-experiment-on.png` | Thesis rows: Setup face with the neutral Setup pip, Analysis face with pulse, Question initials with ?, News glyph and the unavailable row unchanged |
+| `05-thesis-rows-experiment-off.png` | Thesis rows with the experiment off: all glyphs, as before |

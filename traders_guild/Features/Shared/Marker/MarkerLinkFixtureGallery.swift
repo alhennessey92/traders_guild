@@ -130,7 +130,8 @@ enum MarkerLinkFixtures {
         parentKey: String? = nil,
         depth: Int = 0,
         responses: Int = 0,
-        unavailable: Bool = false
+        unavailable: Bool = false,
+        intent: RLMarkerIntent = .analysis
     ) -> RLMarkerLinkPreviewDTO {
         RLMarkerLinkPreviewDTO(
             nodeKey: "n\(n)",
@@ -138,14 +139,17 @@ enum MarkerLinkFixtures {
             markerId: unavailable ? nil : uuid(n),
             linkRelationship: relationship,
             isUnavailable: unavailable,
+            // The same user and picture the author's markers use.
+            authorId: unavailable ? nil : uuid(400 + n),
             authorDisplayName: unavailable ? nil : author?.capitalized,
             authorUsername: unavailable ? nil : author,
+            authorAvatarUrl: unavailable ? nil : author.flatMap(MarkerAvatarFixtureImages.defaultURL(forUsername:)),
             symbolId: unavailable ? nil : uuid(1),
             ticker: unavailable ? nil : "BTC",
             timeframe: unavailable ? nil : "1h",
             candleTimestamp: unavailable ? nil : Date(timeIntervalSinceReferenceDate: 0),
             price: unavailable ? nil : 64_000,
-            intent: unavailable ? nil : RLMarkerIntent.analysis.rawValue,
+            intent: unavailable ? nil : intent.rawValue,
             title: unavailable ? nil : title,
             directResponseCount: responses,
             depth: depth
@@ -323,15 +327,16 @@ enum MarkerLinkFixtures {
             rootResolved: true,
             windowRootKey: "n1",
             nodes: [
-                preview(1, author: "alex", title: "BTC breakout", relationship: nil, responses: 3),
+                preview(1, author: "alex", title: "BTC breakout", relationship: nil, responses: 3,
+                        intent: .setup),
                 preview(2, author: "jamie", title: "Backing this", relationship: "supports",
                         parentKey: "n1", depth: 1),
-                preview(3, author: "sam", title: "Bearish instead", relationship: "challenges",
-                        parentKey: "n1", depth: 1, responses: 1),
+                preview(3, author: "noor", title: "Bearish instead?", relationship: "challenges",
+                        parentKey: "n1", depth: 1, responses: 1, intent: .question),
                 preview(6, author: nil, title: nil, relationship: "supports",
                         parentKey: "n3", depth: 2, unavailable: true),
-                preview(4, author: "kit", title: "Second leg", relationship: "builds_on",
-                        parentKey: "n1", depth: 1),
+                preview(4, author: "kit", title: "CPI second leg", relationship: "builds_on",
+                        parentKey: "n1", depth: 1, intent: .news),
             ],
             branches: [RLMarkerThreadBranchDTO(nodeKey: "n1", cursor: "more")],
             totalCount: nil,
@@ -373,6 +378,7 @@ struct MarkerLinkFixtureGallery: View {
         case avatarStates = "Avatar states"
         case mixedLegacy = "Mixed with legacy markers"
         case componentArcs = "Selected: component arcs"
+        case timeframeJumps = "Selected: cross-timeframe jumps"
 
         var id: String { rawValue }
 
@@ -393,6 +399,7 @@ struct MarkerLinkFixtureGallery: View {
             case .avatarStates: return "avatarStates"
             case .mixedLegacy: return "mixedLegacy"
             case .componentArcs: return "componentArcs"
+            case .timeframeJumps: return "timeframeJumps"
             }
         }
 
@@ -412,6 +419,7 @@ struct MarkerLinkFixtureGallery: View {
             case .avatarStates: return MarkerLinkFixtures.avatarStates()
             case .mixedLegacy: return MarkerLinkFixtures.mixedLegacy()
             case .componentArcs: return MarkerLinkFixtures.componentArcs()
+            case .timeframeJumps: return MarkerLinkFixtures.timeframeJumps()
             }
         }
 
@@ -447,15 +455,15 @@ struct MarkerLinkFixtureGallery: View {
                     chartSection
                     badgeSection.id("badges")
                     detailSection
-                    threadSection
+                    threadSection.id("thread")
                     placementSection
                 }
                 .padding(16)
             }
             .onAppear {
-                // `-MarkerFixtureSection badges` opens on the badge strip.
-                if UserDefaults.standard.string(forKey: "MarkerFixtureSection") == "badges" {
-                    proxy.scrollTo("badges", anchor: .top)
+                // `-MarkerFixtureSection badges|thread` opens on that section.
+                if let section = UserDefaults.standard.string(forKey: "MarkerFixtureSection") {
+                    proxy.scrollTo(section, anchor: .top)
                 }
             }
         }
@@ -568,6 +576,7 @@ struct MarkerLinkFixtureGallery: View {
                     selectedMarkerRotation: selectionRotation,
                     avatarIntents: MarkerAvatarPresentation.avatarIntents(experimentEnabled: avatarsEnabled),
                     avatarSymbols: avatarSymbols.entries,
+                    timeframeJumps: scene.timeframeJumps,
                     onSelect: { selectedId = $0 }
                 )
                 // Tall enough for a four-deep stack above a candle and a
@@ -759,6 +768,7 @@ struct MarkerLinkFixtureCanvas: View {
     var selectedMarkerRotation: CGFloat = 0
     var avatarIntents: Set<RLMarkerIntent> = MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
     var avatarSymbols: [MarkerAvatarSymbolEntry] = []
+    var timeframeJumps: [MarkerTimeframeJump] = []
     var onSelect: ((UUID?) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -791,6 +801,7 @@ struct MarkerLinkFixtureCanvas: View {
                     // The harness exists to review the decorated states, so the
                     // capability is on; the disabled state is covered by tests.
                     linkedMarkersEnabled: true,
+                    timeframeJumps: timeframeJumps,
                     avatarIntents: avatarIntents
                 )
             } symbols: {

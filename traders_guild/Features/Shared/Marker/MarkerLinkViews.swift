@@ -361,7 +361,8 @@ struct MarkerThreadRowView: View {
             } else {
                 UnifiedMarkerBadge(
                     intent: row.node.intentEnum ?? .analysis,
-                    size: 26
+                    size: 26,
+                    avatar: MarkerAvatarIdentity.forPreview(row.node)
                 )
                 .accessibilityHidden(true)
             }
