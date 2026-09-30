@@ -1,12 +1,14 @@
 # v1.5.0 — Stage 2 owner visual review
 
+**Approved by the owner on 2026-09-30. Stage 3 authorized.** The package below records the reviewed checkpoint; outstanding technical verification remains outstanding.
+
 Review the avatar-led direction before Stage 3 changes creation. The frozen master plan remains `sanctuary/docs/version_docs/ios/1.5.0.md`.
 
 Open [the visual gallery](visual-review/v1.5-owner-review.html). Captures are deterministic simulator fixtures through the app’s actual marker renderer, using synthetic portraits. They are not a live-data or physical-device acceptance result.
 
 ## Decision at this gate
 
-Approve the visual direction, or identify changes to face prominence, intent/status badges, selected context arcs and relationship readability. Stage 3 remains paused until owner approval. Density overlap is included explicitly for review; no new density strategy has been introduced.
+Approve the visual direction, or identify changes to face prominence, intent/status badges, selected context arcs and relationship readability. The owner approved this gate on 2026-09-30. Density overlap is included explicitly for review; no new density strategy has been introduced.
 
 ## Engineering review
 
