@@ -2,17 +2,19 @@
 
 Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktree `.worktrees/marker-avatar-claude`.
 
-**Commits:** three local commits, not pushed, not deployed. No backend, Android or production changes.
+**Commits:** local commits, not pushed, not deployed. No backend, Android or production changes by Claude.
 
 | Commit | What |
 |---|---|
-| `c4ecb14` | Fix: a guided text-only Analysis stays editable. Includes tests. |
-| `05f5d00` | Fix: the guided discard confirmation is presented from the chart sheet. The old placement crashed the app. |
-| this commit | This checkpoint and its evidence. |
+| `c4ecb14` | Fix: a guided text-only Analysis stays editable. Includes tests. Integrated by Astra as `8e0686d`. |
+| `05f5d00` | Fix: the guided discard confirmation is presented from the chart sheet. The old placement crashed the app. Integrated as `0550b73`. |
+| `076fb52` | The first version of this checkpoint and its evidence. Integrated as `5f71c93`. |
+| `2e8750e` | Approved correction: guided tracked Setup level integrity (§5a). Includes tests. |
+| this commit | This checkpoint, updated for the correction, and its evidence. |
 
 **Stop point.** This is an engineering checkpoint for Astra. Stage 5 has not started.
 
-**Open item: Setup level-ordering defect.** One defect is **open and not marked passed**: a tracked Setup can be stored with its levels in the wrong order. It predates Stage 4. Changing the Setup rules waits on the owner's decision (§5).
+**Setup level-ordering defect: corrected, pending Astra's engineering review.** The owner approved a bounded correction (`docs/V1_5_SETUP_GUARD_CORRECTION.md`). The defect, its reproduction and its baseline are kept in §5 as found. The correction and its verification are in §5a. The existing invalid records are evidence and were not repaired.
 
 `$S` = `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad`. All times are UTC unless marked otherwise. The app's clock labels are BST (UTC+1).
 
@@ -22,10 +24,18 @@ Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktre
 - Compose project `traders-guild-local`, run from `.worktrees/linked-markers-backend`:
   - `0055fbb`, clean
   - `docker-compose.yml` + `docker-compose.safe.yml` + `.env.local` (mode 600, never printed)
-- One extra override kept outside both backend trees: `$S/stage4/compose.stage4-780398f.yml`.
+- One extra override kept outside both backend trees: `$S/stage4/compose.stage4-780398f.yml`, replaced for the correction by `$S/stage4/compose.stage4-5061824.yml` (same content, new snapshot path and label).
 - Before this stage the stack was stopped. Only TimescaleDB was brought up, for the read-only inventory. No running stack was replaced.
 
-**Backend source.**
+**Backend source now running: Sol's tracked-Setup guard `5061824`.**
+- chart-service is recreated from `$S/backend-5061824`, a `git archive` snapshot of `50618244942df1669bff626e8315e312fb502194` (checkpoint `f2e78dc`), mounted read-only.
+- Label `co.tradersguild.stage4.source=50618244…`, both mounts `rw=false`.
+- `sha1(/app/shared/schemas/chart_schema.py)` is `b4926289…` in the container, the snapshot and `git show 5061824:shared/schemas/chart_schema.py`.
+- chart-service `app/` is identical to `780398f`, and `requirements.txt` and `Dockerfile` are unchanged, so no rebuild. `780398f..5061824` changes only `shared/schemas/chart_schema.py` at runtime.
+- Flags after the swap are unchanged (linked markers on; Discord, autopost and postback off). Both smokes pass.
+- Revert to the text-only-only runtime: the same `up -d --no-deps chart-service` with `compose.stage4-780398f.yml`.
+
+**Backend source used for §2–§4 (before the correction).**
 - chart-service `/app/app` and `/app/shared` are bind-mounted **read-only** from `$S/backend-780398f`. That is a `git archive` snapshot of Sol's accepted `780398f936e3fc877ac23700f4d2c94b5c9d502c`.
 - Sol's working tree was never mounted or edited. Its later commits are documentation only: `c855879`, and the correction `be26788` that records migration head `m1n2o3p4q5r6`.
 - Proof of what is mounted:
@@ -62,6 +72,7 @@ Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktre
 - **Markers in that guild:**
   - `dd02fc7f` (B, created via the API)
   - `3895ba9d`, `69aff9b5`, `6fa2782b`, `772cfd7a` (A, created in the app)
+  - for the correction (§5a): `f65276b9`, `3f0fbe6a`, `5028f408`, `499bf540` (B, via the API) and `e2641cfc` (A, in the app)
 - **Marker in the existing QA guild:** `66bf3fc6` in "Linked Markers QA d1f509e3", posted by the restored `linkqad1f509e30` session.
 
 ## 2. Backend real-Postgres gate (local DEV)
@@ -110,7 +121,7 @@ Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktre
 | Draft cancellation (edited draft) | **Failed (crash) → fixed (`05f5d00`) → Pass** | Before: EXC_BREAKPOINT in UIKit `dismissViewController` via `SheetBridge.present` (`test-results/crash-discard-before-fix-frames.txt`). After: "Discard this draft?" appears over the sheet; Discard ends placement; no crash and no marker created. | 29 |
 | Incompatible-component warning | **Pass** | Analysis + Support, then tap Question → "Switch to Question? This removes context Question can't carry: Support." Cancel keeps Analysis with 1 level. | 32, 33 |
 | Setup, untracked | **Pass** | `6fa2782b`: `tracking_enabled=false`, state DRAFT, long with consistent levels. Review showed the untracked copy. | 34, 35, 38 |
-| Setup, tracked | **Open: see §5** | `3895ba9d` stored with entry above both TP and SL; ARMED→ACTIVE at 15:31:20. | 22–27 |
+| Setup, tracked | **Failed as found (§5); corrected in §5a** | `3895ba9d` stored with entry above both TP and SL; ARMED→ACTIVE at 15:31:20. Kept as evidence, not repaired. | 22–27 |
 | Experiment off | Legacy flat list | Per-launch gate observed as off. | 36 |
 
 **Not exercised at runtime:**
@@ -131,9 +142,9 @@ Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktre
    - The request needs `cancellingNeedsConfirmation`, which needs the guided flow. So it stays unreachable with the experiment off and in production.
    - No unit test: the fault is in the presentation hierarchy, which the unit target cannot host. Evidence is the crash frames before the fix and capture 29 after.
 
-## 5. Open defect: tracked Setup stored with inconsistent levels (decision pending)
+## 5. Defect as found: tracked Setup stored with inconsistent levels
 
-**Status.** Not passed and not fixed. Setup rules were left unchanged, as instructed, pending the owner's scoped decision relayed by Astra.
+**Status.** Kept here as found. The owner then approved a bounded correction, which is in §5a. The paths and line numbers below describe the code before `2e8750e` and before Sol's `5061824`.
 
 ### Exact reproduction (guided flow, real runtime)
 
@@ -168,11 +179,11 @@ The failed post only widened the window. Without any failure, the same result fo
 - Run with the experiment off, in the legacy panel (captures 36, 37).
 - Chart handles keep TP and SL consistent relative to the displayed entry: dragging SL across the entry flips the side and mirrors TP.
 - A tracked short was placed with SL 83,957.08 just above the displayed entry 83,954.01 while the live price read 83,958.
-- On Place, the entry was rewritten to `lastCandle.close` = 83,934.01, with no re-check. Result: `772cfd7a`, ARMED.
+- On Place, the entry was rewritten to `lastCandle.close` = 83,934.01, with no re-check. Result: `772cfd7a`, ARMED; the processor later scored it SL_HIT.
 - The price had moved down, so the stored levels happen to be consistent.
 - Chasing the exact price timing further was stopped at Astra's request.
 
-### Minimal correction recommendation (not implemented)
+### Minimal correction recommendation (as written before approval)
 
 1. **Client (smallest).**
    - In `placeMarkerFromState`, after rewriting a tracked Setup's entry to `lastCandle.close`, check `isSetupDirectionValid`. If it fails, send nothing: keep the draft and record a failure, for example "Price moved past your stop or target. Adjust the levels and post again." In the guided flow that is `submissionPhase = .failed`; in the legacy flow, `presentPlacementFailure`.
@@ -184,9 +195,82 @@ The failed post only widened the window. Without any failure, the same result fo
    - Old clients that hit the price race would get a generic failure instead of an invalid record.
    - Existing records are untouched.
 
+## 5a. Approved correction: tracked Setup level integrity
+
+Scope: `docs/V1_5_SETUP_GUARD_CORRECTION.md`. Claude owns iOS and the local runtime; Sol owns the backend guard.
+
+### Client (`2e8750e`, guided flow under the experiment only)
+
+- **Review shows the Entry the chart shows.** The guided Setup card, Review, side pill and R:R read `guidedSetupEntryPrice`: the Entry level (what the chart's Entry line drives), falling back to the anchor only if no Entry level exists. A linked Setup's anchor sits on the parent's candle with an old price, which Stage 4 showed as "Entry".
+- **Post-time check.** The chart's latest-price Entry refresh is unchanged; it moved into `MarkerPlacementState.refreshSetupEntryForPosting(latest:)` with identical behaviour.
+  - Straight after it, `MarkerPlacementSubmitter.submitCreate` checks the request that is about to be sent.
+  - A guided tracked Setup whose Entry is not strictly between SL and TP, or that lacks exactly one of each, is **not sent**. It fails with `MarkerPlacementFailure.trackedSetupLevelsOutOfOrder`.
+  - The side inference is the editor's `MarkerSetupSide.of`.
+- **On rejection.**
+  - Review shows "Couldn't post — The price moved: Entry is no longer between your stop and target. Adjust your levels, then post again. Your draft is saved." It offers **Adjust levels**, which returns to Details. The chart shows the "Adjust Your Levels" warning toast.
+  - The draft, link, response timeframe, tracking and exits are kept. Nothing moves TP or SL, freezes the old Entry or flips direction.
+  - The chart's Entry line moves to the refreshed price, as a new candle would, so the chart and Review agree.
+  - Nothing is marked as submitting. The chart's `isSubmittingPlacement` is cleared by the normal non-stale outcome path, so nothing is left pending. Duplicate-post protection, stale-completion handling and retry after a server failure are unchanged.
+- **Before Post.** Review and Post/Retry are disabled while a guided tracked Setup's levels are out of order, and Details explains why. This also covers Retry after a failure during which the price moved.
+- **Unchanged.**
+  - Untracked Setups are never held.
+  - With the experiment off, the legacy panel, checklist, validity and submission behave exactly as before. The new guided-only checks read `isGuidedFlowActive`.
+  - Production is unchanged because the guided flow is unreachable there.
+
+### Tests
+
+`MarkerTrackedSetupGuardTests` (8 tests):
+- linked Review Entry
+- valid long and short
+- a price move through the stop: no transport call; draft, link and timeframe kept; no pending state; retry also sends nothing
+- adjustment, then success
+- untracked
+- experiment-off legacy
+- the refresh moves only Entry and the anchor
+- the request check against the backend rule: strict order, missing level, duplicate Entry, untracked, non-Setup
+
+**Mutation check:**
+- Reading the anchor again fails 3 tests.
+- Removing the preflight fails 2: `aPriceMoveThroughTheStopIsStoppedBeforeSending` and `adjustingTheLevelsThenPostingSucceeds`.
+
+**Harness scenarios** (in-memory transport, not the backend):
+- `responseSetupEntry` (capture 39): Review Entry 63,920, the Entry line. The anchor is 63,520.
+- `setupMarketMoved` (capture 40): the price rose 200 through a +120 stop. "TP / SL same side", the explanation, Adjust levels, and Retry disabled; the transport received nothing.
+
+### Backend (Sol, `5061824`), verified on local DEV
+
+`$S/stage4/guard_checks.py` ran against the local gateway only, using the disposable accounts. Results are in `test-results/guard-local-dev-api-checks.json`; the DB after the run is in `test-results/guard-local-dev-guild-markers.txt`. **10 of 10 as expected:**
+
+| Check | Result |
+|---|---|
+| Invalid tracked create: the original retry levels exactly (Entry 83,920.01, SL 83,840.98, TP 83,393.81), linked `challenges`, 15m | **422** "Tracked setup requires SL < Entry < TP or TP < Entry < SL". Not persisted. |
+| Invalid tracked create: SL and TP both above Entry, 30m | **422**. Not persisted. |
+| Valid tracked long (1h) and short (4h) | 200, `f65276b9` / `3f0fbe6a` ARMED |
+| Untracked with same-side levels (1d) | 200, `5028f408` DRAFT. Untracked behaviour is unchanged. |
+| Effective update: turn tracking on for that untracked record | **400** |
+| Effective update: move the valid long's SL above Entry (ARMED, components replaceable) | **400**; the stored levels are unchanged |
+| Note-only edit of the valid long | 200 |
+| Text-only Analysis create and edit (regression) | 200 / 200, `499bf540`, `[anchor]` |
+
+- **No new invalid rows.** The guild went from 5 to 9 markers: the four accepted API creates. `3895ba9d` (still ACTIVE) and `772cfd7a` (SL_HIT) are untouched.
+- **Original retry case, without live-price timing.** Covered twice:
+  - The backend rejects that exact request (above).
+  - The client never sends it: the `setupMarketMoved` harness scenario and `aPriceMoveThroughTheStopIsStoppedBeforeSending`.
+- **Real app, same runtime.**
+  - As A: respond to B's `499bf540` (Challenges, 5m) → Change type → Setup.
+  - Details and Review show Entry 83,825.085, the Entry line (captures 41, 42).
+  - Post → POST 200. `e2641cfc` is a tracked long (SL 83,728.11 < Entry 83,841.66 < TP 83,986.72), ARMED, parent `499bf540`, `challenges`, 5m (capture 43).
+  - The live rejection path in the real app was not triggered, because it depends on price timing. It is covered by the harness and the unit tests.
+- **Consequences** (from Sol's checkpoint; the backend is not deployed):
+  - An effective-state update of an existing invalid tracked Setup, including a note-only edit, now returns 400.
+  - An ACTIVE invalid Setup cannot have its levels replaced through the current endpoint.
+  - Turning tracking off bypasses the rule.
+  - In today's app, such an edit would show the generic "Could not save changes" failure. That is inferred from the update path and was not exercised, to avoid writing to the evidence records.
+
 ## 6. Other observations (not fixed)
 
-- **Review Entry value.** For a response Setup, the guided Review's Entry shows the anchor price (83,553.98), labelled "Latest price when you post". The chart's Entry line showed 83,744.01 and the posted entry was 83,920.01. For a new Setup the values match: 84,000.005 at Review, 83,982.16 posted, the difference being price movement. Folded into §5, recommendation 1.
+- **Review Entry value.** Fixed in `2e8750e` (§5a). As found: for a response Setup the guided Review's Entry showed the anchor price (83,553.98), while the chart's Entry line showed 83,744.01.
+- **Response thesis text cut short.** Two response drafts typed by the simulator tool were stored truncated after a colon: "Stage4 response: reje" (`3895ba9d`) and "Guard check:" (`e2641cfc`). Non-response notes containing a colon were stored in full. The cause is not known; it may be tool input racing a re-render. It was not reproduced by hand or investigated, because it is outside this correction's scope. Worth a Stage 5 check.
 - **Legacy edit panel wording.** The panel still lists "Add at least one chart component" with a warning icon for a text-only Analysis, although under the experiment it is optional (capture 31). Cosmetic.
 - **Unit tests sign the app out.** The unit-test host is the same LinkedDev bundle on the same simulator, and after each test run the app came back signed out. At 15:19:24 and 15:20:31, refresh returned 401 right after a run. This is a harness effect, not a product finding.
 - **Simulator input.**
@@ -205,7 +289,9 @@ The failed post only widened the window. Without any failure, the same result fo
   - `RLChartMarkerDTO.components` is a required array with synthesized Codable, so `[anchor]` decodes.
   - Non-test source has no `components.first!` or `[0]`.
   - The only rule tying Analysis to a component is placement validation (`MarkerPlacementMode.swift:720` there).
-- Source inspection suggests an author editing a text-only Analysis from an old build would be asked to add a component before saving. This does not prove absence of crashes or data loss in the shipped versions. **Runtime not exercised; exact 1.1.1/1.1.2 source provenance remains unverified.**
+- So, by source reading, an author editing a text-only Analysis from an old build would be asked to add a component before saving. This is inference only: it does not prove the absence of a crash or data loss, and `c401710` is not proven to be the exact 1.1.1 or 1.1.2 source (Astra's qualification, `546f9bf`). **Runtime not exercised.**
+
+**Tracked-Setup guard (`5061824`), by source.** Released clients that send valid tracked levels keep the same request, response and event shapes. A released client that hits the price race gets a failure instead of an invalid record. Current iOS with the experiment off maps that 422 to the generic "Could not place marker" toast and keeps the draft; the guided flow does not send the request. Older clients' messages were not checked at runtime.
 
 **Current iOS, experiment off.** Same rule; unchanged. Only the experiment-gated path allows a text-only edit.
 
@@ -230,6 +316,11 @@ All runs use `ONLY_ACTIVE_ARCH=YES`. `grep -c TradersGuildMac` = 0.
 | `GCP Public Prod` Release build | BUILD SUCCEEDED | `$S/s4-release.log` |
 | Backend real-Postgres gate (local DEV) | 1 passed | §2 |
 | Compose and gateway smokes | pass, before and after the swap | §1 |
+| **Correction** `2e8750e`, `LinkedDev` DevDebug: MarkerTrackedSetupGuard plus all the suites above | **167 passed, 0 failed, 0 skipped** | `$S/rb-s4g-devdebug.xcresult`, `$S/s4g-devdebug.log`; `test-results/guard-devdebug-summary.json` |
+| Mutation: Review reads the anchor | 3 of 8 failed, as intended | `$S/rb-s4g-mutation-entry.xcresult`; `test-results/guard-mutation-review-entry-summary.json` |
+| Mutation: preflight removed | 2 of 8 failed, as intended | `$S/rb-s4g-mutation-preflight.xcresult`; `test-results/guard-mutation-preflight-summary.json` |
+| Correction: `LinkedDev` DevDebug app / `LinkedDev Profile` / `GCP Public Prod` Release builds | BUILD SUCCEEDED ×3 | `$S/s4g-build-devdebug.log`, `$S/s4g-devprofile.log`, `$S/s4g-release.log` |
+| Correction: backend guard on local DEV | 10 of 10 as expected | §5a |
 
 The whole unit target was not re-run for this bounded stage. The last full run is Stage 3's (772 tests).
 
@@ -248,4 +339,6 @@ The whole unit target was not re-run for this bounded stage. The last full run i
 | 32–33 | Incompatible-component warning |
 | 34–35, 38 | Untracked Setup |
 | 36–37 | Experiment-off baseline |
-| `test-results/` | Summaries, junit, row counts, crash frames |
+| 39–40 | Correction, harness: linked Review Entry; market moved, not sent |
+| 41–43 | Correction, real app: linked Setup Details and Review Entry line; posted |
+| `test-results/` | Summaries, junit, row counts, crash frames; `guard_checks.py`, `guard-local-dev-api-checks.json`, `guard-local-dev-guild-markers.txt`, guard test and mutation summaries |

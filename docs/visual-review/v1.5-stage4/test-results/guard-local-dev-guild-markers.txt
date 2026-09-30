@@ -1,0 +1,10 @@
+dd02fc7f | analysis | 5m | f | - | B: text-only thesis, buyers defending 83.8k | anchor@84060.00
+3895ba9d | setup | 15m | t | SL_HIT | Stage4 response: reje | anchor@83920.01,level.entry@83920.01,level.sl@83840.98,level.tp@83393.81
+69aff9b5 | analysis | 5m | f | - | A text-only thesis to edit later (edited in Stage4) | anchor@83868.07
+6fa2782b | setup | 5m | f | DRAFT | Stage4 untracked setup idea | anchor@83982.16,level.entry@83982.16,level.sl@83903.03,level.tp@84161.64
+772cfd7a | setup | 5m | t | SL_HIT |  | anchor@83934.01,level.entry@83934.01,level.sl@83957.08,level.tp@83792.37
+f65276b9 | setup | 1h | t | ARMED | guard: valid long (note edited) | anchor@50000.00,level.entry@50000.00,level.sl@49800.00,level.tp@50400.00
+3f0fbe6a | setup | 4h | t | ARMED | guard: valid short | anchor@50000.00,level.entry@50000.00,level.sl@50200.00,level.tp@49600.00
+5028f408 | setup | 1d | f | DRAFT | guard: untracked same-side | anchor@50000.00,level.entry@50000.00,level.sl@50100.00,level.tp@50300.00
+499bf540 | analysis | 5m | f | - | guard: text-only analysis regression (edited) | anchor@84000.00
+e2641cfc | setup | 5m | t | ACTIVE | Guard check: | anchor@83841.66,level.entry@83841.66,level.sl@83728.11,level.tp@83986.72

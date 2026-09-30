@@ -1,0 +1,57 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 2,
+      "passedTests" : 6,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 2,
+  "finishTime" : 1790793760.655,
+  "passedTests" : 6,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1790793719.191,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (transport.createRequests → [traders_guild.RLCreateMarkerRequest(symbolId: 00000000-0000-0000-0000-000000000001, timeframe: \"15m\", intent: \"setup\", title: nil, note: Optional(\"Short the failed breakout\"), visibility: \"guild\", confidence: nil, trackingEnabled: true, components: [traders_guild.RLMarkerComponentRequest(componentType: \"anchor\", payload: [\"price\": traders_guild.AnyCodable(value: 64120), \"time\": traders_guild.AnyCodable(value: \"2026-05-09T08:13:20Z\")]), traders_guild.RLMarkerComponentRequest(componentType: \"level.tp\", payload: [\"label\": traders_guild.AnyCodable(value: \"TP\"), \"price\": traders_guild.AnyCodable(value: 63680)]), traders_guild.RLMarkerComponentRequest(componentType: \"level.sl\", payload: [\"price\": traders_guild.AnyCodable(value: 64040), \"label\": traders_guild.AnyCodable(value: \"SL\")]), traders_guild.RLMarkerComponentRequest(componentType: \"level.entry\", payload: [\"label\": traders_guild.AnyCodable(value: \"Entry\"), \"price\": traders_guild.AnyCodable(value: 64120)])], pollQuestion: nil, pollOptions: nil, discordChannelId: nil, parentMarkerId: Optional(00000000-0000-0000-0000-000000000070), linkRelationship: Optional(\"challenges\"))]).isEmpty → false",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 2,
+      "testIdentifierString" : "MarkerTrackedSetupGuardTests/adjustingTheLevelsThenPostingSucceeds()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTrackedSetupGuardTests/adjustingTheLevelsThenPostingSucceeds()",
+      "testName" : "adjustingTheLevelsThenPostingSucceeds()"
+    },
+    {
+      "failureText" : "Expectation failed: (outcome.result → .success(Optional(traders_guild.RLChartMarkerDTO(id: 6428FDD7-987C-4A62-BA72-76A2D63C1735, symbolId: 00000000-0000-0000-0000-000000000001, guildId: 00000000-0000-0000-0000-000000000002, author: traders_guild.RLGuildMemberDTO(membershipId: 00000000-0000-0000-0000-000000000501, role: \"member\", reputation: 120, contributionScore: 40, dateJoined: 2001-01-01 00:00:00 +0000, accuracyRate: Optional(0.62), mutedUntil: nil, suspendedUntil: nil, userId: 00000000-0000-0000-0000-000000000401, username: \"alex\", displayName: \"Alex\", avatarUrl: Optional(\"https://fixtures.tradersguild.invalid/avatars/alex.png\"), isOnline: true, globalReputation: 300, isFriend: false, friendshipStatus: nil, isBlocked: false, isBlockedBy: false), candleTimestamp: 2026-05-09 08:13:20 +0000, timeframe: \"15m\", price: 64120.0, intent: \"setup\", title: nil, note: Optional(\"Short the failed breakout\"), visibility: \"guild\", confidence: nil, trackingEnabled: true, trackingState: Optional(\"ARMED\"), alertSeverity: nil, createdAt: 2026-09-30 18:42:32 +0000, createdAtFormatted: \"just now\", isVisible: true, likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [], isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [traders_guild.RLMarkerComponentDTO(id: F1D6AD47-D6AE-4B40-A518-6A2DACA0C9C6, componentType: \"anchor\", payload: traders_guild.MarkerComponentPayload.anchor(traders_guild.AnchorPayload(time: 2026-05-09 08:13:20 +0000, price: 64120.0)), ordering: 0), traders_guild.RLMarkerComponentDTO(id: 1951987A-9212-4213-BC8A-75DB49A0AE66, componentType: \"level.sl\", payload: traders_guild.MarkerComponentPayload.levelSl(traders_guild.LevelPayload(price: 64040.0, label: Optional(\"SL\"), colorHex: nil, lineStyle: nil, lineWidth: nil)), ordering: 1), traders_guild.RLMarkerComponentDTO(id: 9A6FB801-BFC4-4A59-ADF1-43F2023AF55E, componentType: \"level.entry\", payload: traders_guild.MarkerComponentPayload.levelEntry(traders_guild.LevelPayload(price: 64120.0, label: Optional(\"Entry\"), colorHex: nil, lineStyle: nil, lineWidth: nil)), ordering: 2), traders_guild.RLMarkerComponentDTO(id: 4FD83CC5-F73C-40B2-B11A-6E531EF4AA9F, componentType: \"level.tp\", payload: traders_guild.MarkerComponentPayload.levelTp(traders_guild.LevelPayload(price: 63680.0, label: Optional(\"TP\"), colorHex: nil, lineStyle: nil, lineWidth: nil)), ordering: 3)], primaryComponentId: Optional(F1D6AD47-D6AE-4B40-A518-6A2DACA0C9C6), pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil, parentMarkerId: Optional(00000000-0000-0000-0000-000000000070), linkRelationship: Optional(\"challenges\"), parentPreview: nil, directResponseCount: nil, responsesRevision: nil, hasResponses: nil, parentDirectResponseCount: nil, parentResponsesRevision: nil, parentHasResponses: nil)))) == (.failure(.trackedSetupLevelsOutOfOrder) → .failure(traders_guild.MarkerPlacementFailure.trackedSetupLevelsOutOfOrder))",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 6,
+      "testIdentifierString" : "MarkerTrackedSetupGuardTests/aPriceMoveThroughTheStopIsStoppedBeforeSending()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTrackedSetupGuardTests/aPriceMoveThroughTheStopIsStoppedBeforeSending()",
+      "testName" : "aPriceMoveThroughTheStopIsStoppedBeforeSending()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 8
+}

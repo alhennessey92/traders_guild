@@ -1,0 +1,124 @@
+[
+  {
+    "check": "invalid tracked create: original retry levels (linked, 15m)",
+    "status": 422,
+    "expected": [
+      400,
+      422
+    ],
+    "pass": true,
+    "id": null,
+    "detail": [
+      {
+        "loc": [
+          "body"
+        ],
+        "msg": "Value error, Tracked setup requires SL < Entry < TP or TP < Entry < SL"
+      }
+    ]
+  },
+  {
+    "check": "invalid tracked create: SL and TP both above Entry (30m)",
+    "status": 422,
+    "expected": [
+      400,
+      422
+    ],
+    "pass": true,
+    "id": null,
+    "detail": [
+      {
+        "loc": [
+          "body"
+        ],
+        "msg": "Value error, Tracked setup requires SL < Entry < TP or TP < Entry < SL"
+      }
+    ]
+  },
+  {
+    "check": "valid tracked long (1h)",
+    "status": 200,
+    "expected": [
+      200,
+      201
+    ],
+    "pass": true,
+    "id": "f65276b9-c9fb-42d1-bd6a-e78925605de0",
+    "detail": null
+  },
+  {
+    "check": "valid tracked short (4h)",
+    "status": 200,
+    "expected": [
+      200,
+      201
+    ],
+    "pass": true,
+    "id": "3f0fbe6a-4813-4e29-b3c7-706fdc21c793",
+    "detail": null
+  },
+  {
+    "check": "untracked same-side levels still accepted (1d)",
+    "status": 200,
+    "expected": [
+      200,
+      201
+    ],
+    "pass": true,
+    "id": "5028f408-cb6c-4fca-9430-810bfcd0f8ab",
+    "detail": null
+  },
+  {
+    "check": "effective update: enable tracking on same-side untracked",
+    "status": 400,
+    "expected": [
+      400,
+      422
+    ],
+    "pass": true,
+    "id": null,
+    "detail": "Tracked setup requires SL < Entry < TP or TP < Entry < SL"
+  },
+  {
+    "check": "effective update: valid long -> SL above Entry",
+    "status": 400,
+    "expected": [
+      400,
+      422
+    ],
+    "pass": true,
+    "id": null,
+    "detail": "Tracked setup requires SL < Entry < TP or TP < Entry < SL"
+  },
+  {
+    "check": "valid update: note-only edit on valid long",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "id": "f65276b9-c9fb-42d1-bd6a-e78925605de0",
+    "detail": null
+  },
+  {
+    "check": "text-only Analysis create (regression)",
+    "status": 200,
+    "expected": [
+      200,
+      201
+    ],
+    "pass": true,
+    "id": "499bf540-a092-4bfd-8b3e-ab08a544176e",
+    "detail": null
+  },
+  {
+    "check": "text-only Analysis update (regression)",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "id": "499bf540-a092-4bfd-8b3e-ab08a544176e",
+    "detail": null
+  }
+]
