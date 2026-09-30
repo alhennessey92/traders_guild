@@ -1,0 +1,4 @@
+B create throwaway question 200 47bd471b-6a05-498d-a64b-ca822401f351
+A (guild owner) GET can_delete: 200 False
+A (guild owner) DELETE: 403 You don't have permission to delete this marker
+B (author) DELETE throwaway: 200

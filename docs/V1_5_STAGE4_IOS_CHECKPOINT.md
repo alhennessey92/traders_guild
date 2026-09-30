@@ -125,9 +125,9 @@ Branch `claude/1.5.0-avatar-markers`, continuing the accepted `b10ed51`. Worktre
 | Experiment off | Legacy flat list | Per-launch gate observed as off. | 36 |
 
 **Not exercised at runtime:**
-- closing an *untouched* guided draft (covered by the Stage 3 unit tests)
-- a `marker_updated` event received by a second client (only one app instance)
 - physical-device behaviour and performance
+
+Closing an *untouched* guided draft, and a `marker_updated` event received by another client, were exercised later (§10).
 
 ## 4. Client fixes (separate commits)
 
@@ -270,7 +270,7 @@ Scope: `docs/V1_5_SETUP_GUARD_CORRECTION.md`. Claude owns iOS and the local runt
 ## 6. Other observations (not fixed)
 
 - **Review Entry value.** Fixed in `2e8750e` (§5a). As found: for a response Setup the guided Review's Entry showed the anchor price (83,553.98), while the chart's Entry line showed 83,744.01.
-- **Response thesis text cut short.** Two response drafts typed by the simulator tool were stored truncated after a colon: "Stage4 response: reje" (`3895ba9d`) and "Guard check:" (`e2641cfc`). Non-response notes containing a colon were stored in full. The cause is not known; it may be tool input racing a re-render. It was not reproduced by hand or investigated, because it is outside this correction's scope. Worth a Stage 5 check.
+- **Response thesis text cut short: a tool artifact, not an app bug** (§10). Two response drafts typed by the simulator tool were stored truncated: "Stage4 response: reje" (`3895ba9d`) and "Guard check:" (`e2641cfc`).
 - **Legacy edit panel wording.** The panel still lists "Add at least one chart component" with a warning icon for a text-only Analysis, although under the experiment it is optional (capture 31). Cosmetic.
 - **Unit tests sign the app out.** The unit-test host is the same LinkedDev bundle on the same simulator, and after each test run the app came back signed out. At 15:19:24 and 15:20:31, refresh returned 401 right after a run. This is a harness effect, not a product finding.
 - **Simulator input.**
@@ -322,7 +322,9 @@ All runs use `ONLY_ACTIVE_ARCH=YES`. `grep -c TradersGuildMac` = 0.
 | Correction: `LinkedDev` DevDebug app / `LinkedDev Profile` / `GCP Public Prod` Release builds | BUILD SUCCEEDED ×3 | `$S/s4g-build-devdebug.log`, `$S/s4g-devprofile.log`, `$S/s4g-release.log` |
 | Correction: backend guard on local DEV | 10 of 10 as expected | §5a |
 
-The whole unit target was not re-run for this bounded stage. The last full run is Stage 3's (772 tests).
+| **Full unit target** (`traders_guildTests`), `LinkedDev` DevDebug, on `a257851` (code identical to `2e8750e`) | **792 passed, 0 failed, 0 skipped** | `$S/rb-s4-full.xcresult`, `$S/s4-full.log`; `test-results/full-unit-target-summary.json` |
+
+The previous full run was Stage 3's (772 tests).
 
 ## 9. Evidence index (`docs/visual-review/v1.5-stage4/`)
 
@@ -341,4 +343,31 @@ The whole unit target was not re-run for this bounded stage. The last full run i
 | 36–37 | Experiment-off baseline |
 | 39–40 | Correction, harness: linked Review Entry; market moved, not sent |
 | 41–43 | Correction, real app: linked Setup Details and Review Entry line; posted |
-| `test-results/` | Summaries, junit, row counts, crash frames; `guard_checks.py`, `guard-local-dev-api-checks.json`, `guard-local-dev-guild-markers.txt`, guard test and mutation summaries |
+| 44–45 | Follow-up: response-draft typing probes (tool artifact) |
+| 46–47 | Follow-up: owner's view before and after a realtime `marker_updated` (new note; Delete affordance) |
+| 48–49 | Follow-up: untouched guided draft closes without a dialog |
+| `test-results/` | Summaries, junit, row counts, crash frames; `guard_checks.py`, `guard-local-dev-api-checks.json`, `guard-local-dev-guild-markers.txt`, guard test and mutation summaries; `followup-owner-delete-check.txt` |
+
+## 10. Follow-up while Astra and Sol were unavailable (no code changes)
+
+Bounded to the gaps this checkpoint listed. Same runtime (`5061824`), same accounts. The only writes were the API calls named below; none touched the evidence records' levels or state.
+
+**1. Response-thesis truncation (§6): a tool artifact.** Two probes on a real response draft (Supports, 5m), then discarded:
+- Test A (capture 44): 67 characters including a colon, typed, then a 3-second wait. All of them arrived.
+- Test B (capture 45): 37 more characters, typed, then "Change type" tapped straight away. Only " plus probe" arrived. The simulator typing tool returns before every keystroke has been delivered, and removing the field drops the rest.
+
+Both truncated notes were typed immediately before a Change type tap. Text that has arrived survives a type change and back. Nothing in the app needs changing.
+
+**2. `marker_updated` on a second client: passes, and exposed a permission mismatch that predates v1.5.**
+- At 19:07:14, B edited `499bf540`'s note through the API. A's app, already open on the chart, showed the new note on selection. chart-service logged no marker GET after the PUT, so the update arrived over realtime (capture 47).
+- **Finding: owner Delete affordance.** The same selection now offered A **Delete Marker** on B's marker; before the update it did not (capture 46).
+  - iOS `neutralMerge`/`locallyPermissioned` (1.3.0, commit `e236543`, present in the 1.3.0 RC `8801a6a`) sets `canDelete = isMine || viewerCanModerate`. `MemberRole.canModerate` includes **owner**.
+  - The backend allows delete, and reports `can_delete`, only for the author, admin or moderator (`chart.py` `delete_marker`; `can_delete` at `:1346`).
+  - Runtime check on a throwaway marker (`test-results/followup-owner-delete-check.txt`): B created a Question; A (guild owner) got `can_delete=false` and DELETE **403** "You don't have permission to delete this marker"; B, the author, then deleted it (200).
+  - Effect: a guild owner sees Delete on other members' markers that arrived or changed over realtime; tapping it fails with the generic failure. Nothing is lost.
+  - Not fixed: the code is shipped 1.3.0 behaviour, and which side is right (should owners moderate?) is a product/backend decision. Candidates: include `owner` in the backend delete rule and `can_delete` (additive, and every client benefits), or drop owner from the client derivation.
+  - That this affects released builds is inferred from `8801a6a`; a released binary was not run.
+
+**3. Closing an untouched guided draft: passes.** "Post to the chart", then close, with nothing typed: placement ended with no confirmation and no request (captures 48, 49).
+
+**4. Full unit target: 792 passed, 0 failed, 0 skipped** (§8). Running it on the same simulator signed the LinkedDev app out again, the known harness effect.
