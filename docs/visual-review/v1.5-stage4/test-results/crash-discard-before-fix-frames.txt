@@ -1,0 +1,24 @@
+app traders_guild 1.5.0 (25) bundle co.tradersguild.app.linkeddev captured 2026-09-30 16:34:36.00 +0100
+exception: EXC_BREAKPOINT SIGTRAP
+  UIKitCore      ?
+  UIKitCore      ?
+  UIKitCore      ___UIViewControllerTransitioningRunCustomTransitionWithRequest_block_invoke_3
+  UIKitCore      +[UIKeyboardSceneDelegate _pinInputViewsForKeyboardSceneDelegate:onBehalfOfResponder:duringBlock:]
+  UIKitCore      ___UIViewControllerTransitioningRunCustomTransitionWithRequest_block_invoke_2
+  UIKitCore      +[UIView(Animation) _setAlongsideAnimations:toRunByEndOfBlock:animated:]
+  UIKitCore      _UIViewControllerTransitioningRunCustomTransitionWithRequest
+  UIKitCore      __77-[UIPresentationController runTransitionForCurrentStateAnimated:handoffData:]_block_invoke_3
+  UIKitCore      +[UIPresentationController _scheduleTransition:]
+  UIKitCore      -[UIPresentationController runTransitionForCurrentStateAnimated:handoffData:]
+  UIKitCore      -[UIPresentationController _dismissWithAnimationController:interactionController:animated:handoffData:]
+  UIKitCore      __73-[UIViewController _dismissViewControllerWithTransition:from:completion:]_block_invoke
+  UIKitCore      -[UIViewController _dismissViewControllerWithTransition:from:completion:]
+  UIKitCore      -[UIViewController dismissViewControllerWithTransition:completion:]
+  UIKitCore      -[UIViewController _performCoordinatedPresentOrDismiss:animated:]
+  UIKitCore      +[UIViewController _performWithoutDeferringTransitionsAllowingAnimation:actions:]
+  UIKitCore      __61-[UIViewController dismissViewControllerAnimated:completion:]_block_invoke_2
+  UIKitCore      +[UIView _performWithFluidPresentationTransitionsEnabled:]
+  UIKitCore      -[UIViewController dismissViewControllerAnimated:completion:]
+  SwiftUI        closure #3 in SheetBridge.present(_:from:animated:existingPresentedVC:isPreempting:)
+  SwiftUICore    static Update.dispatchActions()
+  SwiftUICore    closure #1 in ViewGraphRootValueUpdater.render(interval:updateDisplayList:targetTimestamp:)

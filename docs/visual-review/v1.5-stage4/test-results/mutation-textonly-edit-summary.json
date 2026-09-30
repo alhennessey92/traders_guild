@@ -1,0 +1,61 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 2,
+      "passedTests" : 2,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 2,
+  "finishTime" : 1790781580.015,
+  "passedTests" : 2,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1790781519.946,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (state → traders_guild.MarkerPlacementState).isValid → false",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 3,
+      "testIdentifierString" : "MarkerTextOnlyAnalysisEditTests/theAllowanceEndsWithTheEditSession()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTextOnlyAnalysisEditTests/theAllowanceEndsWithTheEditSession()",
+      "testName" : "theAllowanceEndsWithTheEditSession()"
+    },
+    {
+      "failureText" : "Expectation failed: (state → traders_guild.MarkerPlacementState).isValid → false",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 2,
+      "testIdentifierString" : "MarkerTextOnlyAnalysisEditTests/underTheExperimentATextOnlyAnalysisSavesAsText()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTextOnlyAnalysisEditTests/underTheExperimentATextOnlyAnalysisSavesAsText()",
+      "testName" : "underTheExperimentATextOnlyAnalysisSavesAsText()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+    {
+      "category" : "Common Failures",
+      "impact" : "100% of failures",
+      "text" : "2 runs of 2 tests failed with Expectation failed: (state → traders_guild.MarkerPlacementState).isValid → false"
+    }
+  ],
+  "totalTestCount" : 4
+}
