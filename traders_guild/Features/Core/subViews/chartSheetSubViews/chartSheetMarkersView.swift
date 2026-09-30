@@ -36,11 +36,15 @@ struct chartSheetMarkersView: View {
 
     @ObservedObject var chartViewModel: ChartViewModel
     @ObservedObject var controlViewModel: ChartControlViewModel
+    /// The draft the entry points start. Only the guided entry points (avatar
+    /// prototype on) use it; the legacy list never did.
+    var placementState: MarkerPlacementState? = nil
 
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
     var onMarkerSelection: (() -> Void)? = nil
 
     @State private var selectedPrimaryTab: MarkerSheetPrimaryTab = .add
+    @State private var showsOtherMarkerTypes = false
     @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
     @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
 
@@ -315,9 +319,101 @@ struct chartSheetMarkersView: View {
         }
     }
 
-    // MARK: - Add Tab (flat list of all intents)
+    // MARK: - Add Tab
 
+    /// The v1.5 hierarchy when the avatar prototype is on; the flat list of
+    /// every intent otherwise, exactly as before.
+    @ViewBuilder
     private var addContent: some View {
+        if MarkerAvatarExperiment.isEnabled, let placementState {
+            guidedAddContent(placementState)
+        } else {
+            legacyAddContent
+        }
+    }
+
+    /// Post to the chart → social Analysis; Structured → Setup; other types on
+    /// their existing flows.
+    private func guidedAddContent(_ placementState: MarkerPlacementState) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MarkerPostToChartCard(author: guidedAuthor) {
+                startGuidedPlacement(.analysis, placementState: placementState)
+            }
+
+            MarkerGuidedSectionTitle("Structured")
+                .padding(.top, 6)
+            setupPredictionNote
+            MarkerPlacementOptionRow(
+                intent: .setup,
+                isActive: isMarkerPlacementActive(for: .setup),
+                onToggle: { startGuidedPlacement(.setup, placementState: placementState) }
+            )
+
+            DisclosureGroup(isExpanded: $showsOtherMarkerTypes) {
+                VStack(spacing: 8) {
+                    ForEach(MarkerGuidedFlowEntry.otherIntents, id: \.self) { intent in
+                        MarkerPlacementOptionRow(
+                            intent: intent,
+                            isActive: isMarkerPlacementActive(for: intent),
+                            onToggle: {
+                                placementState.endGuidedFlow()
+                                togglePlacement(for: intent)
+                            }
+                        )
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                MarkerGuidedSectionTitle("Other marker types")
+            }
+            .tint(AppColors.greyText)
+            .padding(.top, 6)
+        }
+    }
+
+    private var guidedAuthor: MarkerAvatarIdentity {
+        var identity = MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+        identity.authorId = rlAppState.currentUser?.id
+        return identity
+    }
+
+    /// Start a guided placement. Same preflight as the legacy rows; the sheet
+    /// stays up, because Details is where the author starts.
+    private func startGuidedPlacement(_ intent: RLMarkerIntent, placementState: MarkerPlacementState) {
+        if isMarkerPlacementActive(for: intent) {
+            controlViewModel.cancelMarkerPlacement()
+            return
+        }
+        if let failure = placementPreflightFailure(for: intent) {
+            rlAppState.showError(
+                title: failure.toastTitle,
+                message: failure.userMessage,
+                severity: failure.toastSeverity,
+                style: .toast
+            )
+            return
+        }
+        placementState.prepareGuidedFlow()
+        controlViewModel.startMarkerPlacement(intent: intent)
+    }
+
+    private var setupPredictionNote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "shield.checkered")
+                .foregroundColor(AppColors.statusWarning90)
+                .font(.caption)
+            Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
+                .font(.caption2)
+                .foregroundColor(AppColors.secondaryForeground)
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var legacyAddContent: some View {
         VStack(spacing: 8) {
             ForEach(addMarkerIntents, id: \.self) { intent in
                 if intent == .setup {
@@ -1156,7 +1252,9 @@ private struct MarkerPlacementOptionRow: View {
                         UnifiedMarkerBadge(
                             intent: intent,
                             sizeToken: .large,
-                            avatar: currentUserAvatar
+                            // Only a personal marker is about its author; the
+                            // other rows keep their type glyph.
+                            avatar: intent == .personal ? currentUserAvatar : .none
                         )
                             .frame(width: 46, height: 46)
                     }

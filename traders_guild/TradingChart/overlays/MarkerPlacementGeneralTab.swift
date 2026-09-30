@@ -435,7 +435,7 @@ struct MarkerPlacementGeneralTab: View {
                 .tint(placementState.trackingEnabled ? RLComponentType.levelEntry.color : placementState.intent.color)
 
                 if placementState.trackingEnabled {
-                    trackedSetupCard
+                    MarkerTrackedSetupCard(placementState: placementState)
                 }
             }
 
@@ -646,7 +646,7 @@ struct MarkerPlacementGeneralTab: View {
 
             Spacer(minLength: 0)
 
-            TextField("0.0", value: levelValueBinding(for: componentType), formatter: Self.priceFormatter)
+            TextField("0.0", value: placementState.levelPriceBinding(for: componentType), formatter: Self.priceFormatter)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(AppColors.primaryForeground)
@@ -665,96 +665,6 @@ struct MarkerPlacementGeneralTab: View {
                 )
                 .frame(width: 132)
         }
-    }
-
-    /// One tidy card for tracking mode: a slim header line + the estimated
-    /// reputation impact chips (replaces the old banner + separate chip row).
-    private var trackedSetupCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                Image(systemName: "scope")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(RLComponentType.levelEntry.color)
-                Text("Tracking active")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.primaryForeground)
-                Spacer(minLength: 0)
-                Text("Est. reputation")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(AppColors.greyText)
-            }
-
-            HStack(spacing: 8) {
-                trackedRepChip(
-                    title: "If TP hits",
-                    value: placementState.estimatedTrackingRepGain.map { "+\($0)" } ?? "—",
-                    tint: RLComponentType.levelTp.color
-                )
-                trackedRepChip(
-                    title: "If SL hits",
-                    value: placementState.estimatedTrackingRepLoss.map { "-\($0)" } ?? "—",
-                    tint: RLComponentType.levelSl.color
-                )
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(RLComponentType.levelEntry.color.opacity(0.10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(RLComponentType.levelEntry.color.opacity(0.30), lineWidth: 1)
-                )
-        )
-    }
-
-    private func trackedRepChip(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppColors.greyText)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(tint.opacity(0.95))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(tint.opacity(0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(tint.opacity(0.32), lineWidth: 1)
-                )
-        )
-    }
-
-    private func levelValueBinding(for type: RLComponentType) -> Binding<Double> {
-        Binding<Double>(
-            get: {
-                placementState.componentPrice(type)
-                    ?? placementState.anchorDraft?.payload.levelPrice
-                    ?? 0
-            },
-            set: { newValue in
-                switch type {
-                case .levelTp:
-                    placementState.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: newValue, label: "TP")))
-                case .levelSl:
-                    placementState.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: newValue, label: "SL")))
-                case .levelSupport:
-                    placementState.upsertComponent(.levelSupport, payload: .levelSupport(LevelPayload(price: newValue, label: "Support")))
-                case .levelResistance:
-                    placementState.upsertComponent(.levelResistance, payload: .levelResistance(LevelPayload(price: newValue, label: "Resistance")))
-                case .levelEntry:
-                    placementState.upsertComponent(.levelEntry, payload: .levelEntry(LevelPayload(price: newValue, label: "Entry")))
-                default:
-                    break
-                }
-            }
-        )
     }
 
     /// A one-line statement of a requirement and whether it is met.

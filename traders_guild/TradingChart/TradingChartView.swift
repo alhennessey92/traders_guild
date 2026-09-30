@@ -2796,7 +2796,9 @@ struct TradingChartView: View {
                   let index = MarkerResponseAnchorResolver.index(
                     for: time, candles: chartData.candles, timeframe: currentTimeframe
                   ) else {
-                placementState.linkSession.recordFailure("Load the response candle before placing this marker. Your draft is saved.")
+                let message = "Load the response candle before placing this marker. Your draft is saved."
+                placementState.linkSession.recordFailure(message)
+                placementState.submissionPhase = .failed(message)
                 return
             }
             resolvedResponseAnchorTime = chartData.candles[index].timestamp
@@ -2849,36 +2851,25 @@ struct TradingChartView: View {
         let candleIdx = optimisticCandleIndex(from: request, fallback: fallbackCandleIndex)
 
         Task { @MainActor in
-            let result = await markerManager.addMarkerV2(
+            let outcome = await MarkerPlacementSubmitter.submitCreate(
                 request: request,
                 candleIndex: candleIdx,
-                candles: chartData.candles
+                candles: chartData.candles,
+                placementState: placementState,
+                markerManager: markerManager,
+                symbolTicker: chartViewModel.currentSymbol?.ticker
             )
             isSubmittingPlacement = false
 
-            switch result {
-            case .success(let created):
-                placementState.endLinkSession(.submitted)
+            switch outcome.result {
+            case .success:
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     controlViewModel.cancelMarkerPlacement()
                 }
                 impactFeedback.impactOccurred()
-                if let created, created.visibility == "guild" {
+                if let shareContext = outcome.shareContext {
                     // Presented by MainView (above the persistent chart bottom sheet);
                     // a sheet from here would contend with that one and flood the log.
-                    // Carry the composer's Discord choice through, so the
-                    // prompt shows the post already went rather than offering
-                    // to send a second copy of it.
-                    let postedTo = placementState.selectedDiscordChannelId.flatMap { id in
-                        placementState.discordChannels
-                            .first { $0.id == id }?.displayLabel
-                    }
-                    let shareContext = MarkerShareContext(
-                        marker: created,
-                        symbolTicker: chartViewModel.currentSymbol?.ticker,
-                        isCurrentUserMarker: true,
-                        postedToDiscord: postedTo
-                    )
                     NotificationCenter.default.post(
                         name: .presentMarkerSharePrompt,
                         object: nil,
@@ -2886,9 +2877,6 @@ struct TradingChartView: View {
                     )
                 }
             case .failure(let failure):
-                // The link survives a failed submission so the author can
-                // retry without rebuilding the response from scratch.
-                placementState.linkSession.recordFailure(failure.toastTitle)
                 presentPlacementFailure(failure)
             }
         }
@@ -3043,6 +3031,10 @@ struct TradingChartView: View {
                 if controlViewModel.currentMarkerIntent == .setup {
                     initializePredictionPlacement()
                 }
+
+                // What "unedited" means for this draft, so the guided flow can
+                // tell whether cancelling needs a confirmation.
+                placementState.captureDraftBaseline()
             }
         } else if oldValue && !newValue {
             // Exiting placement mode - reset to invalid index
@@ -3060,6 +3052,7 @@ struct TradingChartView: View {
             // Leaving placement without submitting ends the link. A successful
             // submission already ended it, so this is a no-op in that case.
             placementState.endLinkSession(.cancelled)
+            placementState.endGuidedFlow()
             if gestureState.markerPlacementGuide.source == .placement {
                 gestureState.markerPlacementGuide = MarkerPlacementGuideState()
             }

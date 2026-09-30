@@ -206,6 +206,12 @@ struct traders_guildApp: App {
     private var wantsMarkerLinkFixtures: Bool {
         ProcessInfo.processInfo.arguments.contains("-MarkerLinkFixtures")
     }
+
+    /// Guided-creation interaction fixture:
+    /// `-MarkerGuidedCreationFixture <scenario>`. Backend-free.
+    private var guidedCreationFixture: MarkerGuidedCreationHarness.Scenario? {
+        MarkerGuidedCreationHarness.Scenario.launch
+    }
     #endif
 
     #if DEBUG
@@ -219,7 +225,9 @@ struct traders_guildApp: App {
     @ViewBuilder
     private var mainContent: some View {
         #if DEBUG
-        if wantsMarkerLinkFixtures {
+        if let guidedCreationFixture {
+            MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
+        } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else if wantsWalkthroughPreview {
             WalkthroughPreviewHarness()
@@ -227,7 +235,9 @@ struct traders_guildApp: App {
             authenticatedContent
         }
         #elseif TG_ISOLATED_DEV
-        if wantsMarkerLinkFixtures {
+        if let guidedCreationFixture {
+            MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
+        } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else {
             authenticatedContent

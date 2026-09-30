@@ -219,6 +219,23 @@ final class MarkerPlacementState: ObservableObject {
     /// entering edit mode, logout, an unrelated chart context, or the author
     /// removing it from the banner.
     @Published var linkSession = MarkerLinkSession()
+
+    // MARK: Guided creation (v1.5 avatar prototype)
+    //
+    // Stored here because a draft has one home: the guided panel is another
+    // view onto this same state, never a second draft. Behaviour lives in
+    // `MarkerGuidedPlacement.swift`.
+
+    /// Where the guided panel is; `nil` is the legacy panel. Survives `reset`,
+    /// which runs after the entry point has chosen the guided flow.
+    @Published var guidedStep: MarkerGuidedStep?
+    /// The last submission, so the guided Review can show posting, failure and
+    /// retry. The legacy panel ignores it.
+    @Published var submissionPhase: MarkerPlacementSubmissionPhase = .idle
+    /// What the draft looked like once placement had set it up; editing away
+    /// from it is what makes cancelling need a confirmation.
+    var draftBaseline: MarkerDraftFingerprint?
+
     @Published private(set) var responseTimeframeChangeID: UUID?
     @Published private(set) var responseTimeframeLoadFailed = false
     var isChangingResponseTimeframe: Bool { responseTimeframeChangeID != nil }
@@ -553,7 +570,7 @@ final class MarkerPlacementState: ObservableObject {
                 checklistItem(
                     id: "analysis_structure",
                     title: "Add at least one chart component",
-                    isRequired: true,
+                    isRequired: requiresAnalysisContext,
                     isComplete: hasStructuredAnalysisComponents,
                     tab: .components
                 )
@@ -752,7 +769,7 @@ final class MarkerPlacementState: ObservableObject {
 
         switch intent {
         case .analysis:
-            return !trimmedNote.isEmpty && hasStructuredAnalysisComponents
+            return !trimmedNote.isEmpty && (hasStructuredAnalysisComponents || !requiresAnalysisContext)
         case .setup:
             // Setup anchors are fixed by chart placement flow; do not block submit on
             // additional directional/location requirements.
@@ -1679,6 +1696,8 @@ final class MarkerPlacementState: ObservableObject {
         // Editing an existing marker is not answering one, and a link is
         // immutable after creation, so any in-flight session ends here.
         endLinkSession(.enteredEditMode)
+        // Editing keeps the existing editor; guided creation is for new posts.
+        endGuidedFlow()
         intent = marker.intent
         selectedPlacementTab = .components
         activeTool = .indicators
@@ -2602,6 +2621,13 @@ final class MarkerPlacementState: ObservableObject {
         default:
             return incoming
         }
+    }
+
+    /// What `setIntent` would remove for `newIntent`, so a caller can say so
+    /// first. The same rule the purge applies, not a copy of it.
+    func incompatibleComponents(for newIntent: RLMarkerIntent) -> [MarkerComponentDraft] {
+        let allowed = allowedComponentTypes(for: newIntent)
+        return components.filter { $0.componentType != .anchor && !allowed.contains($0.componentType) }
     }
 
     private func purgeIncompatibleComponents(for intent: RLMarkerIntent) {

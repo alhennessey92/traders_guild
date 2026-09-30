@@ -171,6 +171,7 @@ struct MainView: View {
     @StateObject private var chartStateOwner = ChartStateOwner()
     @StateObject private var indicatorPanelViewportStore = IndicatorPanelViewportStore()
     @StateObject private var placementState = MarkerPlacementState()
+    @State private var showDiscardGuidedDraftConfirmation = false
     @StateObject private var markerOverlayState = MarkerOverlayState()
 
     private var chartGestureState: ChartGestureState { chartStateOwner.gestureState }
@@ -1386,10 +1387,21 @@ struct MainView: View {
                 iconColor: .white,
                 tintColor: AppColors.statusNegative55
             ) {
+                // The guided flow asks before throwing away what the author
+                // did; an untouched draft, and the legacy flow, close as before.
+                if placementState.cancellingNeedsConfirmation {
+                    showDiscardGuidedDraftConfirmation = true
+                    return
+                }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     chartControlVM.cancelMarkerPlacement()
                 }
             }
+            .modifier(MarkerGuidedDiscardConfirmation(isPresented: $showDiscardGuidedDraftConfirmation) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    chartControlVM.cancelMarkerPlacement()
+                }
+            })
         } else if chartControlVM.isMarkerViewingMode {
             markerToolbarCloseButton(
                 iconColor: AppColors.whiteText.opacity(0.95),
@@ -1426,7 +1438,7 @@ struct MainView: View {
     @ViewBuilder
     private var mainToolbarPrincipalItem: some View {
         if chartControlVM.isMarkerPlacementMode {
-            Text(placementState.toolbarInstructionText ?? "Place a Marker")
+            Text(placementState.toolbarInstructionText ?? placementState.guidedToolbarTitle ?? "Place a Marker")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(1)
@@ -3043,7 +3055,13 @@ struct ChartBottomSheet: View {
     @ViewBuilder
     private var sheetBottomBar: some View {
         if controlViewModel.isMarkerPlacementMode {
-            placementTabBar
+            if placementState.isGuidedFlowActive {
+                MarkerGuidedPlacementBar(placementState: placementState) {
+                    onPlaceMarker?()
+                }
+            } else {
+                placementTabBar
+            }
         } else if isMarkerDetailActive {
             if markerDetailTab == .chat {
                 EmptyView()
@@ -3463,6 +3481,7 @@ struct ChartBottomSheet: View {
         chartSheetMarkersView(
             chartViewModel: chartViewModel,
             controlViewModel: controlViewModel,
+            placementState: placementState,
             onNavigateToMarker: onNavigateToMarker,
             onMarkerSelection: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -3478,34 +3497,70 @@ struct ChartBottomSheet: View {
             from: chartViewModel.indicatorManager.activeIndicators
         )
         let liveChartDrawings = chartViewModel.chartDrawingManager.activeDrawings
-        return MarkerPlacementPanel(
-            placementState: placementState,
-            activeChartIndicators: placementIndicatorSnapshot.didCapture
-                ? placementIndicatorSnapshot.indicators
-                : liveChartIndicatorPayloads,
-            activeChartDrawings: placementIndicatorSnapshot.didCapture
-                ? placementIndicatorSnapshot.drawings
-                : liveChartDrawings,
-            currentChartTimeframe: chartViewModel.currentTimeframe,
-            onSelectTimeframe: { timeframe in
-                selectPlacementTimeframe(timeframe)
-            },
-            onBeginInteractiveDrawing: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedDetent = .fraction(0.11)
-                }
-            },
-            viewportAnchorProvider: { [weak placementState] in
-                guard let state = placementState,
-                      let time = state.currentViewportAnchorTime,
-                      let price = state.currentViewportAnchorPrice else {
-                    return nil
-                }
-                return (time: time, price: price)
+        let indicators = placementIndicatorSnapshot.didCapture
+            ? placementIndicatorSnapshot.indicators
+            : liveChartIndicatorPayloads
+        let drawings = placementIndicatorSnapshot.didCapture
+            ? placementIndicatorSnapshot.drawings
+            : liveChartDrawings
+        let viewportAnchorProvider: () -> (time: Date, price: Double)? = { [weak placementState] in
+            guard let state = placementState,
+                  let time = state.currentViewportAnchorTime,
+                  let price = state.currentViewportAnchorPrice else {
+                return nil
             }
-        )
+            return (time: time, price: price)
+        }
+        return Group {
+            if placementState.isGuidedFlowActive {
+                // v1.5 guided creation — the same draft, a different view of it.
+                MarkerGuidedPlacementPanel(
+                    placementState: placementState,
+                    author: guidedPlacementAuthor,
+                    guildName: rlAppState.currentGuild?.name,
+                    currentChartTimeframe: chartViewModel.currentTimeframe,
+                    activeChartIndicators: indicators,
+                    activeChartDrawings: drawings,
+                    onSelectTimeframe: { timeframe in
+                        selectPlacementTimeframe(timeframe)
+                    },
+                    onBeginInteractiveDrawing: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedDetent = .fraction(0.11)
+                        }
+                    },
+                    viewportAnchorProvider: viewportAnchorProvider
+                )
+            } else {
+                MarkerPlacementPanel(
+                    placementState: placementState,
+                    activeChartIndicators: indicators,
+                    activeChartDrawings: drawings,
+                    currentChartTimeframe: chartViewModel.currentTimeframe,
+                    onSelectTimeframe: { timeframe in
+                        selectPlacementTimeframe(timeframe)
+                    },
+                    onBeginInteractiveDrawing: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedDetent = .fraction(0.11)
+                        }
+                    },
+                    viewportAnchorProvider: viewportAnchorProvider
+                )
+            }
+        }
         .padding(.horizontal, 16)
         .padding(.top, 12)
+    }
+
+    /// The viewer, who is the author of whatever they are placing.
+    private var guidedPlacementAuthor: MarkerAvatarIdentity {
+        var identity = MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+        identity.authorId = rlAppState.currentUser?.id
+        return identity
     }
 
     private func selectPlacementTimeframe(_ timeframe: RLChartTimeframe) {
@@ -3671,6 +3726,13 @@ struct ChartBottomSheet: View {
                 relationship: relationship
             )
         )
+
+        // With the avatar prototype on, a response is composed in the guided
+        // flow; it still starts as Analysis, and "Change type" can make it a
+        // structured Setup without losing the link.
+        if MarkerAvatarExperiment.isEnabled {
+            placementState.prepareGuidedFlow()
+        }
 
         withAnimation(.easeInOut(duration: 0.25)) {
             chartViewModel.markerManager?.selectedMarker = nil
