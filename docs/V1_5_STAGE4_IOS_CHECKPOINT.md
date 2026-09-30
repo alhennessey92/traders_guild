@@ -205,14 +205,14 @@ The failed post only widened the window. Without any failure, the same result fo
   - `RLChartMarkerDTO.components` is a required array with synthesized Codable, so `[anchor]` decodes.
   - Non-test source has no `components.first!` or `[0]`.
   - The only rule tying Analysis to a component is placement validation (`MarkerPlacementMode.swift:720` there).
-- So an author editing a text-only Analysis from an old build would be asked to add a component before saving. That is graceful, with no crash or data loss. **Runtime not exercised.**
+- Source inspection suggests an author editing a text-only Analysis from an old build would be asked to add a component before saving. This does not prove absence of crashes or data loss in the shipped versions. **Runtime not exercised; exact 1.1.1/1.1.2 source provenance remains unverified.**
 
 **Current iOS, experiment off.** Same rule; unchanged. Only the experiment-gated path allows a text-only edit.
 
 **Android.**
 - Checked `traders-guild-android` `c5a5c91` (`feat/1.3.0-linked-markers`):
   - `MarkerDto.components` defaults to `emptyList()`, with no `first()` or `[0]`.
-  - `analysis_structure` is required in `MarkerPlacementController.kt:439`, so edits hit the same graceful limitation.
+  - `analysis_structure` is required in `MarkerPlacementController.kt:439`, so source inspection suggests the same edit-validation limitation.
 - **Runtime not exercised.** The shipped Play 1.4.0 (code 19, `6df2000`) was not inspected.
 
 The deployed backend is untouched.
