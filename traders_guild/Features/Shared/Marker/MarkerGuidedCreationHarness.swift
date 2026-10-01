@@ -135,6 +135,9 @@ struct MarkerGuidedCreationHarness: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        // Fixture chrome, not product UI: kept compact so the sheet under
+        // review stays on screen at accessibility text sizes.
+        .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
     private var sheet: some View {

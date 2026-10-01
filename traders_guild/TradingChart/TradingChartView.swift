@@ -1164,14 +1164,16 @@ struct TradingChartView: View {
                         chartWidth: geometry.size.width,
                         chartHeight: geometry.size.height
                     )
-                    withAnimation(.easeOut(duration: 0.3)) { selectionScale = 1.0 }
+                    withAnimation(MarkerSelectionMotion.settle(reduceMotion: reduceMotion)) { selectionScale = 1.0 }
                     selectionRotation = 0
                 } else {
                     suppressHistoricalPreloadBriefly()
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { selectionScale = 1.5 }
+                    withAnimation(MarkerSelectionMotion.pop(reduceMotion: reduceMotion)) { selectionScale = 1.5 }
                     // Delay wiggle so centering pan settles first
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        triggerChartMarkerWiggle()
+                    if MarkerSelectionMotion.wiggles(reduceMotion: reduceMotion) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            triggerChartMarkerWiggle()
+                        }
                     }
                 }
             }

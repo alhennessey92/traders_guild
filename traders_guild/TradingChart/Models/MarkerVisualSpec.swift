@@ -331,3 +331,34 @@ enum MarkerAvatarLayout {
         return max(0, MarkerVisualSpec.avatarDiameter(for: discDiameter)) / native
     }
 }
+
+/// How a chart marker announces its selection: a spring pop to the selected
+/// scale, then a short rotational wiggle.
+///
+/// The legacy chart ignores Reduce Motion for both. With the avatar prototype
+/// on, they honour it — the marker takes its selected size at once and does
+/// not wiggle — so faces, the most prominent thing on the prototype chart, do
+/// not bounce for someone who has asked the system for less motion. With the
+/// experiment off, and in every production configuration, nothing changes.
+enum MarkerSelectionMotion {
+    static func pop(
+        reduceMotion: Bool,
+        experimentEnabled: Bool = MarkerAvatarExperiment.isEnabled
+    ) -> Animation? {
+        reduceMotion && experimentEnabled ? nil : .spring(response: 0.5, dampingFraction: 0.7)
+    }
+
+    static func settle(
+        reduceMotion: Bool,
+        experimentEnabled: Bool = MarkerAvatarExperiment.isEnabled
+    ) -> Animation? {
+        reduceMotion && experimentEnabled ? nil : .easeOut(duration: 0.3)
+    }
+
+    static func wiggles(
+        reduceMotion: Bool,
+        experimentEnabled: Bool = MarkerAvatarExperiment.isEnabled
+    ) -> Bool {
+        !(reduceMotion && experimentEnabled)
+    }
+}

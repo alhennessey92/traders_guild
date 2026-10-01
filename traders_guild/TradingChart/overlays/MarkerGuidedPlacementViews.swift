@@ -27,6 +27,7 @@ struct MarkerGuidedPlacementPanel: View {
 
     @State private var pendingChange: PendingChange?
     @State private var showRelationshipPicker = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// A type change waiting on the author, and where it goes once confirmed.
     private struct PendingChange: Identifiable {
@@ -148,7 +149,12 @@ struct MarkerGuidedPlacementPanel: View {
             authorHeader(title: "Post to the chart")
             responseSection
 
-            HStack(spacing: 8) {
+            // Side by side, or stacked at accessibility text sizes, where two
+            // chips in a row break their words mid-letter.
+            let chipLayout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 8))
+            chipLayout {
                 ForEach([RLMarkerIntent.analysis, .question], id: \.self) { intent in
                     MarkerGuidedIntentChip(intent: intent, isSelected: placementState.intent == intent) {
                         if let change = placementState.requestGuidedIntentChange(to: intent) {
@@ -156,7 +162,9 @@ struct MarkerGuidedPlacementPanel: View {
                         }
                     }
                 }
-                Spacer(minLength: 0)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Spacer(minLength: 0)
+                }
             }
 
             MarkerGuidedTextField(
@@ -266,6 +274,9 @@ struct MarkerGuidedPlacementPanel: View {
                 sizeToken: .large,
                 avatar: authorBadgeIdentity
             )
+            // The viewer's own face beside the step title: decoration, not
+            // something to stop on.
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline.weight(.bold))
@@ -315,6 +326,7 @@ struct MarkerGuidedPlacementPanel: View {
                 Image(systemName: "plus.viewfinder")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(AppColors.accentColor)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Add context")
                         .font(.subheadline.weight(.semibold))
@@ -328,6 +340,7 @@ struct MarkerGuidedPlacementPanel: View {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
+                    .accessibilityHidden(true)
             }
             .padding(12)
             .background(MarkerGuidedCardBackground())
@@ -468,6 +481,7 @@ struct MarkerGuidedPlacementPanel: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(AppColors.statusNegative)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Couldn't post")
                         .font(.footnote.weight(.bold))
@@ -491,6 +505,9 @@ struct MarkerGuidedPlacementPanel: View {
             .background(
                 RoundedRectangle(cornerRadius: 12).fill(AppColors.statusNegative.opacity(0.12))
             )
+            // A container of its own, so its identifier does not overwrite the
+            // Adjust levels button's.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("guided.submissionFailed")
         }
     }
@@ -550,6 +567,10 @@ struct MarkerGuidedPlacementBar: View {
         }
         .padding(.horizontal, 20)
         .frame(height: 68)
+        // The sheet's bottom bar has a fixed height, like a tab bar: its text
+        // stops growing at the first accessibility size, and a long press
+        // shows the control in the Large Content Viewer instead.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     private func backButton(_ title: String) -> some View {
@@ -561,6 +582,7 @@ struct MarkerGuidedPlacementBar: View {
                 .foregroundColor(AppColors.primaryForeground)
         }
         .buttonStyle(.plain)
+        .accessibilityShowsLargeContentViewer()
         // The draft being posted is frozen until the server answers.
         .disabled(placementState.isGuidedSubmissionInFlight)
         .opacity(placementState.isGuidedSubmissionInFlight ? 0.4 : 1)
@@ -579,6 +601,7 @@ struct MarkerGuidedPlacementBar: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityShowsLargeContentViewer()
         .disabled(!enabled)
         .accessibilityIdentifier(identifier)
     }
@@ -648,6 +671,7 @@ struct MarkerPostToChartCard: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
+                    .accessibilityHidden(true)
             }
             .padding(16)
             .background(
@@ -700,12 +724,15 @@ struct MarkerGuidedTypeRow: View {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
                         .foregroundColor(intent.color)
+                        // Spoken as the row's selected trait instead.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(12)
             .background(MarkerGuidedCardBackground())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }
 
@@ -728,6 +755,7 @@ struct MarkerGuidedIntentChip: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
     }
 }
@@ -765,6 +793,7 @@ struct MarkerGuidedHint: View {
             Image(systemName: isMet ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
                 .foregroundColor(isMet ? AppColors.statusPositive : AppColors.statusWarning)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.system(size: 11))
                 .foregroundColor(isMet ? AppColors.greyText : AppColors.statusWarning)
@@ -778,9 +807,13 @@ struct MarkerGuidedValueRow: View {
     let value: String
     let detail: String?
     let tint: Color
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+        layout {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.caption.weight(.semibold))
@@ -791,11 +824,15 @@ struct MarkerGuidedValueRow: View {
                         .foregroundColor(AppColors.greyText)
                 }
             }
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer()
+            }
             Text(value)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(.footnote, design: .monospaced).weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
         }
+        // "Entry, Latest price when you post, 63,920" — one stop, not three.
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -804,23 +841,36 @@ struct MarkerGuidedLevelField: View {
     let title: String
     let type: RLComponentType
     @ObservedObject var placementState: MarkerPlacementState
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout())
+        layout {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(type.color)
-            Spacer()
+                .accessibilityHidden(true)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer()
+            }
             TextField("0.0", value: placementState.levelPriceBinding(for: type), formatter: MarkerGuidedFormat.priceFormatter)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(.footnote, design: .monospaced).weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
                 .multilineTextAlignment(.trailing)
                 .keyboardType(.decimalPad)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 10).fill(AppColors.whiteText.opacity(0.07)))
-                .frame(width: 140)
+                .frame(
+                    minWidth: dynamicTypeSize.isAccessibilitySize ? nil : 140,
+                    maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : 140
+                )
+                // The field speaks its own name; the title beside it is
+                // hidden so VoiceOver does not stop on both.
+                .accessibilityLabel(title)
         }
     }
 }
@@ -854,6 +904,7 @@ struct MarkerUntrackedSetupNotice: View {
             Image(systemName: RLTrackingState.draft.icon)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(AppColors.greyText)
+                .accessibilityHidden(true)
             Text("Untracked: this Setup won't be monitored and doesn't count toward accuracy or reputation.")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
@@ -876,11 +927,15 @@ struct MarkerGuidedReviewLine: View {
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppColors.greyText)
                 .frame(width: 16)
+                // Decorative: the text says it. Without this VoiceOver reads
+                // symbol names such as "plus.viewfinder".
+                .accessibilityHidden(true)
             Text(text)
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
