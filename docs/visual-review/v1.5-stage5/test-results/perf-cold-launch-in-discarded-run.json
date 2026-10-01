@@ -1,0 +1,39 @@
+{
+  "what": "Old driver: cold launch inside measure(iterationCount: 1). XCTest ran the block twice and recorded one iteration.",
+  "run": "sim-proto-on-cold2-20261001T073147Z",
+  "test1_wall_seconds": 37.886,
+  "recorded_iterations": {
+    "Clock Monotonic Time": [
+      17.67
+    ],
+    "Absolute Memory Physical (linkeddev)": [
+      109104.44
+    ],
+    "CPU Time (linkeddev)": [
+      9.78
+    ]
+  },
+  "launch_window_avatar_requests_in_order": [
+    "stage4658f08a 200",
+    "stage4658f08e 200",
+    "stage4658f08d 200",
+    "stage4658f08b 200",
+    "stage4658f08c 200",
+    "stage4658f08d 200",
+    "stage4658f08b 200",
+    "stage4658f08c 200",
+    "stage4658f08e 304",
+    "stage4658f08b 304",
+    "stage4658f08d 304",
+    "stage4658f08e 304",
+    "stage4658f08c 304",
+    "stage4658f08c 304",
+    "stage4658f08d 304",
+    "stage4658f08e 304",
+    "stage4658f08b 304",
+    "stage4658f08e 304",
+    "stage4658f08d 304",
+    "stage4658f08c 304",
+    "stage4658f08b 304"
+  ]
+}

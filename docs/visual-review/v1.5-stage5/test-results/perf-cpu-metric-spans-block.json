@@ -1,0 +1,40 @@
+{
+  "what": "Throwaway experiment (never committed): an 8 s idle window measured between startMeasuring/stopMeasuring, after an anchor with 0 s or 12 s of extra wait inside the same measure block. Equal windows, so equal CPU was expected if the metric honoured startMeasuring.",
+  "result_bundle": "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/stage5/rb-exp-spillover-20261001T082116Z.xcresult",
+  "metrics": {
+    "testX1_idleAfterShortSettle()": {
+      "Clock Monotonic Time": [
+        7.88,
+        7.87,
+        7.88
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        112037.22,
+        113052.98,
+        111856.98
+      ],
+      "CPU Time (linkeddev)": [
+        11.13,
+        10.61,
+        10.66
+      ]
+    },
+    "testX2_idleAfterLongSettle()": {
+      "Clock Monotonic Time": [
+        7.87,
+        7.88,
+        7.88
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        111037.73,
+        111562.09,
+        110579.02
+      ],
+      "CPU Time (linkeddev)": [
+        13.68,
+        14.28,
+        14.46
+      ]
+    }
+  }
+}

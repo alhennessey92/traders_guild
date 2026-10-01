@@ -1,0 +1,700 @@
+[
+  {
+    "label": "sim-base-cold",
+    "name": "sim-base-cold-20261001T090347Z",
+    "exit": 0,
+    "launch_args": "",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 8,
+        "304": 6,
+        "other": 0,
+        "downloads_by_author": {
+          "stage4658f08a": 2,
+          "stage4658f08b": 1,
+          "stage4658f08c": 1,
+          "stage4658f08d": 2,
+          "stage4658f08e": 2
+        }
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.03,
+      "panned_max_shift": 10,
+      "panned_max_residual": 4.65,
+      "panned_min_spread": 0.97,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 73619314.38,
+        "Clock Monotonic Time": 17.782,
+        "Memory Peak Physical (linkeddev)": 109923.784,
+        "CPU Cycles (linkeddev)": 23554782.075,
+        "Memory Physical (linkeddev)": 108186.96,
+        "Absolute Memory Physical (linkeddev)": 108186.96,
+        "CPU Time (linkeddev)": 9.047
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 68248083.243,
+        "Clock Monotonic Time": 15.469,
+        "Memory Peak Physical (linkeddev)": 107662.768,
+        "CPU Cycles (linkeddev)": 21324457.677,
+        "Memory Physical (linkeddev)": 107089.208,
+        "Absolute Memory Physical (linkeddev)": 107089.208,
+        "CPU Time (linkeddev)": 8.298
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 30906770.218,
+        "Clock Monotonic Time": 8.642,
+        "Memory Peak Physical (linkeddev)": 115068.24,
+        "CPU Cycles (linkeddev)": 13318648.862,
+        "Memory Physical (linkeddev)": 6242.328,
+        "Absolute Memory Physical (linkeddev)": 114216.272,
+        "CPU Time (linkeddev)": 5.19
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 29613011.163,
+        "Clock Monotonic Time": 8.666,
+        "Memory Peak Physical (linkeddev)": 113397.096,
+        "CPU Cycles (linkeddev)": 13225472.624,
+        "Memory Physical (linkeddev)": 4669.464,
+        "Absolute Memory Physical (linkeddev)": 113397.096,
+        "CPU Time (linkeddev)": 5.237
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-base-warm",
+    "name": "sim-base-warm-20261001T091015Z",
+    "exit": 0,
+    "launch_args": "",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 0,
+        "304": 8,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.24,
+      "panned_max_shift": 13,
+      "panned_max_residual": 5.17,
+      "panned_min_spread": 0.94,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 75803570.105,
+        "Clock Monotonic Time": 17.721,
+        "Memory Peak Physical (linkeddev)": 111005.128,
+        "CPU Cycles (linkeddev)": 24354522.348,
+        "Memory Physical (linkeddev)": 107777.336,
+        "Absolute Memory Physical (linkeddev)": 107777.336,
+        "CPU Time (linkeddev)": 9.347
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 71933047.145,
+        "Clock Monotonic Time": 15.449,
+        "Memory Peak Physical (linkeddev)": 109940.144,
+        "CPU Cycles (linkeddev)": 22920282.127,
+        "Memory Physical (linkeddev)": 107515.144,
+        "Absolute Memory Physical (linkeddev)": 107515.144,
+        "CPU Time (linkeddev)": 8.8
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 31677116.103,
+        "Clock Monotonic Time": 8.731,
+        "Memory Peak Physical (linkeddev)": 115068.24,
+        "CPU Cycles (linkeddev)": 13854690.629,
+        "Memory Physical (linkeddev)": 6520.88,
+        "Absolute Memory Physical (linkeddev)": 114249.04,
+        "CPU Time (linkeddev)": 5.385
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 29137062.861,
+        "Clock Monotonic Time": 8.637,
+        "Memory Peak Physical (linkeddev)": 113216.872,
+        "CPU Cycles (linkeddev)": 12954473.982,
+        "Memory Physical (linkeddev)": 5062.68,
+        "Absolute Memory Physical (linkeddev)": 113184.104,
+        "CPU Time (linkeddev)": 5.081
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-proto-on-cold",
+    "name": "sim-proto-on-cold-20261001T091706Z",
+    "exit": 0,
+    "launch_args": "-TGAvatarMarkersExperiment YES",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 8,
+        "304": 5,
+        "other": 0,
+        "downloads_by_author": {
+          "stage4658f08a": 1,
+          "stage4658f08b": 2,
+          "stage4658f08c": 2,
+          "stage4658f08d": 1,
+          "stage4658f08e": 2
+        }
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.29,
+      "panned_max_shift": 8,
+      "panned_max_residual": 7.54,
+      "panned_min_spread": 0.98,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 73924779.642,
+        "Clock Monotonic Time": 17.664,
+        "Memory Peak Physical (linkeddev)": 110038.256,
+        "CPU Cycles (linkeddev)": 23433172.581,
+        "Memory Physical (linkeddev)": 108186.936,
+        "Absolute Memory Physical (linkeddev)": 108186.936,
+        "CPU Time (linkeddev)": 9.057
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 71067481.102,
+        "Clock Monotonic Time": 15.523,
+        "Memory Peak Physical (linkeddev)": 109628.776,
+        "CPU Cycles (linkeddev)": 22593490.071,
+        "Memory Physical (linkeddev)": 109530.472,
+        "Absolute Memory Physical (linkeddev)": 109530.472,
+        "CPU Time (linkeddev)": 8.68
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 43704387.41,
+        "Clock Monotonic Time": 8.957,
+        "Memory Peak Physical (linkeddev)": 118263.168,
+        "CPU Cycles (linkeddev)": 15500344.091,
+        "Memory Physical (linkeddev)": 10223.664,
+        "Absolute Memory Physical (linkeddev)": 117722.496,
+        "CPU Time (linkeddev)": 6.06
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 43962955.741,
+        "Clock Monotonic Time": 8.673,
+        "Memory Peak Physical (linkeddev)": 119164.264,
+        "CPU Cycles (linkeddev)": 15735397.466,
+        "Memory Physical (linkeddev)": 8339.504,
+        "Absolute Memory Physical (linkeddev)": 119164.264,
+        "CPU Time (linkeddev)": 6.253
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-proto-on-warm",
+    "name": "sim-proto-on-warm-20261001T092330Z",
+    "exit": 0,
+    "launch_args": "-TGAvatarMarkersExperiment YES",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 0,
+        "304": 8,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.3,
+      "panned_max_shift": 14,
+      "panned_max_residual": 5.81,
+      "panned_min_spread": 0.95,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 70812173.703,
+        "Clock Monotonic Time": 17.762,
+        "Memory Peak Physical (linkeddev)": 111496.48,
+        "CPU Cycles (linkeddev)": 22287817.1,
+        "Memory Physical (linkeddev)": 110431.52,
+        "Absolute Memory Physical (linkeddev)": 110431.52,
+        "CPU Time (linkeddev)": 8.876
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 75399542.85,
+        "Clock Monotonic Time": 16.551,
+        "Memory Peak Physical (linkeddev)": 114232.656,
+        "CPU Cycles (linkeddev)": 24768790.669,
+        "Memory Physical (linkeddev)": 113200.464,
+        "Absolute Memory Physical (linkeddev)": 113200.464,
+        "CPU Time (linkeddev)": 9.525
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 40595952.112,
+        "Clock Monotonic Time": 8.641,
+        "Memory Peak Physical (linkeddev)": 120622.464,
+        "CPU Cycles (linkeddev)": 15125617.336,
+        "Memory Physical (linkeddev)": 8765.488,
+        "Absolute Memory Physical (linkeddev)": 119377.28,
+        "CPU Time (linkeddev)": 5.902
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 42344166.37,
+        "Clock Monotonic Time": 8.639,
+        "Memory Peak Physical (linkeddev)": 119721.344,
+        "CPU Cycles (linkeddev)": 15396583.606,
+        "Memory Physical (linkeddev)": 7323.696,
+        "Absolute Memory Physical (linkeddev)": 118410.648,
+        "CPU Time (linkeddev)": 6.055
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-proto-off-warm",
+    "name": "sim-proto-off-warm-20261001T092957Z",
+    "exit": 0,
+    "launch_args": "-TGAvatarMarkersExperiment NO",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 0,
+        "304": 8,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.33,
+      "panned_max_shift": 17,
+      "panned_max_residual": 5.18,
+      "panned_min_spread": 0.94,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 73072259.15,
+        "Clock Monotonic Time": 17.687,
+        "Memory Peak Physical (linkeddev)": 108055.984,
+        "CPU Cycles (linkeddev)": 23395103.976,
+        "Memory Physical (linkeddev)": 106433.824,
+        "Absolute Memory Physical (linkeddev)": 106433.824,
+        "CPU Time (linkeddev)": 9.003
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 70628987.537,
+        "Clock Monotonic Time": 16.423,
+        "Memory Peak Physical (linkeddev)": 111496.504,
+        "CPU Cycles (linkeddev)": 22535321.702,
+        "Memory Physical (linkeddev)": 110497.08,
+        "Absolute Memory Physical (linkeddev)": 110497.08,
+        "CPU Time (linkeddev)": 9.115
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 32844818.654,
+        "Clock Monotonic Time": 8.756,
+        "Memory Peak Physical (linkeddev)": 114052.408,
+        "CPU Cycles (linkeddev)": 14517442.433,
+        "Memory Physical (linkeddev)": 5767.168,
+        "Absolute Memory Physical (linkeddev)": 113216.824,
+        "CPU Time (linkeddev)": 5.645
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 26862516.987,
+        "Clock Monotonic Time": 8.639,
+        "Memory Peak Physical (linkeddev)": 113823.056,
+        "CPU Cycles (linkeddev)": 12478181.518,
+        "Memory Physical (linkeddev)": 4522.008,
+        "Absolute Memory Physical (linkeddev)": 113806.672,
+        "CPU Time (linkeddev)": 4.904
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-base-warm-2",
+    "name": "sim-base-warm-2-20261001T093622Z",
+    "exit": 0,
+    "launch_args": "",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 0,
+        "304": 8,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.24,
+      "panned_max_shift": 9,
+      "panned_max_residual": 4.88,
+      "panned_min_spread": 0.96,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 75161119.783,
+        "Clock Monotonic Time": 18.627,
+        "Memory Peak Physical (linkeddev)": 109825.504,
+        "CPU Cycles (linkeddev)": 24351620.305,
+        "Memory Physical (linkeddev)": 106614.096,
+        "Absolute Memory Physical (linkeddev)": 106614.096,
+        "CPU Time (linkeddev)": 9.379
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 70763662.582,
+        "Clock Monotonic Time": 16.374,
+        "Memory Peak Physical (linkeddev)": 111398.224,
+        "CPU Cycles (linkeddev)": 22389615.429,
+        "Memory Physical (linkeddev)": 110546.256,
+        "Absolute Memory Physical (linkeddev)": 110546.256,
+        "CPU Time (linkeddev)": 8.604
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 30197608.621,
+        "Clock Monotonic Time": 8.654,
+        "Memory Peak Physical (linkeddev)": 115150.184,
+        "CPU Cycles (linkeddev)": 13204544.357,
+        "Memory Physical (linkeddev)": 6275.096,
+        "Absolute Memory Physical (linkeddev)": 114298.216,
+        "CPU Time (linkeddev)": 5.131
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 28920137.975,
+        "Clock Monotonic Time": 8.682,
+        "Memory Peak Physical (linkeddev)": 114052.432,
+        "CPU Cycles (linkeddev)": 13232946.432,
+        "Memory Physical (linkeddev)": 4554.8,
+        "Absolute Memory Physical (linkeddev)": 114036.048,
+        "CPU Time (linkeddev)": 5.192
+      }
+    },
+    "hitches_trace": null
+  },
+  {
+    "label": "sim-proto-on-warm-2",
+    "name": "sim-proto-on-warm-2-20261001T094244Z",
+    "exit": 0,
+    "launch_args": "-TGAvatarMarkersExperiment YES",
+    "phases": {
+      "first-launch-and-load": {
+        "200": 0,
+        "304": 8,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "relaunch-and-load": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "revisit-in-process": {
+        "200": 0,
+        "304": 16,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-selected-thesis": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected-anchor": {
+        "200": 0,
+        "304": 40,
+        "other": 0,
+        "downloads_by_author": {}
+      },
+      "pans-unselected": {
+        "200": 0,
+        "304": 0,
+        "other": 0,
+        "downloads_by_author": {}
+      }
+    },
+    "view_checks": {
+      "anchored_max_shift": 0,
+      "anchored_max_residual": 0.02,
+      "panned_max_shift": 14,
+      "panned_max_residual": 6.23,
+      "panned_min_spread": 0.98,
+      "panned_off_seeded_view": 0,
+      "panned_total": 10
+    },
+    "metric_medians": {
+      "relaunch": {
+        "CPU Instructions Retired (linkeddev)": 76699075.245,
+        "Clock Monotonic Time": 18.698,
+        "Memory Peak Physical (linkeddev)": 111529.272,
+        "CPU Cycles (linkeddev)": 24895260.114,
+        "Memory Physical (linkeddev)": 110464.312,
+        "Absolute Memory Physical (linkeddev)": 110464.312,
+        "CPU Time (linkeddev)": 9.761
+      },
+      "revisit": {
+        "CPU Instructions Retired (linkeddev)": 73346069.066,
+        "Clock Monotonic Time": 16.429,
+        "Memory Peak Physical (linkeddev)": 112790.912,
+        "CPU Cycles (linkeddev)": 23520762.602,
+        "Memory Physical (linkeddev)": 111627.648,
+        "Absolute Memory Physical (linkeddev)": 111627.648,
+        "CPU Time (linkeddev)": 9.088
+      },
+      "pans-selected": {
+        "CPU Instructions Retired (linkeddev)": 38870706.819,
+        "Clock Monotonic Time": 8.651,
+        "Memory Peak Physical (linkeddev)": 119672.192,
+        "CPU Cycles (linkeddev)": 14728486.636,
+        "Memory Physical (linkeddev)": 8863.792,
+        "Absolute Memory Physical (linkeddev)": 118787.456,
+        "CPU Time (linkeddev)": 5.742
+      },
+      "pans-unselected": {
+        "CPU Instructions Retired (linkeddev)": 43005529.653,
+        "Clock Monotonic Time": 8.691,
+        "Memory Peak Physical (linkeddev)": 121474.456,
+        "CPU Cycles (linkeddev)": 15512264.505,
+        "Memory Physical (linkeddev)": 7946.36,
+        "Absolute Memory Physical (linkeddev)": 121163.16,
+        "CPU Time (linkeddev)": 6.108
+      }
+    },
+    "hitches_trace": null
+  }
+]

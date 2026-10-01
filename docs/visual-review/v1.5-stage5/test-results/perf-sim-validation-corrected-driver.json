@@ -1,0 +1,419 @@
+{
+  "what": "Corrected driver, prototype with the experiment on, simulator (iPhone 17 Pro, iOS 26.5). Tooling validation only.",
+  "run": "sim-proto-on-onepan-20261001T083544Z",
+  "exit": 0,
+  "phases": [
+    {
+      "phase": "first-launch-and-load",
+      "begin": "2026-10-01T08:35:47.494000+00:00",
+      "end": "2026-10-01T08:36:04.733000+00:00"
+    },
+    {
+      "phase": "relaunch-and-load",
+      "begin": "2026-10-01T08:36:05.934000+00:00",
+      "end": "2026-10-01T08:36:43.987000+00:00"
+    },
+    {
+      "phase": "revisit-in-process",
+      "begin": "2026-10-01T08:36:45.762000+00:00",
+      "end": "2026-10-01T08:37:18.986000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis-anchor",
+      "begin": "2026-10-01T08:37:19.679000+00:00",
+      "end": "2026-10-01T08:37:33.419000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis",
+      "begin": "2026-10-01T08:37:33.856000+00:00",
+      "end": "2026-10-01T08:37:44.666000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis-anchor",
+      "begin": "2026-10-01T08:37:45.730000+00:00",
+      "end": "2026-10-01T08:37:59.462000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis",
+      "begin": "2026-10-01T08:37:59.880000+00:00",
+      "end": "2026-10-01T08:38:10.758000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis-anchor",
+      "begin": "2026-10-01T08:38:11.888000+00:00",
+      "end": "2026-10-01T08:38:25.654000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis",
+      "begin": "2026-10-01T08:38:26.105000+00:00",
+      "end": "2026-10-01T08:38:36.566000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis-anchor",
+      "begin": "2026-10-01T08:38:38.116000+00:00",
+      "end": "2026-10-01T08:38:51.911000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis",
+      "begin": "2026-10-01T08:38:52.281000+00:00",
+      "end": "2026-10-01T08:39:02.867000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis-anchor",
+      "begin": "2026-10-01T08:39:03.974000+00:00",
+      "end": "2026-10-01T08:39:18.660000+00:00"
+    },
+    {
+      "phase": "pans-selected-thesis",
+      "begin": "2026-10-01T08:39:19.068000+00:00",
+      "end": "2026-10-01T08:39:29.502000+00:00"
+    },
+    {
+      "phase": "pans-unselected-anchor",
+      "begin": "2026-10-01T08:39:30.766000+00:00",
+      "end": "2026-10-01T08:39:48.779000+00:00"
+    },
+    {
+      "phase": "pans-unselected",
+      "begin": "2026-10-01T08:39:49.153000+00:00",
+      "end": "2026-10-01T08:39:59.529000+00:00"
+    },
+    {
+      "phase": "pans-unselected-anchor",
+      "begin": "2026-10-01T08:40:00.541000+00:00",
+      "end": "2026-10-01T08:40:18.633000+00:00"
+    },
+    {
+      "phase": "pans-unselected",
+      "begin": "2026-10-01T08:40:19.033000+00:00",
+      "end": "2026-10-01T08:40:29.368000+00:00"
+    },
+    {
+      "phase": "pans-unselected-anchor",
+      "begin": "2026-10-01T08:40:30.363000+00:00",
+      "end": "2026-10-01T08:40:48.378000+00:00"
+    },
+    {
+      "phase": "pans-unselected",
+      "begin": "2026-10-01T08:40:48.766000+00:00",
+      "end": "2026-10-01T08:40:59.160000+00:00"
+    },
+    {
+      "phase": "pans-unselected-anchor",
+      "begin": "2026-10-01T08:41:00.170000+00:00",
+      "end": "2026-10-01T08:41:18.280000+00:00"
+    },
+    {
+      "phase": "pans-unselected",
+      "begin": "2026-10-01T08:41:18.684000+00:00",
+      "end": "2026-10-01T08:41:29.082000+00:00"
+    },
+    {
+      "phase": "pans-unselected-anchor",
+      "begin": "2026-10-01T08:41:30.065000+00:00",
+      "end": "2026-10-01T08:41:48.222000+00:00"
+    },
+    {
+      "phase": "pans-unselected",
+      "begin": "2026-10-01T08:41:48.673000+00:00",
+      "end": "2026-10-01T08:41:59.011000+00:00"
+    }
+  ],
+  "view_drift": {
+    "pans-selected-thesis": [
+      {
+        "iteration": 1,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.0,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 1,
+        "view": "panned",
+        "shift_columns": -7,
+        "residual": 1.54,
+        "spread_ratio": 0.99
+      },
+      {
+        "iteration": 2,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.21,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 2,
+        "view": "panned",
+        "shift_columns": 2,
+        "residual": 5.16,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 3,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.34,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 3,
+        "view": "panned",
+        "shift_columns": 3,
+        "residual": 2.56,
+        "spread_ratio": 1.01
+      },
+      {
+        "iteration": 4,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.34,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 4,
+        "view": "panned",
+        "shift_columns": 15,
+        "residual": 2.89,
+        "spread_ratio": 0.98
+      },
+      {
+        "iteration": 5,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.34,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 5,
+        "view": "panned",
+        "shift_columns": -11,
+        "residual": 1.86,
+        "spread_ratio": 0.98
+      }
+    ],
+    "pans-unselected": [
+      {
+        "iteration": 1,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.0,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 1,
+        "view": "panned",
+        "shift_columns": -1,
+        "residual": 4.47,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 2,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.02,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 2,
+        "view": "panned",
+        "shift_columns": 3,
+        "residual": 1.77,
+        "spread_ratio": 1.01
+      },
+      {
+        "iteration": 3,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.02,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 3,
+        "view": "panned",
+        "shift_columns": -5,
+        "residual": 4.85,
+        "spread_ratio": 1.01
+      },
+      {
+        "iteration": 4,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.02,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 4,
+        "view": "panned",
+        "shift_columns": -2,
+        "residual": 1.9,
+        "spread_ratio": 1.01
+      },
+      {
+        "iteration": 5,
+        "view": "anchored",
+        "shift_columns": 0,
+        "residual": 0.0,
+        "spread_ratio": 1.0
+      },
+      {
+        "iteration": 5,
+        "view": "panned",
+        "shift_columns": -1,
+        "residual": 2.84,
+        "spread_ratio": 1.0
+      }
+    ]
+  },
+  "avatar_requests_by_phase": {
+    "first-launch-and-load": {
+      "304": 8
+    },
+    "relaunch-and-load": {
+      "304": 16
+    },
+    "revisit-in-process": {
+      "304": 16
+    },
+    "pans-selected-thesis-anchor": {
+      "304": 40
+    },
+    "pans-unselected-anchor": {
+      "304": 40
+    }
+  },
+  "metrics": {
+    "test1_launchAndLoadSeededThesis()": {
+      "Clock Monotonic Time": [
+        17.76
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        109448.5
+      ],
+      "CPU Time (linkeddev)": [
+        9.77
+      ]
+    },
+    "test2_revisitInProcess()": {
+      "Clock Monotonic Time": [
+        15.46
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        109317.41
+      ],
+      "CPU Time (linkeddev)": [
+        9.13
+      ]
+    },
+    "test3_pansWithSelectedThesis_1()": {
+      "Clock Monotonic Time": [
+        9.02
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        117837.18
+      ],
+      "CPU Time (linkeddev)": [
+        6.16
+      ]
+    },
+    "test3_pansWithSelectedThesis_2()": {
+      "Clock Monotonic Time": [
+        9.06
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        117378.41
+      ],
+      "CPU Time (linkeddev)": [
+        6.34
+      ]
+    },
+    "test3_pansWithSelectedThesis_3()": {
+      "Clock Monotonic Time": [
+        8.69
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        119262.59
+      ],
+      "CPU Time (linkeddev)": [
+        6.36
+      ]
+    },
+    "test3_pansWithSelectedThesis_4()": {
+      "Clock Monotonic Time": [
+        8.81
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        116346.26
+      ],
+      "CPU Time (linkeddev)": [
+        5.97
+      ]
+    },
+    "test3_pansWithSelectedThesis_5()": {
+      "Clock Monotonic Time": [
+        8.69
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        120294.78
+      ],
+      "CPU Time (linkeddev)": [
+        6.41
+      ]
+    },
+    "test4_pansUnselected_1()": {
+      "Clock Monotonic Time": [
+        8.62
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        119721.37
+      ],
+      "CPU Time (linkeddev)": [
+        6.31
+      ]
+    },
+    "test4_pansUnselected_2()": {
+      "Clock Monotonic Time": [
+        8.63
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        119115.14
+      ],
+      "CPU Time (linkeddev)": [
+        6.31
+      ]
+    },
+    "test4_pansUnselected_3()": {
+      "Clock Monotonic Time": [
+        8.71
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        118279.53
+      ],
+      "CPU Time (linkeddev)": [
+        6.07
+      ]
+    },
+    "test4_pansUnselected_4()": {
+      "Clock Monotonic Time": [
+        8.67
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        119016.83
+      ],
+      "CPU Time (linkeddev)": [
+        6.3
+      ]
+    },
+    "test4_pansUnselected_5()": {
+      "Clock Monotonic Time": [
+        8.64
+      ],
+      "Absolute Memory Physical (linkeddev)": [
+        120917.4
+      ],
+      "CPU Time (linkeddev)": [
+        6.46
+      ]
+    }
+  }
+}
