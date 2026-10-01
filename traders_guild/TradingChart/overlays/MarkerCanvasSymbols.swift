@@ -67,6 +67,16 @@ enum MarkerCanvasSymbols {
 
         if let urlString = identity.url, !urlString.isEmpty, let url = URL(string: urlString) {
             CachedAvatarImage(url: url, size: diameter, initials: identity.initials ?? "")
+        } else if MarkerAvatarExperiment.isEnabled {
+            // Prototype: an opaque disc that reads in every theme.
+            Circle()
+                .fill(MarkerAvatarInitialsStyle.fill)
+                .frame(width: diameter, height: diameter)
+                .overlay(
+                    Text(identity.initials ?? "")
+                        .font(.system(size: diameter * 0.38, weight: .bold))
+                        .foregroundColor(MarkerAvatarInitialsStyle.text)
+                )
         } else {
             // Same initials fallback as every other avatar surface, tinted to
             // the personal marker's own palette.

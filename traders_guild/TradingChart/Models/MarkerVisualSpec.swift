@@ -362,3 +362,35 @@ enum MarkerSelectionMotion {
         !(reduceMotion && experimentEnabled)
     }
 }
+
+/// The initials disc drawn when an author has no avatar picture.
+///
+/// The legacy disc tints the theme's marker fill and uses the theme's icon
+/// colour, which in Light Grey measures 1.61 : 1 — unreadable. With the
+/// avatar prototype on, faces are everywhere, so its initials get an opaque
+/// disc of their own that reads the same in every theme (7.47 : 1, the pairing
+/// the dark themes already render). With the experiment off, Personal
+/// markers keep the shipped look.
+enum MarkerAvatarInitialsStyle {
+    static let fillRGB: (red: Double, green: Double, blue: Double) = (61, 63, 67)
+    static let textRGB: (red: Double, green: Double, blue: Double) = (217, 217, 217)
+
+    static var fill: Color { Color(red: fillRGB.red / 255, green: fillRGB.green / 255, blue: fillRGB.blue / 255) }
+    static var text: Color { Color(red: textRGB.red / 255, green: textRGB.green / 255, blue: textRGB.blue / 255) }
+
+    /// WCAG 2 contrast ratio between two sRGB colours given as 0–255 components.
+    static func contrastRatio(
+        _ a: (red: Double, green: Double, blue: Double),
+        _ b: (red: Double, green: Double, blue: Double)
+    ) -> Double {
+        func luminance(_ c: (red: Double, green: Double, blue: Double)) -> Double {
+            func channel(_ v: Double) -> Double {
+                let s = v / 255
+                return s <= 0.03928 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+        }
+        let (high, low) = (max(luminance(a), luminance(b)), min(luminance(a), luminance(b)))
+        return (high + 0.05) / (low + 0.05)
+    }
+}
