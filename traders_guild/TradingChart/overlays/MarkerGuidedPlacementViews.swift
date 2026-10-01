@@ -834,6 +834,7 @@ struct MarkerSetupSidePill: View {
             case .long?: return ("LONG", AppColors.statusPositive)
             case .short?: return ("SHORT", AppColors.statusNegative)
             case .inconsistent?: return ("TP / SL same side", AppColors.statusWarning)
+            case .invalidPrice?: return ("Check your prices", AppColors.statusWarning)
             case nil: return ("Set TP and SL", AppColors.greyText)
             }
         }()

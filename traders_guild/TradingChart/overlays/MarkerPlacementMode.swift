@@ -2501,10 +2501,14 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     private var isSetupDirectionValid: Bool {
+        // The guided flow reads the Entry level, as the chart's Entry line
+        // shows it, and refuses a non-finite level; the legacy flow below is
+        // unchanged.
+        if isGuidedFlowActive {
+            return setupSide == .long || setupSide == .short
+        }
         guard
-            // The guided flow reads the Entry level, as the chart's Entry line
-            // shows it; the legacy flow is unchanged.
-            let entry = isGuidedFlowActive ? guidedSetupEntryPrice : setupEntryPrice,
+            let entry = setupEntryPrice,
             let sl = componentPrice(.levelSl),
             let tp = componentPrice(.levelTp)
         else {

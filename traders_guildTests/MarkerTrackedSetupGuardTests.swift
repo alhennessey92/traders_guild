@@ -292,5 +292,71 @@ struct MarkerTrackedSetupGuardTests {
         #expect(check(request(entry: 100, sl: 90, tp: 120, extraEntry: true)), "two Entry levels")
         #expect(!check(request(entry: 100, sl: 110, tp: 120, tracked: false)), "untracked is not checked")
         #expect(!check(request(entry: 100, sl: 110, tp: 120, intent: .analysis)), "only a Setup")
+        #expect(check(request(entry: 100, sl: 90, tp: .infinity)), "infinite target")
+        #expect(check(request(entry: 100, sl: -.infinity, tp: 120)), "infinite stop")
+        #expect(check(request(entry: .nan, sl: 90, tp: 120)), "NaN Entry")
+        #expect(check(request(entry: 100, sl: .nan, tp: 120)), "NaN stop")
+    }
+
+    // MARK: Non-finite prices
+
+    /// A typed "1e400" parses to infinity and "nan" to NaN. Neither has a side.
+    @Test
+    func aNonFiniteLevelHasNoSide() {
+        let bad: [Double] = [.infinity, -.infinity, .nan]
+        for value in bad {
+            #expect(MarkerSetupSide.of(entry: value, takeProfit: 120, stopLoss: 90) == .invalidPrice)
+            #expect(MarkerSetupSide.of(entry: 100, takeProfit: value, stopLoss: 90) == .invalidPrice)
+            #expect(MarkerSetupSide.of(entry: 100, takeProfit: 120, stopLoss: value) == .invalidPrice)
+        }
+        #expect(Double("1e400") == .infinity, "how an infinite level gets typed")
+        #expect(MarkerSetupSide.of(entry: 100, takeProfit: 120, stopLoss: 90) == .long)
+        #expect(MarkerSetupSide.of(entry: 100, takeProfit: 80, stopLoss: 110) == .short)
+        #expect(MarkerSetupSide.of(entry: 100, takeProfit: 120, stopLoss: 110) == .inconsistent)
+        #expect(MarkerSetupSide.of(entry: 100, takeProfit: nil, stopLoss: 90) == nil)
+    }
+
+    @Test
+    func aNonFiniteLevelBlocksAGuidedTrackedSetupAndIsNeverSent() async {
+        for (type, value) in [(RLComponentType.levelTp, Double.infinity), (.levelSl, .nan)] {
+            let (transport, markers) = wire()
+            let state = setupDraft(linked: true)
+            if type == .levelTp {
+                state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: value, label: "TP")))
+            } else {
+                state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: value, label: "SL")))
+            }
+            #expect(state.setupSide == .invalidPrice)
+            #expect(state.guidedTrackedSetupLevelsNeedAdjusting)
+            #expect(state.unmetRequiredChecklistItems.contains { $0.id == "setup_direction_required" })
+            #expect(!state.continueToReview(), "Review stays closed")
+            #expect(!state.canPostGuidedDraft)
+            #expect(state.guidedSetupRiskReward.map(\.isFinite) != true, "no finite R:R is shown for it")
+
+            let outcome = await post(state, latest: candle(closingAt: entry), via: markers)
+            #expect(outcome.result == .failure(.trackedSetupLevelsOutOfOrder))
+            #expect(transport.createRequests.isEmpty, "a non-finite tracked level is never sent")
+            #expect(!state.submissionPhase.isSubmitting)
+            #expect(state.linkSession.isActive, "the draft and its link are kept")
+        }
+    }
+
+    /// Untracked Setups and the legacy flow keep their rules for non-finite
+    /// values: this correction is the guided tracked guard only.
+    @Test
+    func nonFiniteHandlingOutsideTheGuidedTrackedGuardIsUnchanged() async {
+        let untracked = setupDraft(tracked: false)
+        untracked.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: .nan, label: "TP")))
+        #expect(!untracked.guidedTrackedSetupLevelsNeedAdjusting)
+
+        let (transport, markers) = wire()
+        let legacy = setupDraft(guided: false, long: true)
+        legacy.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: .infinity, label: "TP")))
+        #expect(legacy.isValid)
+        #expect(!legacy.unmetRequiredChecklistItems.contains { $0.id == "setup_direction_required" },
+                "the legacy direction check is as before")
+        let outcome = await post(legacy, latest: candle, via: markers)
+        #expect(outcome.result.isSuccess)
+        #expect(transport.createRequests.count == 1, "the device does not hold a legacy post")
     }
 }

@@ -113,9 +113,14 @@ enum MarkerSetupSide: Equatable {
     case short
     /// Target and stop on the same side of entry.
     case inconsistent
+    /// A level that is not a real number — infinite or NaN, which a typed
+    /// value such as "1e400" or "nan" parses to. It has no side, and the
+    /// backend refuses a tracked Setup with one.
+    case invalidPrice
 
     static func of(entry: Double?, takeProfit: Double?, stopLoss: Double?) -> MarkerSetupSide? {
         guard let entry, let takeProfit, let stopLoss else { return nil }
+        guard entry.isFinite, takeProfit.isFinite, stopLoss.isFinite else { return .invalidPrice }
         if takeProfit > entry && stopLoss < entry { return .long }
         if takeProfit < entry && stopLoss > entry { return .short }
         return .inconsistent
@@ -126,6 +131,7 @@ enum MarkerSetupSide: Equatable {
         case .long: return "Long"
         case .short: return "Short"
         case .inconsistent: return "TP and SL on the same side"
+        case .invalidPrice: return "A level is not a valid price"
         }
     }
 }

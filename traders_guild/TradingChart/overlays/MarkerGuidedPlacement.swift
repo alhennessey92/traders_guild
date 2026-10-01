@@ -127,7 +127,7 @@ extension MarkerPlacementState {
         guard isGuidedFlowActive, intent == .setup, trackingEnabled else { return false }
         switch setupSide {
         case .long?, .short?: return false
-        case .inconsistent?, nil: return true
+        case .inconsistent?, .invalidPrice?, nil: return true
         }
     }
 
@@ -433,8 +433,9 @@ enum MarkerPlacementSubmitter {
     }
 
     /// A tracked Setup request whose Entry, SL and TP — as sent — are not
-    /// ordered SL < Entry < TP or TP < Entry < SL, read with the same side
-    /// inference as the Setup editor.
+    /// exactly one finite price each, ordered SL < Entry < TP or
+    /// TP < Entry < SL: the backend's rule, read with the same side inference
+    /// as the Setup editor.
     static func trackedSetupLevelsOutOfOrder(in request: RLCreateMarkerRequest) -> Bool {
         guard request.intent == RLMarkerIntent.setup.rawValue, request.trackingEnabled else { return false }
         func price(_ type: RLComponentType) -> Double? {
@@ -444,7 +445,7 @@ enum MarkerPlacementSubmitter {
         }
         switch MarkerSetupSide.of(entry: price(.levelEntry), takeProfit: price(.levelTp), stopLoss: price(.levelSl)) {
         case .long?, .short?: return false
-        case .inconsistent?, nil: return true
+        case .inconsistent?, .invalidPrice?, nil: return true
         }
     }
 }
