@@ -1,0 +1,23 @@
+9	Close
+48	Post to the chart
+48	Fixture · analysisDetails · transport: in-memory (not the backend)
+1	Vertical scroll bar, 1 page
+9	Review
+48	Post to the chart
+48	Posting to Alpha Traders
+9	Analysis [selected]
+9	Question
+48	Ready to review
+9	Add context, Indicators, drawings, timeframes — optional
+9	Change type
+43	waveform.path.ecg
+48	Analysis
+43	questionmark
+48	Question
+1	Horizontal scroll bar, 1 page
+43	plus.viewfinder
+48	Add context
+48	Indicators, drawings, timeframes — optional
+43	Forward
+43	arrow.left.arrow.right
+48	Change type

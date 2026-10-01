@@ -1,0 +1,134 @@
+# Elements VoiceOver could encounter in the linked-marker fixtures
+# Format: <elementType>	<label>
+# Raw SF Symbol names found: 14
+43	arrow.up.right
+43	arrow.up.right
+43	arrow.up.right
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	newspaper.fill
+43	questionmark.circle
+43	questionmark.circle.dashed
+43	questionmark.circle.dashed
+43	waveform.path.ecg.magnifyingglass
+43	waveform.path.ecg.magnifyingglass
+
+# Full tree
+1	Vertical scroll bar, 4 pages
+40	Avatar markers experiment (saved)
+40	Focus active
+43	Divide
+43	Divide
+43	Forward
+43	Forward
+43	Forward
+43	Link
+43	Selected
+43	Selected
+43	Selected
+43	Swap
+43	Swap
+43	Warning
+43	arrow.up.right
+43	arrow.up.right
+43	arrow.up.right
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	gearshape.arrow.trianglehead.2.clockwise.rotate.90
+43	newspaper.fill
+43	questionmark.circle
+43	questionmark.circle.dashed
+43	questionmark.circle.dashed
+43	waveform.path.ecg.magnifyingglass
+43	waveform.path.ecg.magnifyingglass
+48	1
+48	1 Hour
+48	1 Hour
+48	1 Hour
+48	1 Hour
+48	3
+48	4+ in this thesis
+48	Add to the thesis
+48	Alert
+48	Alex
+48	Analysis
+48	Avatar markers experiment (saved)
+48	BTC breakout
+48	Backing this
+48	Bearish instead?
+48	Builds on
+48	Builds on
+48	Builds on an unavailable marker
+48	CPI second leg
+48	Challenges
+48	Challenges
+48	Challenges Sam's CPI reaction
+48	Challenges alex's BTC breakout
+48	Challenges, Bearish instead?, by Noor, on 1 Hour, current marker
+48	Chart — tap a marker to select it
+48	Focus active
+48	How does your marker relate?
+48	IN REPLY TO · SETUP
+48	Jamie
+48	Kit
+48	Loading…
+48	Marker badge (lists, info box, detail, ghost) — this launch's switch
+48	Marker fixtures
+48	Noor
+48	Open parent on 1 Hour
+48	Open parent on 1 Hour
+48	Open parent on 1 Hour
+48	Parent → unrelated → response
+48	Partially refutes Kit's Unknown relationship
+48	Personal
+48	Placement Failed. Your response is still here — try again.
+48	Placement banner + picker
+48	Question
+48	RESPOND TO MARKER
+48	Relationship row
+48	SL hit
+48	Selected scale 1.50
+48	Setup live
+48	Shared with the guild
+48	Shared with the guild
+48	Starts as Analysis. You can change the marker type during placement.
+48	Supports
+48	Supports
+48	Supports
+48	Supports Alex's BTC breakout
+48	Supports alex's BTC breakout
+48	Supports another marker
+48	TP hit
+48	The marker this answers isn't available to you
+48	Thesis rows — indent, tombstone, current marker
+48	Unavailable marker
+48	Unavailable marker, depth 2
+48	Untracked
+48	Wiggle 0°
+48	You agree and want to back this idea
+48	You disagree, or see it going the other way
+48	You extend it — a further target or next leg
+48	alex's BTC breakout
+9	BTC breakout, by Alex, on 1 Hour
+9	Builds on an unavailable marker
+9	Builds on, CPI second leg, by Kit, on 1 Hour
+9	Builds on. You extend it — a further target or next leg
+9	Case, Parent → unrelated → response
+9	Challenges Sam's CPI reaction
+9	Challenges. You disagree, or see it going the other way
+9	Change relationship
+9	Change relationship
+9	Clear selection
+9	Close response choices
+9	Partially refutes Kit's Unknown relationship
+9	Remove link
+9	Remove link
+9	Supports Alex's BTC breakout
+9	Supports another marker
+9	Supports, Backing this, by Jamie, on 1 Hour
+9	Supports. You agree and want to back this idea

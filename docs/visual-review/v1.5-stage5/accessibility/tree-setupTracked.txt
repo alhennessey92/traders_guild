@@ -1,0 +1,40 @@
+9	Close
+48	Setup
+48	Fixture · setupTracked · transport: in-memory (not the backend)
+1	Vertical scroll bar, 1 page
+9	Review
+48	Setup
+48	Posting to Alpha Traders
+48	Side
+48	LONG
+48	Entry, Latest price when you post, 63,920
+49	Take Profit
+49	Stop Loss
+48	Risk : Reward, R:R 1 : 2.00
+48	You can also drag the Entry, TP and SL lines on the chart.
+40	Tracked Setup, Auto-monitor entry, SL & TP transitions
+43	scope
+48	Tracking active
+48	Est. reputation
+48	If TP hits
+48	If SL hits
+48	+29
+48	-5
+48	TP and SL configured
+48	TP/SL direction is valid
+9	Add context, Indicators, drawings, timeframes — optional
+9	Change type
+48	Entry
+48	Latest price when you post
+48	63,920
+48	Risk : Reward
+48	R:R 1 : 2.00
+48	Tracked Setup
+48	Auto-monitor entry, SL & TP transitions
+1	Horizontal scroll bar, 1 page
+43	plus.viewfinder
+48	Add context
+48	Indicators, drawings, timeframes — optional
+43	Forward
+43	arrow.left.arrow.right
+48	Change type

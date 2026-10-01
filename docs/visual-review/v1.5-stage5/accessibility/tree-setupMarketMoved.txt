@@ -1,0 +1,39 @@
+9	Close
+48	Review
+48	Fixture · setupMarketMoved · transport: in-memory (not the backend)
+1	Vertical scroll bar, 1 page
+9	Edit
+9	Retry [dimmed]
+43	Back
+48	Edit
+48	Setup
+48	Posting to Alpha Traders
+48	Challenges sam's BTC breakout
+48	Short the failed breakout.
+48	TP / SL same side
+48	R:R 1 : 5.50
+48	Entry, Latest price when you post, 64,120
+48	Take Profit, 63,680
+48	Stop Loss, 64,040
+48	Tracked: counts toward accuracy and reputation
+48	No extra context
+48	1 Hour chart
+43	Swap
+48	Challenges sam's BTC breakout
+48	Entry
+48	Latest price when you post
+48	64,120
+48	Take Profit
+48	63,680
+48	Stop Loss
+48	64,040
+43	scope
+48	Tracked: counts toward accuracy and reputation
+43	plus.viewfinder
+48	No extra context
+43	Clock
+48	1 Hour chart
+43	Warning
+48	Couldn't post
+48	The price moved: Entry is no longer between your stop and target. Adjust your levels, then post again. Your draft is saved.
+9	Adjust levels

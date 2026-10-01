@@ -1,0 +1,71 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 2,
+      "passedTests" : 9,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 2,
+  "finishTime" : 1790833143.124,
+  "passedTests" : 9,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1790833079.783,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (state.setupSide → .inconsistent) == .invalidPrice",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 10,
+      "testIdentifierString" : "MarkerTrackedSetupGuardTests/aNonFiniteLevelBlocksAGuidedTrackedSetupAndIsNeverSent()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTrackedSetupGuardTests/aNonFiniteLevelBlocksAGuidedTrackedSetupAndIsNeverSent()",
+      "testName" : "aNonFiniteLevelBlocksAGuidedTrackedSetupAndIsNeverSent()"
+    },
+    {
+      "failureText" : "Expectation failed: (MarkerSetupSide.of(entry: value, takeProfit: 120, stopLoss: 90) → .inconsistent) == .invalidPrice",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 5,
+      "testIdentifierString" : "MarkerTrackedSetupGuardTests/aNonFiniteLevelHasNoSide()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerTrackedSetupGuardTests/aNonFiniteLevelHasNoSide()",
+      "testName" : "aNonFiniteLevelHasNoSide()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+    {
+      "category" : "Common Failures",
+      "impact" : "50% of failures",
+      "text" : "3 runs of 1 test failed with Expectation failed: (MarkerSetupSide.of(entry: value, takeProfit: 120, stopLoss: 90) → .inconsistent) == .invalidPrice"
+    },
+    {
+      "category" : "Common Failures",
+      "impact" : "50% of failures",
+      "text" : "2 runs of 1 test failed with Expectation failed: (state.setupSide → .inconsistent) == .invalidPrice"
+    },
+    {
+      "category" : "Common Failures",
+      "impact" : "50% of failures",
+      "text" : "2 runs of 1 test failed with Expectation failed: (MarkerSetupSide.of(entry: 100, takeProfit: value, stopLoss: 90) → .inconsistent) == .invalidPrice"
+    }
+  ],
+  "totalTestCount" : 11
+}
