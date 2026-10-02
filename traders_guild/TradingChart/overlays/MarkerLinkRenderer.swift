@@ -45,7 +45,7 @@ struct MarkerDrawPass {
     private let unknownRelationship: Color
 
     private var resolvedSymbols: [String: GraphicsContext.ResolvedImage] = [:]
-    private var resolvedBadgeGlyphs: [String: GraphicsContext.ResolvedText] = [:]
+    private var resolvedBadgeGlyphs: [String: GraphicsContext.ResolvedImage] = [:]
 
     init() {
         markerShadow = AppColors.canvasMarkerShadow
@@ -85,18 +85,21 @@ struct MarkerDrawPass {
     /// A badge glyph at badge size, resolved once per pass rather than once per
     /// marker. Heavy weight, as the leaf badge: at eight points a regular
     /// outline reads as a smudge.
+    ///
+    /// An image, not `Text(Image(systemName:))`: drawn as text, every badge went
+    /// through string layout on every frame, which was the whole of the avatar
+    /// prototype's extra pan cost (device Stage 5; `docs/V1_5_STAGE5_CHECKPOINT.md`).
+    /// The symbol shape is theme-free and cached for the process; the colour is
+    /// applied per pass.
     mutating func badgeGlyph(
         named name: String,
         in context: GraphicsContext
-    ) -> GraphicsContext.ResolvedText {
+    ) -> GraphicsContext.ResolvedImage {
         if let hit = resolvedBadgeGlyphs[name] { return hit }
-        let text = context.resolve(
-            Text(Image(systemName: name))
-                .font(.system(size: 8, weight: .heavy))
-                .foregroundColor(onAccent)
-        )
-        resolvedBadgeGlyphs[name] = text
-        return text
+        var image = context.resolve(Image(uiImage: MarkerBadgeGlyphImages.image(named: name)).renderingMode(.template))
+        image.shading = .color(onAccent)
+        resolvedBadgeGlyphs[name] = image
+        return image
     }
 }
 
@@ -687,5 +690,24 @@ enum MarkerLinkRenderer {
             rects.append(MarkerIntentBadge.rect(center: center, isBelow: isBelow, scale: scale))
         }
         return rects
+    }
+}
+
+
+/// SF Symbol badge glyphs at the badge's 8 pt heavy configuration, built once per
+/// symbol name. Shape only: the draw pass tints them.
+enum MarkerBadgeGlyphImages {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: UIImage] = [:]  // guarded by `lock`
+
+    static func image(named name: String) -> UIImage {
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = cache[name] { return hit }
+        let configuration = UIImage.SymbolConfiguration(pointSize: 8, weight: .heavy)
+        let image = (UIImage(systemName: name, withConfiguration: configuration) ?? UIImage())
+            .withRenderingMode(.alwaysTemplate)
+        cache[name] = image
+        return image
     }
 }
