@@ -1,0 +1,75 @@
+{
+  "started": "2026-10-02T17:28:09.209858+00:00",
+  "account_fp": "ef5590f3",
+  "prepare": {
+    "exit": 0,
+    "log": "run-session-check-prepare-20261002T172809Z.log"
+  },
+  "launches": [
+    {
+      "tag": "launch-1",
+      "exit": 0,
+      "window": {
+        "begin": "2026-10-02T17:28:52.967Z",
+        "end": "2026-10-02T17:29:08.071Z"
+      },
+      "log": "run-session-check-launch-1-20261002T172850Z.log",
+      "device_rows": [
+        {
+          "device_fp": "fb7292cb",
+          "platform": "ios",
+          "active": true,
+          "last_used_at": "2026-10-02T17:28:55.822766+00:00"
+        }
+      ]
+    },
+    {
+      "tag": "launch-2",
+      "exit": 0,
+      "window": {
+        "begin": "2026-10-02T17:30:15.825Z",
+        "end": "2026-10-02T17:30:30.891Z"
+      },
+      "log": "run-session-check-launch-2-20261002T173012Z.log",
+      "device_rows": [
+        {
+          "device_fp": "fb7292cb",
+          "platform": "ios",
+          "active": true,
+          "last_used_at": "2026-10-02T17:30:18.660269+00:00"
+        }
+      ]
+    }
+  ],
+  "refreshes": [
+    {
+      "at": "2026-10-02T17:28:21.279000+00:00",
+      "status": 200,
+      "request_fp": "d1e85926"
+    },
+    {
+      "at": "2026-10-02T17:28:29.362000+00:00",
+      "status": 200,
+      "request_fp": "2b0adaca"
+    },
+    {
+      "at": "2026-10-02T17:28:55.409000+00:00",
+      "status": 200,
+      "request_fp": "2e26c190"
+    },
+    {
+      "at": "2026-10-02T17:30:18.215000+00:00",
+      "status": 200,
+      "request_fp": "a0a0e2db"
+    }
+  ],
+  "corroboration_rotated_issue_times": [
+    "2026-10-02T17:28:21.258126+00:00",
+    "2026-10-02T17:28:29.258126+00:00",
+    "2026-10-02T17:28:55.258126+00:00"
+  ],
+  "result": {
+    "passed": true,
+    "reasons": []
+  }
+}

@@ -26,7 +26,7 @@ Branch `claude/1.5.0-avatar-markers`, continuing from `a4631c7` (Stage 4 follow-
 | Initials contrast in Light Grey (review) | Fixed under the experiment: 1.61:1 → 7.47:1, measured from rendered pixels. |
 | Performance tooling (review) | Corrected; the full device sequence ran clean on the simulator (9 / 9 steps). Two further contaminations were found and fixed along the way (§4.2). Early simulator signal: no added avatar requests; the prototype costs some extra CPU while panning (§4.5). |
 | Regression | Full unit target **799 / 0** on `431a9d6` (797 / 0 on `a8c7467`, plus the 2 contrast tests). Accessibility UI tests **11 / 0**. Production binary checked. |
-| **Physical-device baseline vs prototype** | **Not measured.** The phone was locked, and is now listed as `unavailable` (off the Wi-Fi tunnel). Bundles are rebuilt from the corrected driver and nothing is queued (§5). |
+| **Physical-device baseline vs prototype** | **Not compared yet.** Baseline cold was measured on the phone (§6). The sequence then stopped on the app losing its session (401 on token refresh), which needs triage. Frame evidence needs a short-trace pass. |
 
 ## 1. Review correction: non-finite prices (`1288203`)
 
@@ -259,15 +259,283 @@ Pans: medians of 5 single pans per state. App CPU and clock per pan window; memo
 
 Any new sustained growth or stall blocks acceptance. **No performance acceptance is claimed.**
 
+## 6. Physical-device session, 2026-10-01: partial, blocked again
+
+The owner made the phone available, unlocked, with UI Automation enabled (the first blocker: "Timed out while enabling automation mode"). Over about two hours the session produced one complete, valid measure run (baseline cold). It also found and fixed six driver problems on the device, which a simulator could not show. The sequence then stopped on a session loss that needs a decision.
+
+### Device problems found and fixed (all test-only, both builds share the identical driver file)
+
+| Commit | Problem on the phone | Fix |
+|---|---|---|
+| `7469606` | The phone's LinkedDev app was signed in to an older local QA account (another guild), so the fixtures were out of reach; parking needed the BTC/USD tab. | The sign-in step checks the drawer's account card against the run's username. Logging out is left to a person: Settings also holds Delete Account. Parking opens the seeded parent and closes it first. |
+| `09bf30d` → `d3fcd57` | The test runner cannot write the pasteboard on a device, so the pasted password never arrived. Typing it was tried after a dummy-password probe logged `<redacted>`, but a real run then logged the start of the password in clear. | **The driver never types credentials.** `run_perf.py` passes only the username. A signed-out app fails with a request to sign in by hand. |
+| `2021bf3` | The drawer ignored a tap straight after sign-in. | Retry the tap. |
+| `dc94a08` | `XCTHitchMetric` read 0 everywhere, and the run's system trace lost its frame data when the first recorded measure began: they compete for the kernel trace session. | The metric is dropped; frames come from the trace. |
+| `563e5ee` | **`XCUIApplication.open(url)` launches a new app process for every link.** The pid changed on every open and the server saw a full app start each time. So "in-process revisit" was a relaunch, and every measured pan began just after a launch, with launch work able to spill into the window. | Links go through `XCUIDevice.shared.system.open`, as a tapped link would. Simulator check: 13/13, only the 3 intended launches, no revalidation bursts outside them. The prototype's pan CPU fell from 5.7–6.3 s to 4.8–4.9 s per window. **So the simulator CPU signal in §4.5 was measured with relaunching anchors, and must be re-measured with this driver before it is read at all.** |
+
+### Valid device evidence: baseline cold (`base-cold-20261001T173621Z`, corrected driver, exit 0)
+
+- **Selection and branches:** every pan test asserted its state. View checks: 0 of 10 pans ended off the seeded view, max shift 17 of 64 columns, min spread 0.95.
+- **Pans:** app CPU 4.04 s (selected) and 3.89 s (unselected) per ~8.7 s window, medians of 5. Memory about 159–167 MB at the end of each pan, with no growth across the five.
+- **Load:** the first (cold) launch and load made 6 downloads and 4 revalidations. **The two measured relaunches downloaded avatars again (14 downloads)**. So on the phone the URL cache did not carry avatars across a relaunch, unlike the simulator. This is the baseline build, so it predates v1.5.
+- **No avatar requests** during in-process revisits, anchors or pans.
+- Summary: `test-results/device-base-cold-summary.json`.
+
+No prototype run completed, so **there is no baseline/prototype comparison yet, and no acceptance**.
+
+### Frame and hitch evidence: not yet obtained
+
+- A system-wide Animation Hitches trace works on the phone for about a minute: a 15 s preflight was complete, and one run's frame data stopped at 61.7 s.
+- A trace covering a whole 7-minute measure run comes back "Transferred trace file is malformed", with no frame data.
+- `run_frames.py` / `run_frames_all.sh` are ready for a follow-up frames pass: one short trace per test (cold first launch plus each of the 10 pans, for both builds; about 25 minutes of phone time). `hitches_by_phase.py` reads each trace per phase window. It was checked on the 61.7 s trace, which gave per-window frames and hitches.
+
+### Blocker: the app loses its session on the phone
+
+Three times the app's launch-time token refresh got 401 and the app signed out (17:16:06, 17:32:48, 17:44:13 UTC). Each time, the rest of the run failed with "not on the chart".
+- The auth service rotates refresh tokens, with a 30-second replay grace.
+- The pattern fits the app keeping a stale refresh token at launch: launches within 30 s of each other succeed, and the first launch after a longer gap is rejected.
+- The app's restore path does save the rotated token, and the server's only user-wide revocation is password reset. So the cause is not yet known.
+- It may be specific to rapid test-driven relaunches, or a pre-existing app issue. **It needs triage before another device sequence:** each measure run's first launch would be rejected.
+
+### Credential exposure (local only)
+
+- The start of local QA account A's password appears, in clear, in local scratchpad files under `$S/stage5`: two run logs, two result bundles, and their exported attachments.
+- The test runner's environment, which held account A's password, was also written into a result bundle's session log. So other result bundles, including the simulator runs that used account B, probably hold one of them in compressed form.
+- **Nothing in the repo or in any commit contains them.**
+- **Recommended:** rotate the local QA passwords for accounts A and B, then sign the phone back in by hand. The account is disposable local DEV and the stack is reachable only on the LAN. The files are kept, since results are preserved.
+
+## 7. Session-loss triage (read-only), and the recovery sequence
+
+**Method.**
+- Sources: the auth service's access log (times and status codes only), and the server's own rotation record in local Redis. Each rotated refresh token leaves a revoked-id key whose remaining lifetime gives the token's issue time (refresh tokens live exactly 30 days). So for every launch-time refresh, it is known whether the token it issued was presented again later.
+- Plus a reading of the client and server code.
+- No token, token id or password was printed or written.
+
+**What the record shows.**
+
+| Device run | Driver | Tokens issued by launches |
+|---|---|---|
+| prepare runs (all) | any | all kept |
+| 17:00 base cold, 17:10 base warm (≈45 launches) | `2021bf3`: app CPU/memory **plus `XCTHitchMetric`** | all kept, including launches inside `measure` |
+| 17:15 base cold | `dc94a08`: no hitch metric | kept until the first launch inside `measure`; not kept from 17:15:36. At 17:16:06 the app presented a token rotated more than 30 s earlier: rejected, signed out. |
+| 17:36 base cold | `d3fcd57` | first launch (outside `measure`) kept. Both launches inside `measure` not kept: the second presented the first's token again, which was accepted only through the 30 s replay. 17:44:13 rejected, signed out. |
+
+The simulator never lost a token, including a measured relaunch in its 17:27 run.
+
+**Ruled out.**
+- *Cross-app keychain.* LinkedDev has its own access group (`…co.tradersguild.app.linkeddev`), separate from production and Prod QA.
+- *Biometric login.* It runs only when a person taps it on the sign-in screen.
+- *Server policy.* Rotation and the 30 s replay behave as designed, and there are no per-user revocation watermarks (0 keys).
+- *App installs between runs.* Prepare runs kept tokens straight after installs.
+
+**Classification: the strongest observed correlation, not a proven root cause.** Session loss correlates with app launches inside an XCTest `measure` block with the app CPU and memory metrics on the phone, under drivers from `dc94a08`. **The internal mechanism remains unknown.** It is not isolated because the app logs with `print`, which the device's unified log does not keep. The evidence fits two explanations:
+- the app's keychain write silently failing for processes launched under that measurement;
+- the refresh response being lost to the client, in which case `restoreSession` keeps (and writes back) the cached token.
+
+**Latent application fragility** (shipped, not v1.5; affects old clients the same way):
+- `KeychainPreferences.save` deletes and then adds, and ignores both statuses. A failed add after a successful delete loses the token; a failed delete plus a failed add keeps a stale one silently.
+- `restoreSession` keeps the cached refresh token after a transient refresh failure, even if the server already rotated it.
+
+Either one becomes a sign-out on the next launch more than 30 s later. The code dates from April–May 2026, in builds from 1.1.5 on. Server rotation dates from 2026-04-23 and the replay from 2026-05-06. No evidence of real-user impact was gathered.
+- A fix would be an app change (check `SecItem` statuses and update in place; after a failure that may have reached the server, retry within the replay window before keeping the old token). That goes beyond test tooling, so **it is not made here and needs a separate decision.**
+- Backend observation, unchanged: `PUT /api/v1/users/me/password` does not revoke existing sessions; only the email reset flow does.
+
+**Smallest correction: test-only, made.** No test launches the app inside `measure`. The measured relaunch is removed: on a warm run, the single first launch already is the fresh-process warm launch. Every remaining `measure` block (the in-process revisit, the pans) launches nothing.
+- Simulator: 13/13, one launch per run.
+- Device bundles rebuilt.
+- This uses only the pattern the record shows keeping tokens. It is a recovery experiment, not a proven fix: `session_check.py` must pass on the phone before the long sequence.
+
+**Session check, corrected after review (`perf-tooling/session_check.py`).** It fails closed. Every rule must hold:
+- prepare, launch-1 and launch-2 all exit 0 (launch-2, more than 30 s later, must reach the chart with the parent selected);
+- each launch has a complete `first-launch-and-load` window, with at least one refresh returning 200 inside it;
+- no refresh is rejected anywhere in the check;
+- launch-2's refresh is more than 30 s after launch-1's, with no other refresh in between, so it cannot be a replay;
+- exactly one of the run account's push-token rows (`traders_guild.device_tokens`, read after each launch) is updated inside each window, and the device fingerprint is the same for both launches. That ties both launches to this account on this phone.
+
+Identifiers appear only as sha256 fingerprints (account, device, request correlation id). The Redis rotation record is reported as corroboration only, never as proof.
+- Offline tests: `perf-tooling/test_session_check.py`, **19 / 19**: the consistent case passes, and each failure or missing-evidence case fails for the stated reason. Cases: prepare failed or missing; either launch's test failed; one or no launches; a missing or incomplete window; no refresh evidence; only one refresh; a rejection anywhere; launches inside the replay window; a refresh between the launches; a missing, duplicate or out-of-window device row; different devices.
+- Readers checked read-only against local DEV: the phone's row for account A was last updated at 17:37:05, the last measured relaunch before the sign-out.
+
+**Password rotation for QA A and B: done** (`perf-tooling/rotate_qa_passwords.py`, local script, no GUI).
+- Run from this Mac against the local gateway only, after review of its safeguards:
+  - accounts a–e only;
+  - the credentials file must already be mode 600;
+  - new credentials are staged mode 600 in the same directory, persisted the moment the change succeeds, and removed on any failure before that;
+  - output is account letters and HTTP status codes only.
+- Result: for both A and B, current-password login 200, change 200, new-password login 200. `qa-creds.json` is still mode 600, with no staged file left. The new passwords appear in no other file under the scratchpad or `docs/`.
+- **Fixtures preserved:** before and after snapshots (`test-results/fixtures-{before,after}-rotation.txt`) are identical except the password-hash fingerprint. That covers 5 users (ids, avatars, status), all 72 markers in the guild, and the device row.
+- **Limitation, recorded and not changed:** `PUT /api/v1/users/me/password` does not revoke existing sessions; only the email reset flow sets the per-user revocation watermark. Sessions opened with the old passwords stay valid (the simulator app is still signed in as A). No auth policy was broadened.
+
+**Manual sign-in handoff (owner, about 1 minute).**
+- The credentials are in the protected local file `$S/stage4/qa-creds.json` (mode 600), under `accounts.a`: `email` and `password`.
+- On the iPhone, open **TG LinkedDev** (not Traders Guild or TG Prod QA), tap Sign in with Email, and enter account A's email and password from that file. Choose the guild **Stage4 QA 658f08** if asked.
+- Leave the phone unlocked on the same Wi-Fi.
+- Claude does not enter credentials on the phone or in any test.
+
+**Recovery sequence:**
+1. ~~Rotate QA A and B passwords~~: done.
+2. *(Owner)* Manual sign-in, as above.
+3. *(Claude, about 3 minutes of phone time)* `session_check.py <dd-device-base>`. **No long sequence unless it prints PASS.** On FAIL, stop and report.
+   - **Result, 2026-10-01: PASS** (`test-results/device-session-check.json`, fingerprints and times only). The owner signed in by hand.
+     - Prepare exit 0.
+     - launch-1 exit 0: window 19:10:01–19:10:18, refresh 19:10:05 → 200, device row `fb7292cb` updated 19:10:05.
+     - launch-2 exit 0, reaching the chart with the parent selected: window 19:11:26–19:11:41, refresh 19:11:28 → 200 (83 s after launch-1, no refresh between), the same device row updated 19:11:28.
+     - Account `ef5590f3` (account A).
+     - Corroboration (not proof): the token issued at launch-1's refresh appears in the rotation record.
+     - This supports the recovery experiment, launches only outside `measure`. It does not prove the root cause.
+4. *(Owner keeps the phone awake for about 95 minutes; Claude)* `run_all.sh` once, then `run_frames_all.sh` once.
+5. *(Claude)* Per-phase results, the checkpoint update, and a report to Astra before any acceptance.
+
+## 8. Device comparison, 2026-10-01 21:49–22:30 UTC: complete
+
+iPhone 14 Pro, iOS 26.6.1, LinkedDev Profile, local DEV. Driver `5e7826a`: launches only outside `measure`, links in-process, no whole-run trace. The whole-run trace was switched off because each 7-minute trace appeared to leave its data on the phone, filling its storage twice. All seven measured runs exited 0. Summary: `test-results/device-sequence-summary.json`.
+
+**Pans: app CPU per ~8.7 s pan window, medians of 5; memory at the end of the pan.**
+
+| run (UTC start) | selected | unselected | memory |
+|---|---|---|---|
+| baseline cold (21:50) | 3.53 s | 3.52 s | 159 MB |
+| baseline warm (21:55) | 3.35 s | 3.59 s | 159 MB |
+| prototype on, cold (22:00) | **5.31 s** | **5.24 s** | 164 MB |
+| prototype on, warm (22:05) | **6.54 s** | **5.18 s** | 172 / 162 MB |
+| prototype off, warm (22:10) | 4.06 s | 3.93 s | 159 MB |
+| baseline warm, repeat (22:20) | 5.00 s | 4.54 s | 160 MB |
+| prototype on, warm, repeat (22:25) | **8.52 s** | **6.91 s** | 164 MB |
+
+- **The experiment adds CPU while panning:** about +1.5 to +3.5 s of app CPU per pan window over the baseline and the gate-off build run at nearby times (roughly 1.4–1.8×), with the thesis selected and with nothing selected. The simulator signal is confirmed on the device. With the gate off, the prototype is close to the baseline.
+- **Every build rises later in the session** (the baseline repeat is 5.00 s against 3.35 s earlier), so device warmth matters. The experiment-on runs are higher than their neighbours each time.
+- The final experiment-on run had 2 of 10 pans ending off the seeded view (an overshoot), and a longer selected-pan window (9.6 s).
+- Memory: about +3 to +13 MB with the experiment on, and no growth across pans.
+- Selection checks held in every run: title present or absent as required, and the anchored views exact.
+
+**Avatar requests**
+- Cold first launch: the baseline downloaded each author twice (10); the prototype downloaded each once (5).
+- Warm launches: 0 downloads and 4 revalidations in every build.
+- Revisits, anchors and pans: 0 requests.
+- **The prototype adds no avatar network traffic.**
+
+**Frames and hitches: not obtained.** The per-test short traces came back with no displayed-frame data (the first-launch trace was empty). The pan trace attributed many hitches to `AutomationModeUI`, the overlay iOS draws while UI automation runs. Under XCUITest on this phone the frame instrument measures the automation overlay as much as the app, so the pass was stopped after three tests and is not evidence. Frame smoothness would need a manual, non-automated recording session (Instruments with the phone driven by hand).
+
+**Acceptance: not met for performance.** The prototype costs noticeably more CPU while panning on a real device. This is for Astra and the owner to judge against the master plan §4; it needs a profiling and optimisation pass before acceptance. Downloads and memory look acceptable.
+
+## 9. Profiling and optimisation pass (after Astra: Stage 5 not accepted)
+
+Mac only; no phone work.
+
+**Method.** Measurements were controlled, not assumed.
+1. `/usr/bin/sample` of the simulator app during the pan test, main-thread call trees (`profiling/main_thread_profile.py`, `subtree.py`). The XCUITest-driven samples did not control frame counts, so they were used only to point at candidates.
+2. Temporary, uncommitted instrumentation (`profiling/profiling-instrumentation.diff`): per-second counts of chart body evaluations and Canvas draws, time inside each Canvas draw closure, process CPU time, and SwiftUI `_printChanges()`. Pans were driven identically by the same XCUITest pan test, with builds alternated (`profiling/time_pan.sh`). Switches temporarily skipped the face draw, its circle clip, or the intent badge.
+
+**Findings** (`profiling/timings.md`):
+- **Not the cause:**
+  - *Body invalidation or redraw frequency:* bodies and draws per second are the same with the experiment on and off (9–12/s idle, 50–56/s panning), triggered by the same state (`gestureState`, `indicatorManager`). Idle CPU is similar.
+  - *Canvas resolution or the candle canvas:* 0.31–0.32 ms per frame in both.
+  - *Face symbol draw, image decode or resize, circle clip:* skipping the face draw or the clip changed nothing (2.51 and 2.60 ms against 2.45).
+  - *Symbol creation:* the avatar symbol list is rebuilt only when markers or avatars change, not per frame.
+- **Attributed cause (by controlled simulator profiling; device confirmation pending):** the experiment's **intent badge glyph**. It was a `Text(Image(systemName:))` drawn for every marker on every frame, through string layout (`StringDrawing.size` in the profile). Skipping just the badge brought the marker canvas from 2.45 to 1.56 ms per frame (experiment off: 1.41–1.58), and process CPU from 670 to 615 ms/s (off: 594–604).
+
+**Fix (`5f9ee89`).** The badge glyph is now the same SF Symbol (8 pt, heavy) as a template image:
+- built once per symbol, tinted per draw pass (theme-safe), drawn at the same point;
+- only the experiment's intent badge used this path, so experiment-off drawing is unchanged;
+- geometry, the 36 pt disc, hit targets, selection, branches, avatar freshness and request deduplication are untouched.
+
+**After the fix** (matched, alternating):
+
+| pan | marker canvas, on → off | process CPU per second, on → off |
+|---|---|---|
+| selected | 1.63–1.73 → 1.47–1.48 ms per frame | 574–593 → 576–604 ms |
+| unselected | 1.63–1.74 → 1.42–1.47 ms per frame | 564–597 → 550–553 ms |
+
+The marker canvas's extra cost fell from about +1.0 ms to +0.2–0.3 ms per frame, and process CPU is within run-to-run noise of experiment off.
+
+**Visual check.** Gallery captures (intents, Setup states, relationships; Dark and Light Grey; selected) before and after differ in 287–527 pixels per scene, all at the badge glyphs. Zoomed, the glyph, weight and colour are the same, with only sub-pixel anti-aliasing differing (`profiling/badge-glyph-before-after-zoom.jpg`).
+
+**Tests.**
+- New `MarkerBadgeGlyphImagesTests` (2): every badge symbol has a template glyph at badge size, built once.
+- Focused marker suites (badge glyphs, intent decoration, link render and geometry, avatar render, focus hit testing): **95 / 0**.
+- Full unit target: **801 / 0**.
+
+**Reproducible artifacts** (local scratchpad, kept):
+- **Focused suites, 95 / 0:** `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/stage6/rb-s6-focused-065738.xcresult`
+- **Full unit target, 801 / 0:** `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/stage6/rb-s6-full-065918.xcresult`
+- Both ran on `5f9ee89`, simulator iPhone 17 Pro, `traders_guild LinkedDev` scheme, DevDebug.
+- **Prototype device build:** `/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/dd-device-proto/Build/Products/`
+  - test plan: `traders_guild LinkedDev Profile_iphoneos26.5-arm64.xctestrun`
+  - apps: `DevProfile-iphoneos/traders_guild.app` and `traders_guildUITests-Runner.app`
+- How the device build was made: `xcodebuild build-for-testing -scheme "traders_guild LinkedDev Profile" -configuration DevProfile -destination generic/platform=iOS -allowProvisioningUpdates DEVELOPMENT_TEAM=B4WE2NR99U`, at 2026-10-02 07:26 UTC. That is after `5f9ee89` (07:00 UTC) and before `a1eafa0` (docs only), so it is `5f9ee89` code.
+- Build checks:
+  - `** TEST BUILD SUCCEEDED **` (log `stage6/build-device-proto.log`);
+  - the app binary contains the `MarkerBadgeGlyphImages` symbols;
+  - it is signed `co.tradersguild.app.linkeddev`, team `B4WE2NR99U`.
+- The later comment-only correction to the badge glyph's doc comment does not change the built code.
+- The baseline device build (`dd-device-base`, `72b6f2b` plus the identical driver) is unchanged.
+
+**Wording note.** Commit subject `a1eafa0` says "badge glyph was the pan regression". Read it, like the rest of this section, as attributed by controlled simulator profiling. Device confirmation is pending, and physical performance acceptance remains pending.
+
+**Limits.**
+- The simulator renders on the Mac's GPU, so this justifies a device session; it does not replace one.
+- No frame-smoothness claim is made from CPU alone.
+- The earlier device run's thermal drift (every build rose later in the session) and its overshot pans are limitations of that evidence.
+
+**Proposed device session** (to coordinate before any phone time; short, not the hour-long run):
+- The prototype device bundle is rebuilt from `5f9ee89`; the baseline is unchanged.
+- Run interleaved, cooled pairs: baseline warm, prototype on, prototype off, baseline, prototype on, with a few minutes' pause between runs. About 35 minutes.
+- No whole-run traces, and no trace capture without coordination.
+- The `session_check.py` gate comes first.
+
+## 10. Device confirmation of `5f9ee89` (integrated as `37fb5e2`), 2026-10-02 17:28–18:07 UTC
+
+iPhone 14 Pro, iOS 26.6.1, LinkedDev Profile, local DEV. The same fixtures and the same driver (identical file in both builds), with selection and drift checks.
+
+**Pre-flight.**
+- Phone connected and unlocked; no runner active; outbound integrations off.
+- The prototype bundle contains the glyph optimisation (`MarkerBadgeGlyphImages` symbols present); the baseline does not.
+- No whole-run or frame traces, no credentials in tests.
+- Thermal state: devicectl does not expose it. Cooling was a fixed 2-minute pause between runs.
+
+**Gate.** `session_check.py` **PASS** (`test-results/device-session-check-2026-10-02.json`): both launches reached the chart, refreshes returned 200, and launch-2 came 83 s after launch-1 with no replay possible.
+
+**Interleaved, all warm** (`perf-tooling/run_interleaved.sh`; `test-results/device-interleaved-summary.json`). App CPU per ~8.7 s pan window, median of 5 [range]; memory at the end of the pan:
+
+| run (UTC start) | selected | unselected | memory | pans off the seeded view |
+|---|---|---|---|---|
+| baseline warm (17:31) | 4.19 s [4.15–4.30] | 4.11 s [3.95–4.17] | 161 / 157 MB | 0 of 10 |
+| **prototype on (17:38)** | **4.12 s [4.07–4.33]** | **4.09 s [4.03–4.27]** | 166 / 164 MB | 0 of 10 |
+| prototype off (17:45) | 4.05 s [3.96–6.25] | 3.98 s [3.77–4.02] | 159 / 158 MB | 0 of 10 |
+| baseline warm, repeat (17:51) | 4.09 s [3.83–4.29] | 4.03 s [3.92–4.27] | 158 / 159 MB | **1 of 10** (an overshoot, shift 24) |
+| **prototype on, repeat (18:02)** | **4.17 s [3.91–4.38]** | **3.90 s [3.76–3.96]** | 162 / 159 MB | 0 of 10 |
+
+- **The pan CPU regression from §8 (+1.5 to +3.5 s per window) is not present.** With the experiment on, pan CPU is within the spread of the baseline and the gate-off build, in both states and both repeats.
+- Memory with the experiment on is about +1 to +7 MB, with no growth across pans.
+- Avatar requests are identical in every run: 0 downloads and 4 revalidations at launch, nothing during revisits, anchors or pans.
+- **Reported honestly:**
+  - one baseline pan overshot (shown above);
+  - the prototype-off run has one high selected sample (6.25 s, its first pan);
+  - the background task running the sequence hit its time limit during the last run. The interrupted attempt is kept (`rb-perf-i-proto-on-2-…-175810Z`). The run was repeated after a 1-minute pause as `i-proto-on-2b` (the cooling before it was about 4.5 minutes in total).
+- Wall time about 39 minutes including the gate (owner expected about 35).
+
+**Not claimed:**
+- No acceptance; that is for Astra and the owner against master plan §4.
+- No frame-smoothness claim from CPU: frame and hitch evidence remains unobtained under XCUITest (§8).
+- Thermal state was not recorded.
+
 ## Local data added in Stage 5 (local DEV only, additive)
 
 - Accounts `stage4658f08c/d/e` (`@example.com`). `is_verified` was set in the local DB for those rows, as in Stage 4. They joined guild "Stage4 QA 658f08". Credentials live only in `$S/stage4/qa-creds.json` and were never printed.
 - Avatars for accounts A–E, uploaded through the LAN gateway address. They are re-uploaded under new URLs before cold runs; the pictures stay the same.
 - 61 markers on BTC/USD 1h in that guild. Stage 4 evidence records are untouched.
 
-## Remaining work and gaps
+## Remaining work and gaps (current, 2026-10-02)
 
-1. **Physical-device comparison** (§5): needs the phone available, unlocked and awake. Then export hitches per phase from the traces, and evaluate against the master plan's acceptance rules.
-2. **VoiceOver and Switch Control by hand** on the device.
-3. **Older-client runtime compatibility** (iOS 1.1.1/1.1.2, Android): still source inference only. This is required before production adoption (master plan §4) and needs Astra-coordinated worktrees.
-4. **Decisions carried forward:** the owner-delete permission mismatch (deferred for separate triage); legacy Reduce Motion; the link-banner wrap.
+Owner hands-on review note: `V1_5_STAGE5_OWNER_HANDS_ON.md`. Test-tooling summary for integration: `V1_5_STAGE5_TOOLING_INTEGRATION.md`. Warm-pan CPU regression accepted by Astra as resolved within the baseline spread (`e1ffd10`); this is not Stage 5, frame-smoothness or production acceptance.
+
+1. **Device confirmation of the fix:** done (§10). Pan CPU with the experiment on is within the spread of the baseline and gate-off builds. Performance acceptance is for Astra and the owner.
+2. **Frame smoothness:** not measurable under XCUITest on the phone (§8). It needs a hand-driven Instruments session if Astra wants frame or hitch evidence.
+3. **VoiceOver and Switch Control by hand** on the device.
+4. **Older-client runtime compatibility** (iOS 1.1.1/1.1.2, Android): still source inference only. Required before production adoption (master plan §4); needs Astra-coordinated worktrees.
+5. **Decisions carried forward:** the owner-delete permission mismatch; legacy Reduce Motion; the link-banner wrap.
+
+## Deferred issues, recorded separately (not v1.5 scope; no change made)
+
+- **Client auth-token fragility** (shipped since about 1.1.5; §7). `KeychainPreferences.save` deletes then adds and ignores both statuses, and `restoreSession` keeps a cached refresh token after a transient refresh failure. Either can turn a lost token update into a sign-out on the next launch more than 30 s later. Seen only under test-driven launches on the phone; root cause not proven.
+- **Password change does not revoke sessions:** `PUT /api/v1/users/me/password` leaves existing sessions valid; only the email reset flow sets the revocation watermark (§7). Recorded only; auth policy unchanged.
