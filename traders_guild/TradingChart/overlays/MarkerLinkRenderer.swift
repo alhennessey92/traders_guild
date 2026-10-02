@@ -88,7 +88,7 @@ struct MarkerDrawPass {
     ///
     /// An image, not `Text(Image(systemName:))`: drawn as text, every badge went
     /// through string layout on every frame, which was the whole of the avatar
-    /// prototype's extra pan cost (device Stage 5; `docs/V1_5_STAGE5_CHECKPOINT.md`).
+    /// prototype's extra pan cost in controlled simulator profiling; device confirmation remains pending.
     /// The symbol shape is theme-free and cached for the process; the colour is
     /// applied per pass.
     mutating func badgeGlyph(
