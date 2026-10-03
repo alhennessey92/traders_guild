@@ -68,8 +68,10 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(response.guidedToolbarTitle == "New response")
         #expect(response.guidedStepPrompt == "What's your view?")
         response.openTypeChooser()
-        #expect(response.guidedToolbarTitle == "Other marker types")
+        #expect(response.guidedToolbarTitle == "Change type")
+        #expect(response.guidedStepPrompt == "What do you want to post?")
         #expect(response.guidedStepNumber == nil)
+        #expect(response.linkSession.isActive, "Change type keeps the response")
     }
 
     @Test
@@ -146,6 +148,27 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(state.continueToReview())
     }
 
+    /// Review is held back while a response's timeframe loads, and after it
+    /// fails; the bar says so rather than going quiet.
+    @Test
+    func aResponseTimeframeChangeExplainsTheWait() {
+        let state = guidedDraft(.analysis, response: true)
+        state.note = "Not convinced."
+        #expect(state.guidedNextStepPrompt == nil)
+
+        let request = state.beginResponseTimeframeChange()
+        #expect(!state.isValid)
+        #expect(state.guidedNextStepPrompt == "Loading the response timeframe…")
+
+        state.finishResponseTimeframeChange(request, succeeded: false)
+        #expect(!state.isValid)
+        #expect(state.guidedNextStepPrompt == "Choose a response timeframe that loads")
+
+        state.finishResponseTimeframeChange(state.beginResponseTimeframeChange(), succeeded: true)
+        #expect(state.guidedNextStepPrompt == nil)
+        #expect(state.isValid)
+    }
+
     // MARK: Formatting
 
     @Test
@@ -162,6 +185,8 @@ struct MarkerGuidedSheetRefinementTests {
     func theAudienceLineNamesTheGuild() {
         #expect(MarkerGuidedFormat.audience("Alpha Traders") == "Members of Alpha Traders will see this on the chart.")
         #expect(MarkerGuidedFormat.audience(nil) == "Your guild will see this on the chart.")
-        #expect(MarkerGuidedFlowEntry.guidedIntents == [.analysis, .question, .setup])
+        // The approved separation: Setup is not in the social selector.
+        #expect(MarkerGuidedFlowEntry.socialIntents == [.analysis, .question])
+        #expect(!MarkerGuidedFlowEntry.otherIntents.contains(.setup))
     }
 }

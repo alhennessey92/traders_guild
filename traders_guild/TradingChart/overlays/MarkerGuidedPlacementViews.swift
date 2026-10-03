@@ -125,24 +125,53 @@ struct MarkerGuidedPlacementPanel: View {
         )
     }
 
-    // MARK: Other types
+    // MARK: Change type
 
-    /// The types the guided flow does not compose, on their existing flows.
-    /// Analysis, Question and Setup are chosen on Details itself.
+    /// "Change type" returns to the creation hierarchy — Post to the chart,
+    /// Plan a trade, other types — keeping the draft and any response.
+    /// Setup is reached here, never from the social selector.
     private var typeChooser: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             stepHeader
-            Text("These open the full marker editor. Your text is kept.")
+            responseSection
+            Text("Your text\(placementState.linkSession.isActive ? " and response" : "") will be kept.")
                 .font(.footnote)
                 .foregroundColor(AppColors.greyText)
                 .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 8) {
-                ForEach(MarkerGuidedFlowEntry.otherIntents, id: \.self) { intent in
-                    MarkerGuidedTypeRow(intent: intent, subtitle: intent.subtitle, isCurrent: false) {
-                        choose(intent, leavesGuidedFlow: true)
+            MarkerGuidedEntryCard(
+                author: author,
+                intent: placementState.isSocialDetails ? placementState.intent : .analysis,
+                title: "Post to the chart",
+                subtitle: "Share analysis or ask the guild a question",
+                identifier: "guided.postToChart",
+                isCurrent: placementState.isSocialDetails
+            ) {
+                choose(placementState.isSocialDetails ? placementState.intent : .analysis, leavesGuidedFlow: false)
+            }
+            MarkerGuidedEntryCard(
+                author: author,
+                intent: .setup,
+                title: "Plan a trade",
+                subtitle: "Entry, stop and target. Tracked Setups count toward your accuracy and reputation.",
+                identifier: "guided.planTrade",
+                isCurrent: placementState.intent == .setup
+            ) {
+                choose(.setup, leavesGuidedFlow: false)
+            }
+            DisclosureGroup {
+                VStack(spacing: 8) {
+                    ForEach(MarkerGuidedFlowEntry.otherIntents, id: \.self) { intent in
+                        MarkerGuidedTypeRow(intent: intent, subtitle: intent.subtitle, isCurrent: false) {
+                            choose(intent, leavesGuidedFlow: true)
+                        }
                     }
                 }
+                .padding(.top, 8)
+            } label: {
+                MarkerGuidedSectionTitle("Other marker types")
             }
+            .tint(AppColors.greyText)
+            .padding(.top, 4)
         }
     }
 
@@ -152,8 +181,8 @@ struct MarkerGuidedPlacementPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             stepHeader
             responseSection
-            typePicker
             if placementState.isSocialDetails {
+                socialTypePicker
                 socialFields
             } else {
                 setupFields
@@ -163,12 +192,12 @@ struct MarkerGuidedPlacementPanel: View {
         }
     }
 
-    /// Analysis · Question · Setup, with one line saying what the chosen
-    /// type is for.
-    private var typePicker: some View {
+    /// Analysis · Question — the social selector — with one line saying
+    /// what the chosen type is for. Setup is structured and is not in it.
+    private var socialTypePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             MarkerGuidedTypePicker(
-                intents: MarkerGuidedFlowEntry.guidedIntents,
+                intents: MarkerGuidedFlowEntry.socialIntents,
                 selected: placementState.intent,
                 stacks: dynamicTypeSize.isAccessibilitySize
             ) { intent in
@@ -272,7 +301,7 @@ struct MarkerGuidedPlacementPanel: View {
             Button {
                 placementState.openTypeChooser()
             } label: {
-                Text("Other marker types")
+                Label("Change type", systemImage: "arrow.left.arrow.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(AppColors.accentColor)
                     .padding(.vertical, 6)
@@ -490,8 +519,8 @@ struct MarkerGuidedPlacementBar: View {
                 if let prompt = placementState.guidedNextStepPrompt {
                     // Amber only for levels that are set but wrong; a step
                     // not yet taken is just the next step.
-                    let isProblem = placementState.setupSide == .inconsistent
-                        || placementState.setupSide == .invalidPrice
+                    let isProblem = placementState.intent == .setup
+                        && (placementState.setupSide == .inconsistent || placementState.setupSide == .invalidPrice)
                     Text(prompt)
                         .font(.footnote)
                         .foregroundColor(isProblem ? AppColors.statusWarning : AppColors.greyText)
@@ -611,8 +640,9 @@ struct MarkerGuidedDiscardConfirmation: ViewModifier {
 
 /// Which types the entry hierarchy leads to.
 enum MarkerGuidedFlowEntry {
-    /// Composed in the guided flow, and chosen on its Details step.
-    static let guidedIntents: [RLMarkerIntent] = [.analysis, .question, .setup]
+    /// The social selector on Details. Setup is structured and reached from
+    /// its own entry, or from Change type.
+    static let socialIntents: [RLMarkerIntent] = [.analysis, .question]
     /// Kept on their existing flows behind "Other marker types".
     static let otherIntents: [RLMarkerIntent] = [.alert, .poll, .news, .reaction, .personal]
 }
@@ -626,27 +656,37 @@ struct MarkerGuidedEntryCard: View {
     let title: String
     let subtitle: String
     let identifier: String
+    /// In Change type, the draft's current kind: a checkmark, and selected.
+    var isCurrent: Bool = false
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                UnifiedMarkerBadge(intent: intent, sizeToken: .large, avatar: author)
-                    .frame(width: 52, height: 52)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(AppColors.primaryForeground)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                        .fixedSize(horizontal: false, vertical: true)
+                // At accessibility sizes the face sits above the words, which
+                // then get the card's width.
+                let content = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                    : AnyLayout(HStackLayout(spacing: 14))
+                content {
+                    UnifiedMarkerBadge(intent: intent, sizeToken: .large, avatar: author)
+                        .frame(width: 52, height: 52)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.headline.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundColor(AppColors.greyText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
+                Image(systemName: isCurrent ? "checkmark" : "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(isCurrent ? intent.color : AppColors.greyText)
                     .accessibilityHidden(true)
             }
             .padding(16)
@@ -662,7 +702,7 @@ struct MarkerGuidedEntryCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(identifier)
     }
 }
@@ -779,8 +819,9 @@ struct MarkerGuidedStepHeader: View {
     }
 }
 
-/// Analysis · Question · Setup as one segmented control. Stacks at
-/// accessibility text sizes, where three segments in a row would break words.
+/// The social selector, Analysis · Question, as one segmented control.
+/// Stacks at accessibility text sizes, where segments in a row would break
+/// words.
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent

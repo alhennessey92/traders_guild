@@ -210,7 +210,7 @@ extension MarkerPlacementState {
     /// instruction still wins while one is active.
     var guidedToolbarTitle: String? {
         switch guidedStep {
-        case .chooseType?: return "Other marker types"
+        case .chooseType?: return "Change type"
         case .details?, .context?, .review?:
             return linkSession.isActive ? "New response" : "New \(intent.displayName)"
         case nil: return nil
@@ -235,6 +235,14 @@ extension MarkerPlacementState {
     /// disabled Review button so the reason is never a guess.
     var guidedNextStepPrompt: String? {
         guard guidedStep == .details else { return nil }
+        // A response's timeframe holds Review back while it loads, and after
+        // it fails to.
+        if isChangingResponseTimeframe {
+            return "Loading the response timeframe…"
+        }
+        if responseTimeframeLoadFailed {
+            return "Choose a response timeframe that loads"
+        }
         // A Setup is always valid; a tracked one is held back by the level
         // guard instead, so its prompt names what the guard is waiting for.
         if guidedTrackedSetupLevelsNeedAdjusting {
@@ -287,7 +295,7 @@ extension MarkerPlacementState {
             }
         case .context?: return "Add chart context"
         case .review?: return "Check your post"
-        case .chooseType?: return "Choose another type"
+        case .chooseType?: return "What do you want to post?"
         case nil: return nil
         }
     }

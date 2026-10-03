@@ -145,6 +145,40 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         attachTree("tree-analysisEmpty-to-review")
     }
 
+    /// The frozen plan's separation: Details offers Analysis/Question only;
+    /// Setup is reached through Change type, which returns to the creation
+    /// hierarchy with the draft kept.
+    func testSetupStaysOutOfTheSocialSelector() throws {
+        launch("analysisDetails")
+        XCTAssertTrue(app.buttons["guided.intent.analysis"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["guided.intent.question"].exists)
+        XCTAssertFalse(app.buttons["guided.intent.setup"].exists, "Setup is not in the social selector")
+
+        app.buttons["guided.changeType"].tap()
+        let social = app.buttons["guided.postToChart"]
+        let setup = app.buttons["guided.planTrade"]
+        XCTAssertTrue(social.waitForExistence(timeout: 5) && setup.exists, "Change type shows the creation hierarchy")
+        XCTAssertTrue(social.isSelected, "the draft's current kind is marked")
+        XCTAssertFalse(setup.isSelected)
+        attachScreenshot("change-type-hierarchy")
+
+        setup.tap()
+        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Plan a trade opens Setup details")
+        XCTAssertFalse(app.buttons["guided.intent.analysis"].exists, "Setup details carry no social selector")
+        XCTAssertTrue(app.buttons["guided.changeType"].exists, "and keep the way back")
+    }
+
+    func testChangeTypeKeepsAResponse() throws {
+        launch("responseChooser")
+        XCTAssertTrue(app.buttons["guided.planTrade"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Challenges")).firstMatch.exists
+                || app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Challenges")).firstMatch.exists,
+            "the response banner stays in Change type"
+        )
+        attachScreenshot("change-type-response")
+    }
+
     /// Optional extras stay out of the way until asked for.
     func testTheTitleIsAddedOnRequest() throws {
         launch("analysisEmpty")
