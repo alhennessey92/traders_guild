@@ -186,7 +186,8 @@ extension MarkerPlacementState {
     /// The Details step's Review button: a postable draft, levels in order
     /// for a tracked Setup, and — for an edit — something changed.
     var canContinueToReview: Bool {
-        isValid && !guidedTrackedSetupLevelsNeedAdjusting && (!isGuidedEdit || guidedEditHasChanges)
+        isValid && !guidedTrackedSetupLevelsNeedAdjusting
+            && (!isGuidedEdit || (guidedEditHasChanges && !guidedEditComponentChangeRefused))
     }
 
     /// A Setup's levels → its reasoning: levels in order for a tracked Setup.
@@ -284,6 +285,9 @@ extension MarkerPlacementState {
         }
         if responseTimeframeLoadFailed {
             return "Choose a response timeframe that loads"
+        }
+        if guidedEditComponentChangeRefused {
+            return Self.guidedEditComponentChangeRefusedMessage
         }
         // A Setup is always valid; a tracked one is held back by the level
         // guard instead, so its prompt names what the guard is waiting for.

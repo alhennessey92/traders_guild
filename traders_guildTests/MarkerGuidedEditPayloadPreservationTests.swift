@@ -248,6 +248,56 @@ struct MarkerGuidedEditPayloadPreservationTests {
         #expect(e.state.components.first { $0.componentType == .levelSl }?.payload.guidedLevelPayload?.label == "SL")
     }
 
+    // MARK: Unverifiable pairing fails closed
+
+    /// Open an edit whose hydrated drafts were disturbed before pairing, so
+    /// the saved components cannot be matched one for one.
+    private func mismatchedEdit(_ disturb: (MarkerPlacementState) -> Void) throws -> MarkerPlacementState {
+        let marker = try decoder().decode(RLChartMarkerDTO.self,
+                                          from: Data(markerJSON(intent: "analysis", components: analysisComponents).utf8))
+        let ui = ChartMarkerUI(marker: marker, candleIndex: 0)
+        let state = MarkerPlacementState()
+        state.beginEditingMarker(ui)
+        state.allowTextOnlyAnalysisEdit()
+        disturb(state)
+        state.prepareGuidedEdit(of: ui)
+        return state
+    }
+
+    @Test
+    func fewerDraftsThanSavedComponentsNeverIndexesAndStillSavesText() throws {
+        // More saved components than drafts: a negative offset.
+        let state = try mismatchedEdit { state in
+            for draft in state.components.filter({ $0.componentType == .levelSupport }) {
+                state.removeComponent(id: draft.id)
+            }
+        }
+        #expect(state.guidedEditOriginal?.componentsMatched == false)
+        state.title = "Higher lows holding"
+        #expect(state.canContinueToReview, "a text-only edit is safe")
+        let request = state.buildGuidedUpdateRequest()
+        #expect(request.title == "Higher lows holding")
+        #expect(request.components == nil, "nothing that could lose saved data is sent")
+    }
+
+    @Test
+    func anUnverifiableComponentChangeIsRefusedWithTheDraftKept() throws {
+        let state = try mismatchedEdit { state in
+            state.components.append(MarkerComponentDraft(componentType: .levelResistance,
+                                                         payload: .levelResistance(LevelPayload(price: 1, label: nil))))
+            state.components.append(MarkerComponentDraft(componentType: .levelResistance,
+                                                         payload: .levelResistance(LevelPayload(price: 2, label: nil))))
+        }
+        #expect(state.guidedEditOriginal?.componentsMatched == false)
+        state.upsertComponent(.timeframeLink, payload: .timeframeLink(TimeframeLinkPayload(timeframe: "1d", note: nil)))
+        #expect(state.guidedEditComponentChangeRefused)
+        #expect(!state.canContinueToReview)
+        #expect(!state.continueToReview())
+        #expect(state.guidedNextStepPrompt == MarkerPlacementState.guidedEditComponentChangeRefusedMessage)
+        #expect(state.buildGuidedUpdateRequest().components == nil)
+        #expect(state.components.contains { $0.componentType == .timeframeLink }, "the draft is kept")
+    }
+
     // MARK: Legacy output
 
     @Test

@@ -39,8 +39,9 @@ struct MarkerGuidedEditOriginal {
     /// `guidedEditRequestComponents()`.
     let components: [MarkerGuidedEditComponent]
     /// False if the hydrated drafts could not be matched to the saved
-    /// components one for one; the edit then sends the typed components, as
-    /// the legacy editor does, plus any it cannot read.
+    /// components one for one. The edit then fails closed for components:
+    /// text can still be saved, but a context or level change is refused
+    /// rather than sent in a form that could lose saved data.
     let componentsMatched: Bool
     /// The tracked-Setup states in which the server refuses component edits.
     static let componentLockedStates: Set<RLTrackingState> = [.active, .tpHit, .slHit, .expired]
@@ -184,9 +185,13 @@ extension MarkerPlacementState {
             return $0.id.uuidString < $1.id.uuidString
         }
         let readable = saved.filter { $0.componentTypeEnum != nil }
+        // 0, or 1 for an anchor hydration added; anything else (including a
+        // negative difference) is unverifiable and never used to index.
         let offset = components.count - readable.count
-        let matched = (offset == 0 || (offset == 1 && components.first?.componentType == .anchor
-                                        && !readable.contains { $0.componentTypeEnum == .anchor }))
+        let offsetIsValid = offset == 0
+            || (offset == 1 && components.first?.componentType == .anchor
+                && !readable.contains { $0.componentTypeEnum == .anchor })
+        let matched = offsetIsValid
             && zip(components.dropFirst(offset), readable).allSatisfy { $0.componentType == $1.componentTypeEnum }
         var draftIndex = offset
         let paired = saved.map { component -> MarkerGuidedEditComponent in
@@ -216,11 +221,7 @@ extension MarkerPlacementState {
     /// - a type this build cannot read goes back as saved, where it was
     /// - anything the author added follows, as the editor built it
     func guidedEditRequestComponents() -> [RLMarkerComponentRequest] {
-        guard let original = guidedEditOriginal else { return [] }
-        guard original.componentsMatched else {
-            return requestComponentsForCurrentState(rewritesSetupEntry: false)
-                + original.components.filter { RLComponentType(rawValue: $0.componentType) == nil }.map(\.request)
-        }
+        guard let original = guidedEditOriginal, original.componentsMatched else { return [] }
         var requests: [RLMarkerComponentRequest] = []
         var accounted = Set<UUID>()
         for saved in original.components {
@@ -324,7 +325,18 @@ extension MarkerPlacementState {
     var canSaveGuidedEdit: Bool {
         isGuidedEdit && isValid && guidedEditHasChanges
             && !submissionPhase.isSubmitting && !guidedTrackedSetupLevelsNeedAdjusting
+            && !guidedEditComponentChangeRefused
     }
+
+    /// The saved components could not be matched safely, and the author
+    /// changed context or levels: the save is refused, the draft kept.
+    var guidedEditComponentChangeRefused: Bool {
+        guard let original = guidedEditOriginal, !original.componentsMatched, !isGuidedEditLocked else { return false }
+        return guidedEditComponentsChanged
+    }
+
+    static let guidedEditComponentChangeRefusedMessage =
+        "This marker's chart context can't be changed safely in this version. Undo the context or level change to save your text."
 
     // MARK: The update
 
@@ -341,6 +353,7 @@ extension MarkerPlacementState {
         let titleChanged = now.title != original.title
         let noteChanged = now.note != original.note
         let sendsComponents = !isGuidedEditLocked && guidedEditComponentsChanged
+            && original.componentsMatched
         let sendsTracking = !isGuidedEditLocked && intent == .setup && trackingEnabled != original.trackingEnabled
         return RLUpdateMarkerRequest(
             intent: nil,
