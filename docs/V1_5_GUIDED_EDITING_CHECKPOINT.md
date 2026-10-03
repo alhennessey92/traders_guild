@@ -241,3 +241,16 @@ The shared component DTO's encoding changed, so the whole unit target was re-run
 Neither touched product code.
 
 **Still pending:** live chart, detent and keyboard checks, after an owner sign-in on the simulator.
+
+### 9e. Fail-closed pairing guard (`4681ab0`, Astra's final narrow guard)
+
+**What changed:**
+- **Pairing failure:** if the hydrated drafts can't be matched to the saved components one for one, a guided edit no longer falls back to the lossy typed replacement.
+  - A context or level change is refused, with the draft kept. Both Review and Save are disabled.
+  - The bar says "This marker's chart context can't be changed safely in this version. Undo the context or level change to save your text."
+  - Text-only edits still save, and components are never sent.
+- **Offset check:** the pairing offset must be exactly 0 (or 1, for an anchor that hydration added) before any `dropFirst` or indexing. A negative difference is unverifiable and is never used.
+
+**Tests:** focused **43 / 43**: preservation 12 (2 new mismatch regressions, negative and +2 offsets), editing 16, refinement 15. Artifact: `$S/bs/rb-guard.xcresult`; `test-results/guard-focused-unit-*.json`.
+
+There was no full-suite re-run, per Astra: the change is guided-edit logic and tests only. The weekend device build (`docs/V1_5_WEEKEND_BUILD.md`) compiles this source.
