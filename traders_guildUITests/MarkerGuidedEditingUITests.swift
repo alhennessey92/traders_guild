@@ -68,7 +68,10 @@ final class MarkerGuidedEditingUITests: XCTestCase {
         XCTAssertFalse(app.textFields["Take Profit"].exists, "no level fields")
         XCTAssertFalse(app.switches.firstMatch.exists, "no tracking switch")
         XCTAssertFalse(app.buttons["guided.addContext"].exists, "no context editing")
-        XCTAssertTrue(app.buttons["guided.addTitle"].exists || app.textFields["guided.title"].exists)
+        app.buttons["guided.next"].tap()
+        XCTAssertTrue(app.buttons["guided.addTitle"].waitForExistence(timeout: 5) || app.textFields["guided.title"].exists,
+                      "the title and thesis are editable")
+        XCTAssertFalse(app.buttons["guided.addContext"].exists, "still no context editing")
         attachScreenshot("edit-setup-active-locked")
     }
 

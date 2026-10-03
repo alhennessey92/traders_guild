@@ -220,6 +220,8 @@ struct MarkerGuidedEditingTests {
         e.state.trackingEnabled = false
         #expect(!e.state.guidedEditHasChanges)
         #expect(!e.state.canContinueToReview)
+        #expect(e.state.guidedNextStepPrompt == nil, "the levels section moves on without a change")
+        #expect(e.state.continueToSetupReasoning())
         #expect(e.state.guidedNextStepPrompt == "Make a change to review it")
 
         e.state.note = "Moving my stop mentally to break-even."

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CoreGraphics
 
 /// Where the guided panel is.
 enum MarkerGuidedStep: Equatable {
@@ -14,8 +15,11 @@ enum MarkerGuidedStep: Equatable {
     /// types — reached from "Change type". The draft and any response session
     /// are kept.
     case chooseType
-    /// Social (Analysis / Question) or Setup details.
+    /// Social (Analysis / Question) details, or a Setup's levels.
     case details
+    /// A Setup's second section: its reasoning, title and context. Split from
+    /// the levels so each section fits a sheet no higher than half the screen.
+    case setupReasoning
     /// The existing component editors, opened from "Add context".
     case context
     case review
@@ -185,12 +189,41 @@ extension MarkerPlacementState {
         isValid && !guidedTrackedSetupLevelsNeedAdjusting && (!isGuidedEdit || guidedEditHasChanges)
     }
 
-    /// Details → Review, only when the draft could be posted.
+    /// A Setup's levels → its reasoning: levels in order for a tracked Setup.
+    /// An edit needs no change yet; Review asks for one.
+    var canContinueToSetupReasoning: Bool {
+        intent == .setup && isValid && !guidedTrackedSetupLevelsNeedAdjusting
+    }
+
+    @discardableResult
+    func continueToSetupReasoning() -> Bool {
+        guard guidedStep == .details, canContinueToSetupReasoning, !isGuidedSubmissionInFlight else { return false }
+        guidedStep = .setupReasoning
+        return true
+    }
+
+    /// Details (or a Setup's reasoning) → Review, only when the draft could
+    /// be posted.
     @discardableResult
     func continueToReview() -> Bool {
-        guard guidedStep == .details, canContinueToReview, !isGuidedSubmissionInFlight else { return false }
+        guard guidedStep == .details || guidedStep == .setupReasoning,
+              canContinueToReview, !isGuidedSubmissionInFlight else { return false }
         guidedStep = .review
         return true
+    }
+
+    /// One section back: Review → a Setup's reasoning or Details; reasoning,
+    /// context and the type list → where they were opened from.
+    func goBack() {
+        guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
+        switch guidedStep {
+        case .review?, .context?:
+            guidedStep = intent == .setup ? .setupReasoning : .details
+        case .setupReasoning?, .chooseType?:
+            guidedStep = .details
+        case .details?, nil:
+            break
+        }
     }
 
     func backToDetails() {
@@ -219,7 +252,7 @@ extension MarkerPlacementState {
     var guidedToolbarTitle: String? {
         switch guidedStep {
         case .chooseType?: return "Change type"
-        case .details?, .context?, .review?:
+        case .details?, .setupReasoning?, .context?, .review?:
             if isGuidedEdit { return "Edit \(intent.displayName)" }
             return linkSession.isActive ? "New response" : "New \(intent.displayName)"
         case nil: return nil
@@ -243,7 +276,7 @@ extension MarkerPlacementState {
     /// available; nil once the draft can be reviewed. Shown beside the
     /// disabled Review button so the reason is never a guess.
     var guidedNextStepPrompt: String? {
-        guard guidedStep == .details else { return nil }
+        guard guidedStep == .details || guidedStep == .setupReasoning else { return nil }
         // A response's timeframe holds Review back while it loads, and after
         // it fails to.
         if isChangingResponseTimeframe {
@@ -267,7 +300,10 @@ extension MarkerPlacementState {
             ? unmetRequiredChecklistItems.filter { !$0.id.hasPrefix("setup_") }
             : unmetRequiredChecklistItems
         guard let unmet = unmetItems.first else {
-            return isGuidedEdit && !guidedEditHasChanges ? "Make a change to review it" : nil
+            // A Setup's levels section moves on without a change; Review is
+            // where an edit needs one.
+            let onSetupLevels = intent == .setup && guidedStep == .details
+            return isGuidedEdit && !guidedEditHasChanges && !onSetupLevels ? "Make a change to review it" : nil
         }
         switch unmet.id {
         case "anchor":
@@ -288,22 +324,27 @@ extension MarkerPlacementState {
         }
     }
 
-    /// Where the guided panel is in the two-step flow, for its header:
-    /// Details is step 1, Review step 2. Context and the type list are side
-    /// trips from Details and are not counted.
+    /// Where the guided panel is, for its header: Details is step 1 and
+    /// Review the last; a Setup has its reasoning as step 2 of 3. Context and
+    /// the type list are side trips and are not counted.
     var guidedStepNumber: Int? {
         switch guidedStep {
         case .details?: return 1
-        case .review?: return 2
+        case .setupReasoning?: return 2
+        case .review?: return guidedStepCount
         case .chooseType?, .context?, nil: return nil
         }
     }
+
+    /// Two steps for Analysis and Question, three for a Setup.
+    var guidedStepCount: Int { intent == .setup ? 3 : 2 }
 
     /// The step's prompt, as a question the author can answer.
     var guidedStepPrompt: String? {
         if isGuidedEdit {
             switch guidedStep {
             case .details?: return "Edit your \(intent == .setup ? "Setup" : intent.displayName.lowercased())"
+            case .setupReasoning?: return "Edit your reasoning"
             case .context?: return "Edit chart context"
             case .review?: return "Check your changes"
             case .chooseType?, nil: return nil
@@ -316,6 +357,7 @@ extension MarkerPlacementState {
             case .setup: return "Plan your trade"
             default: return linkSession.isActive ? "What's your view?" : "What are you seeing?"
             }
+        case .setupReasoning?: return "Why this trade?"
         case .context?: return "Add chart context"
         case .review?: return "Check your post"
         case .chooseType?: return "What do you want to post?"
@@ -548,5 +590,31 @@ enum MarkerPlacementSubmitter {
         case .long?, .short?: return false
         case .inconsistent?, .invalidPrice?, nil: return true
         }
+    }
+}
+
+// MARK: - Sheet height
+
+/// The chart sheet's heights while the guided flow is open (owner
+/// requirement): fully collapsed to the usual capsule (0.11, the bar and its
+/// primary action still showing), a low detent at 0.28, and never above half
+/// the screen — so the chart stays in view and in reach for dragging the
+/// marker, panning and moving levels. It opens at half height. Other sheet
+/// uses keep their usual set, up to 0.9.
+enum MarkerGuidedSheetHeight {
+    static let fractions: [CGFloat] = [0.11, 0.28, 0.5]
+    static let opening: CGFloat = 0.5
+
+    /// The guided flow's own heights, or nil to keep the sheet's usual set.
+    static func fractions(guidedFlowActive: Bool, placing: Bool) -> [CGFloat]? {
+        guidedFlowActive && placing ? fractions : nil
+    }
+
+    /// A height outside the guided set: above the cap comes down to it;
+    /// the usual 0.35 becomes the guided low detent.
+    static func clamped(_ fraction: CGFloat) -> CGFloat {
+        if fractions.contains(fraction) { return fraction }
+        if fraction > opening { return opening }
+        return fractions.last { $0 <= fraction } ?? fractions[0]
     }
 }

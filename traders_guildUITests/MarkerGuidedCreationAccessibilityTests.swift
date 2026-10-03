@@ -165,7 +165,8 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         setup.tap()
         XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Plan a trade opens Setup details")
         XCTAssertFalse(app.buttons["guided.intent.analysis"].exists, "Setup details carry no social selector")
-        XCTAssertTrue(app.buttons["guided.changeType"].exists, "and keep the way back")
+        XCTAssertTrue(app.buttons["guided.changeType"].exists,
+                      "the way back is there before any level is set")
     }
 
     func testChangeTypeKeepsAResponse() throws {
@@ -177,6 +178,40 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
             "the response banner stays in Change type"
         )
         attachScreenshot("change-type-response")
+    }
+
+    /// Owner requirement: the sheet stops at half the screen, so a Setup is
+    /// split in two and each section's controls are on screen without
+    /// scrolling inside the harness's half-height panel.
+    func testASetupIsSplitSoEachSectionFitsHalfTheScreen() throws {
+        launch("setupTracked")
+        let next = app.buttons["guided.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        for element in [app.textFields["Take Profit"], app.textFields["Stop Loss"], app.switches.firstMatch] {
+            XCTAssertTrue(element.exists && element.isHittable, "\(element) is on screen")
+        }
+        XCTAssertFalse(app.textViews["guided.text"].exists || app.textFields["guided.text"].exists,
+                       "the reasoning is in the next section")
+        attachScreenshot("half-sheet-setup-levels")
+        next.tap()
+        let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        XCTAssertTrue(text.isHittable && app.buttons["guided.addTitle"].isHittable && app.buttons["guided.addContext"].isHittable)
+        XCTAssertTrue(app.buttons["guided.review"].isEnabled)
+        attachScreenshot("half-sheet-setup-reasoning")
+        app.buttons["guided.back"].tap()
+        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Levels goes back one section")
+    }
+
+    func testAnAnalysisFitsHalfTheScreen() throws {
+        launch("analysisEmpty")
+        let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        for element in [app.buttons["guided.intent.analysis"], text, app.buttons["guided.addTitle"],
+                        app.buttons["guided.addContext"], app.buttons["guided.changeType"]] {
+            XCTAssertTrue(element.isHittable, "\(element) is on screen")
+        }
+        attachScreenshot("half-sheet-analysis")
     }
 
     /// Optional extras stay out of the way until asked for.

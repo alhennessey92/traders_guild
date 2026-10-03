@@ -169,6 +169,80 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(state.isValid)
     }
 
+    // MARK: Sections and height
+
+    /// A Setup is split in two so each section fits a half-height sheet:
+    /// levels, then reasoning, then Review — three steps, with Back going one
+    /// section at a time.
+    @Test
+    func aSetupIsLevelsThenReasoningThenReview() {
+        let state = guidedDraft(.setup)
+        setLevels(state, tp: 240, sl: -120)
+        state.trackingEnabled = true
+        #expect(state.guidedStepNumber == 1 && state.guidedStepCount == 3)
+        #expect(state.continueToSetupReasoning())
+        #expect(state.guidedStep == .setupReasoning)
+        #expect(state.guidedStepNumber == 2)
+        state.note = "Retest of the range high."
+        #expect(state.guidedStepPrompt == "Why this trade?")
+        #expect(state.guidedToolbarTitle == "New Setup")
+        #expect(state.continueToReview())
+        #expect(state.guidedStepNumber == 3)
+
+        state.goBack()
+        #expect(state.guidedStep == .setupReasoning, "Review goes back to the reasoning")
+        state.openContext()
+        state.goBack()
+        #expect(state.guidedStep == .setupReasoning, "context returns to where it was opened")
+        state.goBack()
+        #expect(state.guidedStep == .details)
+        #expect(state.note == "Retest of the range high.", "nothing is reset on the way")
+        #expect(state.componentPrice(.levelTp) != nil)
+
+        // Levels out of order hold the Setup on its first section.
+        setLevels(state, tp: 240, sl: 120)
+        #expect(!state.continueToSetupReasoning())
+        #expect(state.guidedStep == .details)
+    }
+
+    @Test
+    func analysisAndQuestionStayTwoSteps() {
+        let state = guidedDraft(.analysis)
+        #expect(state.guidedStepCount == 2)
+        state.note = "Range low is holding."
+        #expect(!state.continueToSetupReasoning(), "only a Setup has a reasoning section")
+        #expect(state.continueToReview())
+        #expect(state.guidedStepNumber == 2)
+        state.goBack()
+        #expect(state.guidedStep == .details)
+    }
+
+    /// Owner requirement: while placing or editing in the guided flow the
+    /// sheet can collapse to the capsule, rest low at about 28%, and goes no
+    /// higher than half the screen, where it opens.
+    @Test
+    func theGuidedSheetStopsAtHalfTheScreen() {
+        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: true, placing: true) == [0.11, 0.28, 0.5])
+        #expect(MarkerGuidedSheetHeight.fractions.min() == 0.11, "fully collapsible to the usual capsule")
+        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: true, placing: true)?.max() == 0.5)
+        #expect(MarkerGuidedSheetHeight.opening == 0.5)
+        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: false, placing: true) == nil, "the legacy panel keeps its heights")
+        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: true, placing: false) == nil)
+        #expect(MarkerGuidedSheetHeight.clamped(0.9) == 0.5)
+        #expect(MarkerGuidedSheetHeight.clamped(0.35) == 0.28)
+        #expect(MarkerGuidedSheetHeight.clamped(0.28) == 0.28)
+        #expect(MarkerGuidedSheetHeight.clamped(0.11) == 0.11)
+    }
+
+    @Test
+    func theTrackingLineCarriesTheEstimate() {
+        #expect(MarkerGuidedFormat.trackingSummary(tracked: true, gain: 29, loss: 5)
+                == "Counts toward accuracy · reputation +29 if TP, −5 if SL")
+        #expect(MarkerGuidedFormat.trackingSummary(tracked: true, gain: nil, loss: nil)
+                == "Counts toward your accuracy and reputation")
+        #expect(MarkerGuidedFormat.trackingSummary(tracked: false, gain: 29, loss: 5).hasPrefix("Off"))
+    }
+
     // MARK: Formatting
 
     @Test

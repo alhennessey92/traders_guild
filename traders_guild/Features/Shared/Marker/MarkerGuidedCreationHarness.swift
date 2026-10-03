@@ -22,6 +22,8 @@ struct MarkerGuidedCreationHarness: View {
     enum Scenario: String, CaseIterable {
         case entry, analysisEmpty, analysisDetails, questionShort, context, analysisReview
         case setupTracked, setupUntracked, setupReview
+        /// A Setup's second section: reasoning, title and context.
+        case setupReasoning
         case responseChooser, responseSetupReview
         /// A linked response being written: the banner first, then the text,
         /// then where it is placed.
@@ -79,6 +81,13 @@ struct MarkerGuidedCreationHarness: View {
             default: return 0
             }
         }
+    }
+
+    /// The panel's height in the real chart sheet at its guided cap, half the
+    /// screen: less the grabber (about 20 pt), the panel's top inset and the
+    /// 68 pt bar. What fits here fits the real sheet without scrolling.
+    static var halfSheetPanelHeight: CGFloat {
+        UIScreen.main.bounds.height * MarkerGuidedSheetHeight.opening - 20 - 68
     }
 
     static let symbolId = MarkerLinkFixtures.uuid(1)
@@ -200,7 +209,7 @@ struct MarkerGuidedCreationHarness: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .frame(height: 470)
+                .frame(height: Self.halfSheetPanelHeight)
                 Divider()
                 MarkerGuidedPlacementBar(placementState: placementState) {
                     Task { await post() }
@@ -303,7 +312,7 @@ struct MarkerGuidedCreationHarness: View {
         }
         let state = MarkerPlacementState()
         let candle = candles[5]
-        let isSetup = [.setupTracked, .setupUntracked, .setupReview].contains(scenario)
+        let isSetup = [.setupTracked, .setupUntracked, .setupReview, .setupReasoning].contains(scenario)
         let isResponse = [.responseChooser, .responseDetails, .responseSetupReview, .responseSetupEntry, .setupMarketMoved].contains(scenario)
         if isResponse {
             state.beginRespondingTo(MarkerLinkContext(
@@ -346,6 +355,9 @@ struct MarkerGuidedCreationHarness: View {
             state.title = "Higher lows"
             state.note = "BTC is holding higher lows into the open. Watching 63.8k."
             state.continueToReview()
+        case .setupReasoning:
+            state.note = "Retest of the range high."
+            state.continueToSetupReasoning()
         case .setupTracked:
             state.note = "Retest of the range high."
         case .setupUntracked:

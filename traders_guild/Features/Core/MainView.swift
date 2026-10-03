@@ -240,6 +240,17 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
+
+    /// The chart sheet's heights: never above half the screen while the v1.5
+    /// guided flow is placing or editing; otherwise the usual four.
+    private var chartSheetDetents: Set<PresentationDetent> {
+        let fractions = MarkerGuidedSheetHeight.fractions(
+            guidedFlowActive: placementState.isGuidedFlowActive,
+            placing: chartControlVM.isMarkerPlacementMode
+        ) ?? [0.11, 0.35, 0.5, 0.9]
+        return Set(fractions.map { PresentationDetent.fraction($0) })
+    }
+
     /// Presented (above the persistent chart bottom sheet) after a guild-visible marker is placed.
     @State private var markerSharePromptContext: MarkerShareContext?
     @State private var showDiscordSetupReminder = false
@@ -687,8 +698,7 @@ struct MainView: View {
                 chartBottomSheet
                 .environmentObject(rlAppState)
                 .id(appThemeStorage)
-                .presentationDetents([.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)],
-                                      selection: $selectedDetent)
+                .presentationDetents(chartSheetDetents, selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
                 .presentationBackgroundInteraction(.enabled)
                 .interactiveDismissDisabled(true)
@@ -901,8 +911,11 @@ struct MainView: View {
             .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     if isPlacing {
-                        // Show placement panel at compact height — maximize chart space
-                        selectedDetent = .fraction(0.35)
+                        // Show placement panel at compact height — maximize chart space.
+                        // The v1.5 guided flow opens at its cap, half the screen.
+                        selectedDetent = placementState.isGuidedFlowActive
+                            ? .fraction(MarkerGuidedSheetHeight.opening)
+                            : .fraction(0.35)
                     } else {
                         // ...and put it back when the panel goes away. Raising the sheet on
                         // the way in without lowering it on the way out left it standing open
@@ -3006,6 +3019,16 @@ struct ChartBottomSheet: View {
     }
 
     private func handleSelectedDetentChange(oldValue: PresentationDetent, newValue: PresentationDetent) {
+        // While the v1.5 guided flow is placing or editing, the sheet keeps
+        // to its own heights: collapsed, low, or half the screen at most.
+        if controlViewModel.isMarkerPlacementMode, placementState.isGuidedFlowActive {
+            let guided = MarkerGuidedSheetHeight.fractions.map { PresentationDetent.fraction($0) }
+            if !guided.contains(newValue) {
+                let fallback: CGFloat = newValue == .fraction(0.35) ? 0.28 : MarkerGuidedSheetHeight.opening
+                selectedDetent = .fraction(MarkerGuidedSheetHeight.clamped(fallback))
+                return
+            }
+        }
         let updatedTab = ChartBottomSheetStateReducer.markerDetailTabAfterDetentChange(
             oldDetent: oldValue,
             newDetent: newValue,
@@ -3763,7 +3786,9 @@ struct ChartBottomSheet: View {
             chartViewModel.markerManager?.selectedMarker = nil
             chartViewModel.selectedMarkerForSheet = nil
             controlViewModel.startMarkerPlacement(intent: .analysis)
-            selectedDetent = .fraction(0.35)
+            selectedDetent = placementState.isGuidedFlowActive
+                ? .fraction(MarkerGuidedSheetHeight.opening)
+                : .fraction(0.35)
         }
     }
 
