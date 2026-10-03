@@ -6127,7 +6127,7 @@ struct TradingChartView: View {
                 if !isDraggingOnYAxis && !isPinchingOnYAxis && !isMarkerBeingDragged && !isDraggingTarget && !isDraggingPlacementLine && draggingPredictionLine == nil {
                     // Start tracking on first drag event
                     if lastDragTranslation == .zero {
-                        gestureState.beginDrag()
+                        gestureState.beginDrag(interruptsCentering: MarkerAvatarExperiment.isEnabled)
                     }
                     isChartPanning = true
                     

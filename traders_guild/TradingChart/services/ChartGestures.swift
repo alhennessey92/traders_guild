@@ -128,7 +128,17 @@ class ChartGestureState: ObservableObject {
     // MARK: - Pan Methods
     
     /// Begin a drag gesture - call this in onChanged when drag starts
-    func beginDrag() {
+    ///
+    /// `interruptsCentering`: the finger takes over from a centre-on-marker
+    /// animation still running. That animation writes the pan offset outright
+    /// on every frame for 0.9 s, so a drag begun inside it — selecting a
+    /// marker and panning straight away — had its movement overwritten by the
+    /// next frame until the animation ended. True under the v1.5 avatar
+    /// prototype; the legacy chart keeps its behaviour.
+    func beginDrag(interruptsCentering: Bool = false) {
+        if interruptsCentering {
+            stopCenteringAnimation()
+        }
         stopMomentum()
         isUserDrivenScrollActive = true
         lastDragTime = Date()
@@ -520,6 +530,9 @@ class ChartGestureState: ObservableObject {
         panOffset.width = centeringStartPanX + (centeringTargetPanX - centeringStartPanX) * eased
         verticalPanOffset = centeringStartVertical + (centeringTargetVertical - centeringStartVertical) * eased
     }
+
+    /// A centre-on-marker animation is moving the chart.
+    var isCenteringAnimationActive: Bool { centeringDisplayLink != nil }
 
     func stopCenteringAnimation() {
         centeringDisplayLink?.invalidate()
