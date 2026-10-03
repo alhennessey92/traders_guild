@@ -1,0 +1,73 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 4,
+      "passedTests" : 6,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 4,
+  "finishTime" : 1791019391.2,
+  "passedTests" : 6,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1791019363.504,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (edited[\"x_note\"] as? String → nil) == \"keep\"",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 4,
+      "testIdentifierString" : "MarkerGuidedEditPayloadPreservationTests/aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()",
+      "testName" : "aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()"
+    },
+    {
+      "failureText" : "Expectation failed: (edited[\"source\"] as? String → nil) == \"import-v2\": unmodelled key kept",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 3,
+      "testIdentifierString" : "MarkerGuidedEditPayloadPreservationTests/anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()",
+      "testName" : "anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()"
+    },
+    {
+      "failureText" : "Expectation failed: MarkerRawPayload.same((components[2].payload[\"partial\"] → nil), [0.5, 0.5]): the target's unmodelled key kept",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 6,
+      "testIdentifierString" : "MarkerGuidedEditPayloadPreservationTests/aSetupsAnchorAndEntryAreExactWhenATargetMoves()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aSetupsAnchorAndEntryAreExactWhenATargetMoves()",
+      "testName" : "aSetupsAnchorAndEntryAreExactWhenATargetMoves()"
+    },
+    {
+      "failureText" : "Expectation failed: MarkerRawPayload.same((tp[\"partial\"] → nil), [0.5, 0.5])",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 7,
+      "testIdentifierString" : "MarkerGuidedEditPayloadPreservationTests/typingATargetChangesOnlyItsPrice()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/typingATargetChangesOnlyItsPrice()",
+      "testName" : "typingATargetChangesOnlyItsPrice()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 10
+}

@@ -1,0 +1,168 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+      "deviceName" : "iPhone 17 Pro",
+      "modelName" : "iPhone 17 Pro",
+      "osBuildNumber" : "23A343",
+      "osVersion" : "26.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.22s",
+                  "durationInSeconds" : 0.22030901908874512,
+                  "name" : "theDecodedComponentKeepsItsRawPayloadThroughTheAppsReencoding()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/theDecodedComponentKeepsItsRawPayloadThroughTheAppsReencoding()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/theDecodedComponentKeepsItsRawPayloadThroughTheAppsReencoding()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:151: Expectation failed: MarkerRawPayload.same((components[index].payload → [\"price\": 64000.5, \"time\": \"2026-09-01T12:00:00Z\"]), (savedRaw(json) → [\"price\": 64000.5, \"time\": \"2026-09-01T12:00:00.123456Z\", \"server_seq\": 7])): component 0 goes back exactly as saved: [\"price\": 64000.5, \"time\": \"2026-09-01T12:00:00Z\"]",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:151: Expectation failed: MarkerRawPayload.same((components[index].payload → [\"price\": 63780, \"label\": \"Range low\", \"color_hex\": \"#33AA55\"]), (savedRaw(json) → [\"source\": \"import-v2\", \"label\": \"Range low\", \"color_hex\": \"#33AA55\", \"style\": [\"glow\": true, \"dash\": [4, 2]], \"price\": 63780])): component 1 goes back exactly as saved: [\"price\": 63780, \"label\": \"Range low\", \"color_hex\": \"#33AA55\"]",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:151: Expectation failed: MarkerRawPayload.same((components[index].payload → [\"price\": 63500, \"label\": \"Deep low\"]), (savedRaw(json) → [\"x_note\": \"keep\", \"label\": \"Deep low\", \"price\": 63500])): component 3 goes back exactly as saved: [\"price\": 63500, \"label\": \"Deep low\"]",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.1s",
+                  "durationInSeconds" : 0.10480690002441406,
+                  "name" : "anUnrelatedContextEditSendsEverySavedComponentExactlyAndInOrder()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/anUnrelatedContextEditSendsEverySavedComponentExactlyAndInOrder()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/anUnrelatedContextEditSendsEverySavedComponentExactlyAndInOrder()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:177: Expectation failed: MarkerRawPayload.same((components[3].payload → [\"label\": \"Deep low\", \"price\": 63500]), (savedRaw(##\"{\"price\": 63500, \"label\": \"Deep low\", \"x_note\": \"keep\"}\"##) → [\"label\": \"Deep low\", \"x_note\": \"keep\", \"price\": 63500])): the other support of the same type is untouched",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:179: Expectation failed: MarkerRawPayload.same((components[0].payload → [\"time\": \"2026-09-01T12:00:00Z\", \"price\": 64000.5]), (savedRaw(##\"{\"time\": \"2026-09-01T12:00:00.123456Z\", \"price\": 64000.5, \"server_seq\": 7}\"##) → [\"server_seq\": 7, \"price\": 64000.5, \"time\": \"2026-09-01T12:00:00.123456Z\"])): the anchor is exact",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.12s",
+                  "durationInSeconds" : 0.11846494674682617,
+                  "name" : "anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/anEditedFieldIsMergedIntoTheSavedPayloadAndNothingElseChanges()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "duration" : "0.034s",
+                  "durationInSeconds" : 0.03380179405212402,
+                  "name" : "aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aClearedModelledFieldIsRemovedAndUnmodelledKeysStay()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0026s",
+                  "durationInSeconds" : 0.002621173858642578,
+                  "name" : "aRemovedComponentStaysRemoved()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/aRemovedComponentStaysRemoved()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aRemovedComponentStaysRemoved()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:220: Expectation failed: MarkerRawPayload.same((components[0].payload → [\"price\": 63500.25, \"time\": \"2026-09-01T12:00:00Z\"]), (savedRaw(##\"{\"time\": \"2026-09-01T12:00:00Z\", \"price\": 63500.25, \"server_seq\": 1}\"##) → [\"time\": \"2026-09-01T12:00:00Z\", \"price\": 63500.25, \"server_seq\": 1]))",
+                      "nodeType" : "Failure Message"
+                    },
+                    {
+                      "name" : "MarkerGuidedEditPayloadPreservationTests.swift:221: Expectation failed: MarkerRawPayload.same((components[1].payload → [\"price\": 63920.5, \"label\": \"Entry\"]), (savedRaw(##\"{\"price\": 63920.5, \"label\": \"Entry\", \"filled_at\": \"2026-09-01T12:05:00Z\"}\"##) → [\"filled_at\": \"2026-09-01T12:05:00Z\", \"label\": \"Entry\", \"price\": 63920.5])): Entry exactly as saved",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.0046s",
+                  "durationInSeconds" : 0.004648923873901367,
+                  "name" : "aSetupsAnchorAndEntryAreExactWhenATargetMoves()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/aSetupsAnchorAndEntryAreExactWhenATargetMoves()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aSetupsAnchorAndEntryAreExactWhenATargetMoves()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                },
+                {
+                  "duration" : "0.0033s",
+                  "durationInSeconds" : 0.00333404541015625,
+                  "name" : "typingATargetChangesOnlyItsPrice()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/typingATargetChangesOnlyItsPrice()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/typingATargetChangesOnlyItsPrice()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0023s",
+                  "durationInSeconds" : 0.002338886260986328,
+                  "name" : "theLegacyRequestOutputIsUnchanged()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/theLegacyRequestOutputIsUnchanged()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/theLegacyRequestOutputIsUnchanged()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.012s",
+                  "durationInSeconds" : 0.011598825454711914,
+                  "name" : "aClearedTitleShowsClearedAtOnceAndAfterTheServerAnswers()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/aClearedTitleShowsClearedAtOnceAndAfterTheServerAnswers()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aClearedTitleShowsClearedAtOnceAndAfterTheServerAnswers()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0035s",
+                  "durationInSeconds" : 0.0035059452056884766,
+                  "name" : "aFailedClearRestoresTheTitle()",
+                  "nodeIdentifier" : "MarkerGuidedEditPayloadPreservationTests/aFailedClearRestoresTheTitle()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests/aFailedClearRestoresTheTitle()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedEditPayloadPreservationTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditPayloadPreservationTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "traders_guildTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "traders_guild LinkedDev",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

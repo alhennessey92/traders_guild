@@ -1,0 +1,223 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+      "deviceName" : "iPhone 17 Pro",
+      "modelName" : "iPhone 17 Pro",
+      "osBuildNumber" : "23A343",
+      "osVersion" : "26.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "10s",
+                  "durationInSeconds" : 10.819440960884094,
+                  "name" : "testAMovedMarketExplainsAndOffersTheWayBack()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testAMovedMarketExplainsAndOffersTheWayBack()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testAMovedMarketExplainsAndOffersTheWayBack",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.34957492351532,
+                  "name" : "testAnAnalysisFitsHalfTheScreen()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testAnAnalysisFitsHalfTheScreen()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testAnAnalysisFitsHalfTheScreen",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "9s",
+                  "durationInSeconds" : 9.387817978858948,
+                  "name" : "testASetupIsSplitSoEachSectionFitsHalfTheScreen()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testASetupIsSplitSoEachSectionFitsHalfTheScreen()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testASetupIsSplitSoEachSectionFitsHalfTheScreen",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.120759010314941,
+                  "name" : "testChangeTypeKeepsAResponse()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testChangeTypeKeepsAResponse()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testChangeTypeKeepsAResponse",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "7s",
+                  "durationInSeconds" : 7.27858304977417,
+                  "name" : "testDetailsControlsSpeakProseAndExposeTheSelectedType()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testDetailsControlsSpeakProseAndExposeTheSelectedType()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testDetailsControlsSpeakProseAndExposeTheSelectedType",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "10s",
+                  "durationInSeconds" : 10.754635095596313,
+                  "name" : "testDetailsNamesTheStepAndWhatIsMissing()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testDetailsNamesTheStepAndWhatIsMissing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testDetailsNamesTheStepAndWhatIsMissing",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "10s",
+                  "durationInSeconds" : 10.33452296257019,
+                  "name" : "testLargestTextKeepsPostReachable()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testLargestTextKeepsPostReachable()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testLargestTextKeepsPostReachable",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.137418031692505,
+                  "name" : "testLargestTextStacksTheTypeChips()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testLargestTextStacksTheTypeChips()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testLargestTextStacksTheTypeChips",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.018859028816223,
+                  "name" : "testReviewLinesDoNotSpeakSymbolNames()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testReviewLinesDoNotSpeakSymbolNames()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testReviewLinesDoNotSpeakSymbolNames",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "8s",
+                  "durationInSeconds" : 8.129840970039368,
+                  "name" : "testSetupPriceFieldsSayWhatTheyAre()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testSetupPriceFieldsSayWhatTheyAre()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testSetupPriceFieldsSayWhatTheyAre",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "8s",
+                  "durationInSeconds" : 8.904621958732605,
+                  "name" : "testSetupStaysOutOfTheSocialSelector()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testSetupStaysOutOfTheSocialSelector()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testSetupStaysOutOfTheSocialSelector",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "43s",
+                  "durationInSeconds" : 43.66564404964447,
+                  "name" : "testThemesRenderTheGuidedSheet()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testThemesRenderTheGuidedSheet()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testThemesRenderTheGuidedSheet",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "5s",
+                  "durationInSeconds" : 5.207410931587219,
+                  "name" : "testTheTitleIsAddedOnRequest()",
+                  "nodeIdentifier" : "MarkerGuidedCreationAccessibilityTests/testTheTitleIsAddedOnRequest()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests/testTheTitleIsAddedOnRequest",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedCreationAccessibilityTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedCreationAccessibilityTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "7s",
+                  "durationInSeconds" : 7.514868974685669,
+                  "name" : "testAFailedSaveKeepsTheChangesAndOffersRetry()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testAFailedSaveKeepsTheChangesAndOffersRetry()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testAFailedSaveKeepsTheChangesAndOffersRetry",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "11s",
+                  "durationInSeconds" : 11.492375016212463,
+                  "name" : "testAnActiveSetupShowsItsLevelsLockedAndOffersOnlyTitleAndThesis()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testAnActiveSetupShowsItsLevelsLockedAndOffersOnlyTitleAndThesis()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testAnActiveSetupShowsItsLevelsLockedAndOffersOnlyTitleAndThesis",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "8s",
+                  "durationInSeconds" : 8.69235610961914,
+                  "name" : "testAnEditIsTitledAsOneAndOffersNoTypeOrLinkChange()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testAnEditIsTitledAsOneAndOffersNoTypeOrLinkChange()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testAnEditIsTitledAsOneAndOffersNoTypeOrLinkChange",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.246000051498413,
+                  "name" : "testDiscardingAnEditedDraftSaysTheMarkerIsKept()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testDiscardingAnEditedDraftSaysTheMarkerIsKept()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testDiscardingAnEditedDraftSaysTheMarkerIsKept",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "6s",
+                  "durationInSeconds" : 6.0456379652023315,
+                  "name" : "testLargestTextKeepsSaveReachable()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testLargestTextKeepsSaveReachable()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testLargestTextKeepsSaveReachable",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "5s",
+                  "durationInSeconds" : 5.937124013900757,
+                  "name" : "testRetrySucceedsWithoutCreatingOrSharing()",
+                  "nodeIdentifier" : "MarkerGuidedEditingUITests/testRetrySucceedsWithoutCreatingOrSharing()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests/testRetrySucceedsWithoutCreatingOrSharing",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "MarkerGuidedEditingUITests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerGuidedEditingUITests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "traders_guildUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "traders_guild LinkedDev Profile",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}
