@@ -205,22 +205,91 @@ extension MarkerPlacementState {
     /// Setup's.
     var isSocialDetails: Bool { intent == .analysis || intent == .question }
 
-    /// The toolbar title for the guided step; a drawing tool's instruction
-    /// still wins while one is active.
+    /// The toolbar title for the guided flow: the task as a whole. The sheet
+    /// names the step, so the two never repeat each other. A drawing tool's
+    /// instruction still wins while one is active.
     var guidedToolbarTitle: String? {
         switch guidedStep {
-        case .chooseType?: return "Change type"
-        case .details?: return isSocialDetails ? "Post to the chart" : "Setup"
-        case .context?: return "Add context"
-        case .review?: return "Review"
+        case .chooseType?: return "Other marker types"
+        case .details?, .context?, .review?:
+            return linkSession.isActive ? "New response" : "New \(intent.displayName)"
         case nil: return nil
         }
+    }
+
+    /// Under the avatar prototype an edit is titled as one ("Edit Analysis")
+    /// rather than "Place a Marker". Nil otherwise, leaving the legacy title.
+    func editToolbarTitle(experimentEnabled: Bool = MarkerAvatarExperiment.isEnabled) -> String? {
+        guard experimentEnabled, isEditingExistingMarker else { return nil }
+        return "Edit \(intent.displayName)"
     }
 
     /// The first thing still stopping this draft from being posted, for the
     /// Details step's primary button.
     var firstUnmetRequirementTitle: String? {
         unmetRequiredChecklistItems.first?.title
+    }
+
+    /// What the author does next, in plain words, while Review is not yet
+    /// available; nil once the draft can be reviewed. Shown beside the
+    /// disabled Review button so the reason is never a guess.
+    var guidedNextStepPrompt: String? {
+        guard guidedStep == .details else { return nil }
+        // A Setup is always valid; a tracked one is held back by the level
+        // guard instead, so its prompt names what the guard is waiting for.
+        if guidedTrackedSetupLevelsNeedAdjusting {
+            if componentPrice(.levelTp) == nil || componentPrice(.levelSl) == nil {
+                return "Set a take profit and a stop loss"
+            }
+            return setupSide == .inconsistent
+                ? "Put Entry between your stop and target"
+                : "Check your prices"
+        }
+        guard let unmet = unmetRequiredChecklistItems.first else { return nil }
+        switch unmet.id {
+        case "anchor":
+            return "Place your marker on the chart"
+        case "analysis_note":
+            return "Write your analysis to continue"
+        case "question_required":
+            let remaining = max(1, MarkerPlacementRequirements.minimumContextCharacters - trimmedQuestionNote.count)
+            return trimmedQuestionNote.isEmpty
+                ? "Write your question to continue"
+                : "Write \(remaining) more character\(remaining == 1 ? "" : "s")"
+        case "setup_levels_required":
+            return "Set a take profit and a stop loss"
+        case "setup_direction_required":
+            return "Put Entry between your stop and target"
+        default:
+            return unmet.title
+        }
+    }
+
+    /// Where the guided panel is in the two-step flow, for its header:
+    /// Details is step 1, Review step 2. Context and the type list are side
+    /// trips from Details and are not counted.
+    var guidedStepNumber: Int? {
+        switch guidedStep {
+        case .details?: return 1
+        case .review?: return 2
+        case .chooseType?, .context?, nil: return nil
+        }
+    }
+
+    /// The step's prompt, as a question the author can answer.
+    var guidedStepPrompt: String? {
+        switch guidedStep {
+        case .details?:
+            switch intent {
+            case .question: return "What do you want to ask?"
+            case .setup: return "Plan your trade"
+            default: return linkSession.isActive ? "What's your view?" : "What are you seeing?"
+            }
+        case .context?: return "Add chart context"
+        case .review?: return "Check your post"
+        case .chooseType?: return "Choose another type"
+        case nil: return nil
+        }
     }
 
     // MARK: Type changes

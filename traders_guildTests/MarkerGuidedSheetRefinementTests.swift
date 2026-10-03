@@ -1,0 +1,167 @@
+import Foundation
+import Testing
+@testable import traders_guild
+
+/// The v1.5 bottom-sheet refinement: the guided flow names its step, asks one
+/// question, and says in plain words what is still needed before Review.
+@MainActor
+struct MarkerGuidedSheetRefinementTests {
+
+    private let candles = MarkerLinkFixtures.candles()
+    private var anchorCandle: RLCandleDTO { candles[5] }
+
+    private func guidedDraft(_ intent: RLMarkerIntent, response: Bool = false) -> MarkerPlacementState {
+        let state = MarkerPlacementState()
+        if response {
+            state.beginRespondingTo(MarkerLinkContext(
+                parentMarkerId: MarkerLinkFixtures.uuid(77),
+                parentGuildId: MarkerLinkFixtures.uuid(2),
+                parentSymbolId: MarkerLinkFixtures.uuid(1),
+                parentCandleTimestamp: anchorCandle.timestamp,
+                parentAuthorDisplayText: "sam",
+                parentTitle: "BTC breakout",
+                parentIntent: .analysis,
+                relationship: .supports
+            ))
+        }
+        state.prepareGuidedFlow()
+        state.reset(to: intent, anchorTime: anchorCandle.timestamp, anchorPrice: anchorCandle.close)
+        state.captureDraftBaseline()
+        return state
+    }
+
+    private func setLevels(_ state: MarkerPlacementState, tp: Double, sl: Double) {
+        let entry = anchorCandle.close
+        state.upsertComponent(.levelEntry, payload: .levelEntry(LevelPayload(price: entry, label: "Entry")))
+        state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: entry + tp, label: "TP")))
+        state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: entry + sl, label: "SL")))
+    }
+
+    // MARK: Titles and steps
+
+    @Test
+    func theToolbarNamesTheTaskAndTheSheetNamesTheStep() {
+        let analysis = guidedDraft(.analysis)
+        #expect(analysis.guidedToolbarTitle == "New Analysis")
+        #expect(analysis.guidedStepNumber == 1)
+        #expect(analysis.guidedStepPrompt == "What are you seeing?")
+
+        analysis.note = "Higher lows into the open."
+        #expect(analysis.continueToReview())
+        #expect(analysis.guidedToolbarTitle == "New Analysis", "the task title stays put across steps")
+        #expect(analysis.guidedStepNumber == 2)
+        #expect(analysis.guidedStepPrompt == "Check your post")
+
+        analysis.backToDetails()
+        analysis.openContext()
+        #expect(analysis.guidedStepNumber == nil, "context is a side trip, not a numbered step")
+        #expect(analysis.guidedStepPrompt == "Add chart context")
+
+        #expect(guidedDraft(.question).guidedStepPrompt == "What do you want to ask?")
+        #expect(guidedDraft(.setup).guidedToolbarTitle == "New Setup")
+        #expect(guidedDraft(.setup).guidedStepPrompt == "Plan your trade")
+    }
+
+    @Test
+    func aResponseIsTitledAsOne() {
+        let response = guidedDraft(.analysis, response: true)
+        #expect(response.guidedToolbarTitle == "New response")
+        #expect(response.guidedStepPrompt == "What's your view?")
+        response.openTypeChooser()
+        #expect(response.guidedToolbarTitle == "Other marker types")
+        #expect(response.guidedStepNumber == nil)
+    }
+
+    @Test
+    func outsideTheGuidedFlowThereIsNoGuidedTitleOrPrompt() {
+        let legacy = MarkerPlacementState()
+        legacy.reset(to: .analysis, anchorTime: anchorCandle.timestamp, anchorPrice: anchorCandle.close)
+        #expect(legacy.guidedToolbarTitle == nil)
+        #expect(legacy.guidedStepPrompt == nil)
+        #expect(legacy.guidedNextStepPrompt == nil)
+    }
+
+    /// Editing keeps the existing editor; under the prototype its toolbar
+    /// says "Edit Analysis" instead of "Place a Marker".
+    @Test
+    func anEditIsTitledAsOneOnlyUnderThePrototype() {
+        let dto = MarkerLinkFixtures.marker(
+            1, author: "alex", intent: .analysis, candle: anchorCandle.timestamp,
+            price: anchorCandle.close, title: "Higher lows"
+        )
+        let state = MarkerPlacementState()
+        state.beginEditingMarker(MarkerLinkFixtures.positioned([dto])[0])
+        #expect(state.editToolbarTitle(experimentEnabled: true) == "Edit Analysis")
+        #expect(state.editToolbarTitle(experimentEnabled: false) == nil, "the legacy title is unchanged")
+        #expect(state.guidedToolbarTitle == nil, "an edit is not the guided flow")
+
+        #expect(guidedDraft(.analysis).editToolbarTitle(experimentEnabled: true) == nil, "a new post is not an edit")
+    }
+
+    // MARK: What is still needed
+
+    @Test
+    func analysisAsksForItsTextThenStepsAside() {
+        let state = guidedDraft(.analysis)
+        #expect(state.guidedNextStepPrompt == "Write your analysis to continue")
+        state.note = "Range low is holding."
+        #expect(state.guidedNextStepPrompt == nil)
+        #expect(state.isValid)
+    }
+
+    @Test
+    func aQuestionCountsDownToItsMinimum() {
+        let state = guidedDraft(.question)
+        #expect(state.guidedNextStepPrompt == "Write your question to continue")
+        state.note = "Breakout?"
+        #expect(state.guidedNextStepPrompt == "Write 1 more character")
+        state.note = "Break out?"
+        #expect(state.guidedNextStepPrompt == nil)
+    }
+
+    /// A Setup is always valid; a tracked one waits on the level guard, and
+    /// the prompt names what the guard wants, in the guard's approved words.
+    @Test
+    func aTrackedSetupAsksForItsLevelsInPlainWords() {
+        let state = guidedDraft(.setup)
+        state.trackingEnabled = true
+        #expect(state.guidedNextStepPrompt == "Set a take profit and a stop loss")
+        #expect(!state.continueToReview())
+
+        setLevels(state, tp: 240, sl: 120)  // both above Entry
+        #expect(state.guidedNextStepPrompt == "Put Entry between your stop and target")
+        #expect(!state.continueToReview())
+
+        setLevels(state, tp: 240, sl: -120)
+        #expect(state.guidedNextStepPrompt == nil)
+        #expect(state.continueToReview())
+        #expect(state.guidedNextStepPrompt == nil, "nothing is asked once on Review")
+    }
+
+    @Test
+    func anUntrackedSetupAsksForNothing() {
+        let state = guidedDraft(.setup)
+        state.trackingEnabled = false
+        #expect(state.guidedNextStepPrompt == nil)
+        #expect(state.continueToReview())
+    }
+
+    // MARK: Formatting
+
+    @Test
+    func reviewPricesMatchTheChartsPrecision() {
+        #expect(MarkerGuidedFormat.displayPrice(83_393.8058) == "83,393.81")
+        #expect(MarkerGuidedFormat.displayPrice(63_920) == "63,920.00")
+        #expect(MarkerGuidedFormat.displayPrice(1.08543) == "1.0854")
+        #expect(MarkerGuidedFormat.displayPrice(0.000123456) == "0.000123456")
+        #expect(MarkerGuidedFormat.displayPrice(nil) == "—")
+        #expect(MarkerGuidedFormat.displayPrice(.nan) == "—")
+    }
+
+    @Test
+    func theAudienceLineNamesTheGuild() {
+        #expect(MarkerGuidedFormat.audience("Alpha Traders") == "Members of Alpha Traders will see this on the chart.")
+        #expect(MarkerGuidedFormat.audience(nil) == "Your guild will see this on the chart.")
+        #expect(MarkerGuidedFlowEntry.guidedIntents == [.analysis, .question, .setup])
+    }
+}

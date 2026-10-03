@@ -297,7 +297,9 @@ struct chartSheetMarkersView: View {
     private var subtitleForCurrentTab: String {
         switch selectedPrimaryTab {
         case .add:
-            return "Select a marker type to begin placement on the chart."
+            return MarkerAvatarExperiment.isEnabled
+                ? "Choose what to post. You'll write it, then review it before it goes live."
+                : "Select a marker type to begin placement on the chart."
         case .markers:
             return "Browse recent, grouped, and archived marker activity for \(currentSymbolLabel)."
         case .analysis:
@@ -332,22 +334,23 @@ struct chartSheetMarkersView: View {
         }
     }
 
-    /// Post to the chart → social Analysis; Structured → Setup; other types on
-    /// their existing flows.
+    /// Two starting points — Post to the chart (Analysis or Question) and
+    /// Plan a trade (Setup) — with every other type on its existing flow
+    /// behind a disclosure.
     private func guidedAddContent(_ placementState: MarkerPlacementState) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             MarkerPostToChartCard(author: guidedAuthor) {
                 startGuidedPlacement(.analysis, placementState: placementState)
             }
-
-            MarkerGuidedSectionTitle("Structured")
-                .padding(.top, 6)
-            setupPredictionNote
-            MarkerPlacementOptionRow(
+            MarkerGuidedEntryCard(
+                author: guidedAuthor,
                 intent: .setup,
-                isActive: isMarkerPlacementActive(for: .setup),
-                onToggle: { startGuidedPlacement(.setup, placementState: placementState) }
-            )
+                title: "Plan a trade",
+                subtitle: "Entry, stop and target. Tracked Setups count toward your accuracy and reputation.",
+                identifier: "guided.planTrade"
+            ) {
+                startGuidedPlacement(.setup, placementState: placementState)
+            }
 
             DisclosureGroup(isExpanded: $showsOtherMarkerTypes) {
                 VStack(spacing: 8) {
@@ -398,19 +401,6 @@ struct chartSheetMarkersView: View {
         }
         placementState.prepareGuidedFlow()
         controlViewModel.startMarkerPlacement(intent: intent)
-    }
-
-    private var setupPredictionNote: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "shield.checkered")
-                .foregroundColor(AppColors.statusWarning90)
-                .font(.caption)
-            Text("Prediction markers affect your accuracy, and TP results also affect reputation. Set entry, SL, and TP when prompted.")
-                .font(.caption2)
-                .foregroundColor(AppColors.secondaryForeground)
-            Spacer()
-        }
-        .padding(.horizontal, 2)
     }
 
     private var legacyAddContent: some View {

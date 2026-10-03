@@ -23,6 +23,9 @@ struct MarkerGuidedCreationHarness: View {
         case entry, analysisEmpty, analysisDetails, questionShort, context, analysisReview
         case setupTracked, setupUntracked, setupReview
         case responseChooser, responseSetupReview
+        /// A linked response being written: the banner first, then the text,
+        /// then where it is placed.
+        case responseDetails
         case failedPost, retrySuccess, discardConfirm
         /// A linked Setup whose anchor keeps the parent candle's old price:
         /// Review shows the Entry line, not the anchor.
@@ -152,7 +155,9 @@ struct MarkerGuidedCreationHarness: View {
                     placementState: placementState,
                     author: author,
                     guildName: "Alpha Traders",
-                    currentChartTimeframe: .h1
+                    currentChartTimeframe: .h1,
+                    // Shown, not acted on: the chart is not in the fixture.
+                    onSelectTimeframe: { _ in }
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -229,7 +234,7 @@ struct MarkerGuidedCreationHarness: View {
         let state = MarkerPlacementState()
         let candle = candles[5]
         let isSetup = [.setupTracked, .setupUntracked, .setupReview].contains(scenario)
-        let isResponse = [.responseChooser, .responseSetupReview, .responseSetupEntry, .setupMarketMoved].contains(scenario)
+        let isResponse = [.responseChooser, .responseDetails, .responseSetupReview, .responseSetupEntry, .setupMarketMoved].contains(scenario)
         if isResponse {
             state.beginRespondingTo(MarkerLinkContext(
                 parentMarkerId: MarkerLinkFixtures.uuid(77),
@@ -283,6 +288,8 @@ struct MarkerGuidedCreationHarness: View {
         case .responseChooser:
             state.note = "Not convinced — volume is fading."
             state.openTypeChooser()
+        case .responseDetails:
+            state.note = "Not convinced — volume is fading."
         case .responseSetupReview:
             state.note = "Short the failed breakout."
             _ = state.requestGuidedIntentChange(to: .setup)

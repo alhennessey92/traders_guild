@@ -104,9 +104,8 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         launch("setupMarketMoved")
         XCTAssertTrue(app.buttons["guided.adjustLevels"].waitForExistence(timeout: 5))
         for (spoken, symbol) in [
-            ("No extra context", "plus.viewfinder"),
             ("Tracked: counts toward accuracy and reputation", "scope"),
-            ("1 Hour chart", "Clock"),
+            ("Challenges sam's BTC breakout", "relationship icon"),
         ] {
             let line = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", spoken)).firstMatch
             XCTAssertTrue(line.exists, "\(spoken) is reachable")
@@ -115,6 +114,44 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         let failure = app.staticTexts["Couldn't post"]
         XCTAssertTrue(failure.exists)
         XCTAssertFalse(failure.label.contains("Warning"), "the warning glyph is not spoken separately")
+    }
+
+    /// The step is announced as a heading that says where the author is and
+    /// what is asked, and a disabled Review always says why.
+    func testDetailsNamesTheStepAndWhatIsMissing() throws {
+        launch("analysisEmpty")
+        let header = app.staticTexts["guided.stepHeader"].exists
+            ? app.staticTexts["guided.stepHeader"]
+            : app.otherElements["guided.stepHeader"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertTrue(header.label.contains("What are you seeing?"), header.label)
+        XCTAssertTrue(header.label.contains("Step 1 of 2"), header.label)
+
+        let review = app.buttons["guided.review"]
+        XCTAssertFalse(review.isEnabled, "nothing written yet")
+        XCTAssertEqual(app.staticTexts["guided.nextStep"].label, "Write your analysis to continue")
+
+        let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
+        text.tap()
+        text.typeText("Range low is holding.")
+        XCTAssertTrue(review.isEnabled, "writing enables Review")
+        XCTAssertFalse(app.staticTexts["guided.nextStep"].exists, "nothing left to ask for")
+        review.tap()
+        XCTAssertTrue(
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "will see this on the chart")).firstMatch
+                .waitForExistence(timeout: 5),
+            "Review says who will see the post"
+        )
+        attachTree("tree-analysisEmpty-to-review")
+    }
+
+    /// Optional extras stay out of the way until asked for.
+    func testTheTitleIsAddedOnRequest() throws {
+        launch("analysisEmpty")
+        XCTAssertFalse(app.textFields["guided.title"].exists, "no title field until asked")
+        app.buttons["guided.addTitle"].tap()
+        XCTAssertTrue(app.textFields["guided.title"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["guided.addTitle"].exists)
     }
 
     func testAMovedMarketExplainsAndOffersTheWayBack() throws {
@@ -169,7 +206,7 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     func testThemesRenderTheGuidedSheet() throws {
         for theme in ["dark", "midGrey", "lightGrey"] {
-            for scenario in ["setupTracked", "analysisReview"] {
+            for scenario in ["analysisEmpty", "setupTracked", "analysisReview"] {
                 launch(scenario, extra: ["-appTheme", theme])
                 attachScreenshot("theme-\(theme)-\(scenario)")
                 app.terminate()
