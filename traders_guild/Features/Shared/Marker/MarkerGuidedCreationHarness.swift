@@ -34,12 +34,34 @@ struct MarkerGuidedCreationHarness: View {
         /// post is stopped on the device and nothing reaches the transport.
         case setupMarketMoved
 
+        // Guided editing of an existing marker (the fixture transport answers
+        // updates as chart-service does).
+        /// An untouched edit of a titled Analysis that answers another marker.
+        case editAnalysis
+        /// Title cleared and text edited, on Review.
+        case editAnalysisReview
+        case editQuestion
+        /// A tracked Setup still ARMED, its take profit moved, on Review.
+        case editSetupArmedReview
+        /// A tracked ACTIVE Setup: levels, tracking and context locked.
+        case editSetupActive
+        /// Save fails once; the changes stay for a retry.
+        case editFailedSave
+        /// Save fails once, then Retry succeeds.
+        case editRetrySuccess
+        /// An edited draft being closed.
+        case editDiscard
+
+        var isEdit: Bool { rawValue.hasPrefix("edit") }
+
         static var launch: Scenario? {
             UserDefaults.standard.string(forKey: "MarkerGuidedCreationFixture").flatMap(Scenario.init(rawValue:))
         }
 
         var transportMode: MarkerFixtureTransport.Mode {
             switch self {
+            case .editFailedSave, .editRetrySuccess:
+                return .failFirst(detail: "The server is busy. Try again.")
             case .failedPost, .retrySuccess:
                 return .failFirst(detail: MarkerFixtureTransport.analysisNeedsComponentDetail)
             default:
@@ -52,6 +74,8 @@ struct MarkerGuidedCreationHarness: View {
             case .failedPost: return 1
             case .retrySuccess: return 2
             case .setupMarketMoved: return 1
+            case .editFailedSave: return 1
+            case .editRetrySuccess: return 2
             default: return 0
             }
         }
@@ -66,6 +90,7 @@ struct MarkerGuidedCreationHarness: View {
     @State private var transport: MarkerFixtureTransport
     @State private var markerManager: MarkerManager
     @State private var shareContext: MarkerShareContext?
+    @State private var savedEdit = false
     @State private var showDiscardConfirmation = false
     @State private var closed = false
 
@@ -75,6 +100,10 @@ struct MarkerGuidedCreationHarness: View {
         let transport = MarkerFixtureTransport(mode: scenario.transportMode, author: author)
         let manager = MarkerManager(userId: author.userId, guildId: Self.guildId, currentUserMember: author)
         manager.configure(api: transport, symbolId: Self.symbolId, timeframe: .h1)
+        if let edited = Self.editedMarker(for: scenario) {
+            transport.storedMarkers[edited.id] = edited
+            manager.markers = MarkerLinkFixtures.positioned([edited], candles: Self.candles)
+        }
         _transport = State(initialValue: transport)
         _markerManager = State(initialValue: manager)
         _placementState = StateObject(wrappedValue: Self.makeDraft(for: scenario))
@@ -102,7 +131,9 @@ struct MarkerGuidedCreationHarness: View {
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
         .task {
-            if scenario == .discardConfirm { showDiscardConfirmation = placementState.cancellingNeedsConfirmation }
+            if scenario == .discardConfirm || scenario == .editDiscard {
+                showDiscardConfirmation = placementState.cancellingNeedsConfirmation
+            }
             for _ in 0..<scenario.autoPosts {
                 await post()
             }
@@ -125,9 +156,12 @@ struct MarkerGuidedCreationHarness: View {
                     .background(Circle().fill(AppColors.statusNegative55))
             }
             .disabled(placementState.isGuidedSubmissionInFlight)
-            .modifier(MarkerGuidedDiscardConfirmation(isPresented: $showDiscardConfirmation) { closed = true })
+            .modifier(MarkerGuidedDiscardConfirmation(
+                isPresented: $showDiscardConfirmation,
+                isEditing: placementState.isGuidedEdit
+            ) { closed = true })
             VStack(alignment: .leading, spacing: 1) {
-                Text(placementState.guidedToolbarTitle ?? (closed ? "Closed" : "Legacy panel"))
+                Text(placementState.guidedToolbarTitle ?? (closed ? "Closed" : (savedEdit ? "Saved" : "Legacy panel")))
                     .font(.subheadline.weight(.bold))
                     .foregroundColor(AppColors.primaryForeground)
                 Text("Fixture · \(scenario.rawValue) · transport: in-memory (not the backend)")
@@ -147,6 +181,11 @@ struct MarkerGuidedCreationHarness: View {
         VStack(spacing: 0) {
             if closed {
                 Text("Draft discarded: placement would end here.")
+                    .font(.footnote)
+                    .foregroundColor(AppColors.greyText)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else if savedEdit {
+                Text("Saved: placement would end here. No share prompt, no new marker.")
                     .font(.footnote)
                     .foregroundColor(AppColors.greyText)
                     .frame(maxWidth: .infinity, minHeight: 120)
@@ -179,6 +218,20 @@ struct MarkerGuidedCreationHarness: View {
 
     @ViewBuilder
     private var transportPanel: some View {
+        if let json = transport.lastUpdateJSON {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Update #\(transport.updateRequests.count) sent to the fixture transport (creates: \(transport.createRequests.count))")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text(json)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(AppColors.greyText)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(AppColors.whiteText.opacity(0.05)))
+        }
         if let shareContext {
             VStack(alignment: .leading, spacing: 4) {
                 Label("Posted — share prompt handoff", systemImage: "square.and.arrow.up")
@@ -209,6 +262,20 @@ struct MarkerGuidedCreationHarness: View {
     }
 
     private func post() async {
+        if placementState.isGuidedEdit {
+            guard placementState.canSaveGuidedEdit else { return }
+            let outcome = await MarkerPlacementSubmitter.submitUpdate(
+                placementState: placementState,
+                markerManager: markerManager
+            )
+            if !outcome.isStale, case .success = outcome.result {
+                // What the chart does on success: leave placement.
+                placementState.clearMarkerEditSession()
+                placementState.endGuidedFlow()
+                savedEdit = true
+            }
+            return
+        }
         guard placementState.isValid else { return }
         if scenario == .setupMarketMoved {
             // What the chart does just before sending a Setup, at a latest
@@ -231,6 +298,9 @@ struct MarkerGuidedCreationHarness: View {
     // MARK: Drafts
 
     private static func makeDraft(for scenario: Scenario) -> MarkerPlacementState {
+        if let edited = editedMarker(for: scenario) {
+            return makeEditDraft(for: scenario, marker: MarkerLinkFixtures.positioned([edited], candles: candles)[0])
+        }
         let state = MarkerPlacementState()
         let candle = candles[5]
         let isSetup = [.setupTracked, .setupUntracked, .setupReview].contains(scenario)
@@ -305,8 +375,93 @@ struct MarkerGuidedCreationHarness: View {
             seedSetupLevels(state, entry: candle.close, long: false)
             state.recordSetupLevelSeed()
             state.continueToReview()
+        case .editAnalysis, .editAnalysisReview, .editQuestion, .editSetupArmedReview,
+             .editSetupActive, .editFailedSave, .editRetrySuccess, .editDiscard:
+            break  // built by makeEditDraft
         }
         return state
+    }
+
+    // MARK: Edits
+
+    /// What the edit entry point does: hydrate, allow a text-only Analysis,
+    /// open the guided sheet; then what the author did.
+    private static func makeEditDraft(for scenario: Scenario, marker: ChartMarkerUI) -> MarkerPlacementState {
+        let state = MarkerPlacementState()
+        state.beginEditingMarker(marker)
+        state.allowTextOnlyAnalysisEdit()
+        state.prepareGuidedEdit(of: marker)
+        switch scenario {
+        case .editAnalysisReview, .editFailedSave, .editRetrySuccess, .editDiscard:
+            state.title = ""
+            state.note = "Sellers stalled at 63.8k three times. Still expecting the range high."
+            if scenario == .editAnalysisReview { state.continueToReview() }
+            if scenario == .editFailedSave || scenario == .editRetrySuccess { state.continueToReview() }
+        case .editSetupArmedReview:
+            let tp = state.componentPrice(.levelTp) ?? 0
+            state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: tp + 160, label: "TP")))
+            state.continueToReview()
+        default:
+            break
+        }
+        return state
+    }
+
+    /// The marker each edit scenario opens, as the server holds it.
+    static func editedMarker(for scenario: Scenario) -> RLChartMarkerDTO? {
+        guard scenario.isEdit else { return nil }
+        let candle = candles[5]
+        let me = MarkerLinkFixtures.member(1, username: "alex")
+        func level(_ type: RLComponentType, _ price: Double, _ n: Int) -> RLMarkerComponentDTO {
+            let payload = LevelPayload(price: price, label: nil, colorHex: nil, lineStyle: nil, lineWidth: nil)
+            let typed: MarkerComponentPayload = type == .levelEntry ? .levelEntry(payload)
+                : (type == .levelTp ? .levelTp(payload) : .levelSl(payload))
+            return RLMarkerComponentDTO(id: MarkerLinkFixtures.uuid(8_000 + n), componentType: type.rawValue, payload: typed, ordering: n)
+        }
+        let anchor = RLMarkerComponentDTO(
+            id: MarkerLinkFixtures.uuid(8_100), componentType: RLComponentType.anchor.rawValue,
+            payload: .anchor(AnchorPayload(time: candle.timestamp, price: candle.close)), ordering: 0
+        )
+        var intent = RLMarkerIntent.analysis
+        var title: String? = "Higher lows"
+        var note: String? = "BTC is holding higher lows into the open. Watching 63.8k."
+        var components = [anchor]
+        var tracking = false
+        var state: String?
+        var parent: UUID?
+        var relationship: String?
+        var preview: RLMarkerLinkPreviewDTO?
+        switch scenario {
+        case .editQuestion:
+            intent = .question
+            title = nil
+            note = "Is the range high still the target?"
+        case .editSetupArmedReview, .editSetupActive:
+            intent = .setup
+            title = "Long the range-low retest"
+            note = "Invalidated below the shelf."
+            tracking = true
+            state = scenario == .editSetupActive ? "ACTIVE" : "ARMED"
+            components = [anchor, level(.levelEntry, candle.close, 1), level(.levelTp, candle.close + 480, 2),
+                          level(.levelSl, candle.close - 220, 3)]
+        default:
+            parent = MarkerLinkFixtures.uuid(77)
+            relationship = "supports"
+            preview = MarkerLinkFixtures.preview(77, author: "sam", title: "BTC breakout", relationship: nil)
+        }
+        return RLChartMarkerDTO(
+            id: MarkerLinkFixtures.uuid(600), symbolId: symbolId, guildId: guildId, author: me,
+            candleTimestamp: candle.timestamp, timeframe: "1h", price: candle.close,
+            intent: intent.rawValue, title: title, note: note, visibility: "guild", confidence: nil,
+            trackingEnabled: tracking, trackingState: state, alertSeverity: nil,
+            createdAt: candle.timestamp, createdAtFormatted: "2h ago", isVisible: true,
+            likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [],
+            isCurrentUserMarker: true, canEdit: true, canDelete: true,
+            components: components, primaryComponentId: anchor.id,
+            pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil,
+            parentMarkerId: parent, linkRelationship: relationship, parentPreview: preview,
+            directResponseCount: 0
+        )
     }
 
     /// The next candle, closing 200 above the fixture's Entry — above the

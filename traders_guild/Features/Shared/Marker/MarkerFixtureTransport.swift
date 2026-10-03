@@ -30,6 +30,14 @@ final class MarkerFixtureTransport: MarkerAPIClient {
     var mode: Mode
     let author: RLGuildMemberDTO
     private(set) var createRequests: [RLCreateMarkerRequest] = []
+    /// Every update, in order, with the marker it was for.
+    private(set) var updateRequests: [(markerId: UUID, body: RLUpdateMarkerRequest)] = []
+    /// The markers updates apply to, as the server holds them.
+    var storedMarkers: [UUID: RLChartMarkerDTO] = [:]
+    /// Hold every update until `releaseHeldUpdates()`.
+    var holdsUpdates = false
+    private var heldUpdates: [CheckedContinuation<Void, Never>] = []
+    var heldUpdateCount: Int { heldUpdates.count }
 
     /// Hold every create until `releaseHeldCreates()` — a server that is slow
     /// to answer, for exercising what can happen while a post is in flight.
@@ -47,6 +55,21 @@ final class MarkerFixtureTransport: MarkerAPIClient {
         let held = heldCreates
         heldCreates.removeAll()
         held.forEach { $0.resume() }
+    }
+
+    func releaseHeldUpdates() {
+        let held = heldUpdates
+        heldUpdates.removeAll()
+        held.forEach { $0.resume() }
+    }
+
+    /// The last update body exactly as the app would send it.
+    var lastUpdateJSON: String? {
+        guard let last = updateRequests.last?.body else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(last) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// The last request as the app would send it, pretty-printed.
@@ -125,8 +148,80 @@ final class MarkerFixtureTransport: MarkerAPIClient {
         RLMarkersListDTO(markers: [], totalCount: 0, hasMore: false, nextCursor: nil)
     }
     nonisolated func getMarker(markerId: UUID) async throws -> RLChartMarkerDTO { throw APIError.networkError("fixture") }
+    /// Answers as chart-service `update_marker` does: a field present in the
+    /// body is applied (`null` clears it), a missing one is unchanged;
+    /// components, when present, replace them all and need one anchor; and
+    /// components on a tracked Setup past ARMED are refused. Mode decides a
+    /// failure first, as for creates.
     nonisolated func updateMarkerV2(guildId: UUID, markerId: UUID, request body: RLUpdateMarkerRequest) async throws -> RLChartMarkerDTO {
-        throw APIError.networkError("fixture")
+        let attempt = await recordUpdate(markerId: markerId, body: body)
+        await waitIfUpdateHeld()
+        return try await answerUpdate(attempt: attempt, markerId: markerId, body: body)
+    }
+
+    private func recordUpdate(markerId: UUID, body: RLUpdateMarkerRequest) -> Int {
+        updateRequests.append((markerId, body))
+        return updateRequests.count
+    }
+
+    private func waitIfUpdateHeld() async {
+        guard holdsUpdates else { return }
+        await withCheckedContinuation { continuation in
+            heldUpdates.append(continuation)
+        }
+    }
+
+    private func answerUpdate(attempt: Int, markerId: UUID, body: RLUpdateMarkerRequest) throws -> RLChartMarkerDTO {
+        switch mode {
+        case .succeed: break
+        case .failFirst(let detail): if attempt == 1 { throw APIError.badRequest(detail) }
+        case .failAlways(let detail): throw APIError.badRequest(detail)
+        }
+        guard let stored = storedMarkers[markerId] else { throw APIError.serverError(404, "Marker not found") }
+        let lockedStates: Set<String> = ["ACTIVE", "TP_HIT", "SL_HIT", "EXPIRED"]
+        if body.components != nil, stored.trackingEnabled, lockedStates.contains(stored.trackingState ?? "") {
+            throw APIError.badRequest("Cannot edit components on a tracked setup after activation")
+        }
+        if let components = body.components,
+           components.filter({ $0.componentType == RLComponentType.anchor.rawValue }).count != 1 {
+            throw APIError.badRequest("Component replacement must include exactly one 'anchor'")
+        }
+        let components = body.components.map { requests in
+            requests.enumerated().map { index, component in
+                RLMarkerComponentDTO(
+                    id: UUID(), componentType: component.componentType,
+                    payload: MarkerComponentPayload.decode(componentType: component.componentType, rawPayload: component.payload),
+                    ordering: index
+                )
+            }
+        } ?? stored.components
+        let anchor = components.first { $0.componentTypeEnum == .anchor }?.payload
+        let tracking = body.trackingEnabled ?? stored.trackingEnabled
+        var trackingState = stored.trackingState
+        if let requested = body.trackingEnabled, stored.intent == RLMarkerIntent.setup.rawValue {
+            if requested, trackingState == nil || trackingState == "DRAFT" { trackingState = "ARMED" }
+            if !requested, [nil, "DRAFT", "ARMED"].contains(trackingState) { trackingState = "DRAFT" }
+        }
+        let updated = RLChartMarkerDTO(
+            id: stored.id, symbolId: stored.symbolId, guildId: stored.guildId, author: stored.author,
+            candleTimestamp: anchor?.anchorTime ?? stored.candleTimestamp, timeframe: stored.timeframe,
+            price: anchor?.levelPrice ?? stored.price, intent: body.intent ?? stored.intent,
+            title: body.clearsTitle ? nil : (body.title ?? stored.title),
+            note: body.clearsNote ? nil : (body.note ?? stored.note),
+            visibility: body.visibility ?? stored.visibility, confidence: stored.confidence,
+            trackingEnabled: tracking, trackingState: trackingState, alertSeverity: stored.alertSeverity,
+            createdAt: stored.createdAt, createdAtFormatted: stored.createdAtFormatted, isVisible: true,
+            likeCount: stored.likeCount, isLikedByCurrentUser: stored.isLikedByCurrentUser,
+            commentCount: stored.commentCount, comments: stored.comments,
+            isCurrentUserMarker: stored.isCurrentUserMarker, canEdit: stored.canEdit, canDelete: stored.canDelete,
+            components: components, primaryComponentId: components.first?.id,
+            pollQuestion: stored.pollQuestion, pollOptions: stored.pollOptions, userPollVote: stored.userPollVote,
+            predictionResult: stored.predictionResult,
+            parentMarkerId: stored.parentMarkerId, linkRelationship: stored.linkRelationship,
+            parentPreview: stored.parentPreview, directResponseCount: stored.directResponseCount
+        )
+        storedMarkers[markerId] = updated
+        return updated
     }
     nonisolated func deleteMarker(guildId: UUID, markerId: UUID) async throws -> RLMarkerDeleteResponseDTO {
         throw APIError.networkError("fixture")

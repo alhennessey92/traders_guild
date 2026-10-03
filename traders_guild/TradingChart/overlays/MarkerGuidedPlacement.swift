@@ -124,7 +124,7 @@ extension MarkerPlacementState {
     /// its stop and target, as the backend now requires. Untracked Setups and
     /// the legacy flow are unaffected.
     var guidedTrackedSetupLevelsNeedAdjusting: Bool {
-        guard isGuidedFlowActive, intent == .setup, trackingEnabled else { return false }
+        guard isGuidedFlowActive, intent == .setup, trackingEnabled, !isGuidedEditLocked else { return false }
         switch setupSide {
         case .long?, .short?: return false
         case .inconsistent?, .invalidPrice?, nil: return true
@@ -150,6 +150,7 @@ extension MarkerPlacementState {
     /// Choose the guided flow for the placement about to start. Called by an
     /// entry point before `startMarkerPlacement`; `reset` leaves it in place.
     func prepareGuidedFlow() {
+        guidedEditOriginal = nil
         guidedStep = .details
         submissionPhase = .idle
         draftBaseline = nil
@@ -161,6 +162,7 @@ extension MarkerPlacementState {
     /// panel. A guided post still in flight is retired with the draft, so its
     /// completion cannot close or alter whatever comes next.
     func endGuidedFlow() {
+        guidedEditOriginal = nil
         guidedStep = nil
         submissionPhase = .idle
         draftBaseline = nil
@@ -177,11 +179,16 @@ extension MarkerPlacementState {
 
     // MARK: Navigation
 
+    /// The Details step's Review button: a postable draft, levels in order
+    /// for a tracked Setup, and — for an edit — something changed.
+    var canContinueToReview: Bool {
+        isValid && !guidedTrackedSetupLevelsNeedAdjusting && (!isGuidedEdit || guidedEditHasChanges)
+    }
+
     /// Details → Review, only when the draft could be posted.
     @discardableResult
     func continueToReview() -> Bool {
-        guard guidedStep == .details, isValid, !isGuidedSubmissionInFlight,
-              !guidedTrackedSetupLevelsNeedAdjusting else { return false }
+        guard guidedStep == .details, canContinueToReview, !isGuidedSubmissionInFlight else { return false }
         guidedStep = .review
         return true
     }
@@ -197,7 +204,8 @@ extension MarkerPlacementState {
     }
 
     func openTypeChooser() {
-        guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
+        // An edit keeps its type.
+        guard isGuidedFlowActive, !isGuidedSubmissionInFlight, !isGuidedEdit else { return }
         guidedStep = .chooseType
     }
 
@@ -212,6 +220,7 @@ extension MarkerPlacementState {
         switch guidedStep {
         case .chooseType?: return "Change type"
         case .details?, .context?, .review?:
+            if isGuidedEdit { return "Edit \(intent.displayName)" }
             return linkSession.isActive ? "New response" : "New \(intent.displayName)"
         case nil: return nil
         }
@@ -253,7 +262,13 @@ extension MarkerPlacementState {
                 ? "Put Entry between your stop and target"
                 : "Check your prices"
         }
-        guard let unmet = unmetRequiredChecklistItems.first else { return nil }
+        // A locked Setup's levels are not this edit's to fix.
+        let unmetItems = isGuidedEditLocked
+            ? unmetRequiredChecklistItems.filter { !$0.id.hasPrefix("setup_") }
+            : unmetRequiredChecklistItems
+        guard let unmet = unmetItems.first else {
+            return isGuidedEdit && !guidedEditHasChanges ? "Make a change to review it" : nil
+        }
         switch unmet.id {
         case "anchor":
             return "Place your marker on the chart"
@@ -286,6 +301,14 @@ extension MarkerPlacementState {
 
     /// The step's prompt, as a question the author can answer.
     var guidedStepPrompt: String? {
+        if isGuidedEdit {
+            switch guidedStep {
+            case .details?: return "Edit your \(intent == .setup ? "Setup" : intent.displayName.lowercased())"
+            case .context?: return "Edit chart context"
+            case .review?: return "Check your changes"
+            case .chooseType?, nil: return nil
+            }
+        }
         switch guidedStep {
         case .details?:
             switch intent {
@@ -308,7 +331,8 @@ extension MarkerPlacementState {
     ///
     /// The response session, text, title and compatible components all stay.
     func requestGuidedIntentChange(to newIntent: RLMarkerIntent) -> MarkerGuidedIntentChange? {
-        guard newIntent != intent, !isGuidedSubmissionInFlight else { return nil }
+        // An edit keeps its type.
+        guard newIntent != intent, !isGuidedSubmissionInFlight, !isGuidedEdit else { return nil }
         let incompatible = incompatibleComponents(for: newIntent)
         guard incompatible.isEmpty else {
             let names = Array(Set(incompatible.map(\.componentType.displayName))).sorted()
@@ -325,7 +349,7 @@ extension MarkerPlacementState {
     /// The author confirmed: remove exactly what they were told about, then
     /// switch.
     func applyGuidedIntentChange(_ change: MarkerGuidedIntentChange) {
-        guard !isGuidedSubmissionInFlight else { return }
+        guard !isGuidedSubmissionInFlight, !isGuidedEdit else { return }
         for id in change.incompatibleComponentIDs {
             removeComponent(id: id)
         }

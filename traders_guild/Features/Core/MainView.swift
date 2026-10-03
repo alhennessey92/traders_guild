@@ -2960,7 +2960,10 @@ struct ChartBottomSheet: View {
         .animation(nil, value: shouldIgnoreKeyboardSafeArea)
         .ignoresSafeArea(.keyboard, edges: shouldIgnoreKeyboardSafeArea ? .bottom : [])
         .environmentObject(chatSurfaceOverlayCoordinator)
-        .modifier(MarkerGuidedDiscardConfirmation(isPresented: $guidedDiscardConfirmation) {
+        .modifier(MarkerGuidedDiscardConfirmation(
+            isPresented: $guidedDiscardConfirmation,
+            isEditing: placementState.isGuidedEdit
+        ) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 controlViewModel.cancelMarkerPlacement()
             }
@@ -3702,6 +3705,11 @@ struct ChartBottomSheet: View {
         // text alone stays valid as text alone when edited.
         if MarkerAvatarExperiment.isEnabled {
             placementState.allowTextOnlyAnalysisEdit()
+        }
+        // …and Analysis, Question and Setup are edited in the guided sheet:
+        // Details → Review → Save changes. Other types keep the existing editor.
+        if MarkerPlacementState.usesGuidedEdit(for: marker.intent) {
+            placementState.prepareGuidedEdit(of: marker)
         }
 
         withAnimation(.easeInOut(duration: 0.25)) {

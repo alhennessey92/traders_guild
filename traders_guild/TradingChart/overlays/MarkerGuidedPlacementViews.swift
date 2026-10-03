@@ -119,7 +119,9 @@ struct MarkerGuidedPlacementPanel: View {
         MarkerGuidedStepHeader(
             stepNumber: placementState.guidedStepNumber,
             prompt: placementState.guidedStepPrompt ?? "",
-            destination: MarkerGuidedFormat.destination(guildName),
+            destination: placementState.isGuidedEdit
+                ? "Editing your marker"
+                : MarkerGuidedFormat.destination(guildName),
             intent: placementState.intent,
             author: authorBadgeIdentity
         )
@@ -181,8 +183,12 @@ struct MarkerGuidedPlacementPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             stepHeader
             responseSection
+            editRelationship
             if placementState.isSocialDetails {
-                socialTypePicker
+                // An edit keeps its type: no selector.
+                if !placementState.isGuidedEdit {
+                    socialTypePicker
+                }
                 socialFields
             } else {
                 setupFields
@@ -240,24 +246,11 @@ struct MarkerGuidedPlacementPanel: View {
 
     private var setupFields: some View {
         VStack(alignment: .leading, spacing: 14) {
-            MarkerGuidedSetupLevelsCard(placementState: placementState)
-
-            Toggle(isOn: $placementState.trackingEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Track this Setup")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppColors.primaryForeground)
-                    Text("Counts toward your accuracy and reputation")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                }
-            }
-            .tint(RLComponentType.levelEntry.color)
-
-            if placementState.trackingEnabled {
-                MarkerTrackedSetupCard(placementState: placementState)
+            if placementState.isGuidedEditLocked {
+                MarkerGuidedLockedSetupCard(placementState: placementState)
             } else {
-                MarkerUntrackedSetupNotice()
+                MarkerGuidedSetupLevelsCard(placementState: placementState)
+                trackingControls
             }
 
             MarkerGuidedTextField(
@@ -266,6 +259,37 @@ struct MarkerGuidedPlacementPanel: View {
                 axis: .vertical
             )
             .accessibilityIdentifier("guided.text")
+        }
+    }
+
+    @ViewBuilder
+    private var trackingControls: some View {
+        Toggle(isOn: $placementState.trackingEnabled) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Track this Setup")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text("Counts toward your accuracy and reputation")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+        }
+        .tint(RLComponentType.levelEntry.color)
+
+        if placementState.trackingEnabled {
+            MarkerTrackedSetupCard(placementState: placementState)
+        } else {
+            MarkerUntrackedSetupNotice()
+        }
+    }
+
+    /// An edited response's relationship, fixed: shown, not changeable.
+    @ViewBuilder
+    private var editRelationship: some View {
+        if placementState.isGuidedEdit, let sentence = placementState.guidedEditOriginal?.linkSentence {
+            MarkerGuidedReviewLine(icon: "arrow.triangle.branch", text: sentence)
+                .padding(.horizontal, 2)
+                .accessibilityIdentifier("guided.editRelationship")
         }
     }
 
@@ -289,25 +313,31 @@ struct MarkerGuidedPlacementPanel: View {
                     withAnimation(.easeInOut(duration: 0.2)) { showsTitleField = true }
                 }
             }
-            MarkerGuidedOptionalRow(
-                icon: "plus.viewfinder",
-                title: "Add chart context",
-                detail: MarkerGuidedFormat.contextSummary(placementState.components)
-                    ?? "Indicators, drawings, levels or timeframes",
-                identifier: "guided.addContext"
-            ) {
-                placementState.openContext()
+            // A locked Setup's context cannot change (the server refuses it).
+            if !placementState.isGuidedEditLocked {
+                MarkerGuidedOptionalRow(
+                    icon: "plus.viewfinder",
+                    title: placementState.isGuidedEdit ? "Chart context" : "Add chart context",
+                    detail: MarkerGuidedFormat.contextSummary(placementState.components)
+                        ?? "Indicators, drawings, levels or timeframes",
+                    identifier: "guided.addContext"
+                ) {
+                    placementState.openContext()
+                }
             }
-            Button {
-                placementState.openTypeChooser()
-            } label: {
-                Label("Change type", systemImage: "arrow.left.arrow.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(AppColors.accentColor)
-                    .padding(.vertical, 6)
+            // An edit keeps its type.
+            if !placementState.isGuidedEdit {
+                Button {
+                    placementState.openTypeChooser()
+                } label: {
+                    Label("Change type", systemImage: "arrow.left.arrow.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(AppColors.accentColor)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("guided.changeType")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("guided.changeType")
         }
     }
 
@@ -353,7 +383,9 @@ struct MarkerGuidedPlacementPanel: View {
     private var contextEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
             stepHeader
-            Text("Optional. Anything you add stays with your draft.")
+            Text(placementState.isGuidedEdit
+                 ? "Optional. Nothing changes until you save."
+                 : "Optional. Anything you add stays with your draft.")
                 .font(.footnote)
                 .foregroundColor(AppColors.greyText)
             UnifiedComponentsHostView(
@@ -391,6 +423,8 @@ struct MarkerGuidedPlacementPanel: View {
 
                 if let context = placementState.linkSession.context {
                     MarkerGuidedReviewLine(icon: context.relationship.icon, text: context.bannerSentence)
+                } else if placementState.isGuidedEdit, let sentence = placementState.guidedEditOriginal?.linkSentence {
+                    MarkerGuidedReviewLine(icon: "arrow.triangle.branch", text: sentence)
                 }
 
                 let title = placementState.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -420,13 +454,41 @@ struct MarkerGuidedPlacementPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(MarkerGuidedCardBackground())
 
-            Text(MarkerGuidedFormat.audience(guildName))
+            if placementState.isGuidedEdit {
+                editChanges
+            }
+
+            Text(placementState.isGuidedEdit
+                 ? MarkerGuidedFormat.editAudience(guildName)
+                 : MarkerGuidedFormat.audience(guildName))
                 .font(.footnote)
                 .foregroundColor(AppColors.greyText)
                 .fixedSize(horizontal: false, vertical: true)
 
             submissionStatus
         }
+    }
+
+    /// What saving changes, line by line.
+    private var editChanges: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MarkerGuidedSectionTitle("What changes")
+            ForEach(placementState.guidedEditChangeLines, id: \.self) { line in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(AppColors.accentColor)
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 6)
+                        .accessibilityHidden(true)
+                    Text(line)
+                        .font(.footnote)
+                        .foregroundColor(AppColors.primaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("guided.editChanges")
     }
 
     private var setupReview: some View {
@@ -439,12 +501,15 @@ struct MarkerGuidedPlacementPanel: View {
                     .foregroundColor(AppColors.greyText)
             }
             MarkerGuidedValueRow(title: "Entry", value: MarkerGuidedFormat.displayPrice(placementState.guidedSetupEntryPrice),
-                                 detail: "Latest price when you post", tint: RLComponentType.levelEntry.color)
+                                 detail: placementState.isGuidedEdit ? "Set when posted" : "Latest price when you post",
+                                 tint: RLComponentType.levelEntry.color)
             MarkerGuidedValueRow(title: "Take Profit", value: MarkerGuidedFormat.displayPrice(placementState.componentPrice(.levelTp)),
                                  detail: nil, tint: RLComponentType.levelTp.color)
             MarkerGuidedValueRow(title: "Stop Loss", value: MarkerGuidedFormat.displayPrice(placementState.componentPrice(.levelSl)),
                                  detail: nil, tint: RLComponentType.levelSl.color)
-            if placementState.trackingEnabled {
+            if placementState.isGuidedEditLocked, let state = placementState.guidedEditOriginal?.trackingState {
+                MarkerGuidedReviewLine(icon: "lock.fill", text: "Tracking: \(state.displayName). Levels unchanged.")
+            } else if placementState.trackingEnabled {
                 MarkerGuidedReviewLine(icon: "scope", text: "Tracked: counts toward accuracy and reputation")
             } else {
                 MarkerUntrackedSetupNotice()
@@ -460,7 +525,7 @@ struct MarkerGuidedPlacementPanel: View {
         case .submitting:
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Posting…")
+                Text(placementState.isGuidedEdit ? "Saving…" : "Posting…")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(AppColors.greyText)
             }
@@ -470,10 +535,10 @@ struct MarkerGuidedPlacementPanel: View {
                     .foregroundColor(AppColors.statusNegative)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Couldn't post")
+                    Text(placementState.isGuidedEdit ? "Couldn't save" : "Couldn't post")
                         .font(.footnote.weight(.bold))
                         .foregroundColor(AppColors.primaryForeground)
-                    Text("\(message) Your draft is saved.")
+                    Text(placementState.isGuidedEdit ? "\(message) Your changes are kept." : "\(message) Your draft is saved.")
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
                     if placementState.guidedTrackedSetupLevelsNeedAdjusting {
@@ -531,7 +596,7 @@ struct MarkerGuidedPlacementBar: View {
                 Spacer(minLength: 8)
                 primaryButton(
                     "Review",
-                    enabled: placementState.isValid && !placementState.guidedTrackedSetupLevelsNeedAdjusting,
+                    enabled: placementState.canContinueToReview,
                     identifier: "guided.review"
                 ) {
                     placementState.continueToReview()
@@ -544,12 +609,22 @@ struct MarkerGuidedPlacementBar: View {
             case .review?:
                 backButton("Edit")
                 Spacer()
-                primaryButton(
-                    placementState.submissionPhase.isFailed ? "Retry" : "Post",
-                    enabled: placementState.canPostGuidedDraft,
-                    identifier: "guided.post"
-                ) {
-                    onPost()
+                if placementState.isGuidedEdit {
+                    primaryButton(
+                        placementState.submissionPhase.isFailed ? "Retry" : "Save changes",
+                        enabled: placementState.canSaveGuidedEdit,
+                        identifier: "guided.save"
+                    ) {
+                        onPost()
+                    }
+                } else {
+                    primaryButton(
+                        placementState.submissionPhase.isFailed ? "Retry" : "Post",
+                        enabled: placementState.canPostGuidedDraft,
+                        identifier: "guided.post"
+                    ) {
+                        onPost()
+                    }
                 }
             case nil:
                 EmptyView()
@@ -620,18 +695,20 @@ extension MarkerPlacementState {
 /// "Discard this draft?" — Discard or Keep Editing.
 struct MarkerGuidedDiscardConfirmation: ViewModifier {
     @Binding var isPresented: Bool
+    /// An edit's changes, rather than a new draft.
+    var isEditing: Bool = false
     let onDiscard: () -> Void
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            "Discard this draft?",
+            isEditing ? "Discard your changes?" : "Discard this draft?",
             isPresented: $isPresented,
             titleVisibility: .visible
         ) {
-            Button("Discard Draft", role: .destructive, action: onDiscard)
+            Button(isEditing ? "Discard Changes" : "Discard Draft", role: .destructive, action: onDiscard)
             Button("Keep Editing", role: .cancel) {}
         } message: {
-            Text("Your text, context and levels will be lost.")
+            Text(isEditing ? "The marker stays as it was." : "Your text, context and levels will be lost.")
         }
     }
 }
@@ -928,7 +1005,7 @@ struct MarkerGuidedSetupLevelsCard: View {
             MarkerGuidedValueRow(
                 title: "Entry",
                 value: MarkerGuidedFormat.displayPrice(placementState.guidedSetupEntryPrice),
-                detail: "Latest price when you post",
+                detail: placementState.isGuidedEdit ? "Set when posted" : "Latest price when you post",
                 tint: RLComponentType.levelEntry.color
             )
             MarkerGuidedLevelField(title: "Take Profit", type: .levelTp, placementState: placementState)
@@ -939,13 +1016,47 @@ struct MarkerGuidedSetupLevelsCard: View {
                 detail: nil,
                 tint: AppColors.greyText
             )
-            Text("Drag the lines on the chart, or type a price.")
+            Text(placementState.isGuidedEdit ? "Type a new take profit or stop loss." : "Drag the lines on the chart, or type a price.")
                 .font(.caption)
                 .foregroundColor(AppColors.greyText)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .background(MarkerGuidedCardBackground())
+    }
+}
+
+/// A tracked Setup past ARMED, in an edit: its levels and tracking shown,
+/// read-only, with why. Nothing here invites a change the server refuses.
+struct MarkerGuidedLockedSetupCard: View {
+    @ObservedObject var placementState: MarkerPlacementState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Levels locked", systemImage: "lock.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Spacer()
+                MarkerSetupSidePill(side: placementState.setupSide)
+            }
+            MarkerGuidedValueRow(title: "Entry", value: MarkerGuidedFormat.displayPrice(placementState.guidedSetupEntryPrice),
+                                 detail: nil, tint: RLComponentType.levelEntry.color)
+            MarkerGuidedValueRow(title: "Take Profit", value: MarkerGuidedFormat.displayPrice(placementState.componentPrice(.levelTp)),
+                                 detail: nil, tint: RLComponentType.levelTp.color)
+            MarkerGuidedValueRow(title: "Stop Loss", value: MarkerGuidedFormat.displayPrice(placementState.componentPrice(.levelSl)),
+                                 detail: nil, tint: RLComponentType.levelSl.color)
+            if let explanation = placementState.guidedEditLockExplanation {
+                Text(explanation)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(MarkerGuidedCardBackground())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("guided.lockedSetup")
     }
 }
 
@@ -1190,6 +1301,12 @@ enum MarkerGuidedFormat {
     static func audience(_ guildName: String?) -> String {
         guard let guildName, !guildName.isEmpty else { return "Your guild will see this on the chart." }
         return "Members of \(guildName) will see this on the chart."
+    }
+
+    /// Who will see an edit, under its review.
+    static func editAudience(_ guildName: String?) -> String {
+        guard let guildName, !guildName.isEmpty else { return "Saving updates your marker for your guild." }
+        return "Saving updates your marker for members of \(guildName)."
     }
 
     static func destination(_ guildName: String?) -> String {

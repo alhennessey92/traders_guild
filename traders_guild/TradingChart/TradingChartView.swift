@@ -2809,6 +2809,37 @@ struct TradingChartView: View {
         isSubmittingPlacement = true
         placementSubmitErrorMessage = nil
 
+        // v1.5 guided edit: Save changes. The same update and reconciliation
+        // as the legacy editor, sent with only what changed, owned by this
+        // draft and attempt; no Entry refresh, share prompt or creation.
+        if placementState.isGuidedEdit {
+            guard placementState.canSaveGuidedEdit else {
+                isSubmittingPlacement = false
+                return
+            }
+            Task { @MainActor in
+                let outcome = await MarkerPlacementSubmitter.submitUpdate(
+                    placementState: placementState,
+                    markerManager: markerManager
+                )
+                // The edit was left while saving: whatever is on screen now is
+                // not this draft. Leave it alone.
+                if outcome.isStale { return }
+                isSubmittingPlacement = false
+                switch outcome.result {
+                case .success:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        placementState.clearMarkerEditSession()
+                        controlViewModel.cancelMarkerPlacement()
+                    }
+                    impactFeedback.impactOccurred()
+                case .failure(let failure):
+                    presentPlacementFailure(failure)
+                }
+            }
+            return
+        }
+
         if let editingMarkerId = placementState.editingMarkerId {
             let updateRequest = placementState.buildUpdateRequest()
             Task { @MainActor in
@@ -3083,6 +3114,10 @@ struct TradingChartView: View {
         }
 
         if newIntent == .setup {
+            // A guided edit keeps the Setup's saved levels: the three-line
+            // placement would seed latest-price defaults and then re-pin Entry
+            // to every new candle. Its TP and SL are edited in the sheet.
+            guard !placementState.isGuidedEdit else { return }
             if predictionPlacement == nil {
                 initializePredictionPlacement()
             }
@@ -3192,6 +3227,7 @@ struct TradingChartView: View {
 
     private func syncSetupComponentsFromPredictionPlacement() {
         guard controlViewModel.isMarkerPlacementMode,
+              !placementState.isGuidedEdit,
               placementState.intent == .setup,
               let prediction = predictionPlacement,
               !isSyncingSetupPlacementState else {
