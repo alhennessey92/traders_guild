@@ -139,7 +139,7 @@ Edits keep the existing editor, as recorded in Stage 3 (`beginEditingMarker`: "E
 | Plain Debug, `traders_guild Local Gateway`: refinement, pan hand-off, guided creation and experiment-gate tests | **33 / 33** | `$S/bs/rb-corr-final-debug.xcresult`; `test-results/correction-plain-debug-*.json` |
 | `traders_guild GCP Public Prod`, Release, build only | BUILD SUCCEEDED. `strings` finds no `MarkerViewingFixture`, `MarkerGuidedCreationFixture` or `Fixture · `. | `$S/bs/build-corr-final-release.log` |
 
-Astra independently re-ran the first version (`ff404b4`): 813 full unit, 50 focused and 19 UI tests, all passing. Those runs' summaries are kept as `test-results/{full-unit-devdebug,focused-unit-final,ui-profile,plain-debug}-*.json`.
+Astra independently inspected the existing xcresult artifacts for the first version (`ff404b4`), without rerunning tests: 813 full unit, 50 focused and 19 UI tests, all passing. Those runs' summaries are kept as `test-results/{full-unit-devdebug,focused-unit-final,ui-profile,plain-debug}-*.json`.
 
 **Earlier run, kept as a finding.** The first full UI run on this source went **12 / 19** (`test-results/ui-profile-overlay-run-*.json`).
 - **Cause:** the whole unit run had just run hosted in the same app, and left launch state behind.
