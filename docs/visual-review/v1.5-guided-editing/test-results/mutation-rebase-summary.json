@@ -1,0 +1,53 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 15,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1791010194.198,
+  "passedTests" : 15,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1791010176.738,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (price(request.components, .levelEntry) → 63500.0) == (63_920.5 → 63920.5): Entry exactly as saved, not the anchor or a latest price",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 5,
+      "testIdentifierString" : "MarkerGuidedEditingTests/anArmedSetupSendsItsLevelsExactlyWithoutRebasing()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditingTests/anArmedSetupSendsItsLevelsExactlyWithoutRebasing()",
+      "testName" : "anArmedSetupSendsItsLevelsExactlyWithoutRebasing()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+    {
+      "category" : "Longest Test Runs",
+      "impact" : "46% of duration",
+      "text" : "1 longest test run with outlier durations exceeding 0.13s (three standard deviations)"
+    }
+  ],
+  "totalTestCount" : 16
+}

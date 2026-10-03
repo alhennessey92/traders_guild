@@ -1,0 +1,53 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 15,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1791010174.192,
+  "passedTests" : 15,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1791010155.192,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (request.components → [traders_guild.RLMarkerComponentRequest(componentType: \"anchor\", payload: [\"price\": traders_guild.AnyCodable(value: 63500), \"time\": traders_guild.AnyCodable(value: \"2026-05-09T07:13:20Z\")]), traders_guild.RLMarkerComponentRequest(componentType: \"level.sl\", payload: [\"price\": traders_guild.AnyCodable(value: 63700.75)]), traders_guild.RLMarkerComponentRequest(componentType: \"level.entry\", payload: [\"price\": traders_guild.AnyCodable(value: 63920.5)]), traders_guild.RLMarkerComponentRequest(componentType: \"level.tp\", payload: [\"label\": traders_guild.AnyCodable(value: \"TP\"), \"price\": traders_guild.AnyCodable(value: 65000)])]) == nil: the server refuses components after activation",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 6,
+      "testIdentifierString" : "MarkerGuidedEditingTests/anActiveSetupLocksLevelsTrackingAndContext()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditingTests/anActiveSetupLocksLevelsTrackingAndContext()",
+      "testName" : "anActiveSetupLocksLevelsTrackingAndContext()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+    {
+      "category" : "Longest Test Runs",
+      "impact" : "39% of duration",
+      "text" : "1 longest test run with outlier durations exceeding 0.14s (three standard deviations)"
+    }
+  ],
+  "totalTestCount" : 16
+}

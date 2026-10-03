@@ -1,0 +1,49 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23A343",
+        "osVersion" : "26.0",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 1,
+      "passedTests" : 15,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "traders_guild LinkedDev · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 1,
+  "finishTime" : 1791010214.381,
+  "passedTests" : 15,
+  "result" : "Failed",
+  "skippedTests" : 0,
+  "startTime" : 1791010196.622,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+    {
+      "failureText" : "Expectation failed: (outcome → UpdateOutcome(result: traders_guild.MarkerPlacementSubmissionResult.success(Optional(traders_guild.RLChartMarkerDTO(id: 00000000-0000-0000-0000-000000000600, symbolId: 00000000-0000-0000-0000-000000000001, guildId: 00000000-0000-0000-0000-000000000002, author: traders_guild.RLGuildMemberDTO(membershipId: 00000000-0000-0000-0000-000000000501, role: \"member\", reputation: 120, contributionScore: 40, dateJoined: 2001-01-01 00:00:00 +0000, accuracyRate: Optional(0.62), mutedUntil: nil, suspendedUntil: nil, userId: 00000000-0000-0000-0000-000000000401, username: \"alex\", displayName: \"Alex\", avatarUrl: Optional(\"https://fixtures.tradersguild.invalid/avatars/alex.png\"), isOnline: true, globalReputation: 300, isFriend: false, friendshipStatus: nil, isBlocked: false, isBlockedBy: false), candleTimestamp: 2026-05-09 07:13:20 +0000, timeframe: \"1h\", price: 63920.0, intent: \"analysis\", title: Optional(\"Higher lows\"), note: Optional(\"Edited.\"), visibility: \"guild\", confidence: nil, trackingEnabled: false, trackingState: nil, alertSeverity: nil, createdAt: 2026-05-09 07:13:20 +0000, createdAtFormatted: \"2h ago\", isVisible: true, likeCount: 0, isLikedByCurrentUser: false, commentCount: 0, comments: [], isCurrentUserMarker: true, canEdit: true, canDelete: true, components: [traders_guild.RLMarkerComponentDTO(id: 00000000-0000-0000-0000-000000008100, componentType: \"anchor\", payload: traders_guild.MarkerComponentPayload.anchor(traders_guild.AnchorPayload(time: 2026-05-09 07:13:20 +0000, price: 63920.0)), ordering: 0)], primaryComponentId: Optional(00000000-0000-0000-0000-000000008100), pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil, parentMarkerId: nil, linkRelationship: nil, parentPreview: nil, directResponseCount: Optional(0), responsesRevision: nil, hasResponses: nil, parentDirectResponseCount: nil, parentResponsesRevision: nil, parentHasResponses: nil))), isStale: false)).isStale → false",
+      "targetName" : "traders_guildTests",
+      "testIdentifier" : 13,
+      "testIdentifierString" : "MarkerGuidedEditingTests/whileSavingTheEditIsFrozenAndALateAnswerCannotTouchTheNextDraft()",
+      "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildTests/MarkerGuidedEditingTests/whileSavingTheEditIsFrozenAndALateAnswerCannotTouchTheNextDraft()",
+      "testName" : "whileSavingTheEditIsFrozenAndALateAnswerCannotTouchTheNextDraft()"
+    }
+  ],
+  "title" : "Test - traders_guild LinkedDev",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 16
+}
