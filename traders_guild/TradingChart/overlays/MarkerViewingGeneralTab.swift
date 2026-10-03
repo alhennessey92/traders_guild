@@ -32,7 +32,11 @@ struct MarkerViewingGeneralTab: View {
     var onRespondToMarker: ((MarkerLinkRelationship) -> Void)? = nil
     /// Jump to another marker in the same thesis.
     var onOpenLinkedMarker: ((RLMarkerLinkPreviewDTO) -> Void)? = nil
+    /// Backend-free fixtures only: the guild and symbol the viewer is on,
+    /// standing in for the signed-in app state. Nil in the app.
+    var fixtureViewerContext: (guildId: UUID, symbolId: UUID)? = nil
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showRelationshipPicker: Bool = false
     @State private var pendingResponseRelationship: MarkerLinkRelationship?
     @State private var showDeleteConfirmation: Bool = false
@@ -76,23 +80,27 @@ struct MarkerViewingGeneralTab: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                heroPanel
-                linkRelationshipRow
-                if liveMarker.intent == .setup {
-                    setupDashboard
+                if usesRefinedLayout {
+                    refinedLayout
                 } else {
-                    markerSpecificsBox
-                }
-                descriptionSection
-                if canShowRespondAction {
-                    respondToMarkerButton
-                }
-                generalDisclosure
-                symbolInfoDisclosure
-                authorDisclosure
-                thesisDisclosure
-                if canShowShareAction {
-                    shareMarkerButton
+                    heroPanel
+                    linkRelationshipRow
+                    if liveMarker.intent == .setup {
+                        setupDashboard
+                    } else {
+                        markerSpecificsBox
+                    }
+                    descriptionSection
+                    if canShowRespondAction {
+                        respondToMarkerButton
+                    }
+                    generalDisclosure
+                    symbolInfoDisclosure
+                    authorDisclosure
+                    thesisDisclosure
+                    if canShowShareAction {
+                        shareMarkerButton
+                    }
                 }
                 if liveMarker.canDelete {
                     deleteMarkerAction
@@ -128,6 +136,150 @@ struct MarkerViewingGeneralTab: View {
                 },
                 onCancel: { showReportReasonSheet = false }
             )
+        }
+    }
+
+    // MARK: - Refined layout (v1.5 avatar prototype)
+
+    /// Analysis, Question and Setup under the avatar prototype read in one
+    /// order: who posted what and when, what they said, how it relates, then
+    /// what you can do. Every other type, and every marker with the experiment
+    /// off, keeps the shipped layout.
+    private var usesRefinedLayout: Bool {
+        MarkerAvatarExperiment.isEnabled
+            && [RLMarkerIntent.analysis, .question, .setup].contains(liveMarker.intent)
+    }
+
+    @ViewBuilder
+    private var refinedLayout: some View {
+        refinedHero
+        linkRelationshipRow
+        refinedContent
+        if liveMarker.intent == .setup {
+            setupDashboard
+        }
+        refinedActions
+            .padding(.top, 2)
+        thesisDisclosure
+        generalDisclosure
+        symbolInfoDisclosure
+        authorDisclosure
+    }
+
+    private static let relativeTimeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
+    /// "Analysis · 1h chart · 2 hr. ago".
+    private var refinedMetaLine: String {
+        var parts: [String] = []
+        if let timeframe = RLChartTimeframe.fromBackendString(liveMarker.timeframe) {
+            parts.append("\(timeframe.displayName) chart")
+        }
+        parts.append(Self.relativeTimeFormatter.localizedString(for: liveMarker.createdAt, relativeTo: Date()))
+        return parts.joined(separator: " · ")
+    }
+
+    /// The author's face and name — the face opens their profile, as the
+    /// Author section does — then the type, timeframe and age; Edit for the
+    /// author.
+    private var refinedHero: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button {
+                onAuthorTap?()
+            } label: {
+                UnifiedMarkerBadge(
+                    intent: liveMarker.intent,
+                    sizeToken: .large,
+                    avatar: MarkerAvatarIdentity.forMarker(liveMarker)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(onAuthorTap == nil)
+            .accessibilityLabel("\(authorHandle), view profile")
+            .accessibilityIdentifier("marker.authorFace")
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(authorHandle)
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                    .lineLimit(1)
+                // Type, then timeframe and age; stacked at accessibility
+                // sizes so neither is cut off.
+                let metaLayout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                    : AnyLayout(HStackLayout(spacing: 6))
+                metaLayout {
+                    Text(liveMarker.intent.displayName)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(liveMarker.intent.color)
+                    Text(refinedMetaLine)
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            Spacer(minLength: 0)
+
+            if canShowEditAction {
+                heroEditButton
+            }
+        }
+    }
+
+    /// The title, then the text, as plain reading — no boxes within boxes.
+    @ViewBuilder
+    private var refinedContent: some View {
+        let title = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = trimmedNote
+        if !title.isEmpty || !text.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                if !title.isEmpty {
+                    Text(title)
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !text.isEmpty {
+                    Text(text)
+                        .font(.body)
+                        .foregroundColor(AppColors.primaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else if liveMarker.intent != .setup {
+            placeholderText(liveMarker.intent == .question ? "No question provided" : "No analysis provided")
+        }
+    }
+
+    /// Respond and Share side by side: the two things a reader does next.
+    @ViewBuilder
+    private var refinedActions: some View {
+        if canShowRespondAction || canShowShareAction {
+            HStack(spacing: 10) {
+                if canShowRespondAction {
+                    respondAction(compact: true)
+                }
+                if canShowShareAction {
+                    Button {
+                        onShareMarker?()
+                    } label: {
+                        MarkerViewingActionLabel(
+                            title: "Share",
+                            icon: "square.and.arrow.up",
+                            isPrimary: !canShowRespondAction
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("marker.share")
+                }
+            }
         }
     }
 
@@ -172,44 +324,26 @@ struct MarkerViewingGeneralTab: View {
         markerManager.linkedMarkersEnabled
             && onRespondToMarker != nil
             && liveMarker.visibility == "guild"
-            && liveMarker.guildId == rlAppState.currentGuild?.id
-            && liveMarker.symbolId == symbolDTO?.id
+            && liveMarker.guildId == (fixtureViewerContext?.guildId ?? rlAppState.currentGuild?.id)
+            && liveMarker.symbolId == (fixtureViewerContext?.symbolId ?? symbolDTO?.id)
     }
 
     private var respondToMarkerButton: some View {
+        respondAction(compact: false)
+    }
+
+    /// Respond, as the legacy card or as the refined layout's primary button.
+    /// Either way it opens the same relationship picker.
+    private func respondAction(compact: Bool) -> some View {
         Button {
             pendingResponseRelationship = nil
             showRelationshipPicker = true
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppColors.accentColor)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(AppColors.accentColor.opacity(0.20)))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Respond with marker")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(AppColors.primaryForeground)
-                    Text("Add your perspective to this thesis")
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(AppColors.accentColor)
+            if compact {
+                MarkerViewingActionLabel(title: "Respond", icon: "arrow.triangle.branch", isPrimary: true)
+            } else {
+                legacyRespondLabel
             }
-            .padding(13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(AppColors.accentColor.opacity(0.13))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(AppColors.accentColor.opacity(0.42), lineWidth: 1)
-                    )
-            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("marker.respond")
@@ -235,6 +369,38 @@ struct MarkerViewingGeneralTab: View {
             .presentationDetents([.height(580), .large])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private var legacyRespondLabel: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(AppColors.accentColor)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(AppColors.accentColor.opacity(0.20)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Respond with marker")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text("Add your perspective to this thesis")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(AppColors.accentColor)
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppColors.accentColor.opacity(0.13))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(AppColors.accentColor.opacity(0.42), lineWidth: 1)
+                )
+        )
     }
 
     private var respondPickerSummary: String? {
@@ -1520,5 +1686,31 @@ private struct AlertPresentation {
         }
         icon = severity.markerIcon
         color = severity.color
+    }
+}
+
+/// A full-width action in the refined viewing layout: filled in the accent
+/// colour for the primary action, outlined for the rest.
+private struct MarkerViewingActionLabel: View {
+    let title: String
+    let icon: String
+    let isPrimary: Bool
+
+    var body: some View {
+        Label(title, systemImage: icon)
+            .font(.subheadline.weight(.bold))
+            .foregroundColor(isPrimary ? .white : AppColors.primaryForeground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.vertical, 8)
+            // One height for every action whatever its icon: 44 pt, the
+            // minimum touch target.
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(
+                Capsule()
+                    .fill(isPrimary ? AppColors.accentColor : AppColors.whiteText.opacity(0.08))
+                    .overlay(Capsule().stroke(AppColors.whiteText.opacity(isPrimary ? 0 : 0.16), lineWidth: 1))
+            )
+            .contentShape(Capsule())
     }
 }

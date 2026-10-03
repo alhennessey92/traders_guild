@@ -43,7 +43,10 @@ struct traders_guildApp: App {
     var body: some Scene {
         WindowGroup {
             let _ = themeManager.currentTheme
-            let isBiometricLocked = rlAppState.shouldPresentBiometricAppLock
+            // A backend-free fixture is never covered by the signed-in app's
+            // launch transition or lock, whatever account state the simulator
+            // holds: they would sit over it and take its taps.
+            let isBiometricLocked = rlAppState.shouldPresentBiometricAppLock && !isFixtureLaunch
             ZStack {
                 ZStack {
                     // MainContent loads in background (not in if/else)
@@ -53,7 +56,7 @@ struct traders_guildApp: App {
                         .environmentObject(rlMessagingManager)    // chatrooms/DMs
 
                     // TransitionView overlays on top until chart is ready
-                    if rlAppState.showingTransition {
+                    if rlAppState.showingTransition && !isFixtureLaunch {
                         TransitionView(request: rlAppState.transitionRequest)
                             .environmentObject(rlAppState)
                             .environmentObject(rlMessagingManager)
@@ -212,6 +215,12 @@ struct traders_guildApp: App {
     private var guidedCreationFixture: MarkerGuidedCreationHarness.Scenario? {
         MarkerGuidedCreationHarness.Scenario.launch
     }
+
+    /// Marker detail (General tab) fixture: `-MarkerViewingFixture <scenario>`.
+    /// Backend-free.
+    private var viewingFixture: MarkerViewingHarness.Scenario? {
+        MarkerViewingHarness.Scenario.launch
+    }
     #endif
 
     #if DEBUG
@@ -222,11 +231,23 @@ struct traders_guildApp: App {
     }
     #endif
 
+    /// One of the backend-free fixtures is on screen instead of the app.
+    /// Always false outside Debug and isolated-DEV builds.
+    private var isFixtureLaunch: Bool {
+        #if DEBUG || TG_ISOLATED_DEV
+        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures
+        #else
+        false
+        #endif
+    }
+
     @ViewBuilder
     private var mainContent: some View {
         #if DEBUG
         if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
+        } else if let viewingFixture {
+            MarkerViewingHarness(scenario: viewingFixture)
         } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else if wantsWalkthroughPreview {
@@ -237,6 +258,8 @@ struct traders_guildApp: App {
         #elseif TG_ISOLATED_DEV
         if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
+        } else if let viewingFixture {
+            MarkerViewingHarness(scenario: viewingFixture)
         } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else {

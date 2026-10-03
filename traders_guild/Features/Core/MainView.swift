@@ -1439,7 +1439,7 @@ struct MainView: View {
     @ViewBuilder
     private var mainToolbarPrincipalItem: some View {
         if chartControlVM.isMarkerPlacementMode {
-            Text(placementState.toolbarInstructionText ?? placementState.guidedToolbarTitle ?? "Place a Marker")
+            Text(placementState.toolbarInstructionText ?? placementState.guidedToolbarTitle ?? placementState.editToolbarTitle() ?? "Place a Marker")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(1)
