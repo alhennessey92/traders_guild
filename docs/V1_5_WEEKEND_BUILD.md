@@ -114,7 +114,7 @@ Bring:
 - any connection problems, and whether the Mac's address changed
 
 Engineering items waiting:
-- Astra's integration of `bd0560b` and `4681ab0`
+- Astra integrated `bd0560b` and `4681ab0`; independently verified the 43-test guard result and the durable app signature. Installation and saved-switch setup remain pending owner device availability.
 - the live detent and keyboard evidence, from the owner's notes
 - the legacy-editor findings, for a decision
 
