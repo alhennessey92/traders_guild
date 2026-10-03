@@ -54,6 +54,7 @@ final class MarkerGuidedEditingUITests: XCTestCase {
         review.tap()
         XCTAssertTrue(text("Check your changes").waitForExistence(timeout: 5))
         XCTAssertTrue(text("Text edited").exists, "Review lists what changes")
+        XCTAssertTrue(text("Text edited").isHittable, "and leads with it, in view at half height")
         XCTAssertTrue(app.buttons["guided.save"].exists && app.buttons["guided.save"].label == "Save changes")
         XCTAssertFalse(app.buttons["guided.post"].exists, "no Post in an edit")
         XCTAssertFalse(text("will see this on the chart").exists, "no new-post wording")

@@ -121,6 +121,7 @@ struct MarkerGuidedPlacementPanel: View {
     private var stepHeader: some View {
         MarkerGuidedStepHeader(
             stepNumber: placementState.guidedStepNumber,
+            stepCount: placementState.guidedStepCount,
             prompt: placementState.guidedStepPrompt ?? "",
             destination: placementState.isGuidedEdit
                 ? "Editing your marker"
@@ -429,6 +430,11 @@ struct MarkerGuidedPlacementPanel: View {
     private var review: some View {
         VStack(alignment: .leading, spacing: 14) {
             stepHeader
+            // An edit leads with what saving changes, so it is in view at
+            // half height; the post as it will read follows.
+            if placementState.isGuidedEdit {
+                editChanges
+            }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     MarkerGuidedIntentTag(intent: placementState.intent)
@@ -473,10 +479,6 @@ struct MarkerGuidedPlacementPanel: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(MarkerGuidedCardBackground())
-
-            if placementState.isGuidedEdit {
-                editChanges
-            }
 
             Text(placementState.isGuidedEdit
                  ? MarkerGuidedFormat.editAudience(guildName)
@@ -903,6 +905,7 @@ struct MarkerGuidedTypeRow: View {
 /// the author's face. Read by VoiceOver as one heading.
 struct MarkerGuidedStepHeader: View {
     let stepNumber: Int?
+    var stepCount: Int = 2
     let prompt: String
     let destination: String
     let intent: RLMarkerIntent
@@ -911,7 +914,7 @@ struct MarkerGuidedStepHeader: View {
 
     private var stepLine: String {
         guard let stepNumber else { return destination }
-        return "Step \(stepNumber) of 2 · \(destination)"
+        return "Step \(stepNumber) of \(stepCount) · \(destination)"
     }
 
     var body: some View {

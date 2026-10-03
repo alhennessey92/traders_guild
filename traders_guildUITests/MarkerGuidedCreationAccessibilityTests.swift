@@ -187,6 +187,10 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         launch("setupTracked")
         let next = app.buttons["guided.next"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
+        let header = app.staticTexts["guided.stepHeader"].exists
+            ? app.staticTexts["guided.stepHeader"]
+            : app.otherElements["guided.stepHeader"]
+        XCTAssertTrue(header.label.contains("Step 1 of 3"), "a Setup has three steps: \(header.label)")
         for element in [app.textFields["Take Profit"], app.textFields["Stop Loss"], app.switches.firstMatch] {
             XCTAssertTrue(element.exists && element.isHittable, "\(element) is on screen")
         }
