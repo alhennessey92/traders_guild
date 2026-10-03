@@ -2600,6 +2600,13 @@ struct RLUpdateMarkerRequest: Codable {
     // Local-only fields for optimistic reconciliation when server payload omits poll values.
     let pollQuestion: String?
     let pollOptions: [String]?
+    /// Send `"title": null` / `"note": null`, which the server applies as a
+    /// clear (it updates every field that is set, null included). Without
+    /// these a nil title or note is left out and the server keeps the old
+    /// one. Only the v1.5 guided edit sets them; the legacy editor's encoding
+    /// is unchanged.
+    let clearsTitle: Bool
+    let clearsNote: Bool
 
     init(
         intent: String? = nil,
@@ -2610,8 +2617,12 @@ struct RLUpdateMarkerRequest: Codable {
         trackingEnabled: Bool? = nil,
         components: [RLMarkerComponentRequest]? = nil,
         pollQuestion: String? = nil,
-        pollOptions: [String]? = nil
+        pollOptions: [String]? = nil,
+        clearsTitle: Bool = false,
+        clearsNote: Bool = false
     ) {
+        self.clearsTitle = clearsTitle && title == nil
+        self.clearsNote = clearsNote && note == nil
         self.intent = intent
         self.title = title
         self.note = note
@@ -2644,13 +2655,23 @@ struct RLUpdateMarkerRequest: Codable {
         components = try container.decodeIfPresent([RLMarkerComponentRequest].self, forKey: .components)
         pollQuestion = nil
         pollOptions = nil
+        clearsTitle = container.contains(.title) && title == nil
+        clearsNote = container.contains(.note) && note == nil
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(intent, forKey: .intent)
-        try container.encodeIfPresent(title, forKey: .title)
-        try container.encodeIfPresent(note, forKey: .note)
+        if clearsTitle {
+            try container.encodeNil(forKey: .title)
+        } else {
+            try container.encodeIfPresent(title, forKey: .title)
+        }
+        if clearsNote {
+            try container.encodeNil(forKey: .note)
+        } else {
+            try container.encodeIfPresent(note, forKey: .note)
+        }
         try container.encodeIfPresent(visibility, forKey: .visibility)
         try container.encodeIfPresent(confidence, forKey: .confidence)
         try container.encodeIfPresent(trackingEnabled, forKey: .trackingEnabled)

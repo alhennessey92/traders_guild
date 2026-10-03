@@ -240,6 +240,8 @@ final class MarkerPlacementState: ObservableObject {
     /// `draftBaseline` so a mid-draft type change can record its levels
     /// without forgetting the author's text and context.
     var setupLevelSeed: [RLComponentType: Double]?
+    /// The marker as it was when a v1.5 guided edit began; nil otherwise.
+    var guidedEditOriginal: MarkerGuidedEditOriginal?
     /// This draft's identity. Renewed whenever a draft starts or the guided
     /// flow ends, so a guided submission still in flight can tell that the
     /// draft it was posting is gone.
@@ -2236,7 +2238,13 @@ final class MarkerPlacementState: ObservableObject {
         )
     }
 
-    private func requestComponentsForCurrentState(resolvedAnchorTime: Date? = nil) -> [RLMarkerComponentRequest] {
+    /// `rewritesSetupEntry`: a Setup's Entry is re-seated on the anchor price,
+    /// as creation always has. The v1.5 guided edit passes false: an existing
+    /// Setup's Entry is sent exactly as it was.
+    func requestComponentsForCurrentState(
+        resolvedAnchorTime: Date? = nil,
+        rewritesSetupEntry: Bool = true
+    ) -> [RLMarkerComponentRequest] {
         var requestDrafts = components
         // Canonicalize only the submitted anchor after an interval switch.
         // Keep the original draft time so switching back restores its candle.
@@ -2245,7 +2253,7 @@ final class MarkerPlacementState: ObservableObject {
            let price = requestDrafts[index].payload.levelPrice {
             requestDrafts[index].payload = .anchor(AnchorPayload(time: resolvedAnchorTime, price: price))
         }
-        if intent == .setup, let anchorPrice = anchorDraft?.payload.levelPrice {
+        if rewritesSetupEntry, intent == .setup, let anchorPrice = anchorDraft?.payload.levelPrice {
             let entryPayload: MarkerComponentPayload = .levelEntry(
                 LevelPayload(price: anchorPrice, label: "Entry")
             )
