@@ -119,7 +119,8 @@ final class MarkerFixtureTransport: MarkerAPIClient {
                 id: UUID(),
                 componentType: component.componentType,
                 payload: MarkerComponentPayload.decode(componentType: component.componentType, rawPayload: component.payload),
-                ordering: index
+                ordering: index,
+                originalRawPayload: component.payload
             )
         }
         let anchor = components.first { $0.componentTypeEnum == .anchor }?.payload
@@ -191,7 +192,8 @@ final class MarkerFixtureTransport: MarkerAPIClient {
                 RLMarkerComponentDTO(
                     id: UUID(), componentType: component.componentType,
                     payload: MarkerComponentPayload.decode(componentType: component.componentType, rawPayload: component.payload),
-                    ordering: index
+                    ordering: index,
+                    originalRawPayload: component.payload
                 )
             }
         } ?? stored.components

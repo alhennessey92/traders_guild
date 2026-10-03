@@ -1670,6 +1670,12 @@ struct RLMarkerComponentDTO: Codable, Identifiable, Hashable {
     let componentType: String
     let payload: MarkerComponentPayload
     let ordering: Int
+    /// The payload exactly as the server sent it, including keys this build
+    /// does not model, which the typed `payload` cannot carry. Nil for a
+    /// component built in the app. Kept through the app's own re-encoding
+    /// (`encode(to:)`) so an edit can send untouched data back unchanged;
+    /// equality and hashing still compare the typed payload.
+    let originalRawPayload: [String: AnyCodable]?
 
     var componentTypeEnum: RLComponentType? {
         RLComponentType(rawValue: componentType)
@@ -1682,11 +1688,18 @@ struct RLMarkerComponentDTO: Codable, Identifiable, Hashable {
         case ordering
     }
 
-    init(id: UUID, componentType: String, payload: MarkerComponentPayload, ordering: Int) {
+    init(
+        id: UUID,
+        componentType: String,
+        payload: MarkerComponentPayload,
+        ordering: Int,
+        originalRawPayload: [String: AnyCodable]? = nil
+    ) {
         self.id = id
         self.componentType = componentType
         self.payload = payload
         self.ordering = ordering
+        self.originalRawPayload = originalRawPayload
     }
 
     init(from decoder: Decoder) throws {
@@ -1696,6 +1709,7 @@ struct RLMarkerComponentDTO: Codable, Identifiable, Hashable {
         ordering = try container.decode(Int.self, forKey: .ordering)
         let rawPayload = try container.decode([String: AnyCodable].self, forKey: .payload)
         payload = MarkerComponentPayload.decode(componentType: componentType, rawPayload: rawPayload)
+        originalRawPayload = rawPayload
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1703,7 +1717,7 @@ struct RLMarkerComponentDTO: Codable, Identifiable, Hashable {
         try container.encode(id, forKey: .id)
         try container.encode(componentType, forKey: .componentType)
         try container.encode(ordering, forKey: .ordering)
-        try container.encode(payload.rawPayload, forKey: .payload)
+        try container.encode(originalRawPayload ?? payload.rawPayload, forKey: .payload)
     }
 
     static func == (lhs: RLMarkerComponentDTO, rhs: RLMarkerComponentDTO) -> Bool {

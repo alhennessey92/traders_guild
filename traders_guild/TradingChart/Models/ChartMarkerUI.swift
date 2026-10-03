@@ -291,6 +291,23 @@ extension RLChartMarkerDTO {
         return updating(components: normalizedComponents)
     }
 
+    /// This marker with its title and/or note cleared, as an update that
+    /// sends them as null leaves them on the server. `updating` cannot: a nil
+    /// there means "unchanged".
+    func clearing(title clearsTitle: Bool, note clearsNote: Bool) -> RLChartMarkerDTO {
+        guard clearsTitle || clearsNote,
+              var dict = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self)) as? [String: Any] else {
+            return self
+        }
+        if clearsTitle { dict.removeValue(forKey: "title") }
+        if clearsNote { dict.removeValue(forKey: "note") }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict),
+              let cleared = try? JSONDecoder().decode(RLChartMarkerDTO.self, from: data) else {
+            return self
+        }
+        return cleared
+    }
+
     func updating(
         intent: String? = nil,
         title: String? = nil,

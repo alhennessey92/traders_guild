@@ -1226,7 +1226,7 @@ struct MarkerGuidedLevelField: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Spacer()
             }
-            TextField("0.0", value: placementState.levelPriceBinding(for: type), formatter: MarkerGuidedFormat.priceFormatter)
+            TextField("0.0", value: placementState.guidedLevelPriceBinding(for: type), formatter: MarkerGuidedFormat.priceFormatter)
                 .textFieldStyle(.plain)
                 .font(.system(.footnote, design: .monospaced).weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)

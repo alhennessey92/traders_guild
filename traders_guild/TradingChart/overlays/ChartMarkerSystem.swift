@@ -1961,6 +1961,8 @@ class MarkerManager: ObservableObject {
                 pollQuestion: optimisticPollQuestion,
                 pollOptions: optimisticPollOptions
             )
+            // A cleared title or note (sent as null) shows cleared at once.
+            .clearing(title: request.clearsTitle, note: request.clearsNote)
         )
         markers[index] = optimistic
         syncSelectedMarker(optimistic)
@@ -2030,7 +2032,9 @@ class MarkerManager: ObservableObject {
                     componentType: component.componentType,
                     rawPayload: component.payload
                 ),
-                ordering: ordering
+                ordering: ordering,
+                // What was sent is what the server will hold.
+                originalRawPayload: component.payload
             )
         }
     }
