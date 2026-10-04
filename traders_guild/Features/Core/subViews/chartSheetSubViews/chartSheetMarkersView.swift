@@ -53,6 +53,8 @@ struct chartSheetMarkersView: View {
     private var primaryTabSelection: Binding<MarkerSheetPrimaryTab> {
         MarkerAvatarExperiment.isEnabled ? $guidedPrimaryTab : $legacyPrimaryTab
     }
+    var onMeasureAdd: ((MarkerSheetContentMeasurement) -> Void)? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showsOtherMarkerTypes = false
     @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
     @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
@@ -131,7 +133,7 @@ struct chartSheetMarkersView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? 12 : 16) {
             header
 
             UnifiedTabBar(
@@ -166,7 +168,11 @@ struct chartSheetMarkersView: View {
                 errorBanner(activityLoadError)
             }
         }
-        .padding(.top, 15)
+        .padding(.top, MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? 8 : 15)
+        .modifier(MarkerSheetContentMeasure(
+            revision: "add-\(showsOtherMarkerTypes)-\(dynamicTypeSize)",
+            onMeasure: MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? onMeasureAdd : nil
+        ))
         .task(id: visibleLoadKey) {
             await loadMarkerActivity(forceRefresh: false)
         }
@@ -395,6 +401,7 @@ struct chartSheetMarkersView: View {
             } label: {
                 MarkerGuidedSectionTitle("Other marker types")
             }
+            .accessibilityIdentifier("guided.otherTypes")
             .tint(AppColors.greyText)
             .padding(.top, 6)
         }

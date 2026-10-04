@@ -217,31 +217,14 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(state.guidedStep == .details)
     }
 
-    /// Navigating with a complete draft changes the working height but keeps
-    /// the chart dock and user expansion available at every step.
     @Test
-    func theSheetFollowsTheJourneyAndLeavesLegacyHeightsAlone() {
+    func theSheetKeepsTheDraftWhenReturningFromReview() {
         let state = guidedDraft(.analysis)
         state.note = "Range low is holding."
-        let compose = MarkerGuidedSheetHeight.working(step: state.guidedStep, intent: state.intent)
         #expect(state.continueToReview())
-        let review = MarkerGuidedSheetHeight.working(step: state.guidedStep, intent: state.intent)
-        #expect(review < compose)
-        let shortScreen = MarkerGuidedSheetHeight.working(step: .details, intent: .analysis, screenHeight: 667)
-        #expect(MarkerGuidedSheetHeight.add(screenHeight: 667) > MarkerGuidedSheetHeight.add(screenHeight: 874))
-        #expect(shortScreen > compose, "a short screen needs more of the available height")
-        #expect(shortScreen < MarkerGuidedSheetHeight.tall, "user expansion is still available")
         state.goBack()
+        #expect(state.guidedStep == .details)
         #expect(state.note == "Range low is holding.")
-        #expect(MarkerGuidedSheetHeight.working(step: state.guidedStep, intent: state.intent) == compose)
-        for step in [MarkerGuidedStep.details, .setupReasoning, .context, .review, .chooseType] {
-            let heights = MarkerGuidedSheetHeight.fractions(step: step, intent: .setup)
-            #expect(heights.first == MarkerGuidedSheetHeight.compact)
-            #expect(heights.last == MarkerGuidedSheetHeight.tall)
-            #expect(heights[1] > heights[0] && heights[1] < heights[2])
-        }
-        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: false, placing: true, step: .details, intent: .analysis) == nil)
-        #expect(MarkerGuidedSheetHeight.fractions(guidedFlowActive: true, placing: false, step: .details, intent: .analysis) == nil)
     }
 
     @Test

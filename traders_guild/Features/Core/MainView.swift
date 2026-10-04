@@ -119,6 +119,7 @@ struct MainView: View {
             placementState: placementState,
             markerOverlayState: markerOverlayState,
             timeframePanelManager: timeframePanelManager,
+            sheetPresentation: sheetPresentation,
             selectedDetent: $selectedDetent,
             selectedView: $chartSheetTab,
             markerPrimaryTab: $chartMarkerPrimaryTab,
@@ -202,6 +203,7 @@ struct MainView: View {
     /// walkthrough's "Place your first marker" can land on the Markers tab.
     @State private var chartSheetTab: ChartBottomSheet.ChartView = .symbol
     @State private var chartMarkerPrimaryTab: MarkerSheetPrimaryTab = .add
+    @StateObject private var sheetPresentation = MarkerSheetPresentationModel()
 
     // MARK: - Drawer State Management
     @State private var showLeftDrawer: Bool = false
@@ -250,18 +252,15 @@ struct MainView: View {
             && !chartControlVM.isMarkerPlacementMode && chartViewModel.selectedMarkerForSheet == nil
     }
 
-    private var chartSheetDetents: Set<PresentationDetent> {
-        let fractions = MarkerGuidedSheetHeight.fractions(
-            guidedFlowActive: placementState.isGuidedFlowActive,
-            placing: chartControlVM.isMarkerPlacementMode,
-            step: placementState.guidedStep,
-            intent: placementState.intent,
-            screenHeight: UIScreen.main.bounds.height
-        ) ?? (isGuidedAddSheet
-            ? [0.11, MarkerGuidedSheetHeight.add(screenHeight: UIScreen.main.bounds.height), 0.9]
-            : [0.11, 0.35, 0.5, 0.9])
-        return Set(fractions.map { PresentationDetent.fraction($0) })
+    private var markerSheetSurface: MarkerSheetSurface {
+        .resolve(experiment: MarkerAvatarExperiment.isEnabled,
+                 placing: chartControlVM.isMarkerPlacementMode,
+                 step: placementState.guidedStep, intent: placementState.intent,
+                 view: chartSheetTab.rawValue, primaryAdd: chartMarkerPrimaryTab == .add,
+                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id)
     }
+    private var markerSheetPolicy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: markerSheetSurface) }
+    private var chartSheetDetents: Set<PresentationDetent> { markerSheetPolicy.detents }
 
     /// Presented (above the persistent chart bottom sheet) after a guild-visible marker is placed.
     @State private var markerSharePromptContext: MarkerShareContext?
@@ -685,6 +684,7 @@ struct MainView: View {
             }
             .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
             .ignoresSafeArea()
+            .modifier(MarkerSheetContainerMeasure(model: sheetPresentation))
             .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
             
             .observeMarkerNavigation(
@@ -928,12 +928,13 @@ struct MainView: View {
             .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     if isPlacing {
+                        sheetPresentation.resetGuidedCaptures()
                         // Begin at the step's working height. The chart dock is
                         // an intentional move for placement, not a clipped form.
                         selectedDetent = placementState.isGuidedFlowActive
-                            ? .fraction(MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height))
+                            ? markerSheetPolicy.working
                             : .fraction(0.35)
-                    } else {
+                    } else if !MarkerAvatarExperiment.isEnabled {
                         // ...and put it back when the panel goes away. Raising the sheet on
                         // the way in without lowering it on the way out left it standing open
                         // after every place, edit and cancel, for the user to drag down by
@@ -944,18 +945,15 @@ struct MainView: View {
                 }
                 syncTimeframePanelsForCurrentMode(resetPlacementSource: isPlacing)
             }
-            .modifier(MarkerGuidedSheetPresentationObserver(
-                placementState: placementState,
-                controlViewModel: chartControlVM,
-                chartViewModel: chartViewModel,
-                selectedDetent: $selectedDetent,
-                selectedView: $chartSheetTab,
-                markerPrimaryTab: $chartMarkerPrimaryTab
+            .modifier(MarkerSheetPresentationObserver(
+                policy: markerSheetPolicy,
+                enabled: MarkerAvatarExperiment.isEnabled,
+                selection: $selectedDetent
             ))
             .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
                 chartControlVM.isMarkerViewingMode = (newId != nil)
                 handleMarkerViewingSelectionChange(oldId: oldId, newId: newId)
-                if newId != nil {
+                if newId != nil && !MarkerAvatarExperiment.isEnabled {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         selectedDetent = .fraction(0.11)
                     }
@@ -2870,55 +2868,6 @@ enum ChartBottomSheetStateReducer {
 
 // MARK: - Chart Bottom Sheet (IMPROVED CHAT VERSION)
 // When in chat mode, the tab bar is replaced with chat input + back button
-/// Keeps step navigation and marker-tab presentation out of MainView's large
-/// modifier chain; observes UI state only and never mutates the draft.
-private struct MarkerGuidedSheetPresentationObserver: ViewModifier {
-    @ObservedObject var placementState: MarkerPlacementState
-    @ObservedObject var controlViewModel: ChartControlViewModel
-    @ObservedObject var chartViewModel: ChartViewModel
-    @Binding var selectedDetent: PresentationDetent
-    @Binding var selectedView: ChartBottomSheet.ChartView
-    @Binding var markerPrimaryTab: MarkerSheetPrimaryTab
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: placementState.guidedStep) { _, newStep in
-                guard controlViewModel.isMarkerPlacementMode else { return }
-                guard newStep != nil else {
-                    // Other types return to the established legacy placement
-                    // panel, whose detents do not include guided working heights.
-                    if selectedDetent != .fraction(MarkerGuidedSheetHeight.tall) {
-                        selectedDetent = .fraction(0.35)
-                    }
-                    return
-                }
-                let isDocked = selectedDetent == .fraction(MarkerGuidedSheetHeight.compact)
-                let isTall = selectedDetent == .fraction(MarkerGuidedSheetHeight.tall)
-                guard !isDocked && !isTall else { return }
-                selectedDetent = .fraction(MarkerGuidedSheetHeight.working(step: newStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height))
-            }
-            .onChange(of: placementState.intent) { _, intent in
-                guard controlViewModel.isMarkerPlacementMode, placementState.isGuidedFlowActive,
-                      selectedDetent != .fraction(MarkerGuidedSheetHeight.compact),
-                      selectedDetent != .fraction(MarkerGuidedSheetHeight.tall) else { return }
-                selectedDetent = .fraction(MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: intent, screenHeight: UIScreen.main.bounds.height))
-            }
-            .onChange(of: selectedView) { _, tab in
-                guard MarkerAvatarExperiment.isEnabled, tab == .markers,
-                      !controlViewModel.isMarkerPlacementMode,
-                      chartViewModel.selectedMarkerForSheet == nil,
-                      markerPrimaryTab == .add else { return }
-                selectedDetent = .fraction(MarkerGuidedSheetHeight.add(screenHeight: UIScreen.main.bounds.height))
-            }
-            .onChange(of: markerPrimaryTab) { _, tab in
-                guard MarkerAvatarExperiment.isEnabled, selectedView == .markers,
-                      !controlViewModel.isMarkerPlacementMode,
-                      chartViewModel.selectedMarkerForSheet == nil else { return }
-                selectedDetent = tab == .add ? .fraction(MarkerGuidedSheetHeight.add(screenHeight: UIScreen.main.bounds.height)) : .fraction(0.5)
-            }
-    }
-}
-
 struct ChartBottomSheet: View {
     /// Owned by MainView so the walkthrough can open the sheet on Markers.
     @Binding var selectedView: ChartView
@@ -2928,6 +2877,7 @@ struct ChartBottomSheet: View {
     @ObservedObject var placementState: MarkerPlacementState
     @ObservedObject var markerOverlayState: MarkerOverlayState
     @ObservedObject var timeframePanelManager: TimeframePanelManager
+    @ObservedObject var sheetPresentation: MarkerSheetPresentationModel
     @Binding var selectedDetent: PresentationDetent
     /// The toolbar asked to discard an edited guided draft. The confirmation
     /// is presented from this sheet because the sheet is what is on screen: a
@@ -2957,6 +2907,7 @@ struct ChartBottomSheet: View {
         placementState: MarkerPlacementState,
         markerOverlayState: MarkerOverlayState,
         timeframePanelManager: TimeframePanelManager,
+        sheetPresentation: MarkerSheetPresentationModel,
         selectedDetent: Binding<PresentationDetent>,
         selectedView: Binding<ChartView>,
         markerPrimaryTab: Binding<MarkerSheetPrimaryTab> = .constant(.add),
@@ -2972,6 +2923,7 @@ struct ChartBottomSheet: View {
         self.placementState = placementState
         self.markerOverlayState = markerOverlayState
         self.timeframePanelManager = timeframePanelManager
+        self.sheetPresentation = sheetPresentation
         self._selectedDetent = selectedDetent
         self._selectedView = selectedView
         self._markerPrimaryTab = markerPrimaryTab
@@ -3003,6 +2955,15 @@ struct ChartBottomSheet: View {
         }
     }
     
+    private var markerSheetSurface: MarkerSheetSurface {
+        .resolve(experiment: MarkerAvatarExperiment.isEnabled,
+                 placing: controlViewModel.isMarkerPlacementMode,
+                 step: placementState.guidedStep, intent: placementState.intent,
+                 view: selectedView.rawValue, primaryAdd: markerPrimaryTab == .add,
+                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id)
+    }
+    private var markerSheetPolicy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: markerSheetSurface) }
+
     private var isGuidedCompact: Bool {
         controlViewModel.isMarkerPlacementMode
             && placementState.isGuidedFlowActive
@@ -3103,19 +3064,6 @@ struct ChartBottomSheet: View {
     }
 
     private func handleSelectedDetentChange(oldValue: PresentationDetent, newValue: PresentationDetent) {
-        // A step change can temporarily leave an old detent selected. Map it
-        // to the working state without changing the draft or step.
-        if controlViewModel.isMarkerPlacementMode, placementState.isGuidedFlowActive {
-            let guided = MarkerGuidedSheetHeight.fractions(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height)
-                .map { PresentationDetent.fraction($0) }
-            if !guided.contains(newValue) {
-                let fallback = newValue == .fraction(0.11)
-                    ? MarkerGuidedSheetHeight.compact
-                    : MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height)
-                selectedDetent = .fraction(fallback)
-                return
-            }
-        }
         let updatedTab = ChartBottomSheetStateReducer.markerDetailTabAfterDetentChange(
             oldDetent: oldValue,
             newDetent: newValue,
@@ -3132,15 +3080,10 @@ struct ChartBottomSheet: View {
 
     @ViewBuilder
     private var sheetPrimaryContent: some View {
-        if isGuidedCompact {
-            MarkerGuidedCompactDock(
-                placementState: placementState,
-                onResume: {
-                    selectedDetent = .fraction(MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height))
-                }
-            )
-            .padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if controlViewModel.isMarkerPlacementMode && placementState.isGuidedFlowActive {
+            MarkerGuidedRetainedPanel(placementState: placementState, policy: markerSheetPolicy, selection: $selectedDetent) {
+                placementModeContent
+            }
         } else if isExpanded {
             if controlViewModel.isMarkerPlacementMode {
                 placementModeContent
@@ -3175,8 +3118,8 @@ struct ChartBottomSheet: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
+                    .padding(.top, markerSheetSurface == .add ? 8 : 20)
+                    .padding(.bottom, markerSheetSurface == .add ? 12 : 20)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scrollDismissesKeyboard(.interactively)
@@ -3192,7 +3135,9 @@ struct ChartBottomSheet: View {
             EmptyView()
         } else if controlViewModel.isMarkerPlacementMode {
             if placementState.isGuidedFlowActive {
-                MarkerGuidedPlacementBar(placementState: placementState) {
+                MarkerGuidedPlacementBar(placementState: placementState, onShowChart: {
+                    selectedDetent = markerSheetPolicy.compact
+                }) {
                     onPlaceMarker?()
                 }
             } else {
@@ -3348,6 +3293,7 @@ struct ChartBottomSheet: View {
                         selectedView = .symbol
                     }
                 }
+                    .accessibilityIdentifier("chartSheet.tab.symbol")
                 
                 Spacer()
                 
@@ -3366,6 +3312,7 @@ struct ChartBottomSheet: View {
                             selectedView = .chat
                         }
                     }
+                    .accessibilityIdentifier("chartSheet.tab.chat")
 
                     
                     // Indicator button
@@ -3383,6 +3330,7 @@ struct ChartBottomSheet: View {
                             selectedView = .components
                         }
                     }
+                    .accessibilityIdentifier("chartSheet.tab.components")
                     
                     // Markers button
                     RootBottomBarIconButton(
@@ -3399,6 +3347,7 @@ struct ChartBottomSheet: View {
                             selectedView = .markers
                         }
                     }
+                    .accessibilityIdentifier("chartSheet.tab.markers")
                 }
             }
             .padding(.horizontal, 16)
@@ -3620,11 +3569,14 @@ struct ChartBottomSheet: View {
             placementState: placementState,
             onNavigateToMarker: onNavigateToMarker,
             onMarkerSelection: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedDetent = .fraction(0.11)
+                if !MarkerAvatarExperiment.isEnabled {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedDetent = .fraction(0.11)
+                    }
                 }
             },
-            guidedPrimaryTab: $markerPrimaryTab
+            guidedPrimaryTab: $markerPrimaryTab,
+            onMeasureAdd: { sheetPresentation.capture($0, surface: .add, chrome: 110) }
         )
     }
     
@@ -3666,8 +3618,9 @@ struct ChartBottomSheet: View {
                             selectedDetent = .fraction(MarkerGuidedSheetHeight.compact)
                         }
                     },
-                    onShowChart: {
-                        selectedDetent = .fraction(MarkerGuidedSheetHeight.compact)
+                    onContentMeasure: { measurement in
+                        guard let step = placementState.guidedStep else { return }
+                        sheetPresentation.capture(measurement, surface: .guided(step, placementState.intent), chrome: 100)
                     },
                     viewportAnchorProvider: viewportAnchorProvider
                 )
@@ -3889,7 +3842,7 @@ struct ChartBottomSheet: View {
             chartViewModel.selectedMarkerForSheet = nil
             controlViewModel.startMarkerPlacement(intent: .analysis)
             selectedDetent = placementState.isGuidedFlowActive
-                ? .fraction(MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height))
+                ? markerSheetPolicy.working
                 : .fraction(0.35)
         }
     }

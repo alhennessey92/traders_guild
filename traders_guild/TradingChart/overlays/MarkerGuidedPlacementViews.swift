@@ -91,7 +91,7 @@ struct MarkerGuidedPlacementPanel: View {
     var activeChartDrawings: [ChartDrawing] = []
     var onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     var onBeginInteractiveDrawing: (() -> Void)?
-    var onShowChart: (() -> Void)?
+    var onContentMeasure: ((MarkerSheetContentMeasurement) -> Void)?
     var viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     @State private var pendingChange: PendingChange?
@@ -99,6 +99,7 @@ struct MarkerGuidedPlacementPanel: View {
     /// The optional title field, revealed on request — or already, when the
     /// draft has a title.
     @State private var showsTitleField = false
+    @State private var detailsScrollAnchor: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// A type change waiting on the author, and where it goes once confirmed.
@@ -112,17 +113,22 @@ struct MarkerGuidedPlacementPanel: View {
         Group {
             switch placementState.guidedStep {
             case .chooseType?:
-                ScrollView(showsIndicators: false) { typeChooser.padding(.bottom, 24) }
+                ScrollView(showsIndicators: false) {
+                    typeChooser.padding(.bottom, 12).modifier(contentMeasurement)
+                }
             case .details?:
-                ScrollView(showsIndicators: false) { details.padding(.bottom, 24) }
+                ScrollView(showsIndicators: false) {
+                    details.padding(.bottom, 12).scrollTargetLayout().modifier(contentMeasurement)
+                }
+                    .scrollPosition(id: $detailsScrollAnchor)
                     .scrollDismissesKeyboard(.interactively)
             case .setupReasoning?:
-                ScrollView(showsIndicators: false) { setupReasoning.padding(.bottom, 24) }
+                ScrollView(showsIndicators: false) { setupReasoning.padding(.bottom, 12).modifier(contentMeasurement) }
                     .scrollDismissesKeyboard(.interactively)
             case .context?:
                 contextEditor
             case .review?:
-                ScrollView(showsIndicators: false) { review.padding(.bottom, 24) }
+                ScrollView(showsIndicators: false) { review.padding(.bottom, 12).modifier(contentMeasurement) }
             case nil:
                 EmptyView()
             }
@@ -158,7 +164,7 @@ struct MarkerGuidedPlacementPanel: View {
             }
         }
         .onAppear {
-            showsTitleField = !placementState.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            showsTitleField = showsTitleField || !placementState.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
@@ -181,30 +187,27 @@ struct MarkerGuidedPlacementPanel: View {
 
     // MARK: Header
 
-    /// "Step 1 of 2 · Posting to Alpha Traders", then the step's question.
+    private var contentMeasurement: MarkerSheetContentMeasure {
+        // Text edits do not change the Compose detent. Structural additions,
+        // text size/width and the complete Review snapshot get a fresh fit.
+        let reviewRevision = placementState.guidedStep == .review
+            ? "\(placementState.note.hashValue)-\(placementState.title.hashValue)-\(placementState.components.count)-\(placementState.submissionPhase)"
+            : "compose"
+        return MarkerSheetContentMeasure(
+            revision: "\(placementState.guidedStep)-\(showsTitleField)-\(dynamicTypeSize)-\(reviewRevision)",
+            onMeasure: onContentMeasure
+        )
+    }
+
     private var stepHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MarkerGuidedStepHeader(
-                stepNumber: placementState.guidedStepNumber,
-                stepCount: placementState.guidedStepCount,
-                prompt: placementState.guidedStepPrompt ?? "",
-                destination: placementState.isGuidedEdit
-                    ? "Editing your marker"
-                    : MarkerGuidedFormat.destination(guildName)
-            )
-            if let onShowChart {
-                Button {
-                    dismissKeyboard()
-                    onShowChart()
-                } label: {
-                    Label("Show chart", systemImage: "chart.xyaxis.line")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(AppColors.accentColor)
-                .accessibilityIdentifier("guided.showChart")
-            }
-        }
+        MarkerGuidedStepHeader(
+            stepNumber: placementState.guidedStepNumber,
+            stepCount: placementState.guidedStepCount,
+            prompt: placementState.guidedStep == .details && placementState.isSocialDetails
+                ? (placementState.isGuidedEdit ? "Edit your post" : (placementState.intent == .question ? "Ask a question" : "Write analysis"))
+                : placementState.guidedStepPrompt ?? "",
+            destination: placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName)
+        )
     }
 
     // MARK: Change type
@@ -262,19 +265,18 @@ struct MarkerGuidedPlacementPanel: View {
     /// Analysis/Question compose in one section. Setup keeps separate levels
     /// and optional reasoning sections.
     private var details: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            stepHeader
-            responseSection
-            editRelationship
+        VStack(alignment: .leading, spacing: 10) {
+            stepHeader.id("heading")
+            responseSection.id("response")
+            editRelationship.id("relationship")
             if placementState.isSocialDetails {
                 // An edit keeps its type: no selector.
                 if !placementState.isGuidedEdit {
-                    socialTypePicker
+                    socialTypePicker.id("type")
                 }
-                socialFields
-                responseTimeframe
-                optionalExtras
-                changeTypeLink
+                socialFields.id("text")
+                responseTimeframe.id("timeframe")
+                optionalExtras.id("extras")
             } else {
                 setupLevels
                 // Reachable before the levels are set, so the author is never
@@ -300,29 +302,20 @@ struct MarkerGuidedPlacementPanel: View {
         }
     }
 
-    /// Analysis · Question — the social selector — with one line saying
-    /// what the chosen type is for. Setup is structured and is not in it.
     private var socialTypePicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MarkerGuidedTypePicker(
-                intents: MarkerGuidedFlowEntry.socialIntents,
-                selected: placementState.intent
-            ) { intent in
-                choose(intent, leavesGuidedFlow: false)
-            }
-            Text(MarkerGuidedFormat.typeDescription(placementState.intent))
-                .font(.footnote)
-                .foregroundColor(AppColors.greyText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        MarkerGuidedTypePicker(
+            intents: MarkerGuidedFlowEntry.socialIntents,
+            selected: placementState.intent,
+            onChangeType: { placementState.openTypeChooser() }
+        ) { choose($0, leavesGuidedFlow: false) }
     }
 
     private var socialFields: some View {
         VStack(alignment: .leading, spacing: 8) {
             MarkerGuidedTextField(
                 placeholder: placementState.intent == .question
-                    ? "Ask a clear question about this chart"
-                    : "Describe what you see and why it matters",
+                    ? "Your question about this chart"
+                    : "What you see and why it matters",
                 text: $placementState.note,
                 axis: .vertical
             )
@@ -677,10 +670,25 @@ struct MarkerGuidedPlacementPanel: View {
 /// bar says what is missing.
 struct MarkerGuidedPlacementBar: View {
     @ObservedObject var placementState: MarkerPlacementState
+    var onShowChart: (() -> Void)? = nil
     let onPost: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
+            if let onShowChart {
+                Button {
+                    dismissKeyboard()
+                    onShowChart()
+                } label: {
+                    Label("Chart", systemImage: "chart.xyaxis.line")
+                        .font(.footnote.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(AppColors.accentColor)
+                .accessibilityLabel("Show chart")
+                .accessibilityIdentifier("guided.showChart")
+            }
             switch placementState.guidedStep {
             case .chooseType?:
                 backButton("Back")
@@ -992,7 +1000,7 @@ struct MarkerGuidedStepHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(stepLine)
+            Text(stepNumber.map { "Step \($0) of \(stepCount)" } ?? destination)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(AppColors.greyText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1014,6 +1022,7 @@ struct MarkerGuidedStepHeader: View {
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent
+    var onChangeType: (() -> Void)? = nil
     let onSelect: (RLMarkerIntent) -> Void
 
     var body: some View {
@@ -1025,6 +1034,11 @@ struct MarkerGuidedTypePicker: View {
                     Label(intent.displayName, systemImage: intent == selected ? "checkmark" : intent.icon)
                 }
                 .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
+            }
+            if let onChangeType {
+                Divider()
+                Button("Change type…", action: onChangeType)
+                    .accessibilityIdentifier("guided.changeType")
             }
         } label: {
             HStack(spacing: 8) {

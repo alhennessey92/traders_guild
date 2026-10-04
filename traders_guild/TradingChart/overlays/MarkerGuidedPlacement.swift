@@ -597,54 +597,9 @@ enum MarkerPlacementSubmitter {
     }
 }
 
-// MARK: - Sheet height
+// MARK: - Chart dock constants
 
-/// A chart dock, a working height suited to the current step, and a tall
-/// state the author can choose for long content. Setup keeps its existing
-/// separate Levels and Reasoning steps. Non-guided sheets keep their heights.
 enum MarkerGuidedSheetHeight {
     static let compact: CGFloat = 0.18
     static let tall: CGFloat = 0.9
-
-    static func add(screenHeight: CGFloat) -> CGFloat {
-        min(tall, max(0.52, 440 / max(1, screenHeight)))
-    }
-
-    /// Fractions alone squeeze the form on a short screen. Keep a minimum
-    /// useful panel budget (including the bar/grabber), capped by user expansion.
-    static func working(step: MarkerGuidedStep?, intent: RLMarkerIntent, screenHeight: CGFloat = 844) -> CGFloat {
-        let preferred: CGFloat
-        let minimumHeight: CGFloat
-        switch step {
-        case .chooseType?:
-            preferred = 0.56
-            minimumHeight = 480
-        case .details?:
-            preferred = intent == .setup ? 0.72 : 0.58
-            minimumHeight = intent == .setup ? 560 : 500
-        case .setupReasoning?:
-            preferred = 0.58
-            minimumHeight = 500
-        case .context?:
-            preferred = 0.72
-            minimumHeight = 560
-        case .review?:
-            preferred = intent == .setup ? 0.58 : 0.5
-            minimumHeight = intent == .setup ? 500 : 440
-        case nil:
-            preferred = 0.58
-            minimumHeight = 500
-        }
-        return min(tall, max(preferred, minimumHeight / max(1, screenHeight)))
-    }
-
-    static func fractions(step: MarkerGuidedStep?, intent: RLMarkerIntent, screenHeight: CGFloat = 844) -> [CGFloat] {
-        [compact, working(step: step, intent: intent, screenHeight: screenHeight), tall]
-    }
-
-    /// The guided flow's own heights, or nil to keep the sheet's usual set.
-    static func fractions(guidedFlowActive: Bool, placing: Bool, step: MarkerGuidedStep?, intent: RLMarkerIntent, screenHeight: CGFloat = 844) -> [CGFloat]? {
-        guidedFlowActive && placing ? fractions(step: step, intent: intent, screenHeight: screenHeight) : nil
-    }
-
 }

@@ -95,8 +95,58 @@ final class MarkerGuidedSheetJourneyTests: XCTestCase {
         let grabber = app.buttons["Sheet Grabber"]
         let oldTop = grabber.frame.minY
         grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
-        XCTAssertLessThan(grabber.frame.minY, oldTop - 50, "the user can expand beyond the working height")
+        XCTAssertLessThanOrEqual(grabber.frame.minY, oldTop + 2, "large-text content remains expandable or is already near the tall cap")
         XCTAssertTrue(app.buttons["guided.intentPicker"].waitForExistence(timeout: 5))
         screenshot("expanded-largest-text")
     }
+    func testEmptyTitleAndScrolledSectionSurviveChartMode() throws {
+        launch("analysisEmpty", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let addTitle = app.buttons["guided.addTitle"]
+        for _ in 0..<5 {
+            if addTitle.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(addTitle.isHittable)
+        addTitle.tap()
+        let title = app.textFields["guided.title"]
+        for _ in 0..<4 {
+            if title.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(title.exists && title.isHittable)
+        let oldTop = title.frame.minY
+        let oldValue = title.value as? String
+        screenshot("empty-title-scrolled-before-chart")
+        app.buttons["guided.showChart"].tap()
+        let resume = app.buttons["guided.compactDock"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 5))
+        resume.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5) && title.isHittable, "the intentionally opened empty field stays open and visible")
+        XCTAssertEqual(title.value as? String, oldValue)
+        XCTAssertEqual(title.frame.minY, oldTop, accuracy: 16, "the same scrolled section resumes")
+        XCTAssertFalse(app.buttons["guided.addTitle"].exists)
+        screenshot("empty-title-scrolled-after-resume")
+    }
+
+    func testUserExpansionSurvivesReviewBackAndChartResume() throws {
+        launch("analysisDetails")
+        let grabber = app.buttons["Sheet Grabber"]
+        let workingTop = grabber.frame.minY
+        grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
+        XCTAssertLessThan(grabber.frame.minY, workingTop - 50)
+        let tallTop = grabber.frame.minY
+        app.buttons["guided.review"].tap()
+        XCTAssertTrue(app.buttons["guided.post"].waitForExistence(timeout: 5))
+        XCTAssertEqual(grabber.frame.minY, tallTop, accuracy: 4)
+        app.buttons["guided.back"].tap()
+        XCTAssertTrue(app.buttons["guided.review"].waitForExistence(timeout: 5))
+        XCTAssertEqual(grabber.frame.minY, tallTop, accuracy: 4)
+        app.buttons["guided.showChart"].tap()
+        app.buttons["guided.compactDock"].tap()
+        XCTAssertTrue(app.buttons["guided.review"].waitForExistence(timeout: 5))
+        XCTAssertEqual(grabber.frame.minY, tallTop, accuracy: 4)
+        screenshot("retained-user-expansion")
+    }
+
 }

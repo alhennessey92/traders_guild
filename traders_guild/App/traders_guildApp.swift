@@ -235,7 +235,7 @@ struct traders_guildApp: App {
     /// Always false outside Debug and isolated-DEV builds.
     private var isFixtureLaunch: Bool {
         #if DEBUG || TG_ISOLATED_DEV
-        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures
+        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures || ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture")
         #else
         false
         #endif
@@ -244,7 +244,9 @@ struct traders_guildApp: App {
     @ViewBuilder
     private var mainContent: some View {
         #if DEBUG
-        if let guidedCreationFixture {
+        if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
+            MarkerSheetShellHarness()
+        } else if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
         } else if let viewingFixture {
             MarkerViewingHarness(scenario: viewingFixture)
@@ -256,7 +258,9 @@ struct traders_guildApp: App {
             authenticatedContent
         }
         #elseif TG_ISOLATED_DEV
-        if let guidedCreationFixture {
+        if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
+            MarkerSheetShellHarness()
+        } else if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
         } else if let viewingFixture {
             MarkerViewingHarness(scenario: viewingFixture)

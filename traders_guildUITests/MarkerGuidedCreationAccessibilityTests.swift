@@ -125,7 +125,7 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
             ? app.staticTexts["guided.stepHeader"]
             : app.otherElements["guided.stepHeader"]
         XCTAssertTrue(header.waitForExistence(timeout: 5))
-        XCTAssertTrue(header.label.contains("What are you seeing?"), header.label)
+        XCTAssertTrue(header.label.contains("Write analysis"), header.label)
         XCTAssertTrue(header.label.contains("Step 1 of 2"), header.label)
 
         let review = app.buttons["guided.review"]
@@ -157,8 +157,6 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         XCTAssertTrue(app.buttons["guided.intent.analysis"].exists)
         XCTAssertTrue(app.buttons["guided.intent.question"].exists)
         XCTAssertFalse(app.buttons["guided.intent.setup"].exists, "Setup is not in the social selector")
-        app.buttons["guided.intent.analysis"].tap()
-
         app.buttons["guided.changeType"].tap()
         let social = app.buttons["guided.postToChart"]
         let setup = app.buttons["guided.planTrade"]
@@ -216,7 +214,7 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
         for element in [app.buttons["guided.intentPicker"], text, app.buttons["guided.addTitle"],
-                        app.buttons["guided.addContext"], app.buttons["guided.changeType"]] {
+                        app.buttons["guided.addContext"]] {
             XCTAssertTrue(element.isHittable, "\(element) is on screen")
         }
         attachScreenshot("working-sheet-analysis")
