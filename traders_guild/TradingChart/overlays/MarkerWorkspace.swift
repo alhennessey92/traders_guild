@@ -71,6 +71,21 @@ extension MarkerPlacementState {
             && allowedComponentTypes(for: intent).contains(type) && type != .anchor
     }
 
+    var workspaceCanAddSource: Bool {
+        workspaceAllows(.linkURL) && component(.linkURL) == nil
+    }
+
+    /// Capture a new fit for structural changes, never for a typed character.
+    var workspaceMeasurementRevision: String {
+        switch workspaceDestination {
+        case .context: return "context-\(components.count)"
+        case .indicatorSettings: return "indicator-\(workspace.indicatorDraft?.context.item.id ?? "none")"
+        case .drawingEditor: return "drawing-\(activeDrawingWorkflowTool?.rawValue ?? "none")-\(drawingSession.editingDraftId?.uuidString ?? "placing")"
+        case .levelEditor: return "level-\(workspace.selectedLevel?.rawValue ?? "none")"
+        default: return workspaceDestination.rawValue
+        }
+    }
+
     var workspaceHasInvalidLevelInput: Bool {
         workspace.levelInputs.contains { type, input in
             guard [.levelSl, .levelTp].contains(type) else { return false }
@@ -136,6 +151,7 @@ extension MarkerPlacementState {
     func beginWorkspaceText(_ destination: MarkerWorkspaceDestination, componentID: UUID? = nil) {
         let type: RLComponentType = destination == .sourceEditor ? .linkURL : .textNote
         guard workspaceAllows(type) else { return }
+        if destination == .sourceEditor, componentID == nil, !workspaceCanAddSource { return }
         openWorkspace(destination)
         workspace.selectedComponentID = componentID
         workspace.editorText = ""

@@ -105,6 +105,23 @@ struct MarkerWorkspaceTests {
     }
 
     @Test
+    func addingAnotherSourceCannotReplaceExistingSavedContext() {
+        let state = draft()
+        state.beginWorkspaceText(.sourceEditor)
+        state.workspace.editorText = "https://example.com/original"
+        #expect(state.commitWorkspaceEditor())
+        let before = state.components
+        #expect(!state.workspaceCanAddSource)
+        state.beginWorkspaceText(.sourceEditor)
+        #expect(state.guidedStep == .details, "use the existing summary's Edit action")
+        #expect(state.components == before)
+        let id = state.component(.linkURL)!.id
+        state.beginWorkspaceText(.sourceEditor, componentID: id)
+        #expect(state.workspace.selectedComponentID == id)
+        #expect(state.workspace.editorText == "https://example.com/original")
+    }
+
+    @Test
     func chartDrawingCancelRestoresExactComponentAndDoneKeepsIt() {
         let state = draft()
         let id = state.appendComponent(.drawingHorizontalLine, payload: .drawingHorizontalLine(HorizontalLinePayload(price: 101, label: "Shelf")))

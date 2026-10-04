@@ -164,7 +164,7 @@ struct MarkerGuidedPlacementPanel: View {
             ? "\(placementState.note.hashValue)-\(placementState.title.hashValue)-\(placementState.components.count)-\(placementState.submissionPhase)"
             : "compose"
         return MarkerSheetContentMeasure(
-            revision: "\(placementState.workspaceDestination)-\(placementState.workspace.showsTitle)-\(dynamicTypeSize)-\(reviewRevision)",
+            revision: "\(placementState.workspaceDestination)-\(placementState.workspaceMeasurementRevision)-\(placementState.workspace.showsTitle)-\(dynamicTypeSize)-\(reviewRevision)",
             onMeasure: onContentMeasure
         )
     }

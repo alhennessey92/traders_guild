@@ -99,7 +99,7 @@ struct MarkerWorkspaceContent: View {
             if placementState.workspaceAllows(.textNote) {
                 routeRow("Add chart note", icon: "text.bubble") { placementState.beginWorkspaceText(.noteEditor) }
             }
-            if placementState.workspaceAllows(.linkURL) {
+            if placementState.workspaceCanAddSource {
                 routeRow("Add source link", icon: "link") { placementState.beginWorkspaceText(.sourceEditor) }
             }
         }
