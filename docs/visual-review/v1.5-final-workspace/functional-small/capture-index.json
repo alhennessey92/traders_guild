@@ -1,0 +1,63 @@
+{
+  "source_commit": "4478e4de5171626fc57d3c6566a97a09019a6a37",
+  "result_bundle": "/private/tmp/tg-final-workspace-checkpoint-small.xcresult",
+  "purpose": "Functional fixture reference; full visual/accessibility acceptance remains pending",
+  "captures": [
+    {
+      "file": "final-mainview-resumed.png",
+      "test": "MarkerFinalWorkspaceUITests/testActualMainViewKeyboardStaysWithinAvailableWindowAndResumes()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791118968.87
+    },
+    {
+      "file": "final-mainview-keyboard.png",
+      "test": "MarkerFinalWorkspaceUITests/testActualMainViewKeyboardStaysWithinAvailableWindowAndResumes()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791118965.218
+    },
+    {
+      "file": "final-two-entries.png",
+      "test": "MarkerFinalWorkspaceUITests/testExactlyTwoAvatarEntries()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791118973.625
+    },
+    {
+      "file": "final-question-context.png",
+      "test": "MarkerFinalWorkspaceUITests/testQuestionContextExcludesUnsupportedSourceAndLevels()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791119005.016
+    },
+    {
+      "file": "final-setup-details.png",
+      "test": "MarkerFinalWorkspaceUITests/testSetupIsOneScrollingDetailsAndReviewReturnsThere()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791119021.029
+    },
+    {
+      "file": "final-source-resumed.png",
+      "test": "MarkerFinalWorkspaceUITests/testUnfinishedSourceLinkResumesWithoutCreatingPlaceholder()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791119038.806
+    },
+    {
+      "file": "final-indicator-resumed.png",
+      "test": "MarkerFinalWorkspaceUITests/testUnsavedNestedIndicatorCollapseResumeAndCancel()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791119063.606
+    },
+    {
+      "file": "final-indicator-unsaved.png",
+      "test": "MarkerFinalWorkspaceUITests/testUnsavedNestedIndicatorCollapseResumeAndCancel()",
+      "device": "TG Sheet Slice1 Small",
+      "deviceID": "5DAF71B8-2AD0-4274-BE05-97967604193F",
+      "timestamp": 1791119058.907
+    }
+  ]
+}
