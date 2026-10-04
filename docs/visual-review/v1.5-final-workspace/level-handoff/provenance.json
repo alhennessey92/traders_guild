@@ -1,0 +1,15 @@
+{
+  "source_commit": "07996d636b0f87341f944ca1f2205c2df31e4a47",
+  "base_integration_commit": "ec5146dcfe4587af8174a722e8f9fa79d721f3eb",
+  "native_bundle": "/private/tmp/tg-level-handoff-native-keyboard.xcresult",
+  "model_bundle": "/private/tmp/tg-level-handoff-focused.xcresult",
+  "model_result": "55 passed in 4 suites. The initial combined bundle failed its UI selector; use the separate passing native result.",
+  "model_source_note": "Model/state/renderer code is unchanged since this run. Final source adds summary-row hit area and keyboard dismissal, verified by the passing native run.",
+  "native_result": "1 passed, 0 failed/skipped",
+  "device": "iPhone SE (3rd generation), iOS 18.2, 5DAF71B8-2AD0-4274-BE05-97967604193F",
+  "capture_test": "MarkerFinalWorkspaceUITests/testLevelChartHandoffResumesNumericEditorAndCancelDoneStayInternal()",
+  "capture_timestamp_utc": "2026-10-04T18:05:26.995000+00:00",
+  "capture_file": "final-level-chart-handoff-resumed.png",
+  "capture_sha256": "c989e9a8267be0c9f32cee169b0d0de49d9e2e112d1f3b61ef560a6e0a36904a",
+  "capture_note": "Unedited XCTest attachment exported from the passing bundle. Fixture uses the native sheet and in-memory submitter; no signed-in chart gesture or backend coverage."
+}

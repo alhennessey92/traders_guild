@@ -1,5 +1,7 @@
 # Final v1.5 Phase A review closure / bounded local Phase B
 
+**Follow-up:** this checkpoint was accepted and integration advanced to `ec5146dcfe4587af8174a722e8f9fa79d721f3eb`. The subsequent bounded saved support/resistance chart handoff is implemented at `07996d636b0f87341f944ca1f2205c2df31e4a47`; see [`V1_5_FINAL_LEVEL_HANDOFF_CHECKPOINT.md`](V1_5_FINAL_LEVEL_HANDOFF_CHECKPOINT.md) for its passing model/native evidence and review hold. The historical integration and handoff-gap statements below describe this earlier checkpoint. Full Phase B remains open.
+
 4 October 2026. Phase A review fixes complete. Bounded programmatic local integration verified; full Phase B and owner acceptance remain open. Integration stays at `d444158` until orchestration reviews this branch.
 
 ## Exact source and authority

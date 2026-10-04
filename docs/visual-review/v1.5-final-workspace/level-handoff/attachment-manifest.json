@@ -1,0 +1,17 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "5DAF71B8-2AD0-4274-BE05-97967604193F",
+        "deviceName" : "TG Sheet Slice1 Small",
+        "exportedFileName" : "FC3F5827-B81C-4094-91FA-528FE2B3DA60.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "final-level-chart-handoff-resumed_0_E3797693-AE87-4E5F-9173-0994C0DC3338.png",
+        "timestamp" : 1791137126.995
+      }
+    ],
+    "testIdentifier" : "MarkerFinalWorkspaceUITests/testLevelChartHandoffResumesNumericEditorAndCancelDoneStayInternal()",
+    "testIdentifierURL" : "test://com.apple.xcode/traders_guild/traders_guildUITests/MarkerFinalWorkspaceUITests/testLevelChartHandoffResumesNumericEditorAndCancelDoneStayInternal"
+  }
+]
