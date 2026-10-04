@@ -1,0 +1,158 @@
+{
+  "purpose": "Read-only local QA inventory; phaseb-labelled rows include successful/diagnostic runs, no pre-existing rows changed or removed",
+  "tracked_states": {
+    "('1h', 'ARMED')": 1,
+    "('1w', 'ARMED')": 1,
+    "('4h', 'ARMED')": 1
+  },
+  "phaseb_created_rows": [
+    {
+      "id": "13bbf75d-3cae-4d7f-bab2-db6b5ef274fe",
+      "title": "phaseb-54e7941e",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "22b98017-f82f-42a1-a2af-8047faba2cab",
+      "title": "phaseb-54e7941e",
+      "intent": "setup",
+      "timeframe": "1w",
+      "tracking_state": "DRAFT"
+    },
+    {
+      "id": "7cc96396-5d93-449e-bb69-42afa264ec01",
+      "title": "phaseb-54e7941e",
+      "intent": "question",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "3f31aaca-2635-47ea-be3d-4ef9eeaac107",
+      "title": "phaseb-54e7941e",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "501eb32a-fff2-44da-8d4c-b5b681d5738d",
+      "title": "phaseb-c2056aa6",
+      "intent": "question",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "e4ada2f7-50a3-4ad8-878d-e2c90d5e2d1e",
+      "title": "phaseb-c2056aa6",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "b9ec5c19-1ab7-4cf3-9329-a2dfbfb45879",
+      "title": "phaseb-ws-bd7639fa",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "17799a91-4565-4645-a849-96056c0fc159",
+      "title": "phaseb-ws-0fc84e14",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "f5610cd6-0359-4db4-931b-7cd3977b20be",
+      "title": "phaseb-ws-252b010a",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "1aa350bd-a43a-469c-b8ae-f4ee38ec146b",
+      "title": "phaseb-c58f6d0f",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "8a5b89e3-2a73-43a2-9b0a-77d4a8fcb9f2",
+      "title": "phaseb-c58f6d0f",
+      "intent": "setup",
+      "timeframe": "1w",
+      "tracking_state": "ARMED"
+    },
+    {
+      "id": "af3e6a47-dc49-44b3-83cb-f48893b4d284",
+      "title": "phaseb-c58f6d0f",
+      "intent": "question",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "688371f1-adc1-41b5-9f76-b6041707b033",
+      "title": "phaseb-c58f6d0f",
+      "intent": "analysis",
+      "timeframe": "1w",
+      "tracking_state": null
+    },
+    {
+      "id": "c201ca8c-0824-4401-adf0-87d6c62a8753",
+      "title": "phaseb-54e7941e",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "5f0003bf-4479-4a37-8422-0f486d27aa2b",
+      "title": "phaseb-54e7941e",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "cdb80088-2bf8-41bf-a4b7-ad4b59616c28",
+      "title": "phaseb-54e7941e",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "e9622f45-1fe4-4e23-9efc-48d68e58d9bb",
+      "title": "phaseb-c58f6d0f",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "62514ee4-f215-4b9f-9b25-bef509af12d1",
+      "title": "phaseb-c58f6d0f",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "e161281d-82dc-44d3-98c1-336b4521aa45",
+      "title": "phaseb-c58f6d0f",
+      "intent": "analysis",
+      "timeframe": "4h",
+      "tracking_state": null
+    },
+    {
+      "id": "c0364301-b7ba-438a-933d-39bdd7c7d8f7",
+      "title": "phaseb-lifecycle-9327dcaf",
+      "intent": "setup",
+      "timeframe": "1M",
+      "tracking_state": "ACTIVE"
+    },
+    {
+      "id": "e1653755-2e0a-4a5e-ba82-97e90c57543a",
+      "title": "phaseb-setup-response-6e412283",
+      "intent": "setup",
+      "timeframe": "4h",
+      "tracking_state": "DRAFT"
+    }
+  ],
+  "inventory_note": "Original read-only list snapshot contained 19 phaseb rows; the two subsequent own-run Setup probes were appended from their successful read results. Total 21 new labelled QA rows retained, including diagnostics."
+}

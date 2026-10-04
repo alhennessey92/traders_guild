@@ -2,6 +2,8 @@
 
 ## Status and source
 
+Follow-up review closure and real-local verification are recorded in [the bounded Phase B checkpoint](V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md). This document retains the original Phase A evidence and hashes.
+
 Functional implementation complete, 4 October 2026. Ready for orchestration integration review and Claude pickup. Full visual/accessibility refinement, signed-in chart verification and owner device acceptance remain later gates.
 
 - Sole implementation checkout: `.worktrees/marker-workspace-final`.

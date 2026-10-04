@@ -1,0 +1,105 @@
+[
+  {
+    "service": "auth",
+    "flags": {
+      "REGISTRATION_ALERTS_ENABLED": "false",
+      "AWARDS_ENABLED": "false",
+      "AWARD_PROCESSOR_ENABLED": "false",
+      "AWARD_NOTIFICATIONS_ENABLED": "false"
+    },
+    "outbound_config_present": {
+      "RESEND_API_KEY": false,
+      "APNS_KEY_ID": false,
+      "APNS_KEY_PATH": false,
+      "FCM_CREDENTIALS_PATH": false
+    },
+    "mount_sources": [
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/services/auth-service/app",
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/shared"
+    ]
+  },
+  {
+    "service": "core",
+    "flags": {
+      "DISCORD_WEBHOOKS_ENABLED": "false",
+      "DISCORD_MARKER_AUTOPOST_ENABLED": "false",
+      "DISCORD_RESULT_POSTBACK_ENABLED": "false",
+      "GUILD_DIGEST_ENABLED": "false",
+      "REGISTRATION_ALERTS_ENABLED": "false",
+      "AWARDS_ENABLED": "false",
+      "AWARD_PROCESSOR_ENABLED": "false",
+      "AWARD_NOTIFICATIONS_ENABLED": "false"
+    },
+    "outbound_config_present": {
+      "RESEND_API_KEY": false,
+      "APNS_KEY_ID": false,
+      "APNS_KEY_PATH": false,
+      "FCM_CREDENTIALS_PATH": false
+    },
+    "mount_sources": [
+      "/var/lib/docker/volumes/traders-guild-local_avatars-data/_data",
+      "/var/lib/docker/volumes/traders-guild-local_uploads-data/_data",
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/services/core-service/app",
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/shared"
+    ]
+  },
+  {
+    "service": "chart",
+    "flags": {
+      "DISCORD_WEBHOOKS_ENABLED": "false",
+      "DISCORD_MARKER_AUTOPOST_ENABLED": "false",
+      "DISCORD_RESULT_POSTBACK_ENABLED": "false",
+      "AWARDS_ENABLED": "false",
+      "AWARD_PROCESSOR_ENABLED": "false",
+      "AWARD_NOTIFICATIONS_ENABLED": "false"
+    },
+    "outbound_config_present": {
+      "RESEND_API_KEY": false,
+      "APNS_KEY_ID": false,
+      "APNS_KEY_PATH": false,
+      "FCM_CREDENTIALS_PATH": false
+    },
+    "mount_sources": [
+      "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/backend-5061824/services/chart-service/app",
+      "/private/tmp/claude-501/-Users-alhennessey-Desktop-traders-guild-sanctuary/aef5ca1e-57fa-46dd-9aa3-250e9c1d76d0/scratchpad/backend-5061824/shared",
+      "/var/lib/docker/volumes/traders-guild-local_uploads-data/_data"
+    ]
+  },
+  {
+    "service": "realtime",
+    "flags": {
+      "FCM_ENABLED": "false",
+      "AWARDS_ENABLED": "false",
+      "AWARD_PROCESSOR_ENABLED": "false",
+      "AWARD_NOTIFICATIONS_ENABLED": "false"
+    },
+    "outbound_config_present": {
+      "RESEND_API_KEY": false,
+      "APNS_KEY_ID": false,
+      "APNS_KEY_PATH": false,
+      "FCM_CREDENTIALS_PATH": false
+    },
+    "mount_sources": [
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/services/realtime-service/app",
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/shared"
+    ]
+  },
+  {
+    "service": "reputation",
+    "flags": {
+      "AWARDS_ENABLED": "false",
+      "AWARD_PROCESSOR_ENABLED": "false",
+      "AWARD_NOTIFICATIONS_ENABLED": "false"
+    },
+    "outbound_config_present": {
+      "RESEND_API_KEY": false,
+      "APNS_KEY_ID": false,
+      "APNS_KEY_PATH": false,
+      "FCM_CREDENTIALS_PATH": false
+    },
+    "mount_sources": [
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/services/reputation-service/app",
+      "/Users/alhennessey/Desktop/traders_guild/sanctuary/.worktrees/linked-markers-backend/shared"
+    ]
+  }
+]

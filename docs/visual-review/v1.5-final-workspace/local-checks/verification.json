@@ -1,0 +1,37 @@
+{
+  "app_source_commit": "fb7f70a3c5771cb4957d35da726c1377350dba16",
+  "local_harness_commit": "6c67945a329eecfd0eb90d907c55a44335afde56",
+  "focused_model_native_result": "/private/tmp/tg-phaseb-local-verified.xcresult",
+  "test_result": {
+    "passed": 28,
+    "failed": 0,
+    "skipped": 0
+  },
+  "optimized_dev": {
+    "log": "/private/tmp/tg-phaseb-review-profile.log",
+    "success": true,
+    "TG_ISOLATED_DEV": true,
+    "optimized": true
+  },
+  "release": {
+    "log": "/private/tmp/tg-phaseb-review-release.log",
+    "success": true,
+    "TG_ISOLATED_DEV": false,
+    "optimized": true
+  },
+  "signed_in_ui_coverage": false,
+  "coverage_limits": [
+    "Dedicated simulator signed out; manual sign-in required",
+    "No real chart gesture/repaint coverage",
+    "Server normalizes future payload keys; client preservation remains fixture-covered",
+    "Live terminal lifecycle states were not forced"
+  ],
+  "lifecycle": {
+    "checks_passed": 4,
+    "states": [
+      "ARMED",
+      "ACTIVE"
+    ],
+    "result": "lifecycle-summary.json"
+  }
+}

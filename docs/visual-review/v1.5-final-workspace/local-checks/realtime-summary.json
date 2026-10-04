@@ -1,0 +1,40 @@
+{
+  "coverage": "REST/WebSocket contracts only; no signed-in workspace/chart UI coverage",
+  "gateway": "http://127.0.0.1:30080/api/v1",
+  "run": "phaseb-ws-bd7639fa",
+  "backend_limits": {
+    "unknown_extra_keys_preserved_at_create": false
+  },
+  "created_marker_ids": [
+    "b9ec5c19-1ab7-4cf3-9329-a2dfbfb45879"
+  ],
+  "checks": [
+    {
+      "check": "marker_created",
+      "pass": true,
+      "marker_id": "b9ec5c19-1ab7-4cf3-9329-a2dfbfb45879",
+      "channel": "guild:199155c3-22f3-4f07-b7f4-664ba560a14e:markers"
+    },
+    {
+      "check": "marker_updated",
+      "pass": true,
+      "marker_id": "b9ec5c19-1ab7-4cf3-9329-a2dfbfb45879",
+      "channel": "guild:199155c3-22f3-4f07-b7f4-664ba560a14e:markers"
+    },
+    {
+      "check": "drawing REST read/edit preserves normalized saved payload",
+      "pass": true
+    },
+    {
+      "check": "reconnect/resubscribe marker_updated",
+      "pass": true,
+      "marker_id": "b9ec5c19-1ab7-4cf3-9329-a2dfbfb45879",
+      "channel": "guild:199155c3-22f3-4f07-b7f4-664ba560a14e:markers"
+    },
+    {
+      "check": "server rejects short Question without creating a marker",
+      "pass": true,
+      "status": 422
+    }
+  ]
+}

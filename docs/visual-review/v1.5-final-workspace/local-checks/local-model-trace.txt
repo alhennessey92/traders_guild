@@ -1,0 +1,11 @@
+LOCAL_QA_CREATED phaseb-54e7941e 3F31AACA-2635-47EA-BE3D-4EF9EEAAC107 analysis 1w
+LOCAL_QA_CREATED phaseb-54e7941e 7CC96396-5D93-449E-BB69-42AFA264EC01 question 1w
+LOCAL_QA_TRACKED_CREATE_REFUSAL trackedSetupConflictSymbolTimeframe; untracked retry preserves existing tracked data
+LOCAL_QA_CREATED phaseb-54e7941e 22B98017-F82F-42A1-A2AF-8047FABA2CAB setup 1w
+LOCAL_QA_READONLY_LOCK_STATES []
+LOCAL_QA_CREATED phaseb-54e7941e 13BBF75D-3CAE-4D7F-BAB2-DB6B5EF274FE analysis 1w
+LOCAL_QA_BACKEND_LIMIT future keys normalized away at create; historical raw-key preservation is client-fixture verified only
+LOCAL_QA_CREATED phaseb-54e7941e CDB80088-2BF8-41BF-A4B7-AD4B59616C28 analysis 4h
+LOCAL_QA_CREATED phaseb-54e7941e 5F0003BF-4479-4A37-8422-0F486D27AA2B analysis 4h
+LOCAL_QA_CREATED phaseb-54e7941e C201CA8C-0824-4401-ADF0-87D6C62A8753 analysis 4h
+LOCAL_QA_PASS phaseb-54e7941e social/create/read/edit setup/geometry linked/conversion/timeframes retry; API/model integration, not UI end-to-end

@@ -1,0 +1,30 @@
+{
+  "run": "phaseb-lifecycle-9327dcaf",
+  "created_marker_id": "c0364301-b7ba-438a-933d-39bdd7c7d8f7",
+  "gateway": "http://127.0.0.1:30080/api/v1",
+  "coverage": "REST and existing processor only; no signed-in UI or forced lifecycle state",
+  "states": [
+    "ARMED",
+    "ACTIVE"
+  ],
+  "checks": [
+    {
+      "check": "tracked Setup create",
+      "pass": true
+    },
+    {
+      "check": "existing processor naturally activates saved Setup",
+      "pass": true
+    },
+    {
+      "check": "ACTIVE component edits rejected, including identical geometry",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "check": "ACTIVE note-only update preserves exact components",
+      "pass": true
+    }
+  ],
+  "recheck_note": "Same newly-created marker rechecked without forcing state; existing reconcile interval 300 seconds."
+}

@@ -1,0 +1,13 @@
+{
+  "coverage": "REST-only linked Setup create/read; signed-in UI still untested",
+  "gateway": "http://127.0.0.1:30080/api/v1",
+  "run": "phaseb-setup-response-6e412283",
+  "created_marker_id": "e1653755-2e0a-4a5e-ba82-97e90c57543a",
+  "parent_marker_id": "3f31aaca-2635-47ea-be3d-4ef9eeaac107",
+  "checks": [
+    {
+      "check": "untracked linked Setup preserves parent/Supports/4h response/1w supporting context",
+      "pass": true
+    }
+  ]
+}
