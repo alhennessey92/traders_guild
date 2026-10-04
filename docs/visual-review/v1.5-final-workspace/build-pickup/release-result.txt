@@ -1,0 +1,8 @@
+Checkout: ec65f6fb6496960a2cce5ad7872be01606412475
+App source: 07996d636b0f87341f944ca1f2205c2df31e4a47
+/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project traders_guild.xcodeproj -scheme "traders_guild Local Gateway" -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath /private/tmp/tg-final-workspace-release-dd ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO
+** BUILD SUCCEEDED **
+Exit code: 0
+Swift: -O, whole-module optimization
+TG_ISOLATED_DEV: False
+Unsigned universal arm64 + x86_64 iOS Simulator compilation only

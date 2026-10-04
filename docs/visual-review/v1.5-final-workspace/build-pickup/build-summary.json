@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-04",
+  "checkout_commit": "ec65f6fb6496960a2cce5ad7872be01606412475",
+  "app_source_commit": "07996d636b0f87341f944ca1f2205c2df31e4a47",
+  "note": "Only documentation/evidence edited during builds. No installs, launch, credentials, device or backend operations. Simulator compilation does not establish physical-device or runtime acceptance.",
+  "builds": [
+    {
+      "configuration": "DevProfile",
+      "scheme": "traders_guild LinkedDev Profile",
+      "result": "BUILD SUCCEEDED",
+      "process_exit_code": 0,
+      "sdk": "iphonesimulator26.5",
+      "code_signing_allowed": false,
+      "only_active_arch": true,
+      "swift_optimization": "-O",
+      "whole_module_optimization": true,
+      "isolated_define": true,
+      "app_path": "/private/tmp/tg-final-workspace-profile-dd/Build/Products/DevProfile-iphonesimulator/traders_guild.app",
+      "bundle_identifier": "co.tradersguild.app.linkeddev",
+      "bundle_version": "25",
+      "bundle_short_version": "1.5.0",
+      "executable": "traders_guild",
+      "executable_sha256": "3f6b83e7fc8fba7602ed0b437a087532e452cd8bb0a500553a7694a118ddfd2b",
+      "info_plist_sha256": "3f57ad99fa164d6eb3e7a8e83e1d31bbc2a86d6d3914b82fb90ec4e8eb1269f5",
+      "scratch_log": "/private/tmp/tg-final-handoff-profile.log",
+      "scratch_log_sha256": "936ac556aebdf0a8d8baeb991ef49df574aebc81303e52fca9b455347636d920",
+      "build_log_command": "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project traders_guild.xcodeproj -scheme \"traders_guild LinkedDev Profile\" -configuration DevProfile -sdk iphonesimulator -destination \"generic/platform=iOS Simulator\" -derivedDataPath /private/tmp/tg-final-workspace-profile-dd ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ]
+    },
+    {
+      "configuration": "Release",
+      "scheme": "traders_guild Local Gateway",
+      "result": "BUILD SUCCEEDED",
+      "process_exit_code": 0,
+      "sdk": "iphonesimulator26.5",
+      "code_signing_allowed": false,
+      "only_active_arch": true,
+      "swift_optimization": "-O",
+      "whole_module_optimization": true,
+      "isolated_define": false,
+      "app_path": "/private/tmp/tg-final-workspace-release-dd/Build/Products/Release-iphonesimulator/traders_guild.app",
+      "bundle_identifier": "co.tradersguild.app",
+      "bundle_version": "25",
+      "bundle_short_version": "1.5.0",
+      "executable": "traders_guild",
+      "executable_sha256": "924c3e7c5ea2a1fd35bdc36acb55841813c13b203c0c65baa10363425e56ec68",
+      "info_plist_sha256": "1bffd3b55b6030b9ab64bfdbd9767bcdfc1be0b18568ef08bc7e5b0872e10dfa",
+      "scratch_log": "/private/tmp/tg-final-handoff-release.log",
+      "scratch_log_sha256": "a96b5a22749a155e2daf946846fd090af3d827079cc02bb524017891dea2f0c5",
+      "build_log_command": "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project traders_guild.xcodeproj -scheme \"traders_guild Local Gateway\" -configuration Release -sdk iphonesimulator -destination \"generic/platform=iOS Simulator\" -derivedDataPath /private/tmp/tg-final-workspace-release-dd ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ]
+    }
+  ]
+}

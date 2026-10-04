@@ -2,6 +2,8 @@
 
 4 October 2026. The bounded support/resistance handoff is implemented and verified locally. Hold for integration review; full Phase B and owner acceptance remain open.
 
+**Subsequent acceptance:** orchestration integrated this checkpoint at `ec65f6fb6496960a2cce5ad7872be01606412475`. Latest-source compilation and manual/Claude pickup are recorded in [`V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md`](V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md). The review hold below is historical; the manual session gate remains open.
+
 ## Source and scope
 
 - Sole editor/tree: `.worktrees/marker-workspace-final`, `sol/1.5.0-final-workspace`.
@@ -56,4 +58,4 @@ Review source commit `07996d6` and this evidence on top of accepted base `ec5146
 
 The signed-out dedicated iPhone 17 Pro/iOS 26 simulator still requires the owner's manual sign-in. The next actual chart session should verify saved support/resistance handle dragging, style/geometry, collapse/resume and Cancel/Done against the existing protected local QA environment. No credentials were typed or authentication bypassed; no phone was operated. Signed-in realtime repaint, physical-device acceptance and the other full Phase B gates remain open.
 
-The previous local backend observation about normalization of unknown keys in known payloads remains unresolved and separate. This follow-up made no backend writes, resets, restarts or normalization changes. See [`V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md`](V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md) for historical local API/lifecycle evidence and remaining gates.
+The backend audit subsequently completed: unknown-key normalization is pre-existing, and no evidence shows v1.5 depends on extras. Retain typed contracts; no blanket JSON passthrough or backend fix is justified. A bounded read-only historical production payload-key inventory remains a promotion gate, alongside actual released-client runtime checks. The authoritative audit is sanctuary `docs/v1_5_sheet_ux_review/FINAL_BACKEND_PAYLOAD_REVIEW.md`. This follow-up made no backend writes, resets, restarts or normalization changes. See [`V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md`](V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md) for historical local API/lifecycle evidence and remaining gates.

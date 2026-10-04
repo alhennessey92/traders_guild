@@ -2,6 +2,8 @@
 
 **Follow-up:** this checkpoint was accepted and integration advanced to `ec5146dcfe4587af8174a722e8f9fa79d721f3eb`. The subsequent bounded saved support/resistance chart handoff is implemented at `07996d636b0f87341f944ca1f2205c2df31e4a47`; see [`V1_5_FINAL_LEVEL_HANDOFF_CHECKPOINT.md`](V1_5_FINAL_LEVEL_HANDOFF_CHECKPOINT.md) for its passing model/native evidence and review hold. The historical integration and handoff-gap statements below describe this earlier checkpoint. Full Phase B remains open.
 
+**Latest pickup:** orchestration accepted/integrated the handoff checkpoint at `ec65f6f`. See [`V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md`](V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md) for latest-source builds, the completed backend audit and manual/Tuesday gates.
+
 4 October 2026. Phase A review fixes complete. Bounded programmatic local integration verified; full Phase B and owner acceptance remain open. Integration stays at `d444158` until orchestration reviews this branch.
 
 ## Exact source and authority
@@ -70,7 +72,7 @@ Exploratory diagnostics included a test-target compile flag excluding the opt-in
 ## Genuine functional gaps / compatibility limit
 
 1. **Chart-native level editing:** new drawings use the existing graphical workflow (including support/resistance via the drawing picker). Existing support/resistance summary Edit opens a numeric editor with no direct graphical edit handoff. Saved Setup Entry is read-only and editable TP/SL remain numeric by explicit assignment. New Setup chart dragging remains its existing path. Native gesture/state coordination is still unverified signed in; the support/resistance numeric-only summary route is a final-handover interaction gap to review, not visual polish acceptance.
-2. **Server normalization:** this existing local backend validates component payloads into typed Pydantic models and persists `model_dump` on create/full-component replacement. Unrecognised keys in otherwise-known payloads are stripped at create; the live probe cannot establish historical future-key preservation. Client preservation is verified by the decoded saved-data fixtures. A historical saved key could likewise be lost on a full-component server update despite the client sending it unchanged. Orchestration must review that pre-existing compatibility limitation before backend/payload promotion; no backend fix or contract broadening was attempted.
+2. **Server normalization:** this existing local backend validates component payloads into typed Pydantic models and persists `model_dump` on create/full-component replacement. Unrecognised keys in otherwise-known payloads are stripped at create; the live probe cannot establish historical future-key preservation. Client preservation is verified by the decoded saved-data fixtures. A historical saved key could likewise be lost on a full-component server update despite the client sending it unchanged. The subsequent read-only audit found this pre-existing and not an evidenced v1.5 blocker: current v1.5 uses declared fields, with no evidence it relies on extras. Retain typed contracts; no blanket passthrough or identity-unsafe merge is justified. A bounded read-only historical production-key inventory remains before promotion; released-client runtime compatibility is not complete. See sanctuary `docs/v1_5_sheet_ux_review/FINAL_BACKEND_PAYLOAD_REVIEW.md`. No backend fix or contract broadening was attempted.
 3. **Lifecycle coverage:** ARMED tracked create/conflict and saved geometry are exercised live. The new monthly Setup naturally progressed ARMED → ACTIVE after the existing scheduled processor cycle (reconcile interval 300 seconds). An identical full-component update was refused with 400; a note-only save succeeded with exact component IDs/order/payloads. The initial 50-second wait stayed ARMED; a later read of that same marker observed ACTIVE, without creating another marker or forcing state. `lifecycle-summary.json` records all four successful checks. Fixture coverage handles TP_HIT / SL_HIT / EXPIRED client locks; live terminal states were not forced.
 
 ## Manual gates and pickup
@@ -86,7 +88,7 @@ Owner/manual session gate: sign in to the existing protected local QA account, t
 
 Claude: use the final branch as described in `V1_5_FINAL_PHASE_A_CHECKPOINT.md`; preserve these source/contract safeguards while refining visuals, interaction and accessibility. Review the recorded support/resistance chart handoff gap with orchestration before expanding its mechanics. No reset or legacy-data decision is authorized here.
 
-Orchestration: review/accept the app fixes and local evidence, address the server raw-key compatibility observation, then integrate from `d444158` using the final branch. This worktree holds after the bounded checkpoint; full Phase B, owner hands-on acceptance and release promotion are not declared complete.
+Orchestration subsequently accepted/integrated this work and the chart handoff through `ec65f6f`; the payload audit is complete with the bounded historical inventory still required before promotion. Sol's latest documentation/build preparation holds for the manual session gate. Full Phase B, owner hands-on acceptance and release promotion are not declared complete.
 
 ### Opt-in local rerun
 

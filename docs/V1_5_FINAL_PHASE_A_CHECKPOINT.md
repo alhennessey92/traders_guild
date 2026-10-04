@@ -4,6 +4,8 @@
 
 Follow-up review closure and real-local verification are recorded in [the bounded Phase B checkpoint](V1_5_FINAL_PHASE_B_LOCAL_CHECKPOINT.md). This document retains the original Phase A evidence and hashes.
 
+Latest accepted integration is `ec65f6f`, including saved support/resistance chart handoff source `07996d6`. Current build artifacts, manual-session gates and Claude Tuesday pickup are in [`V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md`](V1_5_FINAL_MANUAL_AND_CLAUDE_PICKUP.md). Integration/tree references below are historical.
+
 Functional implementation complete, 4 October 2026. Ready for orchestration integration review and Claude pickup. Full visual/accessibility refinement, signed-in chart verification and owner device acceptance remain later gates.
 
 - Sole implementation checkout: `.worktrees/marker-workspace-final`.
