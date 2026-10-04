@@ -156,8 +156,8 @@ struct MarkerWorkspaceContent: View {
             routeRow("Work on chart", icon: "chart.xyaxis.line") { onBeginInteractiveDrawing?() }
             if let id = placementState.drawingSession.editingDraftId {
                 if let draft = placementState.components.first(where: { $0.id == id }),
-                   [.levelSupport, .levelResistance, .drawingHorizontalLine].contains(draft.componentType) {
-                    TextField("Price", value: placementState.guidedLevelPriceBinding(for: draft.componentType),
+                   draft.componentType == .drawingHorizontalLine {
+                    TextField("Price", value: placementState.workspaceHorizontalPriceBinding(for: id),
                               formatter: MarkerGuidedFormat.priceFormatter).keyboardType(.decimalPad)
                 }
                 Picker("Line style", selection: Binding(

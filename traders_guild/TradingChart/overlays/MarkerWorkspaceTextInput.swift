@@ -29,7 +29,7 @@ struct MarkerWorkspaceTextInput: View {
     }
 }
 
-private struct MarkerWorkspaceTextEditor: UIViewRepresentable {
+struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var selection: NSRange
     @Binding var offset: CGPoint
@@ -49,15 +49,20 @@ private struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.updating = true
-        if view.text != text { view.text = text }
+        updateDraft(in: view)
         view.textColor = UIColor(AppColors.primaryForeground)
         view.tintColor = UIColor(AppColors.accentColor)
+        context.coordinator.updating = false
+    }
+    /// UIKit owns text and cursor while an input method is composing.
+    func updateDraft(in view: UITextView) {
+        guard view.markedTextRange == nil else { return }
+        if view.text != text { view.text = text }
         let length = text.utf16.count
         let location = min(selection.location, length)
         let range = NSRange(location: location, length: min(selection.length, length - location))
         if view.selectedRange != range { view.selectedRange = range }
         if !view.isFirstResponder && view.contentOffset != offset { view.setContentOffset(offset, animated: false) }
-        context.coordinator.updating = false
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? 300
@@ -131,7 +136,7 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
     func updateUIView(_ view: UITextField, context: Context) {
         context.coordinator.parent = self
         context.coordinator.updating = true
-        if view.text != text { view.text = text }
+        if view.markedTextRange == nil, view.text != text { view.text = text }
         view.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor(AppColors.greyText)])
         view.textColor = UIColor(AppColors.primaryForeground)
         view.tintColor = UIColor(AppColors.accentColor)

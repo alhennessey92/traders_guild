@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import Testing
 @testable import traders_guild
 
@@ -140,6 +141,24 @@ struct MarkerWorkspaceTests {
     }
 
     @Test
+    func horizontalNumericEditorRepricesOnlyItsExactDrawingAndCancelRestoresIt() {
+        let state = draft()
+        let first = state.appendComponent(.drawingHorizontalLine, payload: .drawingHorizontalLine(HorizontalLinePayload(price: 101, label: "First")))
+        let second = state.appendComponent(.drawingHorizontalLine, payload: .drawingHorizontalLine(HorizontalLinePayload(price: 102, label: "Second", colorHex: "#38BDF8", lineStyle: .dashed, lineWidth: 2)))
+        let before = state.components
+        state.openContext()
+        #expect(state.beginWorkspaceDrawing(.horizontalLine, componentID: second))
+        let binding = state.workspaceHorizontalPriceBinding(for: second)
+        #expect(binding.wrappedValue == 102)
+        binding.wrappedValue = 103
+        #expect(state.components.first { $0.id == first }?.payload.levelPrice == 101)
+        guard case .drawingHorizontalLine(let edited) = state.components.first(where: { $0.id == second })?.payload else { Issue.record("missing second drawing"); return }
+        #expect(edited.price == 103 && edited.label == "Second" && edited.colorHex == "#38BDF8" && edited.lineStyle == .dashed && edited.lineWidth == 2)
+        state.goBack()
+        #expect(state.components == before)
+    }
+
+    @Test
     func drawingCancelKeepsLiveSetupRepricingAndOtherDraftWork() {
         let state = draft(.setup)
         state.openContext()
@@ -195,6 +214,30 @@ struct MarkerWorkspaceTests {
         #expect(state.title == "A response" && state.note == "A")
         #expect(state.linkSession.context?.relationship == .challenges)
         #expect(state.responseTimeframeChangeID == pendingLoad)
+    }
+
+    @Test
+    func multilineUpdatesPreserveMarkedCompositionAndApplyCommittedTextAfterward() throws {
+        let view = UITextView()
+        view.text = "Before "
+        view.selectedRange = NSRange(location: 7, length: 0)
+        view.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0))
+        let marked = try #require(view.markedTextRange)
+        let composedText = view.text
+        let composedSelection = view.selectedRange
+        let markedStart = view.offset(from: view.beginningOfDocument, to: marked.start)
+        let editor = MarkerWorkspaceTextEditor(text: .constant("stale draft"),
+            selection: .constant(NSRange(location: 0, length: 0)), offset: .constant(.zero),
+            placeholder: "Text", onFocus: { _ in })
+        editor.updateDraft(in: view)
+        #expect(view.text == composedText)
+        #expect(view.selectedRange == composedSelection)
+        let retained = try #require(view.markedTextRange)
+        #expect(view.offset(from: view.beginningOfDocument, to: retained.start) == markedStart)
+        view.unmarkText()
+        editor.updateDraft(in: view)
+        #expect(view.text == "stale draft")
+        #expect(view.selectedRange == NSRange(location: 0, length: 0))
     }
 
     @Test

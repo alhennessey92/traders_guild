@@ -170,10 +170,16 @@ extension MarkerPlacementState {
 
     func beginWorkspaceLevel(_ type: RLComponentType, componentID: UUID? = nil) {
         guard [.levelSupport, .levelResistance].contains(type), workspaceAllows(type) else { return }
+        let prior: MarkerComponentDraft?
+        if let componentID {
+            guard let exact = components.first(where: { $0.id == componentID }),
+                  exact.componentType == type, exact.payload.guidedLevelPayload != nil else { return }
+            prior = exact
+        } else { prior = component(type) }
         openWorkspace(.levelEditor)
         workspace.selectedLevel = type
-        workspace.selectedComponentID = componentID ?? component(type)?.id
-        workspace.editorText = String(componentPrice(type) ?? anchorDraft?.payload.levelPrice ?? 0)
+        workspace.selectedComponentID = prior?.id
+        workspace.editorText = String(prior?.payload.levelPrice ?? anchorDraft?.payload.levelPrice ?? 0)
         workspace.editorBaselineText = workspace.editorText
     }
 
@@ -192,6 +198,17 @@ extension MarkerPlacementState {
         else if tool == .horizontalLine { _ = activateImmediateHorizontalDrawing(tool: tool) }
         else { startDrawingWorkflow(tool: tool) }
         return true
+    }
+
+    func workspaceHorizontalPriceBinding(for id: UUID) -> Binding<Double> {
+        Binding(get: { self.components.first { $0.id == id }?.payload.levelPrice ?? 0 }, set: { price in
+            guard self.workspaceAllows(.drawingHorizontalLine), price.isFinite, price > 0,
+                  let draft = self.components.first(where: { $0.id == id }),
+                  case .drawingHorizontalLine(let prior) = draft.payload else { return }
+            self.updateComponent(id: id, payload: .drawingHorizontalLine(HorizontalLinePayload(
+                price: price, label: prior.label, colorHex: prior.colorHex,
+                lineStyle: prior.lineStyle, lineWidth: prior.lineWidth)))
+        })
     }
 
     var workspaceCanCommit: Bool {
@@ -245,7 +262,7 @@ extension MarkerPlacementState {
             saveWorkspacePayload(.textNote, payload: .note(payload))
         case .levelEditor:
             guard let type = workspace.selectedLevel, let price = Double(workspace.editorText) else { return false }
-            let prior = component(type)?.payload.guidedLevelPayload
+            let prior = components.first { $0.id == workspace.selectedComponentID }?.payload.guidedLevelPayload
             let level = LevelPayload(price: price, label: prior?.label ?? type.displayName, colorHex: prior?.colorHex,
                                      lineStyle: prior?.lineStyle, lineWidth: prior?.lineWidth)
             saveWorkspacePayload(type, payload: type == .levelSupport ? .levelSupport(level) : .levelResistance(level))

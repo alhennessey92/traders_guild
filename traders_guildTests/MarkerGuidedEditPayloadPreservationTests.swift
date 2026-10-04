@@ -154,6 +154,28 @@ struct MarkerGuidedEditPayloadPreservationTests {
         #expect(components[5].payload["price"] as? Double == 64_400 || components[5].payload["price"] as? Int == 64_400)
     }
 
+    @Test
+    func workspaceEditingSecondSavedSupportPreservesExactPriceStyleIdentityAndRawOrder() throws {
+        let e = try edit(markerJSON(intent: "analysis", components: analysisComponents))
+        let index = try #require(supportDraftIndex(e.state, price: 63_500))
+        let second = e.state.components[index]
+        let before = e.state.components
+        e.state.openContext()
+        e.state.beginWorkspaceLevel(.levelSupport, componentID: second.id)
+        #expect(Double(e.state.workspace.editorText) == 63_500)
+        #expect(e.state.workspace.selectedComponentID == second.id)
+        #expect(e.state.commitWorkspaceEditor())
+        #expect(e.state.components == before, "Done without edits must be a no-op")
+        e.state.beginWorkspaceLevel(.levelSupport, componentID: second.id)
+        e.state.workspace.editorText = "63525"
+        #expect(e.state.commitWorkspaceEditor())
+        let components = sent(e.state.buildGuidedUpdateRequest().components ?? [])
+        #expect(components.map(\.type) == ["anchor", "level.support", "future.widget", "level.support", "timeframe.link"])
+        #expect(MarkerRawPayload.same(components[1].payload, savedRaw(##"{"price": 63780, "label": "Range low", "color_hex": "#33AA55", "style": {"dash": [4, 2], "glow": true}, "source": "import-v2"}"##)))
+        #expect(MarkerRawPayload.same(components[3].payload, savedRaw(##"{"price": 63525, "label": "Deep low", "x_note": "keep"}"##)))
+        #expect(e.state.components[index].id == second.id)
+    }
+
     // MARK: Edited components
 
     @Test
