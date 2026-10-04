@@ -1,0 +1,99 @@
+[
+  {
+    "file": "native-fixture-post-transport-and-share-handoff.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096922.943
+  },
+  {
+    "file": "native-fixture-review.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096918.021
+  },
+  {
+    "file": "native-fixture-optional-context.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096915.462
+  },
+  {
+    "file": "native-fixture-compact-draft.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096908.701
+  },
+  {
+    "file": "native-fixture-compose-keyboard.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096906.768
+  },
+  {
+    "file": "native-fixture-compose-empty.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096905.436
+  },
+  {
+    "file": "native-fixture-empty-title-scrolled-after-resume.png",
+    "test": "MarkerGuidedSheetJourneyTests/testEmptyTitleAndScrolledSectionSurviveChartMode()",
+    "fixture": true,
+    "timestamp": 1791096932.801
+  },
+  {
+    "file": "native-fixture-empty-title-scrolled-before-chart.png",
+    "test": "MarkerGuidedSheetJourneyTests/testEmptyTitleAndScrolledSectionSurviveChartMode()",
+    "fixture": true,
+    "timestamp": 1791096929.238
+  },
+  {
+    "file": "real-shell-fixture-add-to-components.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096943.844
+  },
+  {
+    "file": "real-shell-fixture-add-to-chat.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096941.305
+  },
+  {
+    "file": "real-shell-fixture-add-to-symbol.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096938.705
+  },
+  {
+    "file": "real-shell-fixture-add.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096937.895
+  },
+  {
+    "file": "real-shell-fixture-returned-add.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791096957.677
+  },
+  {
+    "file": "real-shell-fixture-guided-compose.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791096955.067
+  },
+  {
+    "file": "real-shell-fixture-viewed-marker.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791096951.341
+  },
+  {
+    "file": "native-fixture-review-settled.png",
+    "fixture": true,
+    "scenario": "analysisReview",
+    "method": "simctl launch followed by settled screenshot",
+    "note": "Supplement to journey capture; confirms Chart/Edit/Post after transition settles."
+  }
+]

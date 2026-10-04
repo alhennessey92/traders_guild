@@ -1,0 +1,116 @@
+[
+  {
+    "file": "native-fixture-post-transport-and-share-handoff.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096942.247
+  },
+  {
+    "file": "native-fixture-review.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096935.707
+  },
+  {
+    "file": "native-fixture-optional-context.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096932.31
+  },
+  {
+    "file": "native-fixture-compact-draft.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096923.951
+  },
+  {
+    "file": "native-fixture-compose-keyboard.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096921.977
+  },
+  {
+    "file": "native-fixture-compose-empty.png",
+    "test": "MarkerGuidedSheetJourneyTests/testAnalysisDraftResumesThroughContextReviewAndPost()",
+    "fixture": true,
+    "timestamp": 1791096919.842
+  },
+  {
+    "file": "native-fixture-empty-title-scrolled-after-resume.png",
+    "test": "MarkerGuidedSheetJourneyTests/testEmptyTitleAndScrolledSectionSurviveChartMode()",
+    "fixture": true,
+    "timestamp": 1791096953.381
+  },
+  {
+    "file": "native-fixture-empty-title-scrolled-before-chart.png",
+    "test": "MarkerGuidedSheetJourneyTests/testEmptyTitleAndScrolledSectionSurviveChartMode()",
+    "fixture": true,
+    "timestamp": 1791096948.941
+  },
+  {
+    "file": "native-fixture-context-post-request.png",
+    "test": "MarkerGuidedSheetJourneyTests/testExistingContextSurvivesTheSideTripAndPost()",
+    "fixture": true,
+    "timestamp": 1791096964.008
+  },
+  {
+    "file": "native-fixture-expanded-largest-text.png",
+    "test": "MarkerGuidedSheetJourneyTests/testLargeTextCanExpandAndResume()",
+    "fixture": true,
+    "timestamp": 1791096975.157
+  },
+  {
+    "file": "native-fixture-compact-largest-text.png",
+    "test": "MarkerGuidedSheetJourneyTests/testLargeTextCanExpandAndResume()",
+    "fixture": true,
+    "timestamp": 1791096971.562
+  },
+  {
+    "file": "native-fixture-retained-user-expansion.png",
+    "test": "MarkerGuidedSheetJourneyTests/testUserExpansionSurvivesReviewBackAndChartResume()",
+    "fixture": true,
+    "timestamp": 1791096989.916
+  },
+  {
+    "file": "real-shell-fixture-add-to-components.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791097002.901
+  },
+  {
+    "file": "real-shell-fixture-add-to-chat.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096999.628
+  },
+  {
+    "file": "real-shell-fixture-add-to-symbol.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096996.564
+  },
+  {
+    "file": "real-shell-fixture-add.png",
+    "test": "MarkerSheetShellTests/testRealAddFitsAndItsTabTransitionsStaySupported()",
+    "fixture": true,
+    "timestamp": 1791096995.289
+  },
+  {
+    "file": "real-shell-fixture-returned-add.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791097017.202
+  },
+  {
+    "file": "real-shell-fixture-guided-compose.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791097014.515
+  },
+  {
+    "file": "real-shell-fixture-viewed-marker.png",
+    "test": "MarkerSheetShellTests/testRealShellSelectionClearAndGuidedLegacyExit()",
+    "fixture": true,
+    "timestamp": 1791097010.729
+  }
+]
