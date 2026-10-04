@@ -83,12 +83,17 @@ struct MarkerGuidedCreationHarness: View {
         }
     }
 
-    /// The panel's height in the real chart sheet at its guided cap, half the
-    /// screen: less the grabber (about 20 pt), the panel's top inset and the
-    /// 68 pt bar. What fits here fits the real sheet without scrolling.
-    static var halfSheetPanelHeight: CGFloat {
-        UIScreen.main.bounds.height * MarkerGuidedSheetHeight.opening - 20 - 68
+    /// Embedded regression fixtures use the working panel height. Optional
+    /// native-sheet mode exercises the same detents and dock as the chart.
+    private var panelHeight: CGFloat {
+        UIScreen.main.bounds.height * MarkerGuidedSheetHeight.working(
+            step: placementState.guidedStep, intent: placementState.intent,
+            screenHeight: UIScreen.main.bounds.height
+        ) - 20 - 68
     }
+    private var usesNativeSheet: Bool { UserDefaults.standard.bool(forKey: "MarkerGuidedSheetFixture") }
+    private var isCompact: Bool { selectedDetent == .fraction(MarkerGuidedSheetHeight.compact) }
+    @State private var selectedDetent: PresentationDetent
 
     static let symbolId = MarkerLinkFixtures.uuid(1)
     static let guildId = MarkerLinkFixtures.uuid(2)
@@ -115,7 +120,9 @@ struct MarkerGuidedCreationHarness: View {
         }
         _transport = State(initialValue: transport)
         _markerManager = State(initialValue: manager)
-        _placementState = StateObject(wrappedValue: Self.makeDraft(for: scenario))
+        let draft = Self.makeDraft(for: scenario)
+        _placementState = StateObject(wrappedValue: draft)
+        _selectedDetent = State(initialValue: .fraction(MarkerGuidedSheetHeight.working(step: draft.guidedStep, intent: draft.intent, screenHeight: UIScreen.main.bounds.height)))
     }
 
     private var author: MarkerAvatarIdentity {
@@ -132,13 +139,26 @@ struct MarkerGuidedCreationHarness: View {
             header
             ScrollView {
                 VStack(spacing: 12) {
-                    sheet
+                    if !usesNativeSheet { sheet }
                     transportPanel
                 }
                 .padding(12)
             }
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
+        .sheet(isPresented: .constant(usesNativeSheet)) {
+            sheet
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("guided.fixtureSheet")
+                .presentationDetents(Set(MarkerGuidedSheetHeight.fractions(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height).map { .fraction($0) }), selection: $selectedDetent)
+                .presentationBackground(AppColors.sheetBackground)
+                .presentationBackgroundInteraction(.enabled)
+                .presentationDragIndicator(.visible)
+                .presentationContentInteraction(.resizes)
+                .interactiveDismissDisabled()
+        }
+        .onChange(of: placementState.guidedStep) { _, _ in updateWorkingHeight() }
+        .onChange(of: placementState.intent) { _, _ in updateWorkingHeight() }
         .task {
             if scenario == .discardConfirm || scenario == .editDiscard {
                 showDiscardConfirmation = placementState.cancellingNeedsConfirmation
@@ -147,6 +167,11 @@ struct MarkerGuidedCreationHarness: View {
                 await post()
             }
         }
+    }
+
+    private func updateWorkingHeight(force: Bool = false) {
+        guard force || (!isCompact && selectedDetent != .fraction(MarkerGuidedSheetHeight.tall)) else { return }
+        selectedDetent = .fraction(MarkerGuidedSheetHeight.working(step: placementState.guidedStep, intent: placementState.intent, screenHeight: UIScreen.main.bounds.height))
     }
 
     private var header: some View {
@@ -188,7 +213,9 @@ struct MarkerGuidedCreationHarness: View {
 
     private var sheet: some View {
         VStack(spacing: 0) {
-            if closed {
+            if usesNativeSheet && shareContext != nil {
+                transportPanel.padding(16)
+            } else if closed {
                 Text("Draft discarded: placement would end here.")
                     .font(.footnote)
                     .foregroundColor(AppColors.greyText)
@@ -198,6 +225,10 @@ struct MarkerGuidedCreationHarness: View {
                     .font(.footnote)
                     .foregroundColor(AppColors.greyText)
                     .frame(maxWidth: .infinity, minHeight: 120)
+            } else if usesNativeSheet && isCompact {
+                MarkerGuidedCompactDock(placementState: placementState) { updateWorkingHeight(force: true) }
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if placementState.isGuidedFlowActive {
                 MarkerGuidedPlacementPanel(
                     placementState: placementState,
@@ -205,11 +236,13 @@ struct MarkerGuidedCreationHarness: View {
                     guildName: "Alpha Traders",
                     currentChartTimeframe: .h1,
                     // Shown, not acted on: the chart is not in the fixture.
-                    onSelectTimeframe: { _ in }
+                    onSelectTimeframe: { _ in },
+                    onShowChart: usesNativeSheet ? { selectedDetent = .fraction(MarkerGuidedSheetHeight.compact) } : nil
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .frame(height: Self.halfSheetPanelHeight)
+                .frame(height: usesNativeSheet ? nil : panelHeight)
+                .frame(maxHeight: usesNativeSheet ? .infinity : nil)
                 Divider()
                 MarkerGuidedPlacementBar(placementState: placementState) {
                     Task { await post() }

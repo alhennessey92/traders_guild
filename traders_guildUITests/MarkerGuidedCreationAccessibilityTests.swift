@@ -5,7 +5,7 @@ import XCTest
 /// Like `MarkerLinkAccessibilityTests`, this cannot prove how speech sounds or
 /// how the rotor moves; it proves the parts that silently regress: controls
 /// exist with prose labels, price fields say what they are, the selected type
-/// is exposed as selected, and at the largest accessibility text size the
+/// is named by the type menu, and at the largest accessibility text size the
 /// layout keeps every control reachable.
 ///
 /// Runs against the backend-free guided-creation harness
@@ -68,15 +68,16 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     func testDetailsControlsSpeakProseAndExposeTheSelectedType() throws {
         launch("analysisDetails")
-        let analysis = app.buttons["guided.intent.analysis"]
-        let question = app.buttons["guided.intent.question"]
-        XCTAssertTrue(analysis.exists && question.exists)
-        XCTAssertTrue(analysis.label.contains("Analysis"))
-        XCTAssertTrue(question.label.contains("Question"))
-        XCTAssertTrue(analysis.isSelected, "the current type is exposed as selected")
-        XCTAssertFalse(question.isSelected)
+        let picker = app.buttons["guided.intentPicker"]
+        XCTAssertTrue(picker.exists)
+        XCTAssertEqual(picker.label, "Type: Analysis")
         XCTAssertTrue(app.buttons["guided.review"].exists)
         XCTAssertTrue(symbolNamedButtons.isEmpty, "buttons reading as SF Symbol names: \(symbolNamedButtons)")
+        picker.tap()
+        let question = app.buttons["guided.intent.question"]
+        XCTAssertTrue(question.waitForExistence(timeout: 5))
+        question.tap()
+        XCTAssertEqual(picker.label, "Type: Question")
         attachTree("tree-analysisDetails")
     }
 
@@ -150,9 +151,13 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
     /// hierarchy with the draft kept.
     func testSetupStaysOutOfTheSocialSelector() throws {
         launch("analysisDetails")
-        XCTAssertTrue(app.buttons["guided.intent.analysis"].waitForExistence(timeout: 5))
+        let picker = app.buttons["guided.intentPicker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.tap()
+        XCTAssertTrue(app.buttons["guided.intent.analysis"].exists)
         XCTAssertTrue(app.buttons["guided.intent.question"].exists)
         XCTAssertFalse(app.buttons["guided.intent.setup"].exists, "Setup is not in the social selector")
+        app.buttons["guided.intent.analysis"].tap()
 
         app.buttons["guided.changeType"].tap()
         let social = app.buttons["guided.postToChart"]
@@ -180,10 +185,9 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         attachScreenshot("change-type-response")
     }
 
-    /// Owner requirement: the sheet stops at half the screen, so a Setup is
-    /// split in two and each section's controls are on screen without
-    /// scrolling inside the harness's half-height panel.
-    func testASetupIsSplitSoEachSectionFitsHalfTheScreen() throws {
+    /// Slice 1 preserves separate Setup levels and optional reasoning; their
+    /// controls remain reachable at the working height.
+    func testSetupKeepsSeparateLevelsAndOptionalReasoning() throws {
         launch("setupTracked")
         let next = app.buttons["guided.next"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
@@ -196,26 +200,26 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         }
         XCTAssertFalse(app.textViews["guided.text"].exists || app.textFields["guided.text"].exists,
                        "the reasoning is in the next section")
-        attachScreenshot("half-sheet-setup-levels")
+        attachScreenshot("working-sheet-setup-levels")
         next.tap()
         let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
         XCTAssertTrue(text.isHittable && app.buttons["guided.addTitle"].isHittable && app.buttons["guided.addContext"].isHittable)
         XCTAssertTrue(app.buttons["guided.review"].isEnabled)
-        attachScreenshot("half-sheet-setup-reasoning")
+        attachScreenshot("working-sheet-setup-reasoning")
         app.buttons["guided.back"].tap()
         XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Levels goes back one section")
     }
 
-    func testAnAnalysisFitsHalfTheScreen() throws {
+    func testAnalysisWorkingHeightKeepsOptionalControlsReachable() throws {
         launch("analysisEmpty")
         let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
-        for element in [app.buttons["guided.intent.analysis"], text, app.buttons["guided.addTitle"],
+        for element in [app.buttons["guided.intentPicker"], text, app.buttons["guided.addTitle"],
                         app.buttons["guided.addContext"], app.buttons["guided.changeType"]] {
             XCTAssertTrue(element.isHittable, "\(element) is on screen")
         }
-        attachScreenshot("half-sheet-analysis")
+        attachScreenshot("working-sheet-analysis")
     }
 
     /// Optional extras stay out of the way until asked for.
@@ -247,16 +251,14 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     private static let largestText = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
 
-    func testLargestTextStacksTheTypeChips() throws {
+    func testLargestTextKeepsTheTypeMenuReachable() throws {
         launch("analysisDetails", extra: Self.largestText)
-        let analysis = app.buttons["guided.intent.analysis"]
-        let question = app.buttons["guided.intent.question"]
-        XCTAssertTrue(analysis.waitForExistence(timeout: 5) && question.exists)
-        XCTAssertGreaterThanOrEqual(
-            question.frame.minY, analysis.frame.maxY - 1,
-            "at accessibility sizes the chips stack instead of breaking words"
-        )
-        attachScreenshot("ax-xxxl-analysisDetails")
+        let picker = app.buttons["guided.intentPicker"]
+        if !picker.isHittable { app.swipeUp() }
+        XCTAssertTrue(picker.waitForExistence(timeout: 5) && picker.isHittable)
+        picker.tap()
+        XCTAssertTrue(app.buttons["guided.intent.question"].waitForExistence(timeout: 5))
+        attachScreenshot("ax-xxxl-type-menu")
     }
 
     func testLargestTextKeepsPostReachable() throws {

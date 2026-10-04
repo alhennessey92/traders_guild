@@ -9,6 +9,69 @@
 
 import SwiftUI
 
+/// The chart-working state of a guided draft. It has its own content instead
+/// of squeezing a disabled Review bar into the old 11% detent.
+struct MarkerGuidedCompactDock: View {
+    @ObservedObject var placementState: MarkerPlacementState
+    let onResume: () -> Void
+
+    private var taskTitle: String {
+        if placementState.isGuidedEdit { return "Editing \(placementState.intent.displayName)" }
+        if placementState.linkSession.isActive { return "Responding with \(placementState.intent.displayName)" }
+        return "New \(placementState.intent.displayName)"
+    }
+
+    private var progress: String {
+        if placementState.guidedStep == .review { return "Review ready" }
+        if placementState.isGuidedEdit && placementState.hasMaterialEdits { return "Unsaved changes" }
+        if let requirement = placementState.guidedNextStepPrompt { return requirement }
+        return "Draft kept"
+    }
+
+    var body: some View {
+        Button(action: onResume) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(placementState.intent.color)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(placementState.intent.color.opacity(0.14)))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(taskTitle)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                    Text(progress)
+                        .font(.caption)
+                        .foregroundColor(AppColors.greyText)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.up")
+                    Text("Continue editing")
+                        .font(.caption.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundColor(AppColors.primaryForeground)
+                .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(MarkerGuidedCardBackground())
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityShowsLargeContentViewer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("\(taskTitle). \(progress). Continue editing")
+        .accessibilityAction { onResume() }
+        .accessibilityIdentifier("guided.compactDock")
+    }
+}
+
 // MARK: - Panel
 
 /// The guided panel, shown in place of the legacy placement tabs while
@@ -28,6 +91,7 @@ struct MarkerGuidedPlacementPanel: View {
     var activeChartDrawings: [ChartDrawing] = []
     var onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     var onBeginInteractiveDrawing: (() -> Void)?
+    var onShowChart: (() -> Void)?
     var viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     @State private var pendingChange: PendingChange?
@@ -119,16 +183,28 @@ struct MarkerGuidedPlacementPanel: View {
 
     /// "Step 1 of 2 · Posting to Alpha Traders", then the step's question.
     private var stepHeader: some View {
-        MarkerGuidedStepHeader(
-            stepNumber: placementState.guidedStepNumber,
-            stepCount: placementState.guidedStepCount,
-            prompt: placementState.guidedStepPrompt ?? "",
-            destination: placementState.isGuidedEdit
-                ? "Editing your marker"
-                : MarkerGuidedFormat.destination(guildName),
-            intent: placementState.intent,
-            author: authorBadgeIdentity
-        )
+        VStack(alignment: .leading, spacing: 8) {
+            MarkerGuidedStepHeader(
+                stepNumber: placementState.guidedStepNumber,
+                stepCount: placementState.guidedStepCount,
+                prompt: placementState.guidedStepPrompt ?? "",
+                destination: placementState.isGuidedEdit
+                    ? "Editing your marker"
+                    : MarkerGuidedFormat.destination(guildName)
+            )
+            if let onShowChart {
+                Button {
+                    dismissKeyboard()
+                    onShowChart()
+                } label: {
+                    Label("Show chart", systemImage: "chart.xyaxis.line")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(AppColors.accentColor)
+                .accessibilityIdentifier("guided.showChart")
+            }
+        }
     }
 
     // MARK: Change type
@@ -158,7 +234,7 @@ struct MarkerGuidedPlacementPanel: View {
                 author: author,
                 intent: .setup,
                 title: "Plan a trade",
-                subtitle: "Entry, stop and target. Tracked Setups count toward your accuracy and reputation.",
+                subtitle: "Entry, stop and target · optional tracking",
                 identifier: "guided.planTrade",
                 isCurrent: placementState.intent == .setup
             ) {
@@ -183,8 +259,8 @@ struct MarkerGuidedPlacementPanel: View {
 
     // MARK: Details
 
-    /// Analysis/Question: one section. A Setup's levels: the first of two
-    /// sections, so each fits a sheet no higher than half the screen.
+    /// Analysis/Question compose in one section. Setup keeps separate levels
+    /// and optional reasoning sections.
     private var details: some View {
         VStack(alignment: .leading, spacing: 14) {
             stepHeader
@@ -230,8 +306,7 @@ struct MarkerGuidedPlacementPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             MarkerGuidedTypePicker(
                 intents: MarkerGuidedFlowEntry.socialIntents,
-                selected: placementState.intent,
-                stacks: dynamicTypeSize.isAccessibilitySize
+                selected: placementState.intent
             ) { intent in
                 choose(intent, leavesGuidedFlow: false)
             }
@@ -437,6 +512,8 @@ struct MarkerGuidedPlacementPanel: View {
             }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
+                    UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
+                        .accessibilityHidden(true)
                     MarkerGuidedIntentTag(intent: placementState.intent)
                     if let timeframe = currentChartTimeframe {
                         Text("\(timeframe.displayName) chart")
@@ -470,6 +547,12 @@ struct MarkerGuidedPlacementPanel: View {
 
                 if placementState.intent == .setup {
                     setupReview
+                } else if let anchor = placementState.anchorDraft,
+                          let time = anchor.payload.anchorTime {
+                    MarkerGuidedReviewLine(
+                        icon: "mappin.and.ellipse",
+                        text: "At \(MarkerGuidedFormat.displayPrice(anchor.payload.levelPrice)) · \(time.formatted(date: .abbreviated, time: .shortened))"
+                    )
                 }
 
                 if let summary = MarkerGuidedFormat.contextSummary(placementState.components) {
@@ -774,9 +857,8 @@ enum MarkerGuidedFlowEntry {
     static let otherIntents: [RLMarkerIntent] = [.alert, .poll, .news, .reaction, .personal]
 }
 
-/// One of the Add tab's two starting points: the viewer's face with the type
-/// badge, what it is, and a chevron. "Post to the chart" starts Analysis;
-/// "Plan a trade" starts Setup.
+/// Two starting points with a type, purpose and chevron: "Post to the chart"
+/// starts Analysis, "Plan a trade" starts Setup.
 struct MarkerGuidedEntryCard: View {
     let author: MarkerAvatarIdentity
     let intent: RLMarkerIntent
@@ -791,14 +873,16 @@ struct MarkerGuidedEntryCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                // At accessibility sizes the face sits above the words, which
+                // At accessibility sizes the icon sits above the words, which
                 // then get the card's width.
                 let content = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                     : AnyLayout(HStackLayout(spacing: 14))
                 content {
-                    UnifiedMarkerBadge(intent: intent, sizeToken: .large, avatar: author)
-                        .frame(width: 52, height: 52)
+                    Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(intent.color)
+                        .frame(width: 36, height: 36)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title)
@@ -816,16 +900,9 @@ struct MarkerGuidedEntryCard: View {
                     .foregroundColor(isCurrent ? intent.color : AppColors.greyText)
                     .accessibilityHidden(true)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(intent.color.opacity(0.12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(intent.color.opacity(0.40), lineWidth: 1)
-                    )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .padding(14)
+            .background(MarkerGuidedCardBackground())
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
@@ -834,7 +911,7 @@ struct MarkerGuidedEntryCard: View {
     }
 }
 
-/// "Post to the chart": the viewer's face, starting Analysis.
+/// "Post to the chart" starts Analysis.
 struct MarkerPostToChartCard: View {
     let author: MarkerAvatarIdentity
     let action: () -> Void
@@ -901,16 +978,12 @@ struct MarkerGuidedTypeRow: View {
 
 // MARK: - Small parts
 
-/// "Step 1 of 2 · Posting to Alpha Traders" over the step's question, beside
-/// the author's face. Read by VoiceOver as one heading.
+/// Step, destination and prompt are read by VoiceOver as one heading.
 struct MarkerGuidedStepHeader: View {
     let stepNumber: Int?
     var stepCount: Int = 2
     let prompt: String
     let destination: String
-    let intent: RLMarkerIntent
-    let author: MarkerAvatarIdentity
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var stepLine: String {
         guard let stepNumber else { return destination }
@@ -918,26 +991,15 @@ struct MarkerGuidedStepHeader: View {
     }
 
     var body: some View {
-        // At accessibility sizes the face sits above the words, which then
-        // get the sheet's full width.
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
-        layout {
-            UnifiedMarkerBadge(intent: intent, sizeToken: .large, avatar: author)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(stepLine)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(prompt)
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(AppColors.primaryForeground)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !dynamicTypeSize.isAccessibilitySize {
-                Spacer(minLength: 0)
-            }
+        VStack(alignment: .leading, spacing: 3) {
+            Text(stepLine)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.greyText)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(prompt)
+                .font(.title3.weight(.bold))
+                .foregroundColor(AppColors.primaryForeground)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -947,49 +1009,39 @@ struct MarkerGuidedStepHeader: View {
     }
 }
 
-/// The social selector, Analysis · Question, as one segmented control.
-/// Stacks at accessibility text sizes, where segments in a row would break
-/// words.
+/// The current social type opens the existing choices without filling the
+/// writing surface with a row of competing type controls.
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent
-    let stacks: Bool
     let onSelect: (RLMarkerIntent) -> Void
 
     var body: some View {
-        let layout = stacks
-            ? AnyLayout(VStackLayout(spacing: 4))
-            : AnyLayout(HStackLayout(spacing: 4))
-        layout {
+        Menu {
             ForEach(intents, id: \.self) { intent in
-                let isSelected = intent == selected
                 Button {
                     onSelect(intent)
                 } label: {
-                    Label(intent.displayName, systemImage: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .foregroundColor(isSelected ? .white : AppColors.primaryForeground)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9)
-                                .fill(isSelected ? intent.color : Color.clear)
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius: 9))
+                    Label(intent.displayName, systemImage: intent == selected ? "checkmark" : intent.icon)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
                 .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
             }
+        } label: {
+            HStack(spacing: 8) {
+                Label(selected.displayName, systemImage: MarkerIntentBadge.style(intent: selected)?.symbol ?? selected.icon)
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundColor(AppColors.primaryForeground)
+            .padding(12)
+            .background(MarkerGuidedCardBackground())
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppColors.whiteText.opacity(0.06))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppColors.whiteText.opacity(0.09), lineWidth: 1))
-        )
+        .accessibilityLabel("Type: \(selected.displayName)")
+        .accessibilityHint("Choose Analysis or Question")
+        .accessibilityIdentifier("guided.intentPicker")
     }
 }
 
@@ -1155,7 +1207,7 @@ struct MarkerGuidedTextField: View {
     let axis: Axis
 
     var body: some View {
-        TextField(placeholder, text: $text, axis: axis)
+        TextField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(AppColors.greyText), axis: axis)
             .textFieldStyle(.plain)
             .font(.subheadline)
             .foregroundColor(AppColors.primaryForeground)

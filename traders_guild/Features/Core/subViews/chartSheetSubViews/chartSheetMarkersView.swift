@@ -43,7 +43,16 @@ struct chartSheetMarkersView: View {
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
     var onMarkerSelection: (() -> Void)? = nil
 
-    @State private var selectedPrimaryTab: MarkerSheetPrimaryTab = .add
+    @Binding var guidedPrimaryTab: MarkerSheetPrimaryTab
+    @State private var legacyPrimaryTab: MarkerSheetPrimaryTab = .add
+
+    private var selectedPrimaryTab: MarkerSheetPrimaryTab {
+        MarkerAvatarExperiment.isEnabled ? guidedPrimaryTab : legacyPrimaryTab
+    }
+
+    private var primaryTabSelection: Binding<MarkerSheetPrimaryTab> {
+        MarkerAvatarExperiment.isEnabled ? $guidedPrimaryTab : $legacyPrimaryTab
+    }
     @State private var showsOtherMarkerTypes = false
     @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
     @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
@@ -126,7 +135,7 @@ struct chartSheetMarkersView: View {
             header
 
             UnifiedTabBar(
-                selectedTab: $selectedPrimaryTab,
+                selectedTab: primaryTabSelection,
                 size: .compact,
                 theme: .markerPrimary,
                 spacing: 6
@@ -220,7 +229,24 @@ struct chartSheetMarkersView: View {
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
+        if MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add {
+            HStack {
+                Text("Add a marker")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Spacer()
+                MarkerSettingsButton { showMarkerSettingsSheet = true }
+                    .disabled(chartViewModel.markerManager == nil)
+                    .opacity(chartViewModel.markerManager == nil ? 0.45 : 1)
+            }
+        } else {
+            legacyHeader
+        }
+    }
+
+    private var legacyHeader: some View {
         HStack(spacing: 12) {
             Circle()
                 .fill(AppColors.statusInfo22.opacity(0.9))
@@ -346,7 +372,7 @@ struct chartSheetMarkersView: View {
                 author: guidedAuthor,
                 intent: .setup,
                 title: "Plan a trade",
-                subtitle: "Entry, stop and target. Tracked Setups count toward your accuracy and reputation.",
+                subtitle: "Entry, stop and target · optional tracking",
                 identifier: "guided.planTrade"
             ) {
                 startGuidedPlacement(.setup, placementState: placementState)
