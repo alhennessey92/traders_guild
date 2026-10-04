@@ -6,12 +6,14 @@ import UIKit
 enum MarkerSheetSurface: Equatable {
     case add
     case guided(MarkerGuidedStep, RLMarkerIntent)
+    case workspace(MarkerWorkspaceDestination, RLMarkerIntent)
     case legacy(String)
 
     static func resolve(experiment: Bool, placing: Bool, step: MarkerGuidedStep?, intent: RLMarkerIntent,
-                        view: String, primaryAdd: Bool, viewedMarker: UUID?) -> Self {
+                        view: String, primaryAdd: Bool, viewedMarker: UUID?, workspace: MarkerWorkspaceDestination? = nil) -> Self {
         guard experiment else { return .legacy("experiment-off") }
         if placing {
+            if step == .context, let workspace { return .workspace(workspace, intent) }
             if let step { return .guided(step, intent) }
             return .legacy("placement")
         }
@@ -23,6 +25,7 @@ enum MarkerSheetSurface: Equatable {
         switch self {
         case .add: return "add"
         case let .guided(step, intent): return "\(step)-\(intent.rawValue)"
+        case let .workspace(destination, intent): return "workspace-\(destination.rawValue)-\(intent.rawValue)"
         case let .legacy(route): return route
         }
     }
@@ -31,10 +34,11 @@ enum MarkerSheetSurface: Equatable {
 struct MarkerSheetPresentationPolicy: Equatable {
     let surface: MarkerSheetSurface
     let workingHeight: CGFloat
+    var keyboardConstrained: Bool = false
+    var keyboardRestoreSelection: PresentationDetent? = nil
 
     var compact: PresentationDetent {
-        if case .guided = surface { return .fraction(0.18) }
-        return .fraction(0.11)
+        switch surface { case .guided, .workspace: return .fraction(0.18); case .legacy, .add: return .fraction(0.11) }
     }
     var tall: PresentationDetent { .fraction(0.9) }
     var working: PresentationDetent {
@@ -42,6 +46,7 @@ struct MarkerSheetPresentationPolicy: Equatable {
         return .height(workingHeight)
     }
     var detents: Set<PresentationDetent> {
+        if keyboardConstrained { return [working] }
         if case .legacy = surface { return [.fraction(0.11), .fraction(0.35), .fraction(0.5), tall] }
         return [compact, working, tall]
     }
@@ -50,6 +55,7 @@ struct MarkerSheetPresentationPolicy: Equatable {
     /// choices; map the old dock to the new dock, and obsolete working states
     /// to the new working state. No selected detent survives outside the set.
     func normalized(_ selection: PresentationDetent, from previous: Self?) -> PresentationDetent {
+        if keyboardConstrained { return working }
         if detents.contains(selection) { return selection }
         if selection == previous?.compact || selection == .fraction(0.11) { return compact }
         return working
@@ -58,8 +64,20 @@ struct MarkerSheetPresentationPolicy: Equatable {
 
 @MainActor
 final class MarkerSheetPresentationModel: ObservableObject {
+    @Published private(set) var geometry = MarkerSheetGeometry()
+    private var keyboardRestoreSelection: PresentationDetent?
+
+    func updateGeometry(_ value: MarkerSheetGeometry, selection: PresentationDetent) {
+        // Snapshot before publishing the narrower detent set. SwiftUI may
+        // immediately replace an unsupported native selection when it sees it.
+        if geometry.keyboardOverlap == 0 && value.keyboardOverlap > 0 {
+            keyboardRestoreSelection = selection
+        }
+        geometry = value
+    }
     @Published private(set) var availableHeight: CGFloat = 600
     @Published private(set) var contentHeights: [String: CGFloat] = [:]
+    private var lastGuidedHeight: CGFloat?
     private var captures: [String: CGFloat] = [:]
 
     func setAvailableHeight(_ height: CGFloat) {
@@ -77,9 +95,11 @@ final class MarkerSheetPresentationModel: ObservableObject {
         captures[captureKey] = height
         guard contentHeights[surface.measurementID] != height else { return }
         contentHeights[surface.measurementID] = height
+        switch surface { case .guided, .workspace: lastGuidedHeight = height; default: break }
     }
 
     func resetGuidedCaptures() {
+        lastGuidedHeight = nil
         captures = captures.filter { $0.key.hasPrefix("add|") }
         contentHeights = contentHeights.filter { $0.key == "add" }
     }
@@ -88,14 +108,24 @@ final class MarkerSheetPresentationModel: ObservableObject {
         let fallback: CGFloat
         switch surface {
         case .add: fallback = 360
+        case .workspace: fallback = availableHeight * 0.72
         case .guided(.context, _): fallback = availableHeight * 0.72
         case .guided(.details, .setup): fallback = 440
         case .guided(.review, .setup): fallback = 400
         case .guided: fallback = 340
         case .legacy: fallback = 0
         }
-        let fitted = contentHeights[surface.measurementID] ?? fallback
-        return MarkerSheetPresentationPolicy(surface: surface, workingHeight: min(max(160, fitted), availableHeight * 0.9))
+        let fitted: CGFloat
+        switch surface {
+        case .workspace: fitted = contentHeights[surface.measurementID] ?? fallback
+        case .guided(.context, _): fitted = fallback
+        case .guided: fitted = contentHeights[surface.measurementID] ?? lastGuidedHeight ?? contentHeights["add"] ?? fallback
+        default: fitted = contentHeights[surface.measurementID] ?? fallback
+        }
+        let focused: Bool
+        switch surface { case .guided, .workspace: focused = geometry.keyboardOverlap > 0; default: focused = false }
+        let cap = focused ? min(availableHeight * 0.9, geometry.keyboardWorkingBudget) : availableHeight * 0.9
+        return MarkerSheetPresentationPolicy(surface: surface, workingHeight: min(max(160, fitted), cap), keyboardConstrained: focused, keyboardRestoreSelection: focused ? keyboardRestoreSelection : nil)
     }
 }
 
@@ -103,15 +133,44 @@ struct MarkerSheetPresentationObserver: ViewModifier {
     let policy: MarkerSheetPresentationPolicy
     let enabled: Bool
     @Binding var selection: PresentationDetent
+    @State private var beforeKeyboard: PresentationDetent?
+    @State private var beforeKeyboardPolicy: MarkerSheetPresentationPolicy?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
             .onAppear { if enabled { selection = policy.normalized(selection, from: nil) } }
             .onChange(of: policy) { old, new in
-                if enabled { selection = new.normalized(selection, from: old) }
+                guard enabled else { return }
+                if new.keyboardConstrained && !old.keyboardConstrained {
+                    beforeKeyboard = new.keyboardRestoreSelection ?? selection
+                    beforeKeyboardPolicy = old
+                }
+                let target: PresentationDetent
+                if old.keyboardConstrained && !new.keyboardConstrained {
+                    target = new.normalized(beforeKeyboard ?? selection, from: beforeKeyboardPolicy)
+                    beforeKeyboard = nil
+                    beforeKeyboardPolicy = nil
+                } else { target = new.normalized(selection, from: old) }
+                // Native keyboard avoidance supplies its own animation. Only
+                // authoring transitions use our single restrained transaction.
+                if old.keyboardConstrained || new.keyboardConstrained || reduceMotion {
+                    selection = target
+                } else {
+                    switch (old.surface, new.surface) {
+                    case (.guided, _), (_, .guided), (.workspace, _), (_, .workspace):
+                        withAnimation(.easeInOut(duration: 0.22)) { selection = target }
+                    default: selection = target
+                    }
+                }
             }
             .onChange(of: selection) { _, new in
                 if enabled {
+                    if policy.keyboardConstrained && new == policy.compact {
+                        // Chart was requested while resigning first responder.
+                        beforeKeyboard = new
+                        beforeKeyboardPolicy = policy
+                    }
                     let supported = policy.normalized(new, from: nil)
                     if new != supported { selection = supported }
                 }
@@ -190,8 +249,6 @@ struct MarkerGuidedRetainedPanel<Panel: View>: View {
     let policy: MarkerSheetPresentationPolicy
     @Binding var selection: PresentationDetent
     let panel: Panel
-    @State private var retainedSize = CGSize(width: 320, height: 400)
-    @State private var retainedSelection: PresentationDetent?
     private var isCompact: Bool { selection == policy.compact }
 
     init(placementState: MarkerPlacementState, policy: MarkerSheetPresentationPolicy,
@@ -205,24 +262,24 @@ struct MarkerGuidedRetainedPanel<Panel: View>: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
-                panel.frame(width: isCompact ? retainedSize.width : proxy.size.width,
-                            height: isCompact ? retainedSize.height : proxy.size.height)
+                panel.frame(width: isCompact ? placementState.workspace.resumeSize.width : proxy.size.width,
+                            height: isCompact ? placementState.workspace.resumeSize.height : proxy.size.height)
                     .opacity(isCompact ? 0 : 1)
                     .allowsHitTesting(!isCompact)
                     .accessibilityHidden(isCompact)
                 if isCompact {
                     MarkerGuidedCompactDock(placementState: placementState) {
-                        selection = policy.normalized(retainedSelection ?? policy.working, from: policy)
+                        selection = policy.normalized(placementState.workspace.resumeSelection ?? policy.working, from: policy)
                     }
                     .padding(.horizontal, 20)
                     .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
             .onAppear {
-                if !isCompact { retainedSize = proxy.size; retainedSelection = selection }
+                if !isCompact && !policy.keyboardConstrained { placementState.workspace.resumeSize = proxy.size; placementState.workspace.resumeSelection = selection }
             }
-            .onChange(of: proxy.size) { _, size in if !isCompact { retainedSize = size } }
-            .onChange(of: selection) { _, new in if !isCompact { retainedSelection = new } }
+            .onChange(of: proxy.size) { _, size in if !isCompact && !policy.keyboardConstrained && policy.detents.contains(selection) { placementState.workspace.resumeSize = size } }
+            .onChange(of: selection) { _, new in if !isCompact && !policy.keyboardConstrained && policy.detents.contains(new) { placementState.workspace.resumeSelection = new } }
         }
         .clipped()
     }

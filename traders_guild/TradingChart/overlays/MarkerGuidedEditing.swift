@@ -154,6 +154,7 @@ extension MarkerPlacementState {
     func prepareGuidedEdit(of marker: ChartMarkerUI) {
         guard isEditingExistingMarker, editingMarkerId == marker.id else { return }
         let matched = matchSavedComponents(of: marker)
+        workspace = MarkerWorkspaceState()
         guidedStep = .details
         submissionPhase = .idle
         draftID = UUID()

@@ -229,6 +229,7 @@ final class MarkerPlacementState: ObservableObject {
     /// Where the guided panel is; `nil` is the legacy panel. Survives `reset`,
     /// which runs after the entry point has chosen the guided flow.
     @Published var guidedStep: MarkerGuidedStep?
+    @Published var workspace = MarkerWorkspaceState()
     /// The last submission, so the guided Review can show posting, failure and
     /// retry. The legacy panel ignores it.
     @Published var submissionPhase: MarkerPlacementSubmissionPhase = .idle
@@ -2144,7 +2145,7 @@ final class MarkerPlacementState: ObservableObject {
     /// stay where the author put them. Called by the chart for every Setup
     /// post, legacy and guided alike.
     func refreshSetupEntryForPosting(latest candle: RLCandleDTO) {
-        guard intent == .setup else { return }
+        guard intent == .setup, !isGuidedEdit else { return }
         upsertComponent(
             .anchor,
             payload: .anchor(AnchorPayload(time: candle.timestamp, price: candle.close))
@@ -2725,7 +2726,7 @@ final class MarkerPlacementState: ObservableObject {
         }
     }
 
-    private func allowedComponentTypes(for intent: RLMarkerIntent) -> Set<RLComponentType> {
+    func allowedComponentTypes(for intent: RLMarkerIntent) -> Set<RLComponentType> {
         let drawingAndIndicators: Set<RLComponentType> = [.drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern, .indicator]
 
         switch intent {

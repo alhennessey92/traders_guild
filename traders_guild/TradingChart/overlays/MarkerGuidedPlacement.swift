@@ -11,16 +11,8 @@ import CoreGraphics
 
 /// Where the guided panel is.
 enum MarkerGuidedStep: Equatable {
-    /// The creation hierarchy — social contribution, structured Setup, other
-    /// types — reached from "Change type". The draft and any response session
-    /// are kept.
-    case chooseType
-    /// Social (Analysis / Question) details, or a Setup's levels.
     case details
-    /// A Setup's second section: its reasoning, title and context. Split from
-    /// the levels so each section fits a sheet no higher than half the screen.
-    case setupReasoning
-    /// The existing component editors, opened from "Add context".
+    /// Nested destinations are stored in MarkerWorkspaceState.
     case context
     case review
 }
@@ -155,6 +147,7 @@ extension MarkerPlacementState {
     /// entry point before `startMarkerPlacement`; `reset` leaves it in place.
     func prepareGuidedFlow() {
         guidedEditOriginal = nil
+        workspace = MarkerWorkspaceState()
         guidedStep = .details
         submissionPhase = .idle
         draftBaseline = nil
@@ -167,6 +160,7 @@ extension MarkerPlacementState {
     /// completion cannot close or alter whatever comes next.
     func endGuidedFlow() {
         guidedEditOriginal = nil
+        workspace = MarkerWorkspaceState()
         guidedStep = nil
         submissionPhase = .idle
         draftBaseline = nil
@@ -186,12 +180,12 @@ extension MarkerPlacementState {
     /// The Details step's Review button: a postable draft, levels in order
     /// for a tracked Setup, and — for an edit — something changed.
     var canContinueToReview: Bool {
-        isValid && !guidedTrackedSetupLevelsNeedAdjusting
+        isValid && !guidedTrackedSetupLevelsNeedAdjusting && !workspaceHasInvalidLevelInput
             && (!isGuidedEdit || (guidedEditHasChanges && !guidedEditComponentChangeRefused))
     }
 
-    /// A Setup's levels → its reasoning: levels in order for a tracked Setup.
-    /// An edit needs no change yet; Review asks for one.
+    /// Compatibility for old fixture callers. Setup now remains on Details;
+    /// its reasoning is on the same scrolling surface.
     var canContinueToSetupReasoning: Bool {
         intent == .setup && isValid && !guidedTrackedSetupLevelsNeedAdjusting
     }
@@ -199,7 +193,7 @@ extension MarkerPlacementState {
     @discardableResult
     func continueToSetupReasoning() -> Bool {
         guard guidedStep == .details, canContinueToSetupReasoning, !isGuidedSubmissionInFlight else { return false }
-        guidedStep = .setupReasoning
+        guidedStep = .details
         return true
     }
 
@@ -207,7 +201,7 @@ extension MarkerPlacementState {
     /// be posted.
     @discardableResult
     func continueToReview() -> Bool {
-        guard guidedStep == .details || guidedStep == .setupReasoning,
+        guard guidedStep == .details,
               canContinueToReview, !isGuidedSubmissionInFlight else { return false }
         guidedStep = .review
         return true
@@ -218,10 +212,10 @@ extension MarkerPlacementState {
     func goBack() {
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         switch guidedStep {
-        case .review?, .context?:
-            guidedStep = intent == .setup ? .setupReasoning : .details
-        case .setupReasoning?, .chooseType?:
+        case .review?:
             guidedStep = .details
+        case .context?:
+            cancelWorkspaceEditor()
         case .details?, nil:
             break
         }
@@ -234,13 +228,13 @@ extension MarkerPlacementState {
 
     func openContext() {
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
-        guidedStep = .context
+        openWorkspace(.context)
     }
 
     func openTypeChooser() {
         // An edit keeps its type.
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight, !isGuidedEdit else { return }
-        guidedStep = .chooseType
+        guidedStep = .details
     }
 
     /// Whether the details step is the social one (Analysis / Question) or
@@ -252,8 +246,7 @@ extension MarkerPlacementState {
     /// instruction still wins while one is active.
     var guidedToolbarTitle: String? {
         switch guidedStep {
-        case .chooseType?: return "Change type"
-        case .details?, .setupReasoning?, .context?, .review?:
+        case .details?, .context?, .review?:
             if isGuidedEdit { return "Edit \(intent.displayName)" }
             return linkSession.isActive ? "New response" : "New \(intent.displayName)"
         case nil: return nil
@@ -277,7 +270,7 @@ extension MarkerPlacementState {
     /// available; nil once the draft can be reviewed. Shown beside the
     /// disabled Review button so the reason is never a guess.
     var guidedNextStepPrompt: String? {
-        guard guidedStep == .details || guidedStep == .setupReasoning else { return nil }
+        guard guidedStep == .details else { return nil }
         // A response's timeframe holds Review back while it loads, and after
         // it fails to.
         if isChangingResponseTimeframe {
@@ -286,6 +279,7 @@ extension MarkerPlacementState {
         if responseTimeframeLoadFailed {
             return "Choose a response timeframe that loads"
         }
+        if workspaceHasInvalidLevelInput { return "Check your prices" }
         if guidedEditComponentChangeRefused {
             return Self.guidedEditComponentChangeRefusedMessage
         }
@@ -304,10 +298,8 @@ extension MarkerPlacementState {
             ? unmetRequiredChecklistItems.filter { !$0.id.hasPrefix("setup_") }
             : unmetRequiredChecklistItems
         guard let unmet = unmetItems.first else {
-            // A Setup's levels section moves on without a change; Review is
-            // where an edit needs one.
-            let onSetupLevels = intent == .setup && guidedStep == .details
-            return isGuidedEdit && !guidedEditHasChanges && !onSetupLevels ? "Make a change to review it" : nil
+            // Review requires an actual change for every saved type.
+            return isGuidedEdit && !guidedEditHasChanges ? "Make a change to review it" : nil
         }
         switch unmet.id {
         case "anchor":
@@ -328,30 +320,26 @@ extension MarkerPlacementState {
         }
     }
 
-    /// Where the guided panel is, for its header: Details is step 1 and
-    /// Review the last; a Setup has its reasoning as step 2 of 3. Context and
-    /// the type list are side trips and are not counted.
+    /// Retained for fixture/test callers. The product header has no step track.
     var guidedStepNumber: Int? {
         switch guidedStep {
         case .details?: return 1
-        case .setupReasoning?: return 2
         case .review?: return guidedStepCount
-        case .chooseType?, .context?, nil: return nil
+        case .context?, nil: return nil
         }
     }
 
-    /// Two steps for Analysis and Question, three for a Setup.
-    var guidedStepCount: Int { intent == .setup ? 3 : 2 }
+    /// Every guided draft goes from Details to Review.
+    var guidedStepCount: Int { 2 }
 
     /// The step's prompt, as a question the author can answer.
     var guidedStepPrompt: String? {
         if isGuidedEdit {
             switch guidedStep {
             case .details?: return "Edit your \(intent == .setup ? "Setup" : intent.displayName.lowercased())"
-            case .setupReasoning?: return "Edit your reasoning"
             case .context?: return "Edit chart context"
             case .review?: return "Check your changes"
-            case .chooseType?, nil: return nil
+            case nil: return nil
             }
         }
         switch guidedStep {
@@ -361,10 +349,8 @@ extension MarkerPlacementState {
             case .setup: return "Plan your trade"
             default: return linkSession.isActive ? "What's your view?" : "What are you seeing?"
             }
-        case .setupReasoning?: return "Why this trade?"
         case .context?: return "Add chart context"
         case .review?: return "Check your post"
-        case .chooseType?: return "What do you want to post?"
         case nil: return nil
         }
     }
@@ -405,6 +391,7 @@ extension MarkerPlacementState {
     /// `setIntent`, plus the one default a fresh placement of that type would
     /// have had: a Setup starts tracked, as it does from Structured → Setup.
     private func switchIntentKeepingDefaults(_ newIntent: RLMarkerIntent) {
+        if intent == .setup || newIntent == .setup { workspace.levelInputs = [:] }
         setIntent(newIntent)
         if newIntent == .setup {
             trackingEnabled = true

@@ -3250,6 +3250,7 @@ struct TradingChartView: View {
 
         let tp = placementState.componentPrice(.levelTp) ?? .zero
         if abs(tp - prediction.takeProfitPrice) > epsilon {
+            if placementState.isGuidedFlowActive { placementState.workspace.levelInputs[.levelTp] = nil }
             placementState.upsertComponent(
                 .levelTp,
                 payload: .levelTp(LevelPayload(price: prediction.takeProfitPrice, label: "TP"))
@@ -3258,6 +3259,7 @@ struct TradingChartView: View {
 
         let sl = placementState.componentPrice(.levelSl) ?? .zero
         if abs(sl - prediction.stopLossPrice) > epsilon {
+            if placementState.isGuidedFlowActive { placementState.workspace.levelInputs[.levelSl] = nil }
             placementState.upsertComponent(
                 .levelSl,
                 payload: .levelSl(LevelPayload(price: prediction.stopLossPrice, label: "SL"))

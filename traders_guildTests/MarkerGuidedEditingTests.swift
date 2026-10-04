@@ -111,6 +111,31 @@ struct MarkerGuidedEditingTests {
         return MarkerComponentPayload.decode(componentType: match.componentType, rawPayload: match.payload).levelPrice
     }
 
+    @Test(arguments: [RLTrackingState.armed, .active, .tpHit, .slHit, .expired])
+    func workspaceEntryAndNavigationKeepSavedSetupGeometry(_ trackingState: RLTrackingState) {
+        let e = edit(setupDTO(state: trackingState))
+        let saved = e.state.components
+        let anchor = e.state.anchorDraft
+        e.state.refreshSetupEntryForPosting(latest: candles.last!)
+        e.state.openContext()
+        if trackingState == .armed {
+            e.state.beginWorkspaceIndicator(IndicatorCatalogItem(type: .ema))
+            e.state.workspace.indicatorDraft?.intValues["period"] = "123"
+            e.state.goBack()
+        } else {
+            #expect(!e.state.workspaceAllows(.indicator))
+            e.state.beginWorkspaceIndicator(IndicatorCatalogItem(type: .ema))
+            #expect(e.state.workspace.indicatorDraft == nil)
+        }
+        e.state.backToDetails()
+        #expect(e.state.components == saved)
+        #expect(e.state.anchorDraft == anchor)
+        #expect(e.state.componentPrice(.levelEntry) == 63_920.5)
+        #expect(e.state.componentPrice(.levelSl) == 63_700.75)
+        #expect(e.state.componentPrice(.levelTp) == 64_400.25)
+        #expect(e.state.buildGuidedUpdateRequest().components == nil)
+    }
+
     // MARK: Update, not create
 
     @Test
@@ -220,7 +245,7 @@ struct MarkerGuidedEditingTests {
         e.state.trackingEnabled = false
         #expect(!e.state.guidedEditHasChanges)
         #expect(!e.state.canContinueToReview)
-        #expect(e.state.guidedNextStepPrompt == nil, "the levels section moves on without a change")
+        #expect(e.state.guidedNextStepPrompt == "Make a change to review it", "single Details requires a change before Review")
         #expect(e.state.continueToSetupReasoning())
         #expect(e.state.guidedNextStepPrompt == "Make a change to review it")
 

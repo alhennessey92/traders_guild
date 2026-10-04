@@ -68,9 +68,9 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(response.guidedToolbarTitle == "New response")
         #expect(response.guidedStepPrompt == "What's your view?")
         response.openTypeChooser()
-        #expect(response.guidedToolbarTitle == "Change type")
-        #expect(response.guidedStepPrompt == "What do you want to post?")
-        #expect(response.guidedStepNumber == nil)
+        #expect(response.guidedToolbarTitle == "New response")
+        #expect(response.guidedStepPrompt == "What's your view?")
+        #expect(response.guidedStepNumber == 1)
         #expect(response.linkSession.isActive, "Change type keeps the response")
     }
 
@@ -175,25 +175,25 @@ struct MarkerGuidedSheetRefinementTests {
     /// levels, then reasoning, then Review — three steps, with Back going one
     /// section at a time.
     @Test
-    func aSetupIsLevelsThenReasoningThenReview() {
+    func aSetupHasOneDetailsWorkspaceThenReview() {
         let state = guidedDraft(.setup)
         setLevels(state, tp: 240, sl: -120)
         state.trackingEnabled = true
-        #expect(state.guidedStepNumber == 1 && state.guidedStepCount == 3)
+        #expect(state.guidedStepNumber == 1 && state.guidedStepCount == 2)
         #expect(state.continueToSetupReasoning())
-        #expect(state.guidedStep == .setupReasoning)
-        #expect(state.guidedStepNumber == 2)
+        #expect(state.guidedStep == .details)
+        #expect(state.guidedStepNumber == 1)
         state.note = "Retest of the range high."
-        #expect(state.guidedStepPrompt == "Why this trade?")
+        #expect(state.guidedStepPrompt == "Plan your trade")
         #expect(state.guidedToolbarTitle == "New Setup")
         #expect(state.continueToReview())
-        #expect(state.guidedStepNumber == 3)
+        #expect(state.guidedStepNumber == 2)
 
         state.goBack()
-        #expect(state.guidedStep == .setupReasoning, "Review goes back to the reasoning")
+        #expect(state.guidedStep == .details, "Review goes back to the reasoning")
         state.openContext()
         state.goBack()
-        #expect(state.guidedStep == .setupReasoning, "context returns to where it was opened")
+        #expect(state.guidedStep == .details, "context returns to where it was opened")
         state.goBack()
         #expect(state.guidedStep == .details)
         #expect(state.note == "Retest of the range high.", "nothing is reset on the way")
@@ -254,6 +254,6 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(MarkerGuidedFormat.audience(nil) == "Your guild will see this on the chart.")
         // The approved separation: Setup is not in the social selector.
         #expect(MarkerGuidedFlowEntry.socialIntents == [.analysis, .question])
-        #expect(!MarkerGuidedFlowEntry.otherIntents.contains(.setup))
+        #expect(MarkerGuidedFlowEntry.createIntents == [.analysis, .setup])
     }
 }

@@ -55,7 +55,6 @@ struct chartSheetMarkersView: View {
     }
     var onMeasureAdd: ((MarkerSheetContentMeasurement) -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var showsOtherMarkerTypes = false
     @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
     @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
 
@@ -170,7 +169,7 @@ struct chartSheetMarkersView: View {
         }
         .padding(.top, MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? 8 : 15)
         .modifier(MarkerSheetContentMeasure(
-            revision: "add-\(showsOtherMarkerTypes)-\(dynamicTypeSize)",
+            revision: "add-\(dynamicTypeSize)",
             onMeasure: MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? onMeasureAdd : nil
         ))
         .task(id: visibleLoadKey) {
@@ -367,43 +366,10 @@ struct chartSheetMarkersView: View {
     }
 
     /// Two starting points — Post to the chart (Analysis or Question) and
-    /// Plan a trade (Setup) — with every other type on its existing flow
-    /// behind a disclosure.
+    /// Setup. Legacy types remain readable and editable through existing paths.
     private func guidedAddContent(_ placementState: MarkerPlacementState) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            MarkerPostToChartCard(author: guidedAuthor) {
-                startGuidedPlacement(.analysis, placementState: placementState)
-            }
-            MarkerGuidedEntryCard(
-                author: guidedAuthor,
-                intent: .setup,
-                title: "Plan a trade",
-                subtitle: "Entry, stop and target · optional tracking",
-                identifier: "guided.planTrade"
-            ) {
-                startGuidedPlacement(.setup, placementState: placementState)
-            }
-
-            DisclosureGroup(isExpanded: $showsOtherMarkerTypes) {
-                VStack(spacing: 8) {
-                    ForEach(MarkerGuidedFlowEntry.otherIntents, id: \.self) { intent in
-                        MarkerPlacementOptionRow(
-                            intent: intent,
-                            isActive: isMarkerPlacementActive(for: intent),
-                            onToggle: {
-                                placementState.endGuidedFlow()
-                                togglePlacement(for: intent)
-                            }
-                        )
-                    }
-                }
-                .padding(.top, 8)
-            } label: {
-                MarkerGuidedSectionTitle("Other marker types")
-            }
-            .accessibilityIdentifier("guided.otherTypes")
-            .tint(AppColors.greyText)
-            .padding(.top, 6)
+        MarkerGuidedCreateEntries(author: guidedAuthor) { intent in
+            startGuidedPlacement(intent, placementState: placementState)
         }
     }
 

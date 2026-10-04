@@ -68,16 +68,15 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     func testDetailsControlsSpeakProseAndExposeTheSelectedType() throws {
         launch("analysisDetails")
-        let picker = app.buttons["guided.intentPicker"]
+        let picker = app.otherElements["guided.intentPicker"]
         XCTAssertTrue(picker.exists)
-        XCTAssertEqual(picker.label, "Type: Analysis")
+        XCTAssertTrue(app.buttons["guided.intent.analysis"].isSelected)
         XCTAssertTrue(app.buttons["guided.review"].exists)
         XCTAssertTrue(symbolNamedButtons.isEmpty, "buttons reading as SF Symbol names: \(symbolNamedButtons)")
-        picker.tap()
         let question = app.buttons["guided.intent.question"]
         XCTAssertTrue(question.waitForExistence(timeout: 5))
         question.tap()
-        XCTAssertEqual(picker.label, "Type: Question")
+        XCTAssertTrue(app.buttons["guided.intent.question"].isSelected)
         attachTree("tree-analysisDetails")
     }
 
@@ -146,67 +145,32 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         attachTree("tree-analysisEmpty-to-review")
     }
 
-    /// The frozen plan's separation: Details offers Analysis/Question only;
-    /// Setup is reached through Change type, which returns to the creation
-    /// hierarchy with the draft kept.
     func testSetupStaysOutOfTheSocialSelector() throws {
         launch("analysisDetails")
-        let picker = app.buttons["guided.intentPicker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        picker.tap()
         XCTAssertTrue(app.buttons["guided.intent.analysis"].exists)
         XCTAssertTrue(app.buttons["guided.intent.question"].exists)
-        XCTAssertFalse(app.buttons["guided.intent.setup"].exists, "Setup is not in the social selector")
-        app.buttons["guided.changeType"].tap()
-        let social = app.buttons["guided.postToChart"]
-        let setup = app.buttons["guided.planTrade"]
-        XCTAssertTrue(social.waitForExistence(timeout: 5) && setup.exists, "Change type shows the creation hierarchy")
-        XCTAssertTrue(social.isSelected, "the draft's current kind is marked")
-        XCTAssertFalse(setup.isSelected)
-        attachScreenshot("change-type-hierarchy")
-
-        setup.tap()
-        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Plan a trade opens Setup details")
-        XCTAssertFalse(app.buttons["guided.intent.analysis"].exists, "Setup details carry no social selector")
-        XCTAssertTrue(app.buttons["guided.changeType"].exists,
-                      "the way back is there before any level is set")
+        XCTAssertFalse(app.buttons["guided.intent.setup"].exists)
+        XCTAssertFalse(app.buttons["guided.changeType"].exists)
     }
 
-    func testChangeTypeKeepsAResponse() throws {
-        launch("responseChooser")
-        XCTAssertTrue(app.buttons["guided.planTrade"].waitForExistence(timeout: 5))
-        XCTAssertTrue(
-            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Challenges")).firstMatch.exists
-                || app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Challenges")).firstMatch.exists,
-            "the response banner stays in Change type"
-        )
-        attachScreenshot("change-type-response")
+    func testResponseConvertsWithinDetails() throws {
+        launch("responseDetails")
+        let convert = app.buttons["guided.convertResponse"]
+        for _ in 0..<5 { if convert.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(convert.isHittable)
+        convert.tap()
+        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["marker.response.timeframe"].exists)
     }
 
-    /// Slice 1 preserves separate Setup levels and optional reasoning; their
-    /// controls remain reachable at the working height.
-    func testSetupKeepsSeparateLevelsAndOptionalReasoning() throws {
+    func testSetupHasLevelsAndReasoningInOneDetails() throws {
         launch("setupTracked")
-        let next = app.buttons["guided.next"]
-        XCTAssertTrue(next.waitForExistence(timeout: 5))
-        let header = app.staticTexts["guided.stepHeader"].exists
-            ? app.staticTexts["guided.stepHeader"]
-            : app.otherElements["guided.stepHeader"]
-        XCTAssertTrue(header.label.contains("Step 1 of 3"), "a Setup has three steps: \(header.label)")
-        for element in [app.textFields["Take Profit"], app.textFields["Stop Loss"], app.switches.firstMatch] {
-            XCTAssertTrue(element.exists && element.isHittable, "\(element) is on screen")
-        }
-        XCTAssertFalse(app.textViews["guided.text"].exists || app.textFields["guided.text"].exists,
-                       "the reasoning is in the next section")
-        attachScreenshot("working-sheet-setup-levels")
-        next.tap()
-        let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
-        XCTAssertTrue(text.waitForExistence(timeout: 5))
-        XCTAssertTrue(text.isHittable && app.buttons["guided.addTitle"].isHittable && app.buttons["guided.addContext"].isHittable)
+        XCTAssertFalse(app.buttons["guided.next"].exists)
+        XCTAssertTrue(app.textFields["Take Profit"].exists)
+        XCTAssertTrue(app.textFields["Stop Loss"].exists)
+        XCTAssertTrue(app.textViews["guided.text"].exists)
         XCTAssertTrue(app.buttons["guided.review"].isEnabled)
-        attachScreenshot("working-sheet-setup-reasoning")
-        app.buttons["guided.back"].tap()
-        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5), "Levels goes back one section")
+        attachScreenshot("final-setup-details")
     }
 
     func testAnalysisWorkingHeightKeepsOptionalControlsReachable() throws {
@@ -251,10 +215,9 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     func testLargestTextKeepsTheTypeMenuReachable() throws {
         launch("analysisDetails", extra: Self.largestText)
-        let picker = app.buttons["guided.intentPicker"]
+        let picker = app.otherElements["guided.intentPicker"]
         if !picker.isHittable { app.swipeUp() }
         XCTAssertTrue(picker.waitForExistence(timeout: 5) && picker.isHittable)
-        picker.tap()
         XCTAssertTrue(app.buttons["guided.intent.question"].waitForExistence(timeout: 5))
         attachScreenshot("ax-xxxl-type-menu")
     }

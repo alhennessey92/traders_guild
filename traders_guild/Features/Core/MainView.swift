@@ -128,6 +128,7 @@ struct MainView: View {
                 leftDrawerViewModel.requestNavigationToMarker(marker)
             },
             onPlaceMarker: {
+                guard !MarkerMainViewSheetFixture.enabled else { return }
                 NotificationCenter.default.post(name: .placeMarkerRequested, object: nil)
             },
             onViewingAuthorTap: { marker in
@@ -162,6 +163,7 @@ struct MainView: View {
 
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Matches `ThemeManager` / `ChartBottomSheet` — forces the chart sheet subtree to rebuild on theme change (`.sheet` often skips `ObservableObject` updates).
     @AppStorage("appTheme") private var appThemeStorage: AppTheme = .midGrey
 
@@ -257,7 +259,7 @@ struct MainView: View {
                  placing: chartControlVM.isMarkerPlacementMode,
                  step: placementState.guidedStep, intent: placementState.intent,
                  view: chartSheetTab.rawValue, primaryAdd: chartMarkerPrimaryTab == .add,
-                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id)
+                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id, workspace: placementState.workspaceDestination)
     }
     private var markerSheetPolicy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: markerSheetSurface) }
     private var chartSheetDetents: Set<PresentationDetent> { markerSheetPolicy.detents }
@@ -571,8 +573,8 @@ struct MainView: View {
     
     // MARK: - Body
     var body: some View {
-        if let user = rlAppState.currentUser,
-           rlAppState.currentGuild != nil {
+        if let user = rlAppState.currentUser ?? MarkerMainViewSheetFixture.user,
+           rlAppState.currentGuild != nil || MarkerMainViewSheetFixture.enabled {
             ZStack {
                 // MARK: - Main Content Layer
                 mainContentStack
@@ -708,6 +710,7 @@ struct MainView: View {
             // bottom sheet down for them is the same thing already done for the drawers.
             .sheet(isPresented: .constant(showBottomSheet && !showLeftDrawer && !showRightDrawer && !rlAppState.showingTransition && !walkthroughSlotReserved && markerSharePromptContext == nil && selectedViewingMarkerAuthorRoute == nil && !showDiscordSetupReminder && !guildArrivalReservesSheetSlot)) {
                 chartBottomSheet
+                .modifier(MarkerSheetGeometryObserver(model: sheetPresentation, selection: selectedDetent, enabled: MarkerAvatarExperiment.isEnabled && placementState.isGuidedFlowActive))
                 .environmentObject(rlAppState)
                 .id(appThemeStorage)
                 .presentationDetents(chartSheetDetents, selection: $selectedDetent)
@@ -738,6 +741,13 @@ struct MainView: View {
                 }
             }
             .onAppear {
+                if MarkerMainViewSheetFixture.enabled {
+                    fadeIn = true; showBottomSheet = true; chartSheetTab = .markers
+                    placementState.prepareGuidedFlow()
+                    placementState.reset(to: .analysis, anchorTime: Date(timeIntervalSince1970: 1770000000), anchorPrice: 63920)
+                    chartControlVM.startMarkerPlacement(intent: .analysis)
+                    return
+                }
                 withAnimation(.easeIn(duration: 1.5)) {
                     fadeIn = true
                 }
@@ -788,6 +798,7 @@ struct MainView: View {
             .environmentObject(rightDrawerViewModel)
             .environmentObject(notificationNavigationManager)
             .task {
+                guard !MarkerMainViewSheetFixture.enabled else { return }
                 // Reserve the sheet slot before the transition lifts, or the chart
                 // sheet presents into the gap 0.5 s after appear and the
                 // walkthrough is refused behind it.
@@ -926,21 +937,28 @@ struct MainView: View {
                 )
             )
             .onChange(of: chartControlVM.isMarkerPlacementMode) { _, isPlacing in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if isPlacing {
-                        sheetPresentation.resetGuidedCaptures()
-                        // Begin at the step's working height. The chart dock is
-                        // an intentional move for placement, not a clipped form.
-                        selectedDetent = placementState.isGuidedFlowActive
-                            ? markerSheetPolicy.working
-                            : .fraction(0.35)
-                    } else if !MarkerAvatarExperiment.isEnabled {
-                        // ...and put it back when the panel goes away. Raising the sheet on
-                        // the way in without lowering it on the way out left it standing open
-                        // after every place, edit and cancel, for the user to drag down by
-                        // hand. Placing a marker also selects it, and that path collapses to
-                        // the same detent, so the two agree.
-                        selectedDetent = .fraction(0.11)
+                if isPlacing && MarkerAvatarExperiment.isEnabled && placementState.isGuidedFlowActive {
+                    sheetPresentation.resetGuidedCaptures()
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                        selectedDetent = markerSheetPolicy.working
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        if isPlacing {
+                            sheetPresentation.resetGuidedCaptures()
+                            // Begin at the step's working height. The chart dock is
+                            // an intentional move for placement, not a clipped form.
+                            selectedDetent = placementState.isGuidedFlowActive
+                                ? markerSheetPolicy.working
+                                : .fraction(0.35)
+                        } else if !MarkerAvatarExperiment.isEnabled {
+                            // ...and put it back when the panel goes away. Raising the sheet on
+                            // the way in without lowering it on the way out left it standing open
+                            // after every place, edit and cancel, for the user to drag down by
+                            // hand. Placing a marker also selects it, and that path collapses to
+                            // the same detent, so the two agree.
+                            selectedDetent = .fraction(0.11)
+                        }
                     }
                 }
                 syncTimeframePanelsForCurrentMode(resetPlacementSource: isPlacing)
@@ -977,6 +995,7 @@ struct MainView: View {
                 syncViewingTimeframePanels()
             }
             .onChange(of: scenePhase) { _, newPhase in
+                guard !MarkerMainViewSheetFixture.enabled else { return }
                 switch newPhase {
                 case .active:
                     Task {
@@ -2884,6 +2903,7 @@ struct ChartBottomSheet: View {
     /// dialog presented from `MainView` would pre-empt it, and UIKit traps.
     @Binding var guidedDiscardConfirmation: Bool
     @EnvironmentObject var rlAppState: RLAppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onNavigateToMarker: ((RLTopMarkerDTO) -> Void)?
     let onPlaceMarker: (() -> Void)?
     var onViewingAuthorTap: ((ChartMarkerUI) -> Void)? = nil
@@ -2960,7 +2980,7 @@ struct ChartBottomSheet: View {
                  placing: controlViewModel.isMarkerPlacementMode,
                  step: placementState.guidedStep, intent: placementState.intent,
                  view: selectedView.rawValue, primaryAdd: markerPrimaryTab == .add,
-                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id)
+                 viewedMarker: chartViewModel.selectedMarkerForSheet?.id, workspace: placementState.workspaceDestination)
     }
     private var markerSheetPolicy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: markerSheetSurface) }
 
@@ -3135,9 +3155,7 @@ struct ChartBottomSheet: View {
             EmptyView()
         } else if controlViewModel.isMarkerPlacementMode {
             if placementState.isGuidedFlowActive {
-                MarkerGuidedPlacementBar(placementState: placementState, onShowChart: {
-                    selectedDetent = markerSheetPolicy.compact
-                }) {
+                MarkerGuidedPlacementBar(placementState: placementState) {
                     onPlaceMarker?()
                 }
             } else {
@@ -3614,13 +3632,14 @@ struct ChartBottomSheet: View {
                         selectPlacementTimeframe(timeframe)
                     },
                     onBeginInteractiveDrawing: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
                             selectedDetent = .fraction(MarkerGuidedSheetHeight.compact)
                         }
                     },
+                    onShowChart: { selectedDetent = markerSheetPolicy.compact },
                     onContentMeasure: { measurement in
                         guard let step = placementState.guidedStep else { return }
-                        sheetPresentation.capture(measurement, surface: .guided(step, placementState.intent), chrome: 100)
+                        sheetPresentation.capture(measurement, surface: step == .context ? .workspace(placementState.workspaceDestination, placementState.intent) : .guided(step, placementState.intent), chrome: 156)
                     },
                     viewportAnchorProvider: viewportAnchorProvider
                 )
@@ -3634,7 +3653,7 @@ struct ChartBottomSheet: View {
                         selectPlacementTimeframe(timeframe)
                     },
                     onBeginInteractiveDrawing: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
                             selectedDetent = .fraction(0.11)
                         }
                     },

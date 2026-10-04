@@ -443,221 +443,29 @@ struct IndicatorSettingField: Identifiable {
     }
 }
 
-struct IndicatorSettingsEditorSheet: View {
+/// Uncommitted settings belong to the placement session in an embedded editor.
+/// Existing sheet hosts use their own instance of the same editor model.
+@MainActor
+final class IndicatorSettingsDraft: ObservableObject {
     let context: IndicatorEditingContext
-    let onSave: ([String: AnyCodable]?) -> Void
+    private var initialSettingsData: Data?
+    var hasChanges: Bool { settingsData() != initialSettingsData }
+    @Published var intValues: [String: String] = [:]
+    @Published var doubleValues: [String: String] = [:]
+    @Published var boolValues: [String: Bool] = [:]
+    @Published var colorValues: [String: Color] = [:]
+    var fields: [IndicatorSettingField] { IndicatorSettingField.fields(for: context.item.type) }
 
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var intValues: [String: String] = [:]
-    @State private var doubleValues: [String: String] = [:]
-    @State private var boolValues: [String: Bool] = [:]
-    @State private var colorValues: [String: Color] = [:]
-
-    private var fields: [IndicatorSettingField] {
-        IndicatorSettingField.fields(for: context.item.type)
+    init(context: IndicatorEditingContext) {
+        self.context = context
+        loadCurrentValues()
+        initialSettingsData = settingsData()
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(context.item.description)
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-
-                    if fields.isEmpty {
-                        Text("No editable settings available for this indicator.")
-                            .font(.caption2)
-                            .foregroundColor(AppColors.greyText)
-                    } else {
-                        ForEach(fields) { field in
-                            settingFieldView(field)
-                        }
-                    }
-                }
-                .padding(14)
-            }
-            .background(AppColors.surfaceBlack96)
-            .navigationTitle(context.item.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave(buildSettings())
-                        dismiss()
-                    }
-                    .disabled(fields.isEmpty)
-                }
-            }
-        }
-        .onAppear(perform: loadCurrentValues)
-    }
-
-    @ViewBuilder
-    private func settingFieldView(_ field: IndicatorSettingField) -> some View {
-        switch field.valueType {
-        case .int:
-            if let range = field.range {
-                // Bounded numbers get a slider, matching Android's IndicatorConfigSheets. A number
-                // pad for "period: 20" means summoning a keyboard to nudge a value you want to
-                // feel your way to.
-                sliderField(
-                    label: field.label,
-                    text: Binding(
-                        get: { intValues[field.key, default: ""] },
-                        set: { intValues[field.key] = $0 }
-                    ),
-                    range: range,
-                    step: max(1, field.step),
-                    decimals: 0
-                )
-            } else {
-                numericField(
-                    label: field.label,
-                    text: Binding(
-                        get: { intValues[field.key, default: ""] },
-                        set: { intValues[field.key] = $0 }
-                    ),
-                    keyboard: .numberPad
-                )
-            }
-        case .double:
-            if let range = field.range {
-                sliderField(
-                    label: field.label,
-                    text: Binding(
-                        get: { doubleValues[field.key, default: ""] },
-                        set: { doubleValues[field.key] = $0 }
-                    ),
-                    range: range,
-                    step: field.step,
-                    decimals: field.step < 1 ? 2 : 1
-                )
-            } else {
-                numericField(
-                    label: field.label,
-                    text: Binding(
-                        get: { doubleValues[field.key, default: ""] },
-                        set: { doubleValues[field.key] = $0 }
-                    ),
-                    keyboard: .decimalPad
-                )
-            }
-        case .bool:
-            Toggle(isOn: Binding(
-                get: { boolValues[field.key, default: false] },
-                set: { boolValues[field.key] = $0 }
-            )) {
-                Text(field.label)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.primaryForeground)
-            }
-            .tint(AppColors.statusInfo)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppColors.whiteText.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
-                    )
-            )
-        case .color:
-            colorField(
-                label: field.label,
-                selection: Binding(
-                    get: { colorValues[field.key, default: field.defaultValue as? Color ?? .white] },
-                    set: { colorValues[field.key] = $0 }
-                )
-            )
-        }
-    }
-
-    /// Label + live value readout + Slider, backed by the same String store the text fields use so
-    /// `buildSettings()` keeps working unchanged.
-    private func sliderField(
-        label: String,
-        text: Binding<String>,
-        range: ClosedRange<Double>,
-        step: Double,
-        decimals: Int
-    ) -> some View {
-        let value = Binding<Double>(
-            get: { (Double(text.wrappedValue) ?? range.lowerBound).clamped(to: range) },
-            set: { text.wrappedValue = decimals == 0 ? String(Int($0.rounded())) : String($0) }
-        )
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(AppColors.greyText)
-                Spacer()
-                Text(String(format: "%.\(decimals)f", value.wrappedValue))
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(AppColors.primaryForeground)
-            }
-            Slider(value: value, in: range, step: step)
-                .tint(AppColors.accentColor)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(AppColors.whiteText.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
-                )
-        )
-    }
-
-    private func numericField(label: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-
-            TextField(label, text: text)
-                .textFieldStyle(.plain)
-                .font(.subheadline)
-                .foregroundColor(AppColors.primaryForeground)
-                .keyboardType(keyboard)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.whiteText.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
-                        )
-                )
-        }
-    }
-
-    private func colorField(label: String, selection: Binding<Color>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(AppColors.greyText)
-
-            ColorPickerGrid(selectedColor: selection)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppColors.whiteText.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
-                        )
-                )
-        }
+    private func settingsData() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(buildSettings() ?? [:])
     }
 
     private func loadCurrentValues() {
@@ -679,7 +487,7 @@ struct IndicatorSettingsEditorSheet: View {
         }
     }
 
-    private func buildSettings() -> [String: AnyCodable]? {
+    func buildSettings() -> [String: AnyCodable]? {
         var merged = context.existingSettings ?? [:]
 
         for field in fields {
@@ -785,4 +593,220 @@ struct IndicatorSettingsEditorSheet: View {
             ]
         )
     }
+}
+
+struct IndicatorSettingsEditorSheet: View {
+    let context: IndicatorEditingContext
+    let onSave: ([String: AnyCodable]?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var draft: IndicatorSettingsDraft
+
+    init(context: IndicatorEditingContext, onSave: @escaping ([String: AnyCodable]?) -> Void) {
+        self.context = context
+        self.onSave = onSave
+        _draft = StateObject(wrappedValue: IndicatorSettingsDraft(context: context))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                IndicatorSettingsEditorContent(draft: draft).padding(14)
+            }
+            .background(AppColors.surfaceBlack96)
+            .navigationTitle(context.item.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { onSave(draft.buildSettings()); dismiss() }
+                        .disabled(draft.fields.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+/// The same technical fields, with no presenter, navigation stack or dismissal.
+struct IndicatorSettingsEditorContent: View {
+    @ObservedObject var draft: IndicatorSettingsDraft
+    private var fields: [IndicatorSettingField] { draft.fields }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(draft.context.item.description).font(.caption).foregroundColor(AppColors.greyText)
+            if fields.isEmpty {
+                Text("No editable settings available for this indicator.").font(.caption2)
+            } else {
+                ForEach(fields) { field in
+                    settingFieldView(field).id(field.key)
+                        .accessibilityIdentifier("workspace.indicator.\(field.key)")
+                }
+            }
+        }
+    }
+    @ViewBuilder
+    private func settingFieldView(_ field: IndicatorSettingField) -> some View {
+        switch field.valueType {
+        case .int:
+            if let range = field.range {
+                // Bounded numbers get a slider, matching Android's IndicatorConfigSheets. A number
+                // pad for "period: 20" means summoning a keyboard to nudge a value you want to
+                // feel your way to.
+                sliderField(
+                    label: field.label,
+                    text: Binding(
+                        get: { draft.intValues[field.key, default: ""] },
+                        set: { draft.intValues[field.key] = $0 }
+                    ),
+                    range: range,
+                    step: max(1, field.step),
+                    decimals: 0
+                )
+            } else {
+                numericField(
+                    label: field.label,
+                    text: Binding(
+                        get: { draft.intValues[field.key, default: ""] },
+                        set: { draft.intValues[field.key] = $0 }
+                    ),
+                    keyboard: .numberPad
+                )
+            }
+        case .double:
+            if let range = field.range {
+                sliderField(
+                    label: field.label,
+                    text: Binding(
+                        get: { draft.doubleValues[field.key, default: ""] },
+                        set: { draft.doubleValues[field.key] = $0 }
+                    ),
+                    range: range,
+                    step: field.step,
+                    decimals: field.step < 1 ? 2 : 1
+                )
+            } else {
+                numericField(
+                    label: field.label,
+                    text: Binding(
+                        get: { draft.doubleValues[field.key, default: ""] },
+                        set: { draft.doubleValues[field.key] = $0 }
+                    ),
+                    keyboard: .decimalPad
+                )
+            }
+        case .bool:
+            Toggle(isOn: Binding(
+                get: { draft.boolValues[field.key, default: false] },
+                set: { draft.boolValues[field.key] = $0 }
+            )) {
+                Text(field.label)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.primaryForeground)
+            }
+            .tint(AppColors.statusInfo)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(AppColors.whiteText.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        case .color:
+            colorField(
+                label: field.label,
+                selection: Binding(
+                    get: { draft.colorValues[field.key, default: field.defaultValue as? Color ?? .white] },
+                    set: { draft.colorValues[field.key] = $0 }
+                )
+            )
+        }
+    }
+
+    /// Label + live value readout + Slider, backed by the same String store the text fields use so
+    /// `buildSettings()` keeps working unchanged.
+    private func sliderField(
+        label: String,
+        text: Binding<String>,
+        range: ClosedRange<Double>,
+        step: Double,
+        decimals: Int
+    ) -> some View {
+        let value = Binding<Double>(
+            get: { (Double(text.wrappedValue) ?? range.lowerBound).clamped(to: range) },
+            set: { text.wrappedValue = decimals == 0 ? String(Int($0.rounded())) : String($0) }
+        )
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                Spacer()
+                Text(String(format: "%.\(decimals)f", value.wrappedValue))
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(AppColors.primaryForeground)
+            }
+            Slider(value: value, in: range, step: step)
+                .tint(AppColors.accentColor)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.whiteText.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private func numericField(label: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+
+            TextField(label, text: text)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .foregroundColor(AppColors.primaryForeground)
+                .keyboardType(keyboard)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.whiteText.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                        )
+                )
+        }
+    }
+
+    private func colorField(label: String, selection: Binding<Color>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(AppColors.greyText)
+
+            ColorPickerGrid(selectedColor: selection)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.whiteText.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(AppColors.whiteText.opacity(0.1), lineWidth: 1)
+                        )
+                )
+        }
+    }
+
 }

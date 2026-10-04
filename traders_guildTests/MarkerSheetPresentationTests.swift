@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Testing
 @testable import traders_guild
 
@@ -102,4 +103,43 @@ struct MarkerSheetPresentationTests {
             for detent in policy.detents { #expect(policy.normalized(detent, from: nil) == detent) }
         }
     }
+    @Test
+    func keyboardRestrictsNativeDetentsWithinOneWindowWithoutResizingOnTyping() {
+        let model = model()
+        let compose = surface(placing: true, step: .details)
+        let original = model.policy(for: compose)
+        var geometry = MarkerSheetGeometry(keyboardFrame: CGRect(x: 0, y: 529, width: 402, height: 345),
+                               windowFrame: CGRect(x: 0, y: 0, width: 402, height: 874),
+                               safeAreaInsets: UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0))
+        model.updateGeometry(geometry, selection: original.tall)
+        let focused = model.policy(for: compose)
+        #expect(focused.keyboardConstrained)
+        #expect(focused.keyboardRestoreSelection == original.tall)
+        model.updateGeometry(geometry, selection: focused.working)
+        #expect(model.policy(for: compose).keyboardRestoreSelection == original.tall, "native selection replacement cannot overwrite the prior choice")
+        #expect(focused.detents == [focused.working])
+        #expect(focused.workingHeight <= 421)
+        #expect(focused.normalized(original.tall, from: original) == focused.working)
+        #expect(!model.policy(for: surface(view: "Chat")).keyboardConstrained)
+        geometry.keyboardFrame = CGRect(x: 80, y: 400, width: 220, height: 200)
+        model.updateGeometry(geometry, selection: focused.working)
+        #expect(!model.policy(for: compose).keyboardConstrained, "floating keyboards do not shrink the whole viewport")
+        geometry.keyboardFrame = .zero
+        model.updateGeometry(geometry, selection: original.tall)
+        #expect(model.policy(for: compose) == original)
+    }
+
+    @Test
+    func nestedWorkspaceRoutesRestoreTheirOwnMeasuredHeight() {
+        let model = model()
+        let context = MarkerSheetSurface.workspace(.context, .analysis)
+        let settings = MarkerSheetSurface.workspace(.indicatorSettings, .analysis)
+        model.capture(.init(revision: "context", height: 200, width: 370), surface: context, chrome: 156)
+        let before = model.policy(for: context)
+        model.capture(.init(revision: "settings", height: 420, width: 370), surface: settings, chrome: 156)
+        #expect(model.policy(for: settings).workingHeight != before.workingHeight)
+        #expect(model.policy(for: context) == before)
+        #expect(model.policy(for: settings).compact == .fraction(0.18))
+    }
+
 }

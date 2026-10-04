@@ -96,7 +96,7 @@ final class MarkerGuidedSheetJourneyTests: XCTestCase {
         let oldTop = grabber.frame.minY
         grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
         XCTAssertLessThanOrEqual(grabber.frame.minY, oldTop + 2, "large-text content remains expandable or is already near the tall cap")
-        XCTAssertTrue(app.buttons["guided.intentPicker"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["guided.intentPicker"].waitForExistence(timeout: 5))
         screenshot("expanded-largest-text")
     }
     func testEmptyTitleAndScrolledSectionSurviveChartMode() throws {

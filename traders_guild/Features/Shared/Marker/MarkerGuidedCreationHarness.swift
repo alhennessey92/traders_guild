@@ -85,7 +85,10 @@ struct MarkerGuidedCreationHarness: View {
 
     @StateObject private var sheetPresentation = MarkerSheetPresentationModel()
     private var surface: MarkerSheetSurface {
-        if let step = placementState.guidedStep { return .guided(step, placementState.intent) }
+        if scenario == .entry && !hasEntered { return .add }
+        if let step = placementState.guidedStep {
+            return step == .context ? .workspace(placementState.workspaceDestination, placementState.intent) : .guided(step, placementState.intent)
+        }
         return .legacy("placement")
     }
     private var policy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: surface) }
@@ -106,6 +109,7 @@ struct MarkerGuidedCreationHarness: View {
     @State private var savedEdit = false
     @State private var showDiscardConfirmation = false
     @State private var closed = false
+    @State private var hasEntered = false
 
     init(scenario: Scenario) {
         self.scenario = scenario
@@ -138,7 +142,7 @@ struct MarkerGuidedCreationHarness: View {
             header
             ScrollView {
                 VStack(spacing: 12) {
-                    if !usesNativeSheet { sheet }
+                    if !usesNativeSheet { sheet(entered: hasEntered) }
                     transportPanel
                 }
                 .padding(12)
@@ -148,10 +152,13 @@ struct MarkerGuidedCreationHarness: View {
         .modifier(MarkerSheetContainerMeasure(model: sheetPresentation))
         .modifier(MarkerSheetPresentationObserver(policy: policy, enabled: usesNativeSheet, selection: $selectedDetent))
         .sheet(isPresented: .constant(usesNativeSheet)) {
-            sheet
+            MarkerGuidedFixtureSheetHost(placementState: placementState, entered: $hasEntered) { entered in
+                sheet(entered: entered)
+            }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("guided.fixtureSheet")
-                .presentationDetents(policy.detents, selection: $selectedDetent)
+                .modifier(MarkerSheetGeometryObserver(model: sheetPresentation, selection: selectedDetent, enabled: true))
+            .presentationDetents(policy.detents, selection: $selectedDetent)
                 .presentationBackground(AppColors.sheetBackground)
                 .presentationBackgroundInteraction(.enabled)
                 .presentationDragIndicator(.visible)
@@ -205,7 +212,7 @@ struct MarkerGuidedCreationHarness: View {
         .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
-    private var sheet: some View {
+    private func sheet(entered: Bool) -> some View {
         VStack(spacing: 0) {
             if usesNativeSheet && shareContext != nil {
                 transportPanel.padding(16)
@@ -219,6 +226,19 @@ struct MarkerGuidedCreationHarness: View {
                     .font(.footnote)
                     .foregroundColor(AppColors.greyText)
                     .frame(maxWidth: .infinity, minHeight: 120)
+            } else if scenario == .entry && !entered {
+                MarkerGuidedCreateEntries(author: author) { intent in
+                    let candle = Self.candles[5]
+                    placementState.prepareGuidedFlow()
+                    placementState.reset(to: intent, anchorTime: candle.timestamp, anchorPrice: candle.close)
+                    if intent == .setup {
+                        Self.seedSetupLevels(placementState, entry: candle.close, long: true)
+                        placementState.recordSetupLevelSeed()
+                    }
+                    placementState.captureDraftBaseline()
+                    hasEntered = true
+                    selectedDetent = policy.working
+                }.padding(16)
             } else if placementState.isGuidedFlowActive {
                 if usesNativeSheet {
                     MarkerGuidedRetainedPanel(placementState: placementState, policy: policy, selection: $selectedDetent) { guidedPanel }
@@ -227,9 +247,7 @@ struct MarkerGuidedCreationHarness: View {
                 }
                 if !usesNativeSheet || !isCompact {
                     Divider()
-                    MarkerGuidedPlacementBar(placementState: placementState, onShowChart: usesNativeSheet ? {
-                        selectedDetent = policy.compact
-                    } : nil) { Task { await post() } }
+                    MarkerGuidedPlacementBar(placementState: placementState) { Task { await post() } }
                 }
             } else {
                 Text("Left the guided flow for the legacy panel (\(placementState.intent.displayName)).")
@@ -246,7 +264,9 @@ struct MarkerGuidedCreationHarness: View {
         MarkerGuidedPlacementPanel(
             placementState: placementState, author: author, guildName: "Alpha Traders",
             currentChartTimeframe: .h1, onSelectTimeframe: { _ in },
-            onContentMeasure: { sheetPresentation.capture($0, surface: surface, chrome: 100) }
+            onBeginInteractiveDrawing: usesNativeSheet ? { selectedDetent = policy.compact } : nil,
+            onShowChart: usesNativeSheet ? { selectedDetent = policy.compact } : nil,
+            onContentMeasure: { sheetPresentation.capture($0, surface: surface, chrome: 156) }
         )
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -521,6 +541,15 @@ struct MarkerGuidedCreationHarness: View {
         state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: long ? entry - 120 : entry + 120, label: "SL")))
         state.trackingEnabled = true
     }
+}
+
+/// Sheet routing must observe the fixture's Binding and session in the native
+/// presenter; an already-presented sheet cannot rely on its parent rebuilding.
+private struct MarkerGuidedFixtureSheetHost<Content: View>: View {
+    @ObservedObject var placementState: MarkerPlacementState
+    @Binding var entered: Bool
+    let content: (Bool) -> Content
+    var body: some View { content(entered) }
 }
 
 #endif

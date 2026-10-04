@@ -37,7 +37,7 @@ struct MarkerSheetShellHarness: View {
     private var surface: MarkerSheetSurface {
         .resolve(experiment: MarkerAvatarExperiment.isEnabled, placing: controls.isMarkerPlacementMode,
                  step: draft.guidedStep, intent: draft.intent, view: selectedView.rawValue,
-                 primaryAdd: primaryTab == .add, viewedMarker: chart.selectedMarkerForSheet?.id)
+                 primaryAdd: primaryTab == .add, viewedMarker: chart.selectedMarkerForSheet?.id, workspace: draft.workspaceDestination)
     }
     private var policy: MarkerSheetPresentationPolicy { presentation.policy(for: surface) }
 
@@ -79,6 +79,7 @@ struct MarkerSheetShellHarness: View {
                 sheetPresentation: presentation, selectedDetent: $selectedDetent,
                 selectedView: $selectedView, markerPrimaryTab: $primaryTab)
                 .environmentObject(appState)
+                .modifier(MarkerSheetGeometryObserver(model: presentation, selection: selectedDetent, enabled: draft.isGuidedFlowActive))
                 .presentationDetents(policy.detents, selection: $selectedDetent)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppColors.sheetBackground)

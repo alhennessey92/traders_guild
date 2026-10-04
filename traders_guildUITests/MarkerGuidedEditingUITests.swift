@@ -52,7 +52,7 @@ final class MarkerGuidedEditingUITests: XCTestCase {
         field.typeText(" Still holding.")
         XCTAssertTrue(review.isEnabled)
         review.tap()
-        XCTAssertTrue(text("Check your changes").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("Review").waitForExistence(timeout: 5))
         XCTAssertTrue(text("Text edited").exists, "Review lists what changes")
         XCTAssertTrue(text("Text edited").isHittable, "and leads with it, in view at half height")
         XCTAssertTrue(app.buttons["guided.save"].exists && app.buttons["guided.save"].label == "Save changes")
@@ -69,7 +69,7 @@ final class MarkerGuidedEditingUITests: XCTestCase {
         XCTAssertFalse(app.textFields["Take Profit"].exists, "no level fields")
         XCTAssertFalse(app.switches.firstMatch.exists, "no tracking switch")
         XCTAssertFalse(app.buttons["guided.addContext"].exists, "no context editing")
-        app.buttons["guided.next"].tap()
+        app.swipeUp()
         XCTAssertTrue(app.buttons["guided.addTitle"].waitForExistence(timeout: 5) || app.textFields["guided.title"].exists,
                       "the title and thesis are editable")
         XCTAssertFalse(app.buttons["guided.addContext"].exists, "still no context editing")

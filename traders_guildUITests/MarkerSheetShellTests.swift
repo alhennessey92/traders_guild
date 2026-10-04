@@ -30,11 +30,9 @@ final class MarkerSheetShellTests: XCTestCase {
 
     func testRealAddFitsAndItsTabTransitionsStaySupported() throws {
         launch()
-        for element in [app.buttons["guided.postToChart"], app.buttons["guided.planTrade"], app.otherElements["guided.otherTypes"]] {
+        for element in [app.buttons["guided.postToChart"], app.buttons["guided.planTrade"]] {
             if element.exists { XCTAssertTrue(element.isHittable, "\(element) fits without scrolling") }
         }
-        let other = app.buttons["guided.otherTypes"].exists ? app.buttons["guided.otherTypes"] : app.otherElements["guided.otherTypes"]
-        XCTAssertTrue(other.exists && other.isHittable)
         supported("add")
         shot("add")
         for (tab, route) in [("symbol", "Symbol"), ("chat", "Chat"), ("components", "Components")] {

@@ -17,7 +17,7 @@ struct traders_guildApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     
-    @StateObject private var rlAppState = RLAppState()
+    @StateObject private var rlAppState = RLAppState(restoreSessionOnInit: !MarkerMainViewSheetFixture.anyMarkerFixture)
     @StateObject private var themeManager = ThemeManager.shared
 
     // NEW: RL Messaging Manager for chatrooms and DMs (uses RLAppState)
@@ -25,7 +25,8 @@ struct traders_guildApp: App {
     @StateObject private var notificationNavigationManager = NotificationNavigationManager()
     
     init() {
-        let rlAppState = RLAppState()
+        let rlAppState = RLAppState(restoreSessionOnInit: !MarkerMainViewSheetFixture.anyMarkerFixture)
+        if MarkerMainViewSheetFixture.enabled { rlAppState.showingTransition = false }
         let rlMessagingManager = RLMessagingManager()
 
         // Configure the connections
@@ -92,6 +93,7 @@ struct traders_guildApp: App {
             .animation(.easeOut(duration: 0.5), value: rlAppState.showingTransition)
             .animation(.easeInOut(duration: 0.2), value: rlAppState.shouldPresentBiometricAppLock)
             .onChange(of: scenePhase) { _, newPhase in
+                guard !isFixtureLaunch else { return }
                 switch newPhase {
                 case .active:
                     rlAppState.handleSceneDidBecomeActive()
@@ -235,7 +237,7 @@ struct traders_guildApp: App {
     /// Always false outside Debug and isolated-DEV builds.
     private var isFixtureLaunch: Bool {
         #if DEBUG || TG_ISOLATED_DEV
-        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures || ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture")
+        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures || ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") || MarkerMainViewSheetFixture.enabled
         #else
         false
         #endif
@@ -244,7 +246,9 @@ struct traders_guildApp: App {
     @ViewBuilder
     private var mainContent: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
+        if MarkerMainViewSheetFixture.enabled {
+            MainView()
+        } else if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
             MarkerSheetShellHarness()
         } else if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
@@ -258,7 +262,9 @@ struct traders_guildApp: App {
             authenticatedContent
         }
         #elseif TG_ISOLATED_DEV
-        if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
+        if MarkerMainViewSheetFixture.enabled {
+            MainView()
+        } else if ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") {
             MarkerSheetShellHarness()
         } else if let guidedCreationFixture {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)

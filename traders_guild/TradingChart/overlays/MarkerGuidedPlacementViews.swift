@@ -91,47 +91,40 @@ struct MarkerGuidedPlacementPanel: View {
     var activeChartDrawings: [ChartDrawing] = []
     var onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     var onBeginInteractiveDrawing: (() -> Void)?
+    var onShowChart: (() -> Void)? = nil
     var onContentMeasure: ((MarkerSheetContentMeasurement) -> Void)?
     var viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     @State private var pendingChange: PendingChange?
-    @State private var showRelationshipPicker = false
     /// The optional title field, revealed on request — or already, when the
     /// draft has a title.
-    @State private var showsTitleField = false
-    @State private var detailsScrollAnchor: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// A type change waiting on the author, and where it goes once confirmed.
     private struct PendingChange: Identifiable {
         let change: MarkerGuidedIntentChange
-        let leavesGuidedFlow: Bool
         var id: UUID { change.id }
     }
 
     var body: some View {
-        Group {
-            switch placementState.guidedStep {
-            case .chooseType?:
-                ScrollView(showsIndicators: false) {
-                    typeChooser.padding(.bottom, 12).modifier(contentMeasurement)
+        VStack(alignment: .leading, spacing: 12) {
+            taskHeader
+            ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                switch placementState.guidedStep {
+                case .details?: details
+                case .context?: contextEditor
+                case .review?: review
+                case nil: EmptyView()
                 }
-            case .details?:
-                ScrollView(showsIndicators: false) {
-                    details.padding(.bottom, 12).scrollTargetLayout().modifier(contentMeasurement)
-                }
-                    .scrollPosition(id: $detailsScrollAnchor)
-                    .scrollDismissesKeyboard(.interactively)
-            case .setupReasoning?:
-                ScrollView(showsIndicators: false) { setupReasoning.padding(.bottom, 12).modifier(contentMeasurement) }
-                    .scrollDismissesKeyboard(.interactively)
-            case .context?:
-                contextEditor
-            case .review?:
-                ScrollView(showsIndicators: false) { review.padding(.bottom, 12).modifier(contentMeasurement) }
-            case nil:
-                EmptyView()
             }
+            .padding(.bottom, 12).scrollTargetLayout().modifier(contentMeasurement)
+        }
+        .scrollPosition(id: Binding(
+            get: { placementState.workspace.scrollAnchors[placementState.workspaceDestination] },
+            set: { placementState.workspace.scrollAnchors[placementState.workspaceDestination] = $0 }
+        ))
+        .scrollDismissesKeyboard(.interactively)
         }
         .alert(item: $pendingChange) { pending in
             Alert(
@@ -139,32 +132,13 @@ struct MarkerGuidedPlacementPanel: View {
                 message: Text("This removes context \(pending.change.targetIntent.displayName) can't carry: \(pending.change.incompatibleSummary)."),
                 primaryButton: .destructive(Text("Remove and Switch")) {
                     placementState.applyGuidedIntentChange(pending.change)
-                    if pending.leavesGuidedFlow {
-                        placementState.endGuidedFlow()
-                    } else {
-                        placementState.backToDetails()
-                    }
+                    placementState.backToDetails()
                 },
                 secondaryButton: .cancel()
             )
         }
-        .sheet(isPresented: $showRelationshipPicker) {
-            if let context = placementState.linkSession.context {
-                MarkerLinkRelationshipPicker(
-                    parentSummary: context.bannerSentence,
-                    parentIntent: context.parentIntent,
-                    onSelect: { relationship in
-                        showRelationshipPicker = false
-                        placementState.changeLinkRelationship(relationship)
-                    },
-                    onCancel: { showRelationshipPicker = false }
-                )
-                .presentationDetents([.height(580), .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
         .onAppear {
-            showsTitleField = showsTitleField || !placementState.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            placementState.workspace.showsTitle = placementState.workspace.showsTitle || !placementState.title.isEmpty
         }
     }
 
@@ -172,17 +146,13 @@ struct MarkerGuidedPlacementPanel: View {
 
     /// Guided types go back to Details; other types leave for the legacy panel.
     /// Either way nothing is removed without the author agreeing.
-    private func choose(_ intent: RLMarkerIntent, leavesGuidedFlow: Bool) {
+    private func choose(_ intent: RLMarkerIntent) {
         if let change = placementState.requestGuidedIntentChange(to: intent) {
-            pendingChange = PendingChange(change: change, leavesGuidedFlow: leavesGuidedFlow)
+            pendingChange = PendingChange(change: change)
             HapticFeedback.light.trigger()
             return
         }
-        if leavesGuidedFlow {
-            placementState.endGuidedFlow()
-        } else {
-            placementState.backToDetails()
-        }
+        placementState.backToDetails()
     }
 
     // MARK: Header
@@ -194,70 +164,37 @@ struct MarkerGuidedPlacementPanel: View {
             ? "\(placementState.note.hashValue)-\(placementState.title.hashValue)-\(placementState.components.count)-\(placementState.submissionPhase)"
             : "compose"
         return MarkerSheetContentMeasure(
-            revision: "\(placementState.guidedStep)-\(showsTitleField)-\(dynamicTypeSize)-\(reviewRevision)",
+            revision: "\(placementState.workspaceDestination)-\(placementState.workspace.showsTitle)-\(dynamicTypeSize)-\(reviewRevision)",
             onMeasure: onContentMeasure
         )
     }
 
-    private var stepHeader: some View {
-        MarkerGuidedStepHeader(
-            stepNumber: placementState.guidedStepNumber,
-            stepCount: placementState.guidedStepCount,
-            prompt: placementState.guidedStep == .details && placementState.isSocialDetails
-                ? (placementState.isGuidedEdit ? "Edit your post" : (placementState.intent == .question ? "Ask a question" : "Write analysis"))
-                : placementState.guidedStepPrompt ?? "",
-            destination: placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName)
-        )
+    private var taskHeader: some View {
+        HStack(spacing: 10) {
+            UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(placementState.guidedToolbarTitle ?? "New marker").font(.subheadline.weight(.bold))
+                Text(placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName))
+                    .font(.caption).foregroundColor(AppColors.greyText)
+            }
+            Spacer(minLength: 0)
+            if let onShowChart {
+                Button { dismissKeyboard(); onShowChart() } label: {
+                    Image(systemName: "chart.xyaxis.line").frame(width: 44, height: 44)
+                        .background(Circle().fill(AppColors.whiteText.opacity(0.06)))
+                }.buttonStyle(.plain).disabled(placementState.isGuidedSubmissionInFlight)
+                    .accessibilityLabel("Show chart").accessibilityIdentifier("guided.showChart")
+            }
+        }.foregroundColor(AppColors.primaryForeground)
     }
 
-    // MARK: Change type
-
-    /// "Change type" returns to the creation hierarchy — Post to the chart,
-    /// Plan a trade, other types — keeping the draft and any response.
-    /// Setup is reached here, never from the social selector.
-    private var typeChooser: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            stepHeader
-            responseSection
-            Text("Your text\(placementState.linkSession.isActive ? " and response" : "") will be kept.")
-                .font(.footnote)
-                .foregroundColor(AppColors.greyText)
-                .fixedSize(horizontal: false, vertical: true)
-            MarkerGuidedEntryCard(
-                author: author,
-                intent: placementState.isSocialDetails ? placementState.intent : .analysis,
-                title: "Post to the chart",
-                subtitle: "Share analysis or ask the guild a question",
-                identifier: "guided.postToChart",
-                isCurrent: placementState.isSocialDetails
-            ) {
-                choose(placementState.isSocialDetails ? placementState.intent : .analysis, leavesGuidedFlow: false)
-            }
-            MarkerGuidedEntryCard(
-                author: author,
-                intent: .setup,
-                title: "Plan a trade",
-                subtitle: "Entry, stop and target · optional tracking",
-                identifier: "guided.planTrade",
-                isCurrent: placementState.intent == .setup
-            ) {
-                choose(.setup, leavesGuidedFlow: false)
-            }
-            DisclosureGroup {
-                VStack(spacing: 8) {
-                    ForEach(MarkerGuidedFlowEntry.otherIntents, id: \.self) { intent in
-                        MarkerGuidedTypeRow(intent: intent, subtitle: intent.subtitle, isCurrent: false) {
-                            choose(intent, leavesGuidedFlow: true)
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            } label: {
-                MarkerGuidedSectionTitle("Other marker types")
-            }
-            .tint(AppColors.greyText)
-            .padding(.top, 4)
-        }
+    private var stepHeader: some View {
+        Text(placementState.guidedStep == .context ? placementState.workspaceDestination.title
+             : placementState.guidedStep == .review ? "Review"
+             : placementState.intent == .setup ? "Setup details" : "Post details")
+            .font(.title3.weight(.bold)).foregroundColor(AppColors.primaryForeground)
+            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("guided.stepHeader")
     }
 
     // MARK: Details
@@ -278,47 +215,28 @@ struct MarkerGuidedPlacementPanel: View {
                 responseTimeframe.id("timeframe")
                 optionalExtras.id("extras")
             } else {
-                setupLevels
-                // Reachable before the levels are set, so the author is never
-                // held on this section to leave Setup.
-                changeTypeLink
+                setupLevels.id("levels")
+                MarkerWorkspaceTextInput(placeholder: "Your reasoning (optional)", text: $placementState.note,
+                                         placementState: placementState, fieldID: "reasoning")
+                    .id("text").accessibilityIdentifier("guided.text")
+                responseTimeframe.id("timeframe")
+                optionalExtras.id("extras")
             }
-        }
-    }
-
-    /// A Setup's second section: reasoning, then the optional extras.
-    private var setupReasoning: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            stepHeader
-            MarkerGuidedTextField(
-                placeholder: "Your reasoning (optional)",
-                text: $placementState.note,
-                axis: .vertical
-            )
-            .accessibilityIdentifier("guided.text")
-            responseTimeframe
-            optionalExtras
-            changeTypeLink
         }
     }
 
     private var socialTypePicker: some View {
         MarkerGuidedTypePicker(
             intents: MarkerGuidedFlowEntry.socialIntents,
-            selected: placementState.intent,
-            onChangeType: { placementState.openTypeChooser() }
-        ) { choose($0, leavesGuidedFlow: false) }
+            selected: placementState.intent
+        ) { choose($0) }
     }
 
     private var socialFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MarkerGuidedTextField(
-                placeholder: placementState.intent == .question
-                    ? "Your question about this chart"
-                    : "What you see and why it matters",
-                text: $placementState.note,
-                axis: .vertical
-            )
+            MarkerWorkspaceTextInput(placeholder: placementState.intent == .question
+                                     ? "Your question about this chart" : "What you see and why it matters",
+                                     text: $placementState.note, placementState: placementState, fieldID: "socialText")
             .accessibilityIdentifier("guided.text")
             if placementState.intent == .question {
                 questionCounter
@@ -383,24 +301,24 @@ struct MarkerGuidedPlacementPanel: View {
     /// Title and chart context: one compact row, available, never in the way.
     private var optionalExtras: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if showsTitleField {
-                MarkerGuidedTextField(placeholder: "Title", text: $placementState.title, axis: .horizontal)
+            if placementState.workspace.showsTitle {
+                MarkerWorkspaceLineInput(placeholder: "Title", text: $placementState.title, placementState: placementState, fieldID: "guided.title")
                     .accessibilityIdentifier("guided.title")
             }
             let rowLayout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                 : AnyLayout(HStackLayout(spacing: 8))
             rowLayout {
-                if !showsTitleField {
+                if !placementState.workspace.showsTitle {
                     MarkerGuidedExtraChip(icon: "plus", title: "Title", identifier: "guided.addTitle") {
-                        withAnimation(.easeInOut(duration: 0.2)) { showsTitleField = true }
+                        withAnimation(.easeInOut(duration: 0.2)) { placementState.workspace.showsTitle = true }
                     }
                 }
                 // A locked Setup's context cannot change (the server refuses it).
                 if !placementState.isGuidedEditLocked {
                     MarkerGuidedExtraChip(
                         icon: "plus.viewfinder",
-                        title: MarkerGuidedFormat.contextSummary(placementState.components) ?? "Chart context",
+                        title: MarkerGuidedFormat.contextSummary(placementState.components) ?? "Add context",
                         identifier: "guided.addContext"
                     ) {
                         placementState.openContext()
@@ -410,23 +328,12 @@ struct MarkerGuidedPlacementPanel: View {
                     Spacer(minLength: 0)
                 }
             }
-        }
-    }
-
-    /// Back to the creation hierarchy; never in an edit, which keeps its type.
-    @ViewBuilder
-    private var changeTypeLink: some View {
-        if !placementState.isGuidedEdit {
-            Button {
-                placementState.openTypeChooser()
-            } label: {
-                Label("Change type", systemImage: "arrow.left.arrow.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(AppColors.accentColor)
-                    .padding(.vertical, 4)
+            if placementState.linkSession.isActive && !placementState.isGuidedEdit {
+                Button(placementState.intent == .setup ? "Return to post" : "Respond with a Setup") {
+                    choose(placementState.intent == .setup ? .analysis : .setup)
+                }
+                .frame(minHeight: 44).accessibilityIdentifier("guided.convertResponse")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("guided.changeType")
         }
     }
 
@@ -446,7 +353,7 @@ struct MarkerGuidedPlacementPanel: View {
             MarkerLinkPlacementBanner(
                 context: context,
                 failureMessage: placementState.linkSession.lastFailureMessage,
-                onChangeRelationship: { showRelationshipPicker = true },
+                onChangeRelationship: { placementState.openWorkspace(.relationship) },
                 onRemove: { placementState.removeLink() }
             )
             .disabled(placementState.isChangingResponseTimeframe)
@@ -459,11 +366,11 @@ struct MarkerGuidedPlacementPanel: View {
     private var responseTimeframe: some View {
         if placementState.linkSession.context != nil,
            let timeframe = currentChartTimeframe, let onSelectTimeframe {
-            MarkerResponseTimeframeControl(
-                timeframe: timeframe,
-                isLoading: placementState.isChangingResponseTimeframe,
-                onSelect: onSelectTimeframe
-            )
+            MarkerGuidedOptionalRow(icon: "clock", title: "Response timeframe", detail: timeframe.displayName,
+                                    identifier: "marker.response.timeframe") {
+                placementState.openWorkspace(.responseTimeframe)
+            }.disabled(placementState.isChangingResponseTimeframe)
+
         }
     }
 
@@ -477,18 +384,10 @@ struct MarkerGuidedPlacementPanel: View {
                  : "Optional. Anything you add stays with your draft.")
                 .font(.footnote)
                 .foregroundColor(AppColors.greyText)
-            UnifiedComponentsHostView(
-                adapter: MarkerComponentsAdapter(
-                    placementState: placementState,
-                    activeChartIndicators: activeChartIndicators,
-                    activeChartDrawings: activeChartDrawings,
-                    currentChartTimeframe: currentChartTimeframe,
-                    onSelectTimeframeAction: onSelectTimeframe,
-                    onBeginInteractiveDrawing: onBeginInteractiveDrawing,
-                    showsMirrorButtons: true,
-                    viewportAnchorProvider: viewportAnchorProvider
-                )
-            )
+            MarkerWorkspaceContent(placementState: placementState, currentChartTimeframe: currentChartTimeframe,
+                                   activeChartIndicators: activeChartIndicators, activeChartDrawings: activeChartDrawings,
+                                   onSelectTimeframe: onSelectTimeframe, onBeginInteractiveDrawing: onBeginInteractiveDrawing)
+
         }
     }
 
@@ -690,9 +589,6 @@ struct MarkerGuidedPlacementBar: View {
                 .accessibilityIdentifier("guided.showChart")
             }
             switch placementState.guidedStep {
-            case .chooseType?:
-                backButton("Back")
-                Spacer()
             case .details?:
                 if let prompt = placementState.guidedNextStepPrompt {
                     // Amber only for levels that are set but wrong; a step
@@ -707,45 +603,15 @@ struct MarkerGuidedPlacementBar: View {
                         .accessibilityIdentifier("guided.nextStep")
                 }
                 Spacer(minLength: 8)
-                if placementState.intent == .setup {
-                    primaryButton(
-                        "Next",
-                        enabled: placementState.canContinueToSetupReasoning,
-                        identifier: "guided.next"
-                    ) {
-                        placementState.continueToSetupReasoning()
-                    }
-                } else {
-                    primaryButton(
-                        "Review",
-                        enabled: placementState.canContinueToReview,
-                        identifier: "guided.review"
-                    ) {
-                        placementState.continueToReview()
-                    }
-                }
-            case .setupReasoning?:
-                backButton("Levels")
-                if let prompt = placementState.guidedNextStepPrompt {
-                    Text(prompt)
-                        .font(.footnote)
-                        .foregroundColor(AppColors.greyText)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                        .accessibilityIdentifier("guided.nextStep")
-                }
-                Spacer(minLength: 8)
-                primaryButton(
-                    "Review",
-                    enabled: placementState.canContinueToReview,
-                    identifier: "guided.review"
-                ) {
+                primaryButton("Review", enabled: placementState.canContinueToReview, identifier: "guided.review") {
                     placementState.continueToReview()
                 }
+
             case .context?:
+                backButton(placementState.workspaceDestination.isEditor ? "Cancel" : "Back")
                 Spacer()
-                primaryButton("Done", enabled: true, identifier: "guided.contextDone") {
-                    placementState.goBack()
+                primaryButton("Done", enabled: placementState.workspaceCanCommit, identifier: "guided.contextDone") {
+                    placementState.commitWorkspaceEditor()
                 }
             case .review?:
                 backButton("Edit")
@@ -830,7 +696,7 @@ extension MarkerPlacementSubmissionPhase {
 extension MarkerPlacementState {
     /// Closing now would throw away something the author did in the guided
     /// flow. The legacy flow, and an untouched draft, close without asking.
-    var cancellingNeedsConfirmation: Bool { isGuidedFlowActive && hasMaterialEdits }
+    var cancellingNeedsConfirmation: Bool { isGuidedFlowActive && (hasMaterialEdits || hasWorkspaceEdits) }
 }
 
 /// "Discard this draft?" — Discard or Keep Editing.
@@ -858,22 +724,20 @@ struct MarkerGuidedDiscardConfirmation: ViewModifier {
 
 /// Which types the entry hierarchy leads to.
 enum MarkerGuidedFlowEntry {
-    /// The social selector on Details. Setup is structured and reached from
-    /// its own entry, or from Change type.
+    /// Social Details offers Analysis and Question.
     static let socialIntents: [RLMarkerIntent] = [.analysis, .question]
-    /// Kept on their existing flows behind "Other marker types".
-    static let otherIntents: [RLMarkerIntent] = [.alert, .poll, .news, .reaction, .personal]
+    static let createIntents: [RLMarkerIntent] = [.analysis, .setup]
 }
 
 /// Two starting points with a type, purpose and chevron: "Post to the chart"
-/// starts Analysis, "Plan a trade" starts Setup.
+/// starts Analysis, "Setup" starts a structured trade.
 struct MarkerGuidedEntryCard: View {
     let author: MarkerAvatarIdentity
     let intent: RLMarkerIntent
     let title: String
     let subtitle: String
     let identifier: String
-    /// In Change type, the draft's current kind: a checkmark, and selected.
+    /// Optional selected styling for reusable cards.
     var isCurrent: Bool = false
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -887,10 +751,7 @@ struct MarkerGuidedEntryCard: View {
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                     : AnyLayout(HStackLayout(spacing: 14))
                 content {
-                    Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(intent.color)
-                        .frame(width: 36, height: 36)
+                    UnifiedMarkerBadge(intent: intent, sizeToken: .medium, avatar: author)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title)
@@ -920,6 +781,20 @@ struct MarkerGuidedEntryCard: View {
 }
 
 /// "Post to the chart" starts Analysis.
+struct MarkerGuidedCreateEntries: View {
+    let author: MarkerAvatarIdentity
+    let onSelect: (RLMarkerIntent) -> Void
+    var body: some View {
+        VStack(spacing: 10) {
+            MarkerPostToChartCard(author: author) { onSelect(.analysis) }
+            MarkerGuidedEntryCard(author: author, intent: .setup, title: "Setup",
+                                 subtitle: "Entry, stop and target · optional tracking", identifier: "guided.planTrade") {
+                onSelect(.setup)
+            }
+        }
+    }
+}
+
 struct MarkerPostToChartCard: View {
     let author: MarkerAvatarIdentity
     let action: () -> Void
@@ -986,75 +861,27 @@ struct MarkerGuidedTypeRow: View {
 
 // MARK: - Small parts
 
-/// Step, destination and prompt are read by VoiceOver as one heading.
-struct MarkerGuidedStepHeader: View {
-    let stepNumber: Int?
-    var stepCount: Int = 2
-    let prompt: String
-    let destination: String
-
-    private var stepLine: String {
-        guard let stepNumber else { return destination }
-        return "Step \(stepNumber) of \(stepCount) · \(destination)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(stepNumber.map { "Step \($0) of \(stepCount)" } ?? destination)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(prompt)
-                .font(.title3.weight(.bold))
-                .foregroundColor(AppColors.primaryForeground)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(prompt). \(stepLine)")
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityIdentifier("guided.stepHeader")
-    }
-}
-
-/// The current social type opens the existing choices without filling the
-/// writing surface with a row of competing type controls.
+/// The two social choices share one writing surface.
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent
-    var onChangeType: (() -> Void)? = nil
     let onSelect: (RLMarkerIntent) -> Void
 
     var body: some View {
-        Menu {
+        HStack(spacing: 8) {
             ForEach(intents, id: \.self) { intent in
-                Button {
-                    onSelect(intent)
-                } label: {
-                    Label(intent.displayName, systemImage: intent == selected ? "checkmark" : intent.icon)
+                Button { onSelect(intent) } label: {
+                    Text(intent.displayName).font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Capsule().fill(selected == intent ? intent.color.opacity(0.2) : AppColors.whiteText.opacity(0.06)))
                 }
+                .buttonStyle(.plain).foregroundColor(AppColors.primaryForeground)
+                .accessibilityAddTraits(selected == intent ? .isSelected : [])
                 .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
             }
-            if let onChangeType {
-                Divider()
-                Button("Change type…", action: onChangeType)
-                    .accessibilityIdentifier("guided.changeType")
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Label(selected.displayName, systemImage: MarkerIntentBadge.style(intent: selected)?.symbol ?? selected.icon)
-                    .font(.subheadline.weight(.semibold))
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
-            }
-            .foregroundColor(AppColors.primaryForeground)
-            .padding(12)
-            .background(MarkerGuidedCardBackground())
         }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Type: \(selected.displayName)")
-        .accessibilityHint("Choose Analysis or Question")
         .accessibilityIdentifier("guided.intentPicker")
     }
 }
@@ -1186,7 +1013,7 @@ struct MarkerGuidedExtraChip: View {
                 .foregroundColor(AppColors.primaryForeground)
                 .lineLimit(1)
                 .padding(.horizontal, 12)
-                .frame(minHeight: 36)
+                .frame(minHeight: 44)
                 .background(
                     Capsule()
                         .fill(AppColors.whiteText.opacity(0.06))
@@ -1292,8 +1119,15 @@ struct MarkerGuidedLevelField: View {
             if !dynamicTypeSize.isAccessibilitySize {
                 Spacer()
             }
-            TextField("0.0", value: placementState.guidedLevelPriceBinding(for: type), formatter: MarkerGuidedFormat.priceFormatter)
-                .textFieldStyle(.plain)
+            MarkerWorkspaceLineInput(placeholder: "0.0", text: Binding(
+                get: { placementState.workspace.levelInputs[type] ?? String(placementState.guidedLevelPriceBinding(for: type).wrappedValue) },
+                set: { input in
+                    placementState.workspace.levelInputs[type] = input
+                    if let price = Double(input), price.isFinite, price > 0 {
+                        placementState.guidedLevelPriceBinding(for: type).wrappedValue = price
+                    }
+                }
+            ), placementState: placementState, fieldID: "guided.level.\(type.rawValue)", keyboard: .decimalPad, label: title, trailing: true)
                 .font(.system(.footnote, design: .monospaced).weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
                 .multilineTextAlignment(.trailing)
