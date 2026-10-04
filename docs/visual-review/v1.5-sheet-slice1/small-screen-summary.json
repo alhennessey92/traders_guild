@@ -1,0 +1,42 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "5DAF71B8-2AD0-4274-BE05-97967604193F",
+        "deviceName" : "TG Sheet Slice1 Small",
+        "modelName" : "iPhone SE (3rd generation)",
+        "osBuildNumber" : "22C150",
+        "osVersion" : "18.2",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 0,
+      "passedTests" : 16,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "Slice1 Fixture Review · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 0,
+  "finishTime" : 1791079615.573,
+  "passedTests" : 16,
+  "result" : "Passed",
+  "skippedTests" : 0,
+  "startTime" : 1791079533.169,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+
+  ],
+  "title" : "Test - Slice1 Fixture Review",
+  "topInsights" : [
+
+  ],
+  "totalTestCount" : 16
+}
