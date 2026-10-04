@@ -5367,6 +5367,11 @@ struct TradingChartView: View {
         let resolvedPrice = coordinateSystem.unclampedPrice(atYPosition: location.y)
         liveDrawingGuidePoint = nil
 
+        if drawingState.workspaceLevelChartComponentID != nil {
+            _ = drawingState.updateWorkspaceLevelFromChart(id: draftId, price: resolvedPrice)
+            return
+        }
+
         switch draft.payload {
         case let .levelSupport(payload) where componentType == .levelSupport:
             drawingState.updateComponent(

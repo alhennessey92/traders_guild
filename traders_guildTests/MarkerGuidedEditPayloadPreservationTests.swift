@@ -176,6 +176,68 @@ struct MarkerGuidedEditPayloadPreservationTests {
         #expect(e.state.components[index].id == second.id)
     }
 
+    @Test(arguments: [RLComponentType.levelSupport, .levelResistance])
+    func chartHandoffKeepsSecondSavedLevelIdentityStyleRouteAndRawPayload(_ type: RLComponentType) throws {
+        let input = analysisComponents.replacingOccurrences(of: "level.support", with: type.rawValue)
+        let e = try edit(markerJSON(intent: "analysis", components: input))
+        let second = try #require(e.state.components.first { $0.componentType == type && $0.payload.levelPrice == 63_500 })
+        let before = e.state.components
+        e.state.openContext()
+        e.state.beginWorkspaceLevel(type, componentID: second.id)
+        e.state.workspace.editorText = "63500.00"
+        e.state.workspace.scrollAnchors[.levelEditor] = "price"
+        e.state.workspace.textSelections["level"] = NSRange(location: 3, length: 0)
+        let path = e.state.workspace.path
+        #expect(e.state.beginWorkspaceLevelChartEditing())
+        #expect(e.state.components == before, "handoff never seeds a fresh price or style")
+        #expect(e.state.workspace.destination == .levelEditor && e.state.workspace.path == path)
+        #expect(e.state.workspace.editorText == "63500.00")
+        #expect(e.state.drawingSession.editingDraftId == second.id)
+        #expect(e.state.activeDrawingWorkflowTool == (type == .levelSupport ? .support : .resistance))
+        #expect(e.state.updateWorkspaceLevelFromChart(id: second.id, price: 63_525))
+        #expect(e.state.workspace.editorText == "63525.0")
+        e.state.commitDrawingAndExit() // The chart's existing tap-to-save stops handles, not the editor.
+        #expect(e.state.workspace.path == path && e.state.workspace.selectedComponentID == second.id)
+        #expect(e.state.workspace.scrollAnchors[.levelEditor] == "price")
+        #expect(e.state.workspace.textSelections["level"] == NSRange(location: 3, length: 0))
+        #expect(e.state.beginWorkspaceLevelChartEditing())
+        e.state.workspaceLevelPriceInput.wrappedValue = "63540.00"
+        #expect(e.state.components.first { $0.id == second.id }?.payload.levelPrice == 63_540)
+        #expect(e.state.workspace.editorText == "63540.00")
+        #expect(e.state.commitWorkspaceEditor())
+        #expect(e.state.workspaceDestination == .context)
+        #expect(!e.state.drawingSession.isActive)
+        let components = sent(e.state.buildGuidedUpdateRequest().components ?? [])
+        #expect(MarkerRawPayload.same(components[1].payload, MarkerRawPayload.unwrap(e.marker.components[1].originalRawPayload ?? [:])))
+        #expect(MarkerRawPayload.same(components[3].payload, savedRaw(##"{"price": 63540, "label": "Deep low", "x_note": "keep"}"##)))
+        #expect(e.state.components.first { $0.id == second.id }?.id == second.id)
+        #expect(components.map(\.type) == ["anchor", type.rawValue, "future.widget", type.rawValue, "timeframe.link"])
+    }
+
+    @Test(arguments: [RLComponentType.levelSupport, .levelResistance])
+    func cancellingChartHandoffRestoresOnlySelectedSavedLevel(_ type: RLComponentType) throws {
+        let e = try edit(markerJSON(intent: "analysis", components: analysisComponents.replacingOccurrences(of: "level.support", with: type.rawValue)))
+        let second = try #require(e.state.components.first { $0.componentType == type && $0.payload.levelPrice == 63_500 })
+        let first = try #require(e.state.components.first { $0.componentType == type && $0.payload.levelPrice == 63_780 })
+        e.state.openContext(); e.state.beginWorkspaceLevel(type, componentID: second.id)
+        #expect(e.state.beginWorkspaceLevelChartEditing())
+        e.state.beginEditingDrawing(first.id, tool: type == .levelSupport ? .support : .resistance)
+        #expect(e.state.drawingSession.editingDraftId == second.id, "chart re-entry cannot switch this editor's identity")
+        #expect(!e.state.updateWorkspaceLevelFromChart(id: first.id, price: 10))
+        #expect(e.state.updateWorkspaceLevelFromChart(id: second.id, price: 63_600))
+        // Independent draft changes survive Cancel; it restores this editor only.
+        let changedFirst = LevelPayload(price: 63_790, label: "Other edit", colorHex: "#33AA55", lineStyle: .dotted)
+        e.state.updateComponent(id: first.id, payload: type == .levelSupport ? .levelSupport(changedFirst) : .levelResistance(changedFirst))
+        e.state.upsertComponent(.levelEntry, payload: .levelEntry(LevelPayload(price: 105)))
+        e.state.note = "Unrelated text stays"
+        e.state.goBack()
+        #expect(e.state.components.first { $0.id == second.id } == second)
+        #expect(e.state.components.first { $0.id == first.id }?.payload.levelPrice == 63_790)
+        #expect(e.state.componentPrice(.levelEntry) == 105)
+        #expect(e.state.note == "Unrelated text stays")
+        #expect(e.state.workspaceDestination == .context && !e.state.drawingSession.isActive)
+    }
+
     // MARK: Edited components
 
     @Test

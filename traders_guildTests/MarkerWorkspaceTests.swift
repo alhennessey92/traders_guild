@@ -241,6 +241,23 @@ struct MarkerWorkspaceTests {
     }
 
     @Test
+    func chartLevelHandoffRefusesSetupLevelsAndPreservesNilSavedLabelOnDone() {
+        let setup = draft(.setup)
+        let setupBefore = setup.components
+        setup.beginWorkspaceLevel(.levelEntry, componentID: setup.component(.levelEntry)?.id)
+        #expect(!setup.beginWorkspaceLevelChartEditing())
+        #expect(setup.components == setupBefore && !setup.drawingSession.isActive)
+        let state = draft()
+        let id = state.appendComponent(.levelResistance, payload: .levelResistance(LevelPayload(price: 102, label: nil, colorHex: "#38BDF8", lineStyle: .dashed, lineWidth: 2)))
+        let before = state.components
+        state.openContext(); state.beginWorkspaceLevel(.levelResistance, componentID: id)
+        #expect(state.beginWorkspaceLevelChartEditing())
+        #expect(state.components == before)
+        #expect(state.commitWorkspaceEditor())
+        #expect(state.components == before, "Done without adjustment keeps a nil label and saved style")
+    }
+
+    @Test
     func incompleteSetupPriceSurvivesNavigationAndPreventsReview() {
         let state = draft(.setup)
         state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: 99)))

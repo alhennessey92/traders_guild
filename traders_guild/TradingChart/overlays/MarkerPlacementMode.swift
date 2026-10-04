@@ -1961,6 +1961,7 @@ final class MarkerPlacementState: ObservableObject {
     }
 
     func beginEditingDrawing(_ draftId: UUID, tool: MarkerDrawingWorkflowTool? = nil) {
+        if let ownedID = workspaceLevelChartComponentID, draftId != ownedID { return }
         prepareForInteractiveDrawing()
         if let tool {
             let definition = MarkerDrawingToolRegistry.definition(for: tool)

@@ -105,6 +105,43 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         XCTAssertFalse(sent.label.contains("link.url"))
     }
 
+    func testLevelChartHandoffResumesNumericEditorAndCancelDoneStayInternal() throws {
+        launch("context")
+        let level = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace.edit.")).firstMatch
+        XCTAssertTrue(level.waitForExistence(timeout: 5)); level.tap()
+        let field = app.textFields["workspace.levelEditor.Price"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let original = try XCTUnwrap(field.value as? String)
+        func setPrice(_ value: String) {
+            field.tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count) + value)
+        }
+        setPrice("63820.00")
+        tap("workspace.Work on chart")
+        tap("guided.compactDock")
+        XCTAssertEqual(field.value as? String, "63820.00")
+        XCTAssertTrue(app.buttons["workspace.Work on chart"].exists)
+        XCTAssertEqual(app.buttons["guided.back"].label, "Cancel")
+        XCTAssertEqual(app.navigationBars.count, 0)
+        capture("final-level-chart-handoff-resumed")
+        tap("guided.back")
+        XCTAssertTrue(level.waitForExistence(timeout: 5)); level.tap()
+        XCTAssertEqual(field.value as? String, original, "Cancel restores the selected original level")
+        setPrice("63840.00")
+        tap("workspace.Work on chart"); tap("guided.compactDock")
+        tap("guided.contextDone")
+        XCTAssertTrue(level.waitForExistence(timeout: 5))
+        tap("guided.contextDone"); tap("guided.review"); tap("guided.post")
+        let sent = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "\"components\"")).firstMatch
+        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+        let request = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(sent.label.utf8)) as? [String: Any])
+        let components = try XCTUnwrap(request["components"] as? [[String: Any]])
+        let support = try XCTUnwrap(components.first { $0["component_type"] as? String == "level.support" })
+        let payload = try XCTUnwrap(support["payload"] as? [String: Any])
+        XCTAssertEqual(payload["price"] as? Double, 63840)
+        XCTAssertEqual(payload["label"] as? String, "Range low")
+    }
+
     func testQuestionContextExcludesUnsupportedSourceAndLevels() {
         launch("questionShort")
         XCTAssertFalse(app.buttons["guided.review"].isEnabled)

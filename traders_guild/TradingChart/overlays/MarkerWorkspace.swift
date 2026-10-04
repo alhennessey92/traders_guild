@@ -45,6 +45,10 @@ struct MarkerWorkspaceState {
     var editorText = ""
     var editorTitle = ""
     var levelInputs: [RLComponentType: String] = [:]
+    /// A level's chart handoff stays inside its existing numeric editor.
+    var levelDrawingBaseline: MarkerComponentDraft?
+    var levelDrawingBaselineIndex: Int?
+    var levelDrawingColor: String?
     /// Drawing tools already mutate chart-native placement state. Cancel restores
     /// that editor's exact snapshot, including local component identities.
     var drawingBaseline: [MarkerComponentDraft]?
@@ -110,6 +114,15 @@ extension MarkerPlacementState {
             restoreWorkspaceDrawingSnapshot(baseline)
             commitDrawingAndExit()
         }
+        if workspace.destination == .levelEditor, let baseline = workspace.levelDrawingBaseline {
+            if let index = components.firstIndex(where: { $0.id == baseline.id }) { components[index] = baseline }
+            else { components.insert(baseline, at: min(workspace.levelDrawingBaselineIndex ?? components.count, components.count)) }
+            drawingColorOverrides[baseline.id] = workspace.levelDrawingColor
+            commitDrawingAndExit()
+        }
+        workspace.levelDrawingBaseline = nil
+        workspace.levelDrawingBaselineIndex = nil
+        workspace.levelDrawingColor = nil
         workspace.indicatorDraft = nil
         workspace.selectedComponentID = nil
         workspace.selectedLevel = nil
@@ -183,6 +196,62 @@ extension MarkerPlacementState {
         workspace.editorBaselineText = workspace.editorText
     }
 
+    /// When chart editing belongs to a level editor, re-entry must keep its ID.
+    /// Nil leaves the existing drawing selection behaviour unchanged elsewhere.
+    var workspaceLevelChartComponentID: UUID? {
+        guard isGuidedFlowActive, workspaceDestination == .levelEditor,
+              workspace.levelDrawingBaseline != nil else { return nil }
+        return workspace.selectedComponentID
+    }
+
+    var workspaceCanEditLevelOnChart: Bool {
+        guard workspaceDestination == .levelEditor, workspaceCanCommit,
+              let id = workspace.selectedComponentID,
+              let draft = components.first(where: { $0.id == id }) else { return false }
+        return draft.componentType == workspace.selectedLevel
+    }
+
+    @discardableResult
+    func beginWorkspaceLevelChartEditing() -> Bool {
+        guard workspaceCanEditLevelOnChart, let id = workspace.selectedComponentID,
+              let index = components.firstIndex(where: { $0.id == id }),
+              let price = Double(workspace.editorText), let type = workspace.selectedLevel else { return false }
+        if workspace.levelDrawingBaseline == nil {
+            workspace.levelDrawingBaseline = components[index]
+            workspace.levelDrawingBaselineIndex = index
+            workspace.levelDrawingColor = drawingColorOverrides[id]
+        }
+        guard updateWorkspaceLevelFromChart(id: id, price: price) else { return false }
+        beginEditingDrawing(id, tool: type == .levelSupport ? .support : .resistance)
+        return true
+    }
+
+    var workspaceLevelPriceInput: Binding<String> {
+        Binding(get: { self.workspace.editorText }, set: { value in
+            self.workspace.editorText = value
+            if let id = self.workspaceLevelChartComponentID, let price = Double(value) {
+                _ = self.updateWorkspaceLevelFromChart(id: id, price: price)
+            }
+        })
+    }
+
+    /// Called by the existing chart handle after coordinate-to-price conversion.
+    /// Also used for numeric adjustment while that same chart editor is open.
+    @discardableResult
+    func updateWorkspaceLevelFromChart(id: UUID, price: Double) -> Bool {
+        guard workspaceLevelChartComponentID == id, let type = workspace.selectedLevel,
+              workspaceAllows(type), price.isFinite, price > 0,
+              let draft = components.first(where: { $0.id == id }), draft.componentType == type,
+              let prior = draft.payload.guidedLevelPayload else { return false }
+        if prior.price != price {
+            let level = LevelPayload(price: price, label: prior.label, colorHex: prior.colorHex,
+                                     lineStyle: prior.lineStyle, lineWidth: prior.lineWidth)
+            updateComponent(id: id, payload: type == .levelSupport ? .levelSupport(level) : .levelResistance(level))
+        }
+        if Double(workspace.editorText) != price { workspace.editorText = String(price) }
+        return true
+    }
+
     @discardableResult
     func beginWorkspaceDrawing(_ tool: MarkerDrawingWorkflowTool, componentID: UUID? = nil) -> Bool {
         guard let type = tool.componentType, workspaceAllows(type), tool.isPhaseOneEnabled else { return false }
@@ -221,6 +290,10 @@ extension MarkerPlacementState {
         case .levelEditor:
             guard let type = workspace.selectedLevel, workspaceAllows(type),
                   let price = Double(workspace.editorText) else { return false }
+            if workspace.levelDrawingBaseline != nil {
+                guard let id = workspace.selectedComponentID,
+                      components.contains(where: { $0.id == id && $0.componentType == type }) else { return false }
+            }
             return price.isFinite && price > 0
         case .drawingEditor:
             return drawingSession.editingDraftId != nil || (!drawingSession.isActive && workspace.drawingBaseline != nil && workspaceDrawingHasChanges)
@@ -263,9 +336,11 @@ extension MarkerPlacementState {
         case .levelEditor:
             guard let type = workspace.selectedLevel, let price = Double(workspace.editorText) else { return false }
             let prior = components.first { $0.id == workspace.selectedComponentID }?.payload.guidedLevelPayload
-            let level = LevelPayload(price: price, label: prior?.label ?? type.displayName, colorHex: prior?.colorHex,
+            let level = LevelPayload(price: price, label: prior == nil ? type.displayName : prior?.label, colorHex: prior?.colorHex,
                                      lineStyle: prior?.lineStyle, lineWidth: prior?.lineWidth)
             saveWorkspacePayload(type, payload: type == .levelSupport ? .levelSupport(level) : .levelResistance(level))
+            if workspace.levelDrawingBaseline != nil { commitDrawingAndExit() }
+            workspace.levelDrawingBaseline = nil // Done keeps the selected chart level.
         case .drawingEditor:
             commitDrawingAndExit()
             workspace.drawingBaseline = nil // Done keeps the chart's changes.
@@ -317,6 +392,8 @@ extension MarkerPlacementState {
 
     var hasWorkspaceEdits: Bool {
         if workspaceHasInvalidLevelInput { return true }
+        if let baseline = workspace.levelDrawingBaseline,
+           components.first(where: { $0.id == baseline.id }) != baseline { return true }
         if let draft = workspace.indicatorDraft {
             return draft.hasChanges
         }

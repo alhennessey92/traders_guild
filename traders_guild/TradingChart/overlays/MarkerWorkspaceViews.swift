@@ -26,7 +26,15 @@ struct MarkerWorkspaceContent: View {
             case .drawings: drawingPicker
             case .drawingEditor: drawingEditor
             case .levelEditor:
-                editorField("Price", text: $placementState.workspace.editorText, keyboard: .decimalPad)
+                editorField("Price", text: placementState.workspaceLevelPriceInput, keyboard: .decimalPad)
+                if placementState.workspace.selectedComponentID != nil {
+                    routeRow("Work on chart", icon: "chart.xyaxis.line") {
+                        if placementState.beginWorkspaceLevelChartEditing() {
+                            dismissKeyboard()
+                            onBeginInteractiveDrawing?()
+                        }
+                    }.disabled(!placementState.workspaceCanEditLevelOnChart)
+                }
             case .sourceEditor:
                 editorField("https://example.com/source", text: $placementState.workspace.editorText, keyboard: .URL)
                     .accessibilityIdentifier("workspace.sourceURL")
@@ -72,6 +80,7 @@ struct MarkerWorkspaceContent: View {
                             Text(summary(draft)).frame(maxWidth: .infinity, alignment: .leading)
                             Image(systemName: "pencil")
                         }.frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!placementState.workspaceAllows(draft.componentType))
