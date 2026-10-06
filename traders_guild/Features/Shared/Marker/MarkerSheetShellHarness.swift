@@ -87,7 +87,8 @@ struct MarkerSheetShellHarness: View {
                 sheetDetents: sheetDetents, selectedDetent: $selectedDetent,
                 selectedView: $selectedView, markerPrimaryTab: $primaryTab)
                 .environmentObject(appState)
-                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, route: route, mode: sheetDetents.mode.rawValue))
+                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, session: draft.workspaceSession,
+                                                       route: { route }, mode: sheetDetents.mode.rawValue))
                 .modifier(MarkerSheetDetentHost(controller: sheetDetents, selection: $selectedDetent, enabled: MarkerAvatarExperiment.isEnabled))
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppColors.sheetBackground)

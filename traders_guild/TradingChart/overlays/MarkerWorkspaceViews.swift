@@ -16,7 +16,12 @@ struct MarkerWorkspaceContent: View {
 
     private var current: MarkerWorkspaceDestination { destination ?? placementState.workspaceDestination }
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let message = placementState.workspace.message {
                 Text(message).font(.footnote).foregroundColor(AppColors.statusWarning)

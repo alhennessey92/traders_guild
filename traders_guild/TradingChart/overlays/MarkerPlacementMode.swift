@@ -226,10 +226,18 @@ final class MarkerPlacementState: ObservableObject {
     // view onto this same state, never a second draft. Behaviour lives in
     // `MarkerGuidedPlacement.swift`.
 
-    /// Where the guided panel is; `nil` is the legacy panel. Survives `reset`,
-    /// which runs after the entry point has chosen the guided flow.
-    @Published var guidedStep: MarkerGuidedStep?
-    @Published var workspace = MarkerWorkspaceState()
+    /// The guided panel is showing, rather than the legacy tabs. Survives
+    /// `reset`, which runs after the entry point has chosen the guided flow.
+    /// Set by `prepareGuidedFlow`, `prepareGuidedEdit` and `endGuidedFlow`;
+    /// where the author is within the flow is the workspace session's.
+    @Published var isGuidedFlowActive = false
+    /// Navigation and unfinished editor values. Not published by the draft,
+    /// so they never redraw the chart (see `MarkerWorkspaceSession`).
+    let workspaceSession = MarkerWorkspaceSession()
+    var workspace: MarkerWorkspaceState {
+        get { workspaceSession.state }
+        set { workspaceSession.state = newValue }
+    }
     /// The last submission, so the guided Review can show posting, failure and
     /// retry. The legacy panel ignores it.
     @Published var submissionPhase: MarkerPlacementSubmissionPhase = .idle

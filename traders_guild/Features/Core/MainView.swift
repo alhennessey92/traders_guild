@@ -121,7 +121,8 @@ struct MainView: View {
     @ViewBuilder
     private var presentedChartSheet: some View {
         chartBottomSheet
-        .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, route: markerSheetTraceRoute, mode: sheetDetents.mode.rawValue))
+        .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, session: placementState.workspaceSession,
+                                               route: { markerSheetTraceRoute }, mode: sheetDetents.mode.rawValue))
         .environmentObject(rlAppState)
         .id(appThemeStorage)
         .modifier(MarkerSheetDetentHost(controller: sheetDetents, selection: $selectedDetent, enabled: MarkerAvatarExperiment.isEnabled))
@@ -623,6 +624,7 @@ struct MainView: View {
     
     // MARK: - Body
     var body: some View {
+        let _ = MarkerSheetTrace.noteShellRender()
         if let user = rlAppState.currentUser ?? MarkerMainViewSheetFixture.user,
            rlAppState.currentGuild != nil || MarkerMainViewSheetFixture.enabled {
             ZStack {

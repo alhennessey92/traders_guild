@@ -30,7 +30,12 @@ struct MarkerGuidedCompactDock: View {
         return "Draft kept"
     }
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         Button(action: onResume) {
             HStack(spacing: 10) {
                 Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
@@ -112,7 +117,12 @@ struct MarkerGuidedPlacementPanel: View {
 
     /// One workspace: the header stays put, and only the screen below it
     /// changes. Moving between screens never touches the sheet itself.
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             taskHeader
             ZStack(alignment: .top) {
@@ -613,7 +623,12 @@ struct MarkerGuidedPlacementBar: View {
     let onPost: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         HStack(spacing: 10) {
             if let onShowChart {
                 Button {
@@ -1150,7 +1165,12 @@ struct MarkerGuidedLevelField: View {
     @ObservedObject var placementState: MarkerPlacementState
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
             : AnyLayout(HStackLayout())

@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Navigation and unfinished editor values have the same lifetime as the draft.
-/// `guidedStep` remains the outer shell's compatibility route; these destinations
-/// are internal to its Context workspace and never present another sheet.
+/// Navigation and unfinished editor values have the same lifetime as the draft,
+/// held by its `MarkerWorkspaceSession`. One route stack: Details at the root,
+/// Review and Context screens pushed on top. `guidedStep` is derived from it
+/// for the outer shell. No destination ever presents another sheet.
 enum MarkerWorkspaceDestination: String, Hashable {
     case details, context, indicators, indicatorSettings, drawings, drawingEditor
     case levelEditor, timeframes, sourceEditor, noteEditor, relationship, responseTimeframe, review
@@ -28,12 +29,32 @@ enum MarkerWorkspaceDestination: String, Hashable {
     }
 }
 
-struct MarkerWorkspaceState {
-    var path: [MarkerWorkspaceDestination] = [.details]
-    var destination: MarkerWorkspaceDestination { path.last ?? .details }
+/// Where each screen was scrolled to and each field's cursor and offset. Read
+/// back only when a screen is rebuilt; kept by reference so writing it (every
+/// keystroke, cursor move and scroll) never copies or announces the state.
+final class MarkerWorkspaceMemory {
     var scrollAnchors: [MarkerWorkspaceDestination: String] = [:]
     var textOffsets: [String: CGPoint] = [:]
     var textSelections: [String: NSRange] = [:]
+}
+
+struct MarkerWorkspaceState {
+    var path: [MarkerWorkspaceDestination] = [.details]
+    var destination: MarkerWorkspaceDestination { path.last ?? .details }
+    /// A fresh state is a fresh memory.
+    let memory = MarkerWorkspaceMemory()
+    var scrollAnchors: [MarkerWorkspaceDestination: String] {
+        get { memory.scrollAnchors }
+        nonmutating set { memory.scrollAnchors = newValue }
+    }
+    var textOffsets: [String: CGPoint] {
+        get { memory.textOffsets }
+        nonmutating set { memory.textOffsets = newValue }
+    }
+    var textSelections: [String: NSRange] {
+        get { memory.textSelections }
+        nonmutating set { memory.textSelections = newValue }
+    }
     var showsTitle = false
     var editorBaselineText = ""
     var editorBaselineTitle = ""
@@ -57,22 +78,13 @@ struct MarkerWorkspaceState {
 
 extension MarkerPlacementState {
     var workspaceDestination: MarkerWorkspaceDestination {
-        switch guidedStep {
-        case .details?: return .details
-        case .review?: return .review
-        case .context?: return workspace.destination == .details ? .context : workspace.destination
-        case nil: return .details
-        }
+        isGuidedFlowActive ? workspace.destination : .details
     }
 
     /// How deep the current screen sits, for the direction a new screen
-    /// enters from: Details 0, Review 1, Context and what it opens by path.
+    /// enters from: Details 0, then one more for each screen opened on top.
     var workspaceDepth: Int {
-        switch guidedStep {
-        case .review?: return 1
-        case .context?: return max(1, workspace.path.count - 1)
-        case .details?, nil: return 0
-        }
+        isGuidedFlowActive ? max(0, workspace.path.count - 1) : 0
     }
 
     /// A drawing or level is being worked on the chart itself; the collapsed
@@ -106,12 +118,13 @@ extension MarkerPlacementState {
         }
     }
 
+    /// Opens a screen on top of the current one; Back or Done returns to it,
+    /// so an edit begun from Review comes back to Review.
     func openWorkspace(_ destination: MarkerWorkspaceDestination) {
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         workspace.message = nil
-        if guidedStep != .context { workspace.path = [.details] }
+        guard workspace.destination != destination else { return }
         workspace.path.append(destination)
-        guidedStep = .context
     }
 
     /// Back from a picker keeps committed context. Back/Cancel from an editor
@@ -139,7 +152,6 @@ extension MarkerPlacementState {
         workspace.drawingBaseline = nil
         workspace.message = nil
         if workspace.path.count > 1 { workspace.path.removeLast() }
-        if workspace.destination == .details { guidedStep = .details }
     }
 
     func beginWorkspaceIndicator(_ item: IndicatorCatalogItem, draftID: UUID? = nil) {
@@ -360,7 +372,6 @@ extension MarkerPlacementState {
         while [.indicators, .drawings].contains(workspace.destination), workspace.path.count > 1 {
             workspace.path.removeLast()
         }
-        if workspace.destination == .details { guidedStep = .details }
         return true
     }
 

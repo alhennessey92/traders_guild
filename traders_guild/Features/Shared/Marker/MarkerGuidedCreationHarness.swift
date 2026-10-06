@@ -165,7 +165,8 @@ struct MarkerGuidedCreationHarness: View {
             }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("guided.fixtureSheet")
-                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, route: traceRoute, mode: sheetDetents.mode.rawValue))
+                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, session: placementState.workspaceSession,
+                                                       route: { traceRoute }, mode: sheetDetents.mode.rawValue))
                 .modifier(MarkerSheetDetentHost(controller: sheetDetents, selection: $selectedDetent, enabled: true))
                 .presentationBackground(AppColors.sheetBackground)
                 .presentationBackgroundInteraction(.enabled)

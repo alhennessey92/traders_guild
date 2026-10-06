@@ -155,7 +155,7 @@ extension MarkerPlacementState {
         guard isEditingExistingMarker, editingMarkerId == marker.id else { return }
         let matched = matchSavedComponents(of: marker)
         workspace = MarkerWorkspaceState()
-        guidedStep = .details
+        isGuidedFlowActive = true
         submissionPhase = .idle
         draftID = UUID()
         activeSubmissionID = nil

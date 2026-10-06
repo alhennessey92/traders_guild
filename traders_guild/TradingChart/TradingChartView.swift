@@ -933,6 +933,7 @@ struct TradingChartView: View {
     // MARK: - Body
     
     var body: some View {
+        let _ = MarkerSheetTrace.noteChartRender()
         withNotificationHandlers(
             withPlacementAndChartObservers(
                 withSheetPresentations(rootChartContainer)

@@ -32,7 +32,12 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
 
     private var frozen: Bool { isCollapsed || holdsFrozenSize }
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         GeometryReader { proxy in
             let resume = expandedSize
             ZStack(alignment: .top) {
@@ -121,7 +126,12 @@ struct MarkerWorkspaceChartToolBar: View {
         return isLevel ? "Drag the level on the chart" : "Adjust it on the chart"
     }
 
+    /// Workspace state publishes through its session, not the draft.
     var body: some View {
+        MarkerWorkspaceObserving(session: placementState.workspaceSession) { observedBody }
+    }
+
+    @ViewBuilder private var observedBody: some View {
         let canCommit = placementState.workspaceCanCommit
         HStack(spacing: 8) {
             Button(action: onFinish) {

@@ -13,6 +13,9 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
 
     private struct Trace: Decodable {
         let now: Double
+        /// How many times the chart's and MainView's bodies have run.
+        var chartRenders: Int? = nil
+        var shellRenders: Int? = nil
         let samples: [Sample]
     }
     private struct Sample: Decodable {
@@ -176,6 +179,68 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         assertStatic(samples, "Setup Details→Review→Back")
         XCTAssertTrue(samples.contains { $0.route == "review-setup" })
         XCTAssertEqual(samples.last?.route, "details-setup")
+    }
+
+    // MARK: The chart redraws only for draft edits (P2)
+
+    /// MainView's body runs: it owns the draft, so each draft announcement
+    /// rebuilds the shell and the chart in it. (The fixture has no guild, so
+    /// no chart view is built; the shell is what is counted.)
+    private func shellRenders() -> Int {
+        settle(0.4) // the trace republishes at least every 0.25s
+        return trace().shellRenders ?? -1
+    }
+
+    /// Moving around the workspace and scrolling it belong to the workspace
+    /// session, so the shell and chart behind the sheet never redraw for
+    /// them. Typing the post's own text is a draft edit and still does.
+    func testTheChartRedrawsOnlyForDraftEdits() {
+        launch()
+        reveal("guided.addContext")
+        let start = shellRenders()
+        XCTAssertGreaterThan(start, 0, "the trace counts MainView renders")
+        tap("guided.review")
+        settle(0.6)
+        tap("guided.back")
+        settle(0.6)
+        tap("guided.addContext")
+        settle(0.6)
+        tap("workspace.Add indicator")
+        settle(0.6)
+        tap("workspace.indicator.EMA")
+        XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
+        settle(0.6)
+        tap("guided.back")
+        settle(0.6)
+        tap("guided.back")
+        settle(0.6)
+        tap("guided.contextDone")
+        let navigation = shellRenders() - start
+
+        let beforeScroll = shellRenders()
+        app.scrollMarkerWorkspace()
+        let scrolling = shellRenders() - beforeScroll
+
+        let field = app.textViews["guided.text"]
+        app.revealInMarkerWorkspace(field)
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        settle(1.2)
+        let before = field.value as? String ?? ""
+        let beforeTyping = shellRenders()
+        field.typeText("abcdef")
+        let typing = shellRenders() - beforeTyping
+        let after = field.value as? String ?? ""
+
+        let summary = "MainView renders: navigation \(navigation), scrolling \(scrolling), typing 6 characters \(typing) (since launch \(start))"
+        let note = XCTAttachment(string: summary + "\nbefore: \(before)\nafter: \(after)")
+        note.name = "shell-renders.txt"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertEqual(after.count, before.count + 6, "typed into the post")
+        XCTAssertEqual(navigation, 0, summary)
+        XCTAssertEqual(scrolling, 0, summary)
+        XCTAssertGreaterThan(typing, 0, "the post's text is the draft's: \(summary)")
     }
 
     // MARK: Explicit moves keep one presentation and exact state

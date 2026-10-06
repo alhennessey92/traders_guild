@@ -82,8 +82,17 @@ struct MarkerGuidedIntentChange: Identifiable, Equatable {
 
 extension MarkerPlacementState {
 
-    /// The guided panel is showing, rather than the legacy tabs.
-    var isGuidedFlowActive: Bool { guidedStep != nil }
+    /// Where the guided panel is, as the outer shell has always seen it:
+    /// Details, Review, or somewhere in Context. `nil` is the legacy panel.
+    /// The workspace session's route stack is the single source.
+    var guidedStep: MarkerGuidedStep? {
+        guard isGuidedFlowActive else { return nil }
+        switch workspace.destination {
+        case .details: return .details
+        case .review: return .review
+        default: return .context
+        }
+    }
 
     /// Analysis needs a chart component except where text alone is a post: the
     /// guided flow, and an edit the entry point allowed under the experiment.
@@ -148,7 +157,7 @@ extension MarkerPlacementState {
     func prepareGuidedFlow() {
         guidedEditOriginal = nil
         workspace = MarkerWorkspaceState()
-        guidedStep = .details
+        isGuidedFlowActive = true
         submissionPhase = .idle
         draftBaseline = nil
         draftID = UUID()
@@ -161,7 +170,7 @@ extension MarkerPlacementState {
     func endGuidedFlow() {
         guidedEditOriginal = nil
         workspace = MarkerWorkspaceState()
-        guidedStep = nil
+        isGuidedFlowActive = false
         submissionPhase = .idle
         draftBaseline = nil
         setupLevelSeed = nil
@@ -193,7 +202,6 @@ extension MarkerPlacementState {
     @discardableResult
     func continueToSetupReasoning() -> Bool {
         guard guidedStep == .details, canContinueToSetupReasoning, !isGuidedSubmissionInFlight else { return false }
-        guidedStep = .details
         return true
     }
 
@@ -203,17 +211,17 @@ extension MarkerPlacementState {
     func continueToReview() -> Bool {
         guard guidedStep == .details,
               canContinueToReview, !isGuidedSubmissionInFlight else { return false }
-        guidedStep = .review
+        workspace.path.append(.review)
         return true
     }
 
-    /// One section back: Review → a Setup's reasoning or Details; reasoning,
-    /// context and the type list → where they were opened from.
+    /// One screen back, to where this one was opened from: Review → Details;
+    /// a Context screen → the screen beneath it (Cancel for an editor).
     func goBack() {
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
         switch guidedStep {
         case .review?:
-            guidedStep = .details
+            if workspace.path.count > 1 { workspace.path.removeLast() }
         case .context?:
             cancelWorkspaceEditor()
         case .details?, nil:
@@ -221,9 +229,11 @@ extension MarkerPlacementState {
         }
     }
 
+    /// Straight back to Details, from Details or Review (a type change, or
+    /// a refused post's levels to adjust).
     func backToDetails() {
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight else { return }
-        guidedStep = .details
+        workspace.path = [.details]
     }
 
     func openContext() {
@@ -234,7 +244,7 @@ extension MarkerPlacementState {
     func openTypeChooser() {
         // An edit keeps its type.
         guard isGuidedFlowActive, !isGuidedSubmissionInFlight, !isGuidedEdit else { return }
-        guidedStep = .details
+        workspace.path = [.details]
     }
 
     /// Whether the details step is the social one (Analysis / Question) or

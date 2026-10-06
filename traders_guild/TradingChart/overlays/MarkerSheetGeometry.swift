@@ -154,7 +154,10 @@ struct MarkerSheetGeometryProbe: UIViewRepresentable {
 /// switch, so no probe is mounted and nothing is sampled.
 struct MarkerSheetGeometryObserver: ViewModifier {
     let selection: PresentationDetent
-    var route: String = ""
+    /// Workspace navigation publishes through its session, not the host, so
+    /// the route is read whenever the session changes.
+    @ObservedObject var session: MarkerWorkspaceSession
+    var route: () -> String = { "" }
     var mode: String = ""
     @State private var geometry = MarkerSheetGeometry()
 
@@ -170,7 +173,7 @@ struct MarkerSheetGeometryObserver: ViewModifier {
                     }, selectionID: "\(selection)").allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
-            .modifier(MarkerSheetTraceModifier(selection: selection, route: route, mode: mode))
+            .modifier(MarkerSheetTraceModifier(selection: selection, route: route(), mode: mode))
             .overlay(alignment: .topTrailing) {
                 if showsReadout {
                     Text("selected:\(selection) \(geometry.summary)")
@@ -193,13 +196,13 @@ struct MarkerSheetGeometryObserver: ViewModifier {
 @MainActor
 final class MarkerSheetTrace: NSObject, ObservableObject {
     static let shared = MarkerSheetTrace()
-    static var isEnabled: Bool {
+    static let isEnabled: Bool = {
         #if DEBUG || TG_ISOLATED_DEV
         ProcessInfo.processInfo.arguments.contains("-MarkerSheetTrace")
         #else
         false
         #endif
-    }
+    }()
 
     struct Sample: Codable, Equatable {
         var t: Double
@@ -214,6 +217,11 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
     }
 
     @Published private(set) var json = "{}"
+    /// How many times the chart view's body has run (trace builds only).
+    private(set) var chartRenders = 0
+    /// How many times MainView's body has run. It owns the draft, so every
+    /// draft announcement rebuilds the whole shell, chart included.
+    private(set) var shellRenders = 0
     var selection = ""
     var route = ""
     var mode = ""
@@ -228,6 +236,17 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
     private let start = CACurrentMediaTime()
     private var lastPublish: CFTimeInterval = 0
     private var dirty = false
+
+    /// Called from the chart's body: counts its redraws while tracing.
+    static func noteChartRender() {
+        guard isEnabled else { return }
+        shared.chartRenders += 1
+    }
+
+    static func noteShellRender() {
+        guard isEnabled else { return }
+        shared.shellRenders += 1
+    }
 
     func attach(_ view: UIView) {
         probe = view
@@ -266,7 +285,7 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
         if (dirty && now - lastPublish > 0.1) || now - lastPublish > 0.25 {
             lastPublish = now
             dirty = false
-            let payload = Payload(now: ((now - start) * 1000).rounded() / 1000, samples: samples)
+            let payload = Payload(now: ((now - start) * 1000).rounded() / 1000, chartRenders: chartRenders, shellRenders: shellRenders, samples: samples)
             if let data = try? JSONEncoder().encode(payload) {
                 json = String(decoding: data, as: UTF8.self)
             }
@@ -284,6 +303,8 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
 
     private struct Payload: Codable {
         let now: Double
+        let chartRenders: Int
+        let shellRenders: Int
         let samples: [Sample]
     }
 }
