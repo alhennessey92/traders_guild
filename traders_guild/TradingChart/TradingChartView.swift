@@ -88,6 +88,9 @@ struct PredictionPlacementState: Equatable {
     var takeProfitPrice: Double
     var stopLossPrice: Double
     var candleIndex: Int
+    /// A saved Setup being edited (v1.5 guided edit): Entry and its candle
+    /// are the saved ones and never follow the latest candle.
+    var keepsSavedEntry = false
 
     /// Auto-detect direction from TP position relative to entry
     var isLong: Bool { takeProfitPrice > entryPrice }
@@ -3070,6 +3073,11 @@ struct TradingChartView: View {
                         previewCandleIndex = editingMarker.candleIndex
                     }
                 }
+                // A guided Setup edit draws its saved levels; Take Profit and
+                // Stop Loss drag, Entry and the anchor stay as saved.
+                if placementState.isGuidedEdit, placementState.intent == .setup, !placementState.isGuidedEditLocked {
+                    initializeSavedSetupPlacement()
+                }
             } else {
                 // Initialize the on-chart placement state with anchor at the selected candle
                 initializePlacementState()
@@ -3226,9 +3234,35 @@ struct TradingChartView: View {
         )
     }
 
+    /// The saved Setup under a guided edit, on its own candle. Without that
+    /// candle loaded there are no lines, and the ticket's fields still edit.
+    private func initializeSavedSetupPlacement() {
+        guard chartData.candles.indices.contains(previewCandleIndex),
+              let entry = placementState.guidedSetupEntryPrice,
+              let takeProfit = placementState.componentPrice(.levelTp),
+              let stopLoss = placementState.componentPrice(.levelSl) else { return }
+        predictionPlacement = PredictionPlacementState(
+            entryPrice: entry,
+            takeProfitPrice: takeProfit,
+            stopLossPrice: stopLoss,
+            candleIndex: previewCandleIndex,
+            keepsSavedEntry: true
+        )
+    }
+
     private func syncSetupComponentsFromPredictionPlacement() {
+        // A saved Setup's handles move Take Profit and Stop Loss only, each
+        // keeping its saved payload; Entry is never written.
+        if placementState.isGuidedEdit {
+            guard controlViewModel.isMarkerPlacementMode, !isSyncingSetupPlacementState,
+                  let prediction = predictionPlacement, prediction.keepsSavedEntry else { return }
+            isSyncingSetupPlacementState = true
+            defer { isSyncingSetupPlacementState = false }
+            placementState.applyChartSetupLevels(takeProfit: prediction.takeProfitPrice,
+                                                 stopLoss: prediction.stopLossPrice)
+            return
+        }
         guard controlViewModel.isMarkerPlacementMode,
-              !placementState.isGuidedEdit,
               placementState.intent == .setup,
               let prediction = predictionPlacement,
               !isSyncingSetupPlacementState else {
@@ -3374,6 +3408,18 @@ struct TradingChartView: View {
         }
         if newCount != oldCount {
             indicatorManager.recalculateIndicators(candles: chartData.candles)
+        }
+
+        // A saved Setup stays on its own candle, found again by time when
+        // history is prepended; its Entry never changes.
+        if var state = predictionPlacement, state.keepsSavedEntry {
+            if let editing = markerManager.markers.first(where: { $0.id == placementState.editingMarkerId }),
+               let index = chartData.candles.firstIndex(where: { $0.timestamp == editing.candleTimestamp }),
+               index != state.candleIndex {
+                state.candleIndex = index
+                predictionPlacement = state
+            }
+            return
         }
 
         // Keep prediction placement pinned to latest candle

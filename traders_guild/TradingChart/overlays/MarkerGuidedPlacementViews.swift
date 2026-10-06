@@ -115,10 +115,20 @@ struct MarkerGuidedPlacementPanel: View {
     /// trailing side, a shallower one from the leading side.
     @State private var shownDepth = 0
 
-    /// A type change waiting on the author, and where it goes once confirmed.
-    private struct PendingChange: Identifiable {
-        let change: MarkerGuidedIntentChange
-        var id: UUID { change.id }
+    /// A change waiting on the author: a type change that would remove
+    /// context, or a Setup side change that would move their levels. One
+    /// alert serves both (an alert declared inside the screen's scroll view
+    /// never presents).
+    private enum PendingChange: Identifiable {
+        case intent(MarkerGuidedIntentChange)
+        case side(MarkerSetupSideChange)
+
+        var id: UUID {
+            switch self {
+            case .intent(let change): return change.id
+            case .side(let change): return change.id
+            }
+        }
     }
 
     /// One workspace: the header stays put, and only the screen below it
@@ -146,15 +156,25 @@ struct MarkerGuidedPlacementPanel: View {
             announce(destination)
         }
         .alert(item: $pendingChange) { pending in
-            Alert(
-                title: Text("Switch to \(pending.change.targetIntent.displayName)?"),
-                message: Text("This removes context \(pending.change.targetIntent.displayName) can't carry: \(pending.change.incompatibleSummary)."),
-                primaryButton: .destructive(Text("Remove and Switch")) {
-                    placementState.applyGuidedIntentChange(pending.change)
-                    placementState.backToDetails()
-                },
-                secondaryButton: .cancel()
-            )
+            switch pending {
+            case .intent(let change):
+                return Alert(
+                    title: Text("Switch to \(change.targetIntent.displayName)?"),
+                    message: Text("This removes context \(change.targetIntent.displayName) can't carry: \(change.incompatibleSummary)."),
+                    primaryButton: .destructive(Text("Remove and Switch")) {
+                        placementState.applyGuidedIntentChange(change)
+                        placementState.backToDetails()
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .side(let change):
+                return Alert(
+                    title: Text("Switch to \(change.direction.title)?"),
+                    message: Text(change.summary),
+                    primaryButton: .default(Text("Flip levels")) { placementState.applySetupSideChange(change) },
+                    secondaryButton: .cancel()
+                )
+            }
         }
         .onAppear {
             placementState.workspace.showsTitle = placementState.workspace.showsTitle || !placementState.title.isEmpty
@@ -209,7 +229,7 @@ struct MarkerGuidedPlacementPanel: View {
     /// Either way nothing is removed without the author agreeing.
     private func choose(_ intent: RLMarkerIntent) {
         if let change = placementState.requestGuidedIntentChange(to: intent) {
-            pendingChange = PendingChange(change: change)
+            pendingChange = .intent(change)
             HapticFeedback.light.trigger()
             return
         }
@@ -340,7 +360,11 @@ struct MarkerGuidedPlacementPanel: View {
             if placementState.isGuidedEditLocked {
                 MarkerGuidedLockedSetupCard(placementState: placementState)
             } else {
-                MarkerGuidedSetupLevelsCard(placementState: placementState)
+                // The chart shows the levels as draggable lines; the workspace
+                // steps aside for them.
+                MarkerGuidedSetupLevelsCard(placementState: placementState, onAdjustOnChart: onShowChart) { change in
+                    pendingChange = .side(change)
+                }
                 trackingControls
             }
         }
@@ -1180,16 +1204,32 @@ struct MarkerGuidedOptionalRow: View {
 /// the ratio, with how to move them.
 struct MarkerGuidedSetupLevelsCard: View {
     @ObservedObject var placementState: MarkerPlacementState
+    /// Collapses the workspace so the lines can be dragged; nil where the
+    /// chart has no lines to drag.
+    var onAdjustOnChart: (() -> Void)? = nil
+    /// A side change that moves the author's levels, for the panel to confirm.
+    var onConfirmSideChange: (MarkerSetupSideChange) -> Void = { _ in }
 
+    /// The trade ticket: the side, then each level marked with its line on
+    /// the chart, then risk to reward. Colour marks the lines; the words stay
+    /// readable on every sheet.
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                MarkerSetupSidePill(side: placementState.setupSide)
-                Spacer()
-                Text(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))
-                    .font(.system(.caption, design: .monospaced).weight(.semibold))
-                    .foregroundColor(AppColors.overlayPanelSecondaryText)
-                    .accessibilityLabel("Risk to reward, \(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                MarkerSetupDirectionPicker(selected: placementState.setupDirection) { direction in
+                    if let change = placementState.requestSetupDirection(direction) {
+                        onConfirmSideChange(change)
+                        HapticFeedback.light.trigger()
+                    }
+                }
+                Spacer(minLength: 4)
+                MarkerSetupRiskRewardView(ratio: placementState.guidedSetupRiskReward)
+            }
+            if let problem = sideProblem {
+                Label(problem, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(AppColors.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             MarkerGuidedValueRow(
                 title: "Entry",
@@ -1199,13 +1239,98 @@ struct MarkerGuidedSetupLevelsCard: View {
             )
             MarkerGuidedLevelField(title: "Take Profit", type: .levelTp, placementState: placementState)
             MarkerGuidedLevelField(title: "Stop Loss", type: .levelSl, placementState: placementState)
-            Text(placementState.isGuidedEdit ? "Type a new take profit or stop loss." : "Drag the lines on the chart, or type a price.")
-                .font(.caption)
-                .foregroundColor(AppColors.overlayPanelSecondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if let onAdjustOnChart {
+                Button {
+                    dismissKeyboard()
+                    if placementState.beginSetupAdjust() { onAdjustOnChart() }
+                } label: {
+                    Label("Adjust on chart", systemImage: "arrow.up.and.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+                        .overlay(Capsule().stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+                .accessibilityHint("Shows the chart, where Take Profit and Stop Loss can be dragged")
+                .accessibilityIdentifier("guided.setup.adjust")
+            }
         }
         .padding(12)
         .background(MarkerGuidedCardBackground())
+    }
+
+    /// Levels that describe no side say so, next to the control that fixes them.
+    private var sideProblem: String? {
+        switch placementState.setupSide {
+        case .inconsistent?: return "Take Profit and Stop Loss are on the same side. Choose Long or Short."
+        case .invalidPrice?: return "A level is not a valid price."
+        default: return nil
+        }
+    }
+}
+
+/// Long | Short. The chosen side fills in its colour; with levels that
+/// describe no side, neither is chosen.
+struct MarkerSetupDirectionPicker: View {
+    let selected: MarkerSetupDirection?
+    let onSelect: (MarkerSetupDirection) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(MarkerSetupDirection.allCases) { direction in
+                let isSelected = selected == direction
+                let color = direction == .long ? AppColors.statusPositive : AppColors.statusNegative
+                Button { onSelect(direction) } label: {
+                    Label(direction.title, systemImage: direction.icon)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(isSelected ? .white : AppColors.overlayPanelSecondaryText)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .background(Capsule().fill(isSelected ? color : Color.clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityIdentifier("guided.setup.\(direction.rawValue)")
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(AppColors.whiteText.opacity(0.07)))
+        .padding(.vertical, 2)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selected)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Side")
+    }
+}
+
+/// "R:R 1 : 2.40" over a bar split risk | reward, as the chart's red and
+/// green fills are.
+struct MarkerSetupRiskRewardView: View {
+    let ratio: Double?
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(MarkerGuidedFormat.riskReward(ratio))
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundColor(AppColors.primaryForeground)
+            if let ratio, ratio.isFinite, ratio > 0 {
+                let risk = 1 / (1 + ratio)
+                GeometryReader { proxy in
+                    HStack(spacing: 2) {
+                        Capsule().fill(AppColors.statusNegative).frame(width: max(3, (proxy.size.width - 2) * risk))
+                        Capsule().fill(AppColors.statusPositive)
+                    }
+                }
+                .frame(width: 84, height: 4)
+                .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Risk to reward, \(MarkerGuidedFormat.riskReward(ratio))")
     }
 }
 
@@ -1308,13 +1433,12 @@ struct MarkerGuidedValueRow: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
         layout {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(tint)
+                MarkerSetupLineLabel(title: title, color: tint)
                 if let detail {
                     Text(detail)
                         .font(.caption2)
                         .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .padding(.leading, 22)
                 }
             }
             if !dynamicTypeSize.isAccessibilitySize {
@@ -1346,9 +1470,7 @@ struct MarkerGuidedLevelField: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
             : AnyLayout(HStackLayout())
         layout {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(type.color)
+            MarkerSetupLineLabel(title: title, color: type.color, dashed: true)
                 .accessibilityHidden(true)
             if !dynamicTypeSize.isAccessibilitySize {
                 Spacer()
@@ -1393,12 +1515,36 @@ struct MarkerSetupSidePill: View {
             case nil: return ("Set TP and SL", AppColors.overlayPanelSecondaryText)
             }
         }()
+        let filled = side == .long || side == .short
         Text(text)
             .font(.caption.weight(.bold))
-            .foregroundColor(color)
+            .foregroundColor(filled ? .white : color)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.15)))
+            .background(Capsule().fill(filled ? color : color.opacity(0.15)))
+    }
+}
+
+/// A level's name beside a short stroke of its line on the chart: Entry is
+/// solid, Take Profit and Stop Loss dashed, each in its own colour.
+struct MarkerSetupLineLabel: View {
+    let title: String
+    let color: Color
+    var dashed = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 1.5))
+                path.addLine(to: CGPoint(x: 14, y: 1.5))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: dashed ? [4, 3] : []))
+            .frame(width: 14, height: 3)
+            .accessibilityHidden(true)
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(AppColors.primaryForeground)
+        }
     }
 }
 

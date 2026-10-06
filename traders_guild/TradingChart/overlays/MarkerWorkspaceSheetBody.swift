@@ -81,7 +81,12 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
         }
         .clipped()
         .onAppear { MarkerSheetTrace.shared.dockVisible = isCollapsed }
-        .onChange(of: isCollapsed) { _, value in MarkerSheetTrace.shared.dockVisible = value }
+        .onChange(of: isCollapsed) { _, value in
+            MarkerSheetTrace.shared.dockVisible = value
+            // Dragging the sheet back up from a Setup adjustment keeps the
+            // levels where they were moved, as Done does.
+            if !value { placementState.finishSetupAdjust() }
+        }
     }
 
     private func release() {
@@ -115,15 +120,28 @@ struct MarkerWorkspaceChartToolBar: View {
     let onFinish: () -> Void
 
     private var isLevel: Bool { placementState.workspaceDestination == .levelEditor }
+    /// A Setup's Take Profit and Stop Loss, moved on the chart.
+    private var isSetup: Bool { placementState.isAdjustingSetupOnChart }
+    /// Shows a value (a price, the Setup's levels) rather than an instruction.
+    private var showsValue: Bool { isLevel || isSetup }
 
     private var title: String {
+        if isSetup { return "Take Profit and Stop Loss" }
         if isLevel, let type = placementState.workspace.selectedLevel { return type.displayName }
         return placementState.activeDrawingWorkflowTool?.title ?? placementState.workspaceDestination.title
     }
 
     private var instruction: String {
+        if isSetup { return "Drag the lines on the chart" }
         if let text = placementState.toolbarInstructionText { return text }
         return isLevel ? "Drag the level on the chart" : "Adjust it on the chart"
+    }
+
+    /// The live value (the Setup's levels, a level's price) or what to do.
+    private var subtitle: String {
+        if isSetup { return placementState.setupAdjustReadout }
+        if isLevel { return MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)) }
+        return instruction
     }
 
     /// Workspace state publishes through its session, not the draft.
@@ -132,11 +150,15 @@ struct MarkerWorkspaceChartToolBar: View {
     }
 
     @ViewBuilder private var observedBody: some View {
-        let canCommit = placementState.workspaceCanCommit
+        let canCommit = isSetup || placementState.workspaceCanCommit
         HStack(spacing: 8) {
-            Button(action: onFinish) {
+            Button {
+                // Back to the ticket with the levels where they were moved.
+                if isSetup { placementState.finishSetupAdjust() }
+                onFinish()
+            } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: isLevel ? "arrow.up.and.down" : "hand.draw")
+                    Image(systemName: showsValue ? "arrow.up.and.down" : "hand.draw")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(placementState.intent.color)
                         .frame(width: 36, height: 36)
@@ -146,10 +168,11 @@ struct MarkerWorkspaceChartToolBar: View {
                             .font(.footnote.weight(.bold))
                             .foregroundColor(AppColors.primaryForeground)
                             .lineLimit(1)
-                        Text(isLevel ? MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)) : instruction)
-                            .font(isLevel ? .system(.caption, design: .monospaced).weight(.semibold) : .caption2)
-                            .foregroundColor(isLevel ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                        Text(subtitle)
+                            .font(showsValue ? .system(.caption, design: .monospaced).weight(.semibold) : .caption2)
+                            .foregroundColor(showsValue ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     Spacer(minLength: 0)
                 }
@@ -157,10 +180,10 @@ struct MarkerWorkspaceChartToolBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(title). \(instruction). Show options")
+            .accessibilityLabel("\(title). \(subtitle). Show options")
             .accessibilityIdentifier("workspace.tool.options")
             Button {
-                placementState.cancelWorkspaceEditor()
+                if isSetup { placementState.cancelSetupAdjust() } else { placementState.cancelWorkspaceEditor() }
                 onFinish()
             } label: {
                 Image(systemName: "xmark")
@@ -175,7 +198,12 @@ struct MarkerWorkspaceChartToolBar: View {
             .accessibilityLabel("Cancel")
             .accessibilityIdentifier("workspace.tool.cancel")
             Button {
-                if placementState.commitWorkspaceEditor() { onFinish() }
+                if isSetup {
+                    placementState.finishSetupAdjust()
+                    onFinish()
+                } else if placementState.commitWorkspaceEditor() {
+                    onFinish()
+                }
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .bold))

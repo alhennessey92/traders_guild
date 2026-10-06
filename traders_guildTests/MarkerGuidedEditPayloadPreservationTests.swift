@@ -332,6 +332,73 @@ struct MarkerGuidedEditPayloadPreservationTests {
         #expect(e.state.components.first { $0.componentType == .levelSl }?.payload.guidedLevelPayload?.label == "SL")
     }
 
+    /// A saved Setup, with keys the app does not model on every component.
+    private var savedSetup: String {
+        [
+            component(1, "anchor", 0, ##"{"time": "2026-09-01T12:00:00Z", "price": 63500.25, "server_seq": 1}"##),
+            component(2, "level.entry", 1, ##"{"price": 63920.5, "label": "Entry", "filled_at": "2026-09-01T12:05:00Z"}"##),
+            component(3, "level.tp", 2, ##"{"price": 64400, "label": "Target 1", "color_hex": "#2266FF", "partial": [0.5, 0.5]}"##),
+            component(4, "level.sl", 3, ##"{"price": 63700, "label": "SL", "trail": true}"##),
+        ].joined(separator: ",")
+    }
+
+    /// The chart's handles in an edit move Target and Stop only, each
+    /// keeping everything else it was saved with; Entry and the anchor are
+    /// sent exactly as saved.
+    @Test
+    func chartHandlesInAnEditMoveOnlyTargetAndStop() throws {
+        let e = try edit(markerJSON(intent: "setup", components: savedSetup, tracking: true, state: "ARMED"))
+        e.state.applyChartSetupLevels(takeProfit: 64_700, stopLoss: 63_650)
+        let components = sent(e.state.buildGuidedUpdateRequest().components ?? [])
+        #expect(components.map(\.type) == ["anchor", "level.entry", "level.tp", "level.sl"])
+        #expect(MarkerRawPayload.same(components[0].payload, savedRaw(##"{"time": "2026-09-01T12:00:00Z", "price": 63500.25, "server_seq": 1}"##)))
+        #expect(MarkerRawPayload.same(components[1].payload, savedRaw(##"{"price": 63920.5, "label": "Entry", "filled_at": "2026-09-01T12:05:00Z"}"##)))
+        #expect(MarkerRawPayload.same(components[2].payload["price"], 64_700))
+        #expect(components[2].payload["label"] as? String == "Target 1")
+        #expect(MarkerRawPayload.same(components[2].payload["partial"], [0.5, 0.5]))
+        #expect(MarkerRawPayload.same(components[3].payload["price"], 63_650))
+        #expect(MarkerRawPayload.same(components[3].payload["trail"], true))
+    }
+
+    /// Open the edit, adjust on the chart, cancel: the drafts are the ones
+    /// loaded, there is nothing to save, and no component would be sent, so
+    /// the saved Setup stands exactly.
+    @Test
+    func adjustingOnTheChartThenCancellingLeavesTheSavedSetupExact() throws {
+        let e = try edit(markerJSON(intent: "setup", components: savedSetup, tracking: true, state: "ARMED"))
+        let loaded = e.state.components
+        #expect(e.state.beginSetupAdjust())
+        e.state.applyChartSetupLevels(takeProfit: 64_900, stopLoss: 63_100)
+        #expect(e.state.guidedEditHasChanges)
+        e.state.cancelSetupAdjust()
+        #expect(e.state.components == loaded)
+        #expect(!e.state.guidedEditHasChanges)
+        #expect(e.state.buildGuidedUpdateRequest().components == nil, "no component change is sent")
+    }
+
+    /// A saved Setup's levels are the author's: switching its side always asks.
+    @Test
+    func aSavedSetupAsksBeforeItsSideChanges() throws {
+        let e = try edit(markerJSON(intent: "setup", components: savedSetup, tracking: true, state: "ARMED"))
+        let before = e.state.components
+        let change = e.state.requestSetupDirection(.short)
+        #expect(change != nil)
+        #expect(e.state.components == before)
+    }
+
+    /// Past ARMED a Setup's levels cannot change: no side change, no chart
+    /// adjustment, and handle moves are ignored.
+    @Test
+    func aLockedSetupRefusesEveryLevelChange() throws {
+        let e = try edit(markerJSON(intent: "setup", components: savedSetup, tracking: true, state: "ACTIVE"))
+        #expect(e.state.isGuidedEditLocked)
+        let before = e.state.components
+        #expect(e.state.requestSetupDirection(.short) == nil)
+        #expect(!e.state.beginSetupAdjust())
+        e.state.applyChartSetupLevels(takeProfit: 65_000, stopLoss: 63_000)
+        #expect(e.state.components == before)
+    }
+
     // MARK: Unverifiable pairing fails closed
 
     /// Open an edit whose hydrated drafts were disturbed before pairing, so

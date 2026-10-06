@@ -73,6 +73,9 @@ struct MarkerWorkspaceState {
     var drawingBaseline: [MarkerComponentDraft]?
     var drawingColors: [UUID: String] = [:]
     var drawingScales: [UUID: CGFloat] = [:]
+    /// Take Profit and Stop Loss as they were when "Adjust on chart" began;
+    /// Cancel restores exactly these.
+    var setupAdjustBaseline: [MarkerComponentDraft]?
     var message: String?
 }
 
@@ -90,6 +93,7 @@ extension MarkerPlacementState {
     /// A drawing or level is being worked on the chart itself; the collapsed
     /// sheet shows that tool's bar instead of the resume dock.
     var isWorkspaceChartToolActive: Bool {
+        if isGuidedFlowActive && isAdjustingSetupOnChart { return true }
         guard guidedStep == .context else { return false }
         switch workspace.destination {
         case .drawingEditor: return true

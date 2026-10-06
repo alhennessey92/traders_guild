@@ -219,7 +219,18 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
                 self.saveSelection(view)
             }
         }
-        func textFieldDidBeginEditing(_ view: UITextField) { parent.onFocus(true) }
+        func textFieldDidBeginEditing(_ view: UITextField) {
+            parent.onFocus(true)
+            // A price is replaced far more often than corrected: select it,
+            // so typing replaces it wherever the field was tapped (its text
+            // is right-aligned, so a tap on its left put the cursor first).
+            guard parent.keyboard == .decimalPad || parent.keyboard == .numberPad else { return }
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view, view.isFirstResponder else { return }
+                view.selectedTextRange = view.textRange(from: view.beginningOfDocument, to: view.endOfDocument)
+                self.saveSelection(view)
+            }
+        }
         func textFieldDidEndEditing(_ view: UITextField) { parent.onFocus(false) }
     }
 }
