@@ -23,6 +23,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         let route: String
         let mode: String
         let dock: Bool
+        let chart: Int
     }
 
     private func launch(setup: Bool = false, filledNote: Bool = true) {
@@ -70,33 +71,12 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
     }
 
     /// Brings a control on screen before a measured segment, as a user
-    /// would: raise the sheet by its grabber (small screens), then scroll.
+    /// would: raise the sheet by its grabber, then scroll.
     private func reveal(_ id: String) {
         let button = app.buttons[id]
-        XCTAssertTrue(button.waitForExistence(timeout: 5), id)
-        if !button.isHittable {
-            let grabber = app.buttons["Sheet Grabber"]
-            if grabber.exists {
-                grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
-                settle(0.8)
-            }
-        }
-        for _ in 0..<5 where !button.isHittable {
-            scrollWorkspaceContent()
-            settle(0.6)
-        }
+        app.revealInMarkerWorkspace(button)
         XCTAssertTrue(button.isHittable, "\(id) revealed")
-    }
-
-    /// Scrolls the workspace's content: a fast swipe on its own scroll view,
-    /// which scrolls without activating a row (a slow press-and-drag can
-    /// register as a tap) and, unlike a swipe on a content element, never
-    /// makes XCUITest scroll that element back into view first.
-    private func scrollWorkspaceContent() {
-        let scroll = app.scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
-        guard scroll.waitForExistence(timeout: 2) else { return }
-        scroll.swipeUp(velocity: .fast)
+        settle(0.6)
     }
 
     private func tap(_ id: String, file: StaticString = #filePath, line: UInt = #line) {
@@ -237,10 +217,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         tap("workspace.Add indicator")
         let last = app.buttons["workspace.indicator.Volume"]
         XCTAssertTrue(last.waitForExistence(timeout: 5))
-        for _ in 0..<8 where !last.isHittable {
-            scrollWorkspaceContent()
-            settle(0.5)
-        }
+        for _ in 0..<8 where !last.isHittable { app.scrollMarkerWorkspace() }
         XCTAssertTrue(last.isHittable, "scrolled to the end of the catalogue")
         settle()
         let before = last.frame.minY
@@ -266,6 +243,10 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         launch()
         let field = app.textViews["guided.text"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
+        // On a compact phone the small opening height does not reach the
+        // text (a P3 layout item); the user raises the sheet first.
+        if !field.isHittable { app.raiseMarkerSheet(); settle() }
+        XCTAssertTrue(field.isHittable)
         let keyboard = app.keyboards.firstMatch
         let rest = trace().samples.last
         let restTop = rest?.top ?? 0
@@ -281,6 +262,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
             let entry = segment(since: mark, "typing-entry-\(cycle)")
             XCTAssertEqual(Set(entry.map(\.ctl)).count, 1, "one presentation")
             XCTAssertEqual(Set(entry.map(\.sel)), [rest?.sel ?? ""], "the selected detent never changes")
+            XCTAssertEqual(Set(entry.map(\.chart)).count, 1, "the chart behind the sheet never moves \(Set(entry.map(\.chart)))")
             let tops = entry.map(\.top)
             XCTAssertLessThan(tops.last ?? 0, restTop, "the sheet rose with the keyboard")
             XCTAssertLessThanOrEqual(tops.max() ?? 0, restTop + 3, "no drop before rising \(tops)")
@@ -295,6 +277,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
             XCTAssertFalse(keyboard.exists, "keyboard dismissed by Done")
             XCTAssertEqual(Set(exit.map(\.ctl)).count, 1)
             XCTAssertEqual(Set(exit.map(\.sel)), [rest?.sel ?? ""])
+            XCTAssertEqual(Set(exit.map(\.chart)).count, 1, "nor on the way back \(Set(exit.map(\.chart)))")
             let exitTops = exit.map(\.top)
             XCTAssertEqual(exitTops.last ?? 0, restTop, accuracy: 3, "back to where typing began")
             XCTAssertTrue(zip(exitTops, exitTops.dropFirst()).allSatisfy { $1 >= $0 - 3 }, "one settling motion \(exitTops)")
@@ -305,25 +288,23 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         XCTAssertTrue(text.contains("Buyers stepped in.") && text.contains("Holding."), text)
     }
 
-    /// A new, empty post opens ready to type (owner decision, 6 Oct 2026).
-    func testNewEmptyPostAutofocuses() throws {
+    /// A new post opens small, with no keyboard, so its marker shows on the
+    /// chart above the sheet (owner decision, 6 Oct 2026).
+    func testANewPostOpensSmallWithoutTheKeyboard() {
         launch(filledNote: false)
-        let keyboard = app.keyboards.firstMatch
-        guard keyboard.waitForExistence(timeout: 6) else {
-            throw XCTSkip("no software keyboard on this simulator")
-        }
-        settle(1.0)
-        screenshot("p1-autofocus")
-        let samples = segment(since: 0, "autofocus")
-        XCTAssertEqual(samples.last?.sel, "working", "the workspace's own detent")
+        settle(1.5)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "no keyboard until the text is tapped")
+        let samples = segment(since: 0, "opens-small")
+        XCTAssertEqual(samples.last?.sel, "browse", "opens at the small height")
         XCTAssertEqual(Set(samples.map(\.ctl)).count, 1, "one presentation")
+        screenshot("p1-opens-small")
     }
 
-    /// A Setup never autofocuses.
-    func testSetupDoesNotAutofocus() {
+    func testASetupOpensSmallWithoutTheKeyboard() {
         launch(setup: true, filledNote: false)
         settle(1.5)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(trace().samples.last?.sel, "browse")
         XCTAssertEqual(trace().samples.last?.mode, "authoring")
     }
 }

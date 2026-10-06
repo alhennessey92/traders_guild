@@ -15,7 +15,8 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
     private func tap(_ id: String) {
         let button = app.buttons[id]
         XCTAssertTrue(button.waitForExistence(timeout: 5), id)
-        for _ in 0..<5 { if button.isHittable { break }; app.swipeUp() }
+        // The sheet opens small (6 Oct 2026): raise it, then scroll.
+        app.revealInMarkerWorkspace(button)
         XCTAssertTrue(button.isHittable, id)
         button.tap()
     }

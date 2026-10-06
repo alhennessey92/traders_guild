@@ -12,6 +12,11 @@ import UIKit
 /// here is fixed for the life of an authoring session; navigation inside the
 /// workspace never touches the sheet.
 ///
+/// The workspace offers exactly these heights too (owner, 6 Oct 2026): it
+/// opens small so the marker is visible on the chart, collapses to the same
+/// capsule-sized dock as the rest of the app, and starting or finishing a
+/// marker never changes what the sheet offers, only where it sits.
+///
 /// Typing uses the sheet's native keyboard expansion. Changing the sheet's
 /// height around the keyboard was measured (P1 frame traces) to put the sheet
 /// a frame out of place: UIKit applies such a change in a pass of its own,
@@ -22,32 +27,10 @@ enum MarkerSheetDetents {
     static let browse: PresentationDetent = .fraction(0.35)
     static let working: PresentationDetent = .fraction(0.5)
     static let tall: PresentationDetent = .fraction(0.9)
-    /// Every surface that is not authoring, and the whole sheet with the
-    /// experiment off. Identical to the established set.
+    /// The whole sheet, with the experiment on or off. The established set.
     static let standard: Set<PresentationDetent> = [dock, browse, working, tall]
-}
-
-/// Heights chosen once when an authoring session starts. Starting points,
-/// tuned from device and accessibility evidence; never changed mid-session.
-struct MarkerSheetDetentMetrics: Equatable {
-    /// The chart-tool and collapsed height, excluding the bottom safe area.
-    var tool: CGFloat
-    /// Short screens and accessibility text open a Setup tall.
-    var prefersTallSetup: Bool
-
-    static let standard = MarkerSheetDetentMetrics(tool: 140, prefersTallSetup: false)
-
-    static func make(availableHeight: CGFloat, dynamicTypeSize: DynamicTypeSize) -> Self {
-        let height = availableHeight.isFinite && availableHeight > 100 ? availableHeight : 700
-        let accessibility = dynamicTypeSize.isAccessibilitySize
-        let tool: CGFloat = accessibility ? 184 : (dynamicTypeSize >= .xxLarge ? 156 : 140)
-        return MarkerSheetDetentMetrics(tool: tool, prefersTallSetup: accessibility || height < 640)
-    }
-
-    var toolDetent: PresentationDetent { .height(tool) }
-    /// Working and tall are the same identities the Add tab and a marker
-    /// detail use, so entering the workspace from either moves nothing.
-    var authoring: Set<PresentationDetent> { [toolDetent, MarkerSheetDetents.working, MarkerSheetDetents.tall] }
+    /// Where a marker workspace opens: small, so the marker shows above it.
+    static let workspaceStart: PresentationDetent = browse
 }
 
 // MARK: - Sequencing
@@ -100,10 +83,8 @@ final class MarkerSheetDetentController: ObservableObject {
 
     @Published private(set) var detents: Set<PresentationDetent> = MarkerSheetDetents.standard
     @Published private(set) var mode: Mode = .standard
-    private(set) var metrics: MarkerSheetDetentMetrics = .standard
-    /// Where Resume returns to: the last working or tall choice.
-    private(set) var resumeDetent: PresentationDetent = MarkerSheetDetents.working
-    private(set) var availableHeight: CGFloat = 0
+    /// Where Resume returns to: the last height above the dock.
+    private(set) var resumeDetent: PresentationDetent = MarkerSheetDetents.workspaceStart
     var reduceMotion = false
 
     private var selection: Binding<PresentationDetent>?
@@ -113,17 +94,12 @@ final class MarkerSheetDetentController: ObservableObject {
 
     func attach(_ binding: Binding<PresentationDetent>) { selection = binding }
 
-    func setAvailableHeight(_ height: CGFloat) {
-        guard height.isFinite, height > 100 else { return }
-        availableHeight = height.rounded()
-    }
-
     var currentSelection: PresentationDetent { selection?.wrappedValue ?? MarkerSheetDetents.dock }
-    var toolDetent: PresentationDetent { metrics.toolDetent }
     var isAuthoring: Bool { mode == .authoring }
 
+    /// The workspace at the dock: its capsule (resume, or a chart tool's bar).
     func isCollapsed(_ selection: PresentationDetent) -> Bool {
-        mode == .authoring && selection == metrics.toolDetent
+        mode == .authoring && selection == MarkerSheetDetents.dock
     }
 
     private var planned: MarkerSheetDetentState {
@@ -132,54 +108,40 @@ final class MarkerSheetDetentController: ObservableObject {
 
     // MARK: Authoring
 
-    /// Placement under the guided flow began: the session's heights are fixed
-    /// now. A working or tall choice already made (Add at half height, a
-    /// marker detail) is kept, so entering is a no-op for UIKit.
-    func enterAuthoring(intent: RLMarkerIntent, dynamicTypeSize: DynamicTypeSize, select: PresentationDetent? = nil) {
-        if mode == .standard {
-            metrics = .make(availableHeight: availableHeight, dynamicTypeSize: dynamicTypeSize)
-        }
+    /// Placement under the guided flow began. The workspace opens small, so
+    /// the marker it is about is visible on the chart above it.
+    func enterAuthoring(select: PresentationDetent = MarkerSheetDetents.workspaceStart) {
         mode = .authoring
-        let current = planned.selection
-        let target: PresentationDetent
-        if let select {
-            target = select
-        } else if intent == .setup && metrics.prefersTallSetup {
-            target = MarkerSheetDetents.tall
-        } else if current == MarkerSheetDetents.working || current == MarkerSheetDetents.tall {
-            target = current
-        } else {
-            target = MarkerSheetDetents.working
-        }
-        resumeDetent = target == metrics.toolDetent ? MarkerSheetDetents.working : target
-        go(to: MarkerSheetDetentState(detents: metrics.authoring, selection: target))
+        resumeDetent = select == MarkerSheetDetents.dock ? MarkerSheetDetents.workspaceStart : select
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: select))
     }
 
     /// A response turned into a Setup on a short screen: grow, never shrink.
     func preferTall() {
-        guard mode == .authoring, planned.selection == MarkerSheetDetents.working else { return }
+        let current = planned.selection
+        guard mode == .authoring, current == MarkerSheetDetents.browse || current == MarkerSheetDetents.working else { return }
         resumeDetent = MarkerSheetDetents.tall
-        go(to: MarkerSheetDetentState(detents: metrics.authoring, selection: MarkerSheetDetents.tall))
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: MarkerSheetDetents.tall))
     }
 
+    /// The sheet keeps whatever height it is at; it already offers only the
+    /// app's standard heights.
     func leaveAuthoring() {
         guard mode != .standard else { return }
         mode = .standard
-        let current = planned.selection
-        let target = MarkerSheetDetents.standard.contains(current) ? current : MarkerSheetDetents.dock
-        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: target))
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: planned.selection))
     }
 
-    /// Show the chart: the collapsed workspace, or a chart tool's bar.
+    /// Show the chart: the workspace's capsule at the dock.
     func collapse() {
         guard mode == .authoring else { return }
         rememberResume(planned.selection)
-        go(to: MarkerSheetDetentState(detents: metrics.authoring, selection: metrics.toolDetent))
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: MarkerSheetDetents.dock))
     }
 
     func resume() {
         guard mode == .authoring else { return }
-        go(to: MarkerSheetDetentState(detents: metrics.authoring, selection: resumeDetent))
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: resumeDetent))
     }
 
     /// The native selection changed: a user drag, or one of our own steps.
@@ -189,19 +151,14 @@ final class MarkerSheetDetentController: ObservableObject {
             if mode == .authoring { rememberResume(detent) }
             return
         }
-        // Something outside this controller wrote a detent the sheet does not
-        // offer (an older code path setting the dock). Map it, never drop.
-        switch mode {
-        case .standard:
-            go(to: MarkerSheetDetentState(detents: detents, selection: MarkerSheetDetents.dock))
-        case .authoring:
-            let target = detent == MarkerSheetDetents.dock ? metrics.toolDetent : resumeDetent
-            go(to: MarkerSheetDetentState(detents: metrics.authoring, selection: target))
-        }
+        // Something wrote a detent the sheet does not offer. Map it to the
+        // nearest meaning, never let the sheet fall back on its own.
+        let target = mode == .authoring ? resumeDetent : MarkerSheetDetents.dock
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: target))
     }
 
     private func rememberResume(_ detent: PresentationDetent) {
-        if detent == MarkerSheetDetents.working || detent == MarkerSheetDetents.tall { resumeDetent = detent }
+        if detent != MarkerSheetDetents.dock, detents.contains(detent) { resumeDetent = detent }
     }
 
     // MARK: Applying
@@ -269,64 +226,19 @@ struct MarkerSheetAuthoringSync: ViewModifier {
     let controller: MarkerSheetDetentController
     @Binding var selection: PresentationDetent
     let isAuthoring: Bool
-    let intent: RLMarkerIntent
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
         content
             .onAppear {
                 controller.attach($selection)
-                if isAuthoring { controller.enterAuthoring(intent: intent, dynamicTypeSize: dynamicTypeSize) }
+                if isAuthoring { controller.enterAuthoring() }
             }
             .onChange(of: isAuthoring) { _, authoring in
                 if authoring {
-                    controller.enterAuthoring(intent: intent, dynamicTypeSize: dynamicTypeSize)
+                    controller.enterAuthoring()
                 } else {
                     controller.leaveAuthoring()
                 }
             }
-    }
-}
-
-// MARK: - Container height
-
-/// Reads the presenting container and its window, even when MainView ignores
-/// safe areas. Window bounds are specific to this presentation, not UIScreen.
-private struct MarkerSheetContainerProbe: UIViewRepresentable {
-    let onMeasure: (CGFloat) -> Void
-    func makeUIView(context: Context) -> ProbeView {
-        let view = ProbeView()
-        view.isUserInteractionEnabled = false
-        view.onMeasure = onMeasure
-        return view
-    }
-    func updateUIView(_ view: ProbeView, context: Context) { view.onMeasure = onMeasure }
-
-    final class ProbeView: UIView {
-        var onMeasure: ((CGFloat) -> Void)?
-        private var lastHeight: CGFloat = 0
-        override func didMoveToWindow() { super.didMoveToWindow(); reportHeight() }
-        override func layoutSubviews() { super.layoutSubviews(); reportHeight() }
-        override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); reportHeight() }
-        private func reportHeight() {
-            guard let window else { return }
-            let safeHeight = window.bounds.height - window.safeAreaInsets.top - window.safeAreaInsets.bottom
-            let height = min(bounds.height, safeHeight)
-            guard height > 100, abs(height - lastHeight) > 2 else { return }
-            lastHeight = height
-            DispatchQueue.main.async { [weak self] in self?.onMeasure?(height) }
-        }
-    }
-}
-
-struct MarkerSheetContainerMeasure: ViewModifier {
-    let controller: MarkerSheetDetentController
-    func body(content: Content) -> some View {
-        content.background {
-            MarkerSheetContainerProbe(onMeasure: { controller.setAvailableHeight($0) })
-                .ignoresSafeArea(.keyboard)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
     }
 }

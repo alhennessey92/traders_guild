@@ -209,6 +209,8 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
         var route: String
         var mode: String
         var dock: Bool
+        /// The chart layer's on-screen height behind the sheet (-1: none).
+        var chart: Int
     }
 
     @Published private(set) var json = "{}"
@@ -220,6 +222,8 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
     private var samples: [Sample] = []
     private var controllers: [ObjectIdentifier] = []
     private weak var probe: UIView?
+    /// The chart layer, registered by its own probe, to show it never moves.
+    weak var chartProbe: UIView?
     private var link: CADisplayLink?
     private let start = CACurrentMediaTime()
     private var lastPublish: CFTimeInterval = 0
@@ -249,9 +253,10 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
             }
         }
         let sample = Sample(t: ((now - start) * 1000).rounded() / 1000, top: top, ctl: controllerIndex,
-                            sel: selection, route: route, mode: mode, dock: dockVisible)
+                            sel: selection, route: route, mode: mode, dock: dockVisible,
+                            chart: chartHeight())
         if let last = samples.last, last.top == sample.top, last.ctl == sample.ctl, last.sel == sample.sel,
-           last.route == sample.route, last.mode == sample.mode, last.dock == sample.dock {
+           last.route == sample.route, last.mode == sample.mode, last.dock == sample.dock, last.chart == sample.chart {
             // Unchanged: only the reader's "now" advances.
         } else {
             samples.append(sample)
@@ -266,6 +271,15 @@ final class MarkerSheetTrace: NSObject, ObservableObject {
                 json = String(decoding: data, as: UTF8.self)
             }
         }
+    }
+
+    /// The chart layer's laid-out height (animated, but in its own space):
+    /// a keyboard squashing the layout changes it; iOS's own card-stack
+    /// scaling of the screen behind a full-height sheet does not.
+    private func chartHeight() -> Int {
+        guard let chartProbe, chartProbe.window != nil else { return -1 }
+        let layer = chartProbe.layer.presentation() ?? chartProbe.layer
+        return Int(layer.bounds.height.rounded())
     }
 
     private struct Payload: Codable {
@@ -349,5 +363,22 @@ struct MarkerSheetTraceProbe: UIViewRepresentable {
         }
         while let parent = controller?.parent { controller = parent }
         return controller
+    }
+}
+
+/// Registers the chart layer (behind the sheet) with the frame trace.
+struct MarkerChartLayerProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = ProbeView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+    func updateUIView(_ view: UIView, context: Context) {}
+
+    final class ProbeView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { MainActor.assumeIsolated { MarkerSheetTrace.shared.chartProbe = self } }
+        }
     }
 }

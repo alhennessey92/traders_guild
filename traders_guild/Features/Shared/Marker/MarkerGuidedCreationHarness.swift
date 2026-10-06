@@ -151,13 +151,12 @@ struct MarkerGuidedCreationHarness: View {
             }
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
-        .modifier(MarkerSheetContainerMeasure(controller: sheetDetents))
         .onAppear {
             sheetDetents.attach($selectedDetent)
-            if isAuthoring { sheetDetents.enterAuthoring(intent: placementState.intent, dynamicTypeSize: .large) }
+            if isAuthoring { sheetDetents.enterAuthoring() }
         }
         .onChange(of: isAuthoring) { _, authoring in
-            if authoring { sheetDetents.enterAuthoring(intent: placementState.intent, dynamicTypeSize: .large) }
+            if authoring { sheetDetents.enterAuthoring() }
             else { sheetDetents.leaveAuthoring() }
         }
         .sheet(isPresented: .constant(usesNativeSheet)) {

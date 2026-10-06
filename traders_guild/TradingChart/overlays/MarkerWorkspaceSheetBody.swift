@@ -42,10 +42,13 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
                     .allowsHitTesting(!isCollapsed)
                     .accessibilityHidden(isCollapsed)
                 if isCollapsed {
+                    // Placed exactly as the app's own dock bar: 50pt controls
+                    // in a 68pt bar at the bottom of the sheet.
                     collapsedBar
                         .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+                        .padding(.bottom, 2)
+                        .frame(height: 68)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
                         .transition(.opacity.animation(reduceMotion ? nil : .easeInOut(duration: 0.18)))
                 }
             }
@@ -97,8 +100,8 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
 }
 
 /// While a drawing or level is being worked on the chart, the sheet is this
-/// bar: what to do on the chart, and Cancel or Done. Both return to the
-/// workspace screen the tool was opened from.
+/// capsule at the dock height, leaving the chart to the tool: what is being
+/// worked, Cancel and Done. Its label opens the tool's options.
 struct MarkerWorkspaceChartToolBar: View {
     @ObservedObject var placementState: MarkerPlacementState
     let onFinish: () -> Void
@@ -112,74 +115,74 @@ struct MarkerWorkspaceChartToolBar: View {
 
     private var instruction: String {
         if let text = placementState.toolbarInstructionText { return text }
-        return isLevel ? "Drag the level on the chart." : "Adjust it on the chart."
+        return isLevel ? "Drag the level on the chart" : "Adjust it on the chart"
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: isLevel ? "arrow.up.and.down" : "hand.draw")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(placementState.intent.color)
+        let canCommit = placementState.workspaceCanCommit
+        HStack(spacing: 8) {
+            Button(action: onFinish) {
+                HStack(spacing: 10) {
+                    Image(systemName: isLevel ? "arrow.up.and.down" : "hand.draw")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(placementState.intent.color)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(placementState.intent.color.opacity(0.16)))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.footnote.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                            .lineLimit(1)
+                        Text(isLevel ? MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)) : instruction)
+                            .font(isLevel ? .system(.caption, design: .monospaced).weight(.semibold) : .caption2)
+                            .foregroundColor(isLevel ? AppColors.primaryForeground : AppColors.greyText)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title). \(instruction). Show options")
+            .accessibilityIdentifier("workspace.tool.options")
+            Button {
+                placementState.cancelWorkspaceEditor()
+                onFinish()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(AppColors.primaryForeground)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(placementState.intent.color.opacity(0.14)))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(AppColors.primaryForeground)
-                    Text(instruction)
-                        .font(.caption)
-                        .foregroundColor(AppColors.greyText)
-                        .lineLimit(2)
-                }
-                Spacer(minLength: 4)
-                if isLevel {
-                    Text(MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)))
-                        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-                        .foregroundColor(AppColors.primaryForeground)
-                        .accessibilityLabel("Price \(MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)))")
-                }
+                    .background(Circle().fill(AppColors.whiteText.opacity(0.1)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
-            HStack(spacing: 10) {
-                Button {
-                    placementState.cancelWorkspaceEditor()
-                    onFinish()
-                } label: {
-                    Text("Cancel")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(AppColors.primaryForeground)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("workspace.tool.cancel")
-                Button(action: onFinish) {
-                    Label("Options", systemImage: "chevron.up")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(AppColors.greyText)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Show options")
-                .accessibilityIdentifier("workspace.tool.options")
-                Spacer(minLength: 8)
-                let enabled = placementState.workspaceCanCommit
-                Button {
-                    if placementState.commitWorkspaceEditor() { onFinish() }
-                } label: {
-                    Text("Done")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(enabled ? .white : AppColors.greyText)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 11)
-                        .background(Capsule().fill(enabled ? placementState.intent.color : AppColors.whiteText.opacity(0.06)))
-                }
-                .buttonStyle(.plain)
-                .disabled(!enabled)
-                .accessibilityIdentifier("workspace.tool.done")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel")
+            .accessibilityIdentifier("workspace.tool.cancel")
+            Button {
+                if placementState.commitWorkspaceEditor() { onFinish() }
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(canCommit ? .white : AppColors.greyText)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(canCommit ? placementState.intent.color : AppColors.whiteText.opacity(0.06)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .disabled(!canCommit)
+            .accessibilityLabel("Done")
+            .accessibilityIdentifier("workspace.tool.done")
         }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .padding(.leading, 7)
+        .padding(.trailing, 3)
+        .frame(height: 50)
+        .background(Capsule().fill(AppColors.chartSheetMainTabUnselectedBackground))
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        .accessibilityShowsLargeContentViewer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("workspace.toolBar")
     }

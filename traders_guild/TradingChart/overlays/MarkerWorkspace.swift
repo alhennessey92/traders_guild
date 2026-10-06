@@ -37,8 +37,6 @@ struct MarkerWorkspaceState {
     /// The size the hidden workspace keeps while the sheet is collapsed.
     var resumeSize = CGSize(width: 320, height: 400)
     var showsTitle = false
-    /// A new post's text takes focus once, when Details first appears.
-    var didAutofocus = false
     var editorBaselineText = ""
     var editorBaselineTitle = ""
     var indicatorDraft: IndicatorSettingsDraft?
@@ -88,14 +86,6 @@ extension MarkerPlacementState {
         case .levelEditor: return workspace.levelDrawingBaseline != nil
         default: return false
         }
-    }
-
-    /// A new post opens ready to type (owner decision, 6 Oct 2026). Never a
-    /// Setup, never an edit, and never a draft that already has words.
-    var shouldAutofocusPostText: Bool {
-        isGuidedFlowActive && !isGuidedEdit && guidedStep == .details
-            && (intent == .analysis || intent == .question)
-            && note.isEmpty && !workspace.didAutofocus
     }
 
     /// Semantic client support intersected with typed backend components. Poll,

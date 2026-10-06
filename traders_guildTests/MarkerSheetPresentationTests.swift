@@ -6,13 +6,11 @@ import Testing
 /// The detent rules that keep the chart sheet presented through ordinary
 /// workspace navigation (v1.5 workspace, P1):
 /// R1 the selected detent is always one the sheet offers;
-/// R2 no detent changes height during a session;
+/// R2 detent identities never change: the workspace uses the app's own set;
 /// R3 navigation never moves the selection;
-/// R4 only explicit moves (entry/exit, collapse/resume, a user drag) do.
+/// R4 only explicit moves (open, collapse/resume, a user drag) do.
 @MainActor
 struct MarkerSheetPresentationTests {
-    private let metrics = MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .large)
-
     private func state(_ detents: Set<PresentationDetent>, _ selection: PresentationDetent) -> MarkerSheetDetentState {
         MarkerSheetDetentState(detents: detents, selection: selection)
     }
@@ -38,15 +36,13 @@ struct MarkerSheetPresentationTests {
     @Test
     func sequencerKeepsTheSelectionOfferedForEveryTransition() {
         let standard = MarkerSheetDetents.standard
-        let authoring = metrics.authoring
+        let custom: Set<PresentationDetent> = [.height(140), MarkerSheetDetents.working]
         let cases: [(MarkerSheetDetentState, MarkerSheetDetentState)] = [
-            (state(standard, MarkerSheetDetents.working), state(authoring, MarkerSheetDetents.working)),
-            (state(standard, MarkerSheetDetents.browse), state(authoring, MarkerSheetDetents.working)),
-            (state(standard, MarkerSheetDetents.dock), state(authoring, MarkerSheetDetents.tall)),
-            (state(authoring, MarkerSheetDetents.working), state(authoring, metrics.toolDetent)),
-            (state(authoring, metrics.toolDetent), state(authoring, MarkerSheetDetents.tall)),
-            (state(authoring, metrics.toolDetent), state(standard, MarkerSheetDetents.dock)),
-            (state(authoring, MarkerSheetDetents.tall), state(standard, MarkerSheetDetents.tall)),
+            (state(standard, MarkerSheetDetents.working), state(standard, MarkerSheetDetents.browse)),
+            (state(standard, MarkerSheetDetents.browse), state(standard, MarkerSheetDetents.dock)),
+            (state(standard, MarkerSheetDetents.dock), state(standard, MarkerSheetDetents.tall)),
+            (state(custom, .height(140)), state(standard, MarkerSheetDetents.dock)),
+            (state(standard, MarkerSheetDetents.tall), state(custom, MarkerSheetDetents.working)),
         ]
         for (start, target) in cases {
             assertSafe(start, MarkerSheetDetentSequencer.steps(from: start, to: target), reach: target)
@@ -54,25 +50,15 @@ struct MarkerSheetPresentationTests {
     }
 
     @Test
-    func enteringFromHalfHeightOnlyChangesWhatIsOffered() {
-        // From the Add tab or a marker detail at half height, the workspace
-        // takes over without the selection ever changing.
-        let steps = MarkerSheetDetentSequencer.steps(from: state(MarkerSheetDetents.standard, MarkerSheetDetents.working),
-                                                     to: state(metrics.authoring, MarkerSheetDetents.working))
-        #expect(!steps.isEmpty)
-        #expect(steps.allSatisfy { $0.selection == MarkerSheetDetents.working })
-    }
-
-    @Test
     func reachingTheSameStateTakesNoSteps() {
-        let current = state(metrics.authoring, MarkerSheetDetents.working)
+        let current = state(MarkerSheetDetents.standard, MarkerSheetDetents.working)
         #expect(MarkerSheetDetentSequencer.steps(from: current, to: current).isEmpty)
     }
 
     @Test
     func anUnofferedCurrentSelectionIsRepairedBeforeAnythingMoves() {
-        let broken = state(metrics.authoring, MarkerSheetDetents.dock)
-        let target = state(metrics.authoring, metrics.toolDetent)
+        let broken = state([MarkerSheetDetents.working], MarkerSheetDetents.dock)
+        let target = state(MarkerSheetDetents.standard, MarkerSheetDetents.browse)
         let steps = MarkerSheetDetentSequencer.steps(from: broken, to: target)
         #expect(steps.first?.detents.contains(MarkerSheetDetents.dock) == true)
         for step in steps { #expect(step.detents.contains(step.selection)) }
@@ -80,22 +66,9 @@ struct MarkerSheetPresentationTests {
     }
 
     @Test
-    func authoringDetentsAreFixedHeightsSharingTheStandardWorkingAndTall() {
-        #expect(metrics.authoring == [metrics.toolDetent, MarkerSheetDetents.working, MarkerSheetDetents.tall])
-        #expect(MarkerSheetDetents.standard.contains(MarkerSheetDetents.working))
-        #expect(MarkerSheetDetents.standard.contains(MarkerSheetDetents.tall))
-        #expect(metrics.toolDetent == .height(metrics.tool))
-        #expect(metrics == MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .large))
+    func theWorkspaceUsesTheAppsOwnHeightsAndOpensSmall() {
         #expect(MarkerSheetDetents.standard == [.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)])
-    }
-
-    @Test
-    func metricsGrowForLargerTextAndShortScreensOpenSetupTall() {
-        let accessible = MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .accessibility3)
-        #expect(accessible.tool > metrics.tool)
-        #expect(accessible.prefersTallSetup)
-        #expect(!metrics.prefersTallSetup)
-        #expect(MarkerSheetDetentMetrics.make(availableHeight: 600, dynamicTypeSize: .large).prefersTallSetup)
+        #expect(MarkerSheetDetents.workspaceStart == .fraction(0.35))
     }
 }
 
@@ -110,7 +83,6 @@ struct MarkerSheetDetentControllerTests {
         let box = Box()
         let controller = MarkerSheetDetentController()
         controller.reduceMotion = true
-        controller.setAvailableHeight(780)
         controller.attach(Binding(get: { box.selection }, set: { box.selection = $0 }))
         return (controller, box)
     }
@@ -120,24 +92,28 @@ struct MarkerSheetDetentControllerTests {
     }
 
     @Test
-    func enteringFromHalfHeightKeepsTheSheetWhereItIs() async {
-        let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
-        await settle()
-        #expect(box.selection == MarkerSheetDetents.working)
-        #expect(sheet.detents == sheet.metrics.authoring)
-        #expect(sheet.mode == .authoring)
+    func openingAMarkerStartsSmallWhereverTheSheetWas() async {
+        for start in [MarkerSheetDetents.dock, MarkerSheetDetents.working, MarkerSheetDetents.tall] {
+            let (sheet, box) = controller()
+            box.selection = start
+            sheet.enterAuthoring()
+            await settle()
+            #expect(box.selection == MarkerSheetDetents.browse, "from \(start)")
+            #expect(sheet.detents == MarkerSheetDetents.standard, "the set never changes")
+            #expect(sheet.mode == .authoring)
+        }
     }
 
     @Test
-    func collapseAndResumeReturnToTheLastExpandedChoice() async {
+    func collapseIsTheDockAndResumeReturnsToTheLastHeight() async {
         let (sheet, box) = controller()
-        box.selection = MarkerSheetDetents.tall
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        sheet.enterAuthoring()
         await settle()
+        box.selection = MarkerSheetDetents.tall
+        sheet.selectionChanged(to: MarkerSheetDetents.tall)
         sheet.collapse()
         await settle()
-        #expect(box.selection == sheet.toolDetent)
+        #expect(box.selection == MarkerSheetDetents.dock)
         #expect(sheet.isCollapsed(box.selection))
         sheet.resume()
         await settle()
@@ -145,80 +121,53 @@ struct MarkerSheetDetentControllerTests {
     }
 
     @Test
-    func aUserDragIsRememberedAsTheResumeChoice() async {
+    func draggingDownToTheDockIsACollapseThatResumesToTheLastHeight() async {
         let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        sheet.enterAuthoring()
         await settle()
-        box.selection = MarkerSheetDetents.tall
-        sheet.selectionChanged(to: MarkerSheetDetents.tall)
-        sheet.collapse()
-        await settle()
+        box.selection = MarkerSheetDetents.working
+        sheet.selectionChanged(to: MarkerSheetDetents.working)
+        box.selection = MarkerSheetDetents.dock
+        sheet.selectionChanged(to: MarkerSheetDetents.dock)
+        #expect(sheet.isCollapsed(box.selection))
         sheet.resume()
-        await settle()
-        #expect(box.selection == MarkerSheetDetents.tall)
-    }
-
-    @Test
-    func leavingAuthoringFromAToolLandsOnTheDock() async {
-        let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
-        await settle()
-        sheet.collapse()
-        await settle()
-        sheet.leaveAuthoring()
-        await settle()
-        #expect(sheet.mode == .standard)
-        #expect(sheet.detents == MarkerSheetDetents.standard)
-        #expect(box.selection == MarkerSheetDetents.dock)
-    }
-
-    @Test
-    func leavingAuthoringAtHalfHeightStaysThere() async {
-        let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
-        await settle()
-        sheet.leaveAuthoring()
         await settle()
         #expect(box.selection == MarkerSheetDetents.working)
     }
 
     @Test
-    func aStrayDockWriteDuringAuthoringBecomesACollapse() async {
+    func leavingKeepsTheSheetWhereItIs() async {
+        for height in [MarkerSheetDetents.dock, MarkerSheetDetents.browse, MarkerSheetDetents.tall] {
+            let (sheet, box) = controller()
+            sheet.enterAuthoring()
+            await settle()
+            box.selection = height
+            sheet.selectionChanged(to: height)
+            sheet.leaveAuthoring()
+            await settle()
+            #expect(sheet.mode == .standard)
+            #expect(box.selection == height)
+            #expect(sheet.detents == MarkerSheetDetents.standard)
+            #expect(!sheet.isCollapsed(box.selection), "a standard dock is not a workspace collapse")
+        }
+    }
+
+    @Test
+    func aStrayUnofferedWriteIsMappedNotLeftToUIKit() async {
         let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        sheet.enterAuthoring()
         await settle()
-        box.selection = MarkerSheetDetents.dock
-        sheet.selectionChanged(to: MarkerSheetDetents.dock)
+        box.selection = .height(222)
+        sheet.selectionChanged(to: .height(222))
         await settle()
-        #expect(box.selection == sheet.toolDetent)
+        #expect(box.selection == MarkerSheetDetents.browse, "back to where Resume goes")
         #expect(sheet.detents.contains(box.selection))
     }
 
     @Test
-    func heightsAreFixedForTheSession() async {
-        let (sheet, _) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
-        await settle()
-        let fixed = sheet.metrics
-        sheet.setAvailableHeight(500)
-        sheet.enterAuthoring(intent: .setup, dynamicTypeSize: .accessibility2)
-        await settle()
-        #expect(sheet.metrics == fixed, "R2: a session keeps its identities")
-    }
-
-    @Test
-    func setupOnAShortScreenOpensTall() async {
+    func preferTallGrowsButNeverExpandsTheDock() async {
         let (sheet, box) = controller()
-        sheet.setAvailableHeight(600)
-        sheet.enterAuthoring(intent: .setup, dynamicTypeSize: .large)
-        await settle()
-        #expect(box.selection == MarkerSheetDetents.tall)
-    }
-
-    @Test
-    func preferTallGrowsFromHalfHeightButNeverShrinks() async {
-        let (sheet, box) = controller()
-        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        sheet.enterAuthoring()
         await settle()
         sheet.preferTall()
         await settle()
@@ -227,6 +176,6 @@ struct MarkerSheetDetentControllerTests {
         await settle()
         sheet.preferTall()
         await settle()
-        #expect(box.selection == sheet.toolDetent, "a collapsed sheet stays collapsed")
+        #expect(box.selection == MarkerSheetDetents.dock, "a collapsed sheet stays collapsed")
     }
 }

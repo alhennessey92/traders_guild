@@ -2,6 +2,30 @@
 
 Claude, 6 October 2026. Branch `claude/1.5.0-marker-workspace` (worktree `.worktrees/marker-workspace-claude`), based on canonical `128ead3`. Nothing was merged into `feat/1.5.0-avatar-markers`. The scope is P0 and P1 only, stopping at the owner device gate before P2 (plan: `~/.claude/plans/users-alhennessey-downloads-claude-v1-5-synthetic-wand.md`).
 
+## Round 2 — owner device feedback (6 October), applied
+
+The owner reported that moving around the workspace "feels really nice". Changes made in response to the rest of the feedback:
+
+| Feedback | Change |
+|---|---|
+| Collapsed bar too tall; should be the app's standard collapsed height, as a capsule | The workspace collapses to the app's own 11% dock: a single-row capsule (50pt, placed exactly like the tab bar) naming the draft and the screen it returns to. The chart-tool bar is the same capsule: the tool's label (tap for options), then Cancel and Done. The separate tool height is gone. |
+| Open small/medium so the marker shows on the chart straight away | Every marker workspace (new post, Setup, response, edit) opens **small (35%)**. The workspace now offers exactly the app's own four heights, so opening or finishing a marker changes only where the sheet sits, never what it offers. |
+| (Owner choice) Autofocus | **Removed.** The keyboard comes up when the text is tapped, so the marker stays visible on open. |
+| Keyboard opening: "nasty jumping transition, with the chart jumping up" | Cause: the chart layer behind the sheet made room for the keyboard and was squashed from 724pt to 375pt as the keyboard rose. While a marker is authored it now ignores the keyboard. **Control evidence:** the typing journey measures the chart layer every frame. Without the fix it squashes 724→375; with the fix it holds exactly still both ways, cold and warm. The sheet's own expansion is unchanged (full height, smooth, as the owner preferred). |
+
+**Round 2 evidence** (`docs/visual-review/v1.5-p1-workspace/round2/`):
+
+| Check | Result |
+|---|---|
+| Focused unit suites | **101/101**. Per-session height tests retired; new: opens small from any height, the set never changes, dock collapse/resume, drag-to-dock, stray-write mapping |
+| Sheet journeys, iPhone 17 Pro / iOS 26.5 | **11/11** (adds "a new post / Setup opens small without the keyboard"; typing asserts the chart layer never resizes) |
+| Sheet journeys, iPhone SE / iOS 18.2 | **11/11**. On the SE, the text field is reached by raising the sheet first (P3 compact layout). |
+| Keyboard control | Fix removed: chart layer 724→375pt during the keyboard rise. Fix present: constant. |
+| Existing workspace UI suites (large) | **47/50**, same 3 baseline-stale failures. The older tests now raise the sheet by its grabber where they need lower controls (`MarkerWorkspaceUITestSupport.swift`). |
+| Release build; signed device build | Succeeded |
+
+Note: on iOS 18, if the keyboard pushes an already-tall sheet to the very top, iOS applies its standard card-stack scaling to the screen behind. That is native and animated, and is not the squash.
+
 ## What the owner should feel
 
 Ordinary movement inside the marker workspace no longer touches the sheet:

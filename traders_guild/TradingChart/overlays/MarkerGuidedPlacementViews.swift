@@ -9,8 +9,8 @@
 
 import SwiftUI
 
-/// The chart-working state of a guided draft. It has its own content instead
-/// of squeezing a disabled Review bar into the old 11% detent.
+/// The collapsed workspace: one capsule at the app's standard dock height,
+/// naming the draft and the screen Resume returns to.
 struct MarkerGuidedCompactDock: View {
     @ObservedObject var placementState: MarkerPlacementState
     let onResume: () -> Void
@@ -32,39 +32,38 @@ struct MarkerGuidedCompactDock: View {
 
     var body: some View {
         Button(action: onResume) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(spacing: 10) {
                 Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(placementState.intent.color)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(placementState.intent.color.opacity(0.14)))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(placementState.intent.color.opacity(0.16)))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(taskTitle)
-                        .font(.subheadline.weight(.bold))
+                        .font(.footnote.weight(.bold))
                         .foregroundColor(AppColors.primaryForeground)
+                        .lineLimit(1)
                     Text(progress)
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(AppColors.greyText)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                VStack(spacing: 4) {
-                    Image(systemName: "chevron.up")
-                    Text("Continue editing")
-                        .font(.caption.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                }
-                .foregroundColor(AppColors.primaryForeground)
-                .accessibilityHidden(true)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(placementState.intent.color))
+                    .accessibilityHidden(true)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(MarkerGuidedCardBackground())
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 7)
+            .frame(height: 50)
+            .background(Capsule().fill(AppColors.chartSheetMainTabUnselectedBackground))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityShowsLargeContentViewer()
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
@@ -277,8 +276,7 @@ struct MarkerGuidedPlacementPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             MarkerWorkspaceTextInput(placeholder: placementState.intent == .question
                                      ? "Your question about this chart" : "What you see and why it matters",
-                                     text: $placementState.note, placementState: placementState, fieldID: "socialText",
-                                     autofocus: { placementState.shouldAutofocusPostText })
+                                     text: $placementState.note, placementState: placementState, fieldID: "socialText")
             .accessibilityIdentifier("guided.text")
             if placementState.intent == .question {
                 questionCounter

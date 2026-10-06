@@ -49,7 +49,7 @@ struct MarkerSheetShellHarness: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Fixture · real chart sheet · no account/backend")
-            Text("\(route) · supported: \(sheetDetents.detents.contains(selectedDetent)) · mode: \(sheetDetents.mode.rawValue) · available: \(Int(sheetDetents.availableHeight))")
+            Text("\(route) · supported: \(sheetDetents.detents.contains(selectedDetent)) · mode: \(sheetDetents.mode.rawValue)")
                 .accessibilityIdentifier("shell.policy")
             HStack(spacing: 12) {
                 Button("Add") {
@@ -76,10 +76,9 @@ struct MarkerSheetShellHarness: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppColors.sheetBackground.ignoresSafeArea())
-        .modifier(MarkerSheetContainerMeasure(controller: sheetDetents))
         .onAppear { sheetDetents.attach($selectedDetent) }
         .onChange(of: isAuthoring) { _, authoring in
-            if authoring { sheetDetents.enterAuthoring(intent: draft.intent, dynamicTypeSize: .large) }
+            if authoring { sheetDetents.enterAuthoring() }
             else { sheetDetents.leaveAuthoring() }
         }
         .sheet(isPresented: .constant(true)) {

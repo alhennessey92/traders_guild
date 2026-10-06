@@ -736,7 +736,6 @@ struct MainView: View {
             }
             .ignoresSafeArea(.keyboard, edges: showRightDrawer ? .bottom : [])
             .ignoresSafeArea()
-            .modifier(MarkerSheetContainerMeasure(controller: sheetDetents))
             .rlGlobalMessaging()          // RL: chatrooms/DMs sheets
             
             .observeMarkerNavigation(
@@ -975,7 +974,7 @@ struct MainView: View {
                 syncTimeframePanelsForCurrentMode(resetPlacementSource: isPlacing)
             }
             .modifier(MarkerSheetAuthoringSync(controller: sheetDetents, selection: $selectedDetent,
-                                               isAuthoring: isGuidedAuthoring, intent: placementState.intent))
+                                               isAuthoring: isGuidedAuthoring))
             .onChange(of: chartViewModel.selectedMarkerForSheet?.id) { oldId, newId in
                 chartControlVM.isMarkerViewingMode = (newId != nil)
                 handleMarkerViewingSelectionChange(oldId: oldId, newId: newId)
@@ -1056,7 +1055,15 @@ struct MainView: View {
             ZStack {
                 StaticBackgroundView()
                 mainChartContentLayer
+                if MarkerSheetTrace.isEnabled {
+                    // Laid out exactly as the chart content is (fixture trace).
+                    MarkerChartLayerProbe().allowsHitTesting(false).accessibilityHidden(true)
+                }
             }
+            // While a marker is authored the sheet covers the chart's lower
+            // part and handles the keyboard itself; the chart must not also
+            // move up out of the keyboard's way.
+            .ignoresSafeArea(.keyboard, edges: isGuidedAuthoring ? .all : [])
             .toolbar {
                 mainToolbarContent
             }
