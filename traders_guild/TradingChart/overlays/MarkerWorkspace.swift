@@ -34,8 +34,6 @@ struct MarkerWorkspaceState {
     var scrollAnchors: [MarkerWorkspaceDestination: String] = [:]
     var textOffsets: [String: CGPoint] = [:]
     var textSelections: [String: NSRange] = [:]
-    /// The size the hidden workspace keeps while the sheet is collapsed.
-    var resumeSize = CGSize(width: 320, height: 400)
     var showsTitle = false
     var editorBaselineText = ""
     var editorBaselineTitle = ""

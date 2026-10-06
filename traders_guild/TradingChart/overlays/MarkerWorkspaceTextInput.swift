@@ -8,6 +8,7 @@ struct MarkerWorkspaceTextInput: View {
     @Binding var text: String
     @ObservedObject var placementState: MarkerPlacementState
     let fieldID: String
+    @Environment(\.markerSheetDetents) private var sheetDetents
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -17,7 +18,8 @@ struct MarkerWorkspaceTextInput: View {
             ), offset: Binding(
                 get: { placementState.workspace.textOffsets[fieldID] ?? .zero },
                 set: { placementState.workspace.textOffsets[fieldID] = $0 }
-            ), placeholder: placeholder, onFocus: { placementState.isTextInputFocused = $0 })
+            ), placeholder: placeholder, onFocus: { placementState.isTextInputFocused = $0 },
+               sheetDetents: sheetDetents)
             if text.isEmpty {
                 Text(placeholder).font(.subheadline).foregroundColor(AppColors.greyText)
                     .padding(.horizontal, 5).padding(.top, 8).allowsHitTesting(false).accessibilityHidden(true)
@@ -35,6 +37,8 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     @Binding var offset: CGPoint
     let placeholder: String
     let onFocus: (Bool) -> Void
+    /// Settles the sheet at its current height before the keyboard rises.
+    var sheetDetents: MarkerSheetDetentController? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextView {
@@ -44,7 +48,6 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityLabel = placeholder
         view.delegate = context.coordinator
-        view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
@@ -74,6 +77,20 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
         var parent: MarkerWorkspaceTextEditor
         var updating = false
         init(_ parent: MarkerWorkspaceTextEditor) { self.parent = parent }
+        func textViewShouldBeginEditing(_ view: UITextView) -> Bool {
+            guard let sheet = parent.sheetDetents else { return true }
+            // Focus may wait for the sheet to settle. The tap that asked for
+            // it is gone by then, so the remembered cursor (or the end) is
+            // restored; UIKit would otherwise put it at the start.
+            let wanted = parent.selection
+            return sheet.shouldBeginEditing { [weak self, weak view] in
+                guard let self, let view, view.becomeFirstResponder() else { return }
+                let length = view.text.utf16.count
+                let location = min(wanted.location, length)
+                view.selectedRange = NSRange(location: location, length: min(wanted.length, length - location))
+                self.parent.selection = view.selectedRange
+            }
+        }
         func textViewDidChange(_ view: UITextView) {
             guard !updating else { return }
             parent.text = view.text
@@ -84,7 +101,9 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
             parent.selection = view.selectedRange
         }
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard !updating else { return }
+            // Only the author's own scrolling is kept: a layout pass during a
+            // sheet resize must not publish to the draft (it redraws the chart).
+            guard !updating, scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else { return }
             parent.offset = scrollView.contentOffset
         }
         func textViewDidBeginEditing(_ view: UITextView) { parent.onFocus(true) }
@@ -102,13 +121,14 @@ struct MarkerWorkspaceLineInput: View {
     var keyboard: UIKeyboardType = .default
     var label: String? = nil
     var trailing = false
+    @Environment(\.markerSheetDetents) private var sheetDetents
 
     var body: some View {
         MarkerWorkspaceLineEditor(text: $text, selection: Binding(
             get: { placementState.workspace.textSelections[fieldID] ?? NSRange(location: text.utf16.count, length: 0) },
             set: { placementState.workspace.textSelections[fieldID] = $0 }
         ), placeholder: placeholder, fieldID: fieldID, keyboard: keyboard, label: label ?? placeholder,
-           trailing: trailing, onFocus: { placementState.isTextInputFocused = $0 })
+           trailing: trailing, onFocus: { placementState.isTextInputFocused = $0 }, sheetDetents: sheetDetents)
         .padding(.horizontal, 12).frame(minHeight: 44)
         .background(RoundedRectangle(cornerRadius: 12).fill(AppColors.standardSearchFieldFill))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppColors.standardSearchFieldStroke, lineWidth: 1))
@@ -124,6 +144,7 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
     let label: String
     let trailing: Bool
     let onFocus: (Bool) -> Void
+    var sheetDetents: MarkerSheetDetentController? = nil
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextField {
         let view = UITextField()
@@ -132,7 +153,10 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .subheadline)
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
+        // A number pad has no return key: its Done bar is the only way out.
+        if keyboard == .decimalPad || keyboard == .numberPad {
+            view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
+        }
         return view
     }
     func updateUIView(_ view: UITextField, context: Context) {
@@ -178,14 +202,30 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
             guard !updating, view.isFirstResponder else { return }
             saveSelection(view)
         }
+        func textFieldShouldBeginEditing(_ view: UITextField) -> Bool {
+            guard let sheet = parent.sheetDetents else { return true }
+            // Focus may wait for the sheet to settle: restore the remembered
+            // cursor (or the end), as the text view does.
+            let wanted = parent.selection
+            return sheet.shouldBeginEditing { [weak self, weak view] in
+                guard let self, let view, view.becomeFirstResponder() else { return }
+                let length = (view.text ?? "").utf16.count
+                let start = min(wanted.location, length)
+                let end = min(start + wanted.length, length)
+                if let a = view.position(from: view.beginningOfDocument, offset: start),
+                   let b = view.position(from: view.beginningOfDocument, offset: end) {
+                    view.selectedTextRange = view.textRange(from: a, to: b)
+                }
+                self.saveSelection(view)
+            }
+        }
         func textFieldDidBeginEditing(_ view: UITextField) { parent.onFocus(true) }
         func textFieldDidEndEditing(_ view: UITextField) { parent.onFocus(false) }
     }
 }
 
-/// The standard keyboard bar with Done: a text view's Return adds a line and
-/// a decimal pad has none, so this is how typing ends without leaving the
-/// screen.
+/// The standard keyboard bar with Done, for number pads only: they have no
+/// return key. Text keyboards are dismissed by dragging the content down.
 enum MarkerKeyboardDoneBar {
     static func make(for responder: UIResponder) -> UIToolbar {
         let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))

@@ -30,4 +30,15 @@ extension XCUIApplication {
         raiseMarkerSheet()
         for _ in 0..<scrolls where !element.isHittable { scrollMarkerWorkspace() }
     }
+
+    /// Puts the keyboard away as a user does: dragging the workspace's
+    /// content down (it dismisses interactively; text keyboards carry no
+    /// Done bar).
+    func dismissKeyboardInMarkerWorkspace() {
+        let scroll = scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
+        for _ in 0..<3 where keyboards.firstMatch.exists {
+            scroll.swipeDown(velocity: .fast)
+            _ = keyboards.firstMatch.waitForNonExistence(timeout: 1.5)
+        }
+    }
 }

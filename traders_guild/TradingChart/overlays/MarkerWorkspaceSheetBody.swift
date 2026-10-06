@@ -17,6 +17,10 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
     /// view resized through small heights loses its position).
     @State private var holdsFrozenSize = false
     @State private var releaseWork: DispatchWorkItem?
+    /// The last expanded size, kept here and never published: writing it to
+    /// the draft on every frame of a sheet resize redrew the whole chart each
+    /// frame (the drag stutter reported in round 3).
+    @State private var expandedSize = CGSize(width: 320, height: 400)
 
     init(placementState: MarkerPlacementState, isCollapsed: Bool,
          onResume: @escaping () -> Void, @ViewBuilder panel: () -> Panel) {
@@ -30,7 +34,7 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let resume = placementState.workspace.resumeSize
+            let resume = expandedSize
             ZStack(alignment: .top) {
                 panel
                     .frame(width: frozen ? resume.width : proxy.size.width,
@@ -84,9 +88,8 @@ struct MarkerWorkspaceSheetBody<Panel: View>: View {
     /// The size the hidden workspace keeps while collapsed: its last
     /// expanded size.
     private func record(_ size: CGSize) {
-        guard !frozen, size.height > 100,
-              placementState.workspace.resumeSize != size else { return }
-        placementState.workspace.resumeSize = size
+        guard !frozen, size.height > 100, expandedSize != size else { return }
+        expandedSize = size
     }
 
     @ViewBuilder

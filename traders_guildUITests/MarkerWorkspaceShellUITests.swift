@@ -234,24 +234,28 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
 
     // MARK: Keyboard
 
-    /// Typing uses the sheet's native keyboard expansion, twice in one
-    /// session: the first time the keyboard loads cold (a main-thread stall
-    /// in the simulator), the second warm. Each rise and each return must be
-    /// one monotonic motion, the selected detent must never change, and
-    /// Done returns the sheet exactly where typing began.
-    func testTypingExpandsNativelyAndReturns() throws {
+    /// Typing, twice in one session (the first keyboard loads cold, the
+    /// second warm): the sheet keeps the height it was at and the keyboard
+    /// carries it up as one piece, the content sitting on the keyboard and
+    /// the chart visible above; the selected height never changes, the chart
+    /// layer never resizes, and putting the keyboard away returns the sheet
+    /// exactly where typing began.
+    func testTypingLiftsTheSheetOntoTheKeyboardAndReturns() throws {
         launch()
         let field = app.textViews["guided.text"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         // On a compact phone the small opening height does not reach the
         // text (a P3 layout item); the user raises the sheet first.
-        if !field.isHittable { app.raiseMarkerSheet(); settle() }
+        let startsSmall = field.isHittable
+        if !startsSmall { app.raiseMarkerSheet(); settle() }
         XCTAssertTrue(field.isHittable)
         let keyboard = app.keyboards.firstMatch
-        let rest = trace().samples.last
-        let restTop = rest?.top ?? 0
+        let screenHeight = Int(app.frame.height)
         var risenTops: [Int] = []
         for cycle in 1...2 {
+            // Each cycle from where the sheet is now.
+            let rest = trace().samples.last
+            let restTop = rest?.top ?? 0
             let mark = trace().now
             field.tap()
             guard keyboard.waitForExistence(timeout: 5) else {
@@ -261,29 +265,47 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
             if cycle == 1 { screenshot("p1-typing") }
             let entry = segment(since: mark, "typing-entry-\(cycle)")
             XCTAssertEqual(Set(entry.map(\.ctl)).count, 1, "one presentation")
-            XCTAssertEqual(Set(entry.map(\.sel)), [rest?.sel ?? ""], "the selected detent never changes")
+            // From tall, iOS 18 reports a height of its own while the keyboard
+            // pins the sheet to the top; from the small opening it never does.
+            let entryHeights = Set(entry.map(\.sel)).subtracting(startsSmall ? [] : ["(id: Unknown)"])
+            XCTAssertEqual(entryHeights, [rest?.sel ?? ""], "the selected height never changes")
             XCTAssertEqual(Set(entry.map(\.chart)).count, 1, "the chart behind the sheet never moves \(Set(entry.map(\.chart)))")
             let tops = entry.map(\.top)
-            XCTAssertLessThan(tops.last ?? 0, restTop, "the sheet rose with the keyboard")
+            let risen = tops.last ?? 0
+            if startsSmall { XCTAssertLessThan(risen, restTop, "the sheet rose with the keyboard") }
             XCTAssertLessThanOrEqual(tops.max() ?? 0, restTop + 3, "no drop before rising \(tops)")
             XCTAssertTrue(zip(tops, tops.dropFirst()).allSatisfy { $1 <= $0 + 3 }, "one rising motion \(tops)")
-            risenTops.append(tops.last ?? 0)
+            if startsSmall {
+                // Lifted as one piece: the same height now sits on the keyboard.
+                let heightAbove = Int(keyboard.frame.minY) - risen
+                XCTAssertEqual(heightAbove, screenHeight - restTop, accuracy: 40, "kept its height, on the keyboard")
+                XCTAssertGreaterThan(risen, 150, "the chart stays visible above the sheet")
+            }
+            risenTops.append(risen)
             XCTAssertLessThan(app.buttons["guided.review"].frame.maxY, keyboard.frame.minY + 1, "footer above the keyboard")
+            XCTAssertFalse(app.buttons["Done"].exists && app.toolbars.count > 0, "no Done bar on a text keyboard")
             field.typeText(cycle == 1 ? " Buyers stepped in." : " Holding.")
             let exitMark = trace().now
-            app.buttons["workspace.keyboardDone"].firstMatch.tap()
+            app.dismissKeyboardInMarkerWorkspace()
             settle(1.2)
             let exit = segment(since: exitMark, "typing-exit-\(cycle)")
-            XCTAssertFalse(keyboard.exists, "keyboard dismissed by Done")
+            XCTAssertFalse(keyboard.exists, "keyboard put away")
             XCTAssertEqual(Set(exit.map(\.ctl)).count, 1)
-            XCTAssertEqual(Set(exit.map(\.sel)), [rest?.sel ?? ""])
+            if startsSmall {
+                XCTAssertEqual(exit.last?.sel, rest?.sel, "the height typing began at")
+            } else {
+                // From the tallest height iOS 18 settles a sheet at medium as
+                // the keyboard goes (iOS 26 keeps it tall); either is one motion.
+                XCTAssertTrue(["tall", "working"].contains(exit.last?.sel ?? ""), "an offered height: \(exit.last?.sel ?? "")")
+            }
             XCTAssertEqual(Set(exit.map(\.chart)).count, 1, "nor on the way back \(Set(exit.map(\.chart)))")
             let exitTops = exit.map(\.top)
-            XCTAssertEqual(exitTops.last ?? 0, restTop, accuracy: 3, "back to where typing began")
+            if startsSmall {
+                XCTAssertEqual(exitTops.last ?? 0, restTop, accuracy: 3, "back to where typing began")
+            }
             XCTAssertTrue(zip(exitTops, exitTops.dropFirst()).allSatisfy { $1 >= $0 - 3 }, "one settling motion \(exitTops)")
         }
-        XCTAssertEqual(risenTops[0], risenTops[1], accuracy: 2, "the same expansion both times")
-        // The second tap places the cursor where it lands; both are kept.
+        if startsSmall { XCTAssertEqual(risenTops[0], risenTops[1], accuracy: 2, "the same lift both times") }
         let text = field.value as? String ?? ""
         XCTAssertTrue(text.contains("Buyers stepped in.") && text.contains("Holding."), text)
     }

@@ -17,11 +17,13 @@ import UIKit
 /// capsule-sized dock as the rest of the app, and starting or finishing a
 /// marker never changes what the sheet offers, only where it sits.
 ///
-/// Typing uses the sheet's native keyboard expansion. Changing the sheet's
-/// height around the keyboard was measured (P1 frame traces) to put the sheet
-/// a frame out of place: UIKit applies such a change in a pass of its own,
-/// outside the keyboard's animation. The native expansion is one smooth
-/// motion each way and returns to the same detent.
+/// Typing: UIKit throws a sheet that offers several detents up to its largest
+/// when the keyboard appears (the "large jump" of round 3), but lifts a sheet
+/// offering a single detent as one piece, that height sitting on the
+/// keyboard. So while a workspace field has focus the sheet offers only the
+/// height it is already at; nothing moves until the keyboard carries it.
+/// Changing the height itself around the keyboard was measured (P1 traces)
+/// to put the sheet a frame out of place, so the height never changes.
 enum MarkerSheetDetents {
     static let dock: PresentationDetent = .fraction(0.11)
     static let browse: PresentationDetent = .fraction(0.35)
@@ -89,8 +91,44 @@ final class MarkerSheetDetentController: ObservableObject {
 
     private var selection: Binding<PresentationDetent>?
     private var queue: [MarkerSheetDetentState] = []
+    private var completions: [() -> Void] = []
     private var isDraining = false
     private var applying = false
+
+    /// A workspace field has focus and the sheet offers only its current height.
+    private(set) var isTyping = false
+    /// The height typing began at, restored after the keyboard if UIKit
+    /// reported a height of its own meanwhile.
+    private var typingDetent: PresentationDetent?
+    /// A docked software keyboard is on screen (any field, any height),
+    /// until it has fully gone: its way down counts.
+    private var keyboardShown = false
+    /// Collapse was asked for with the keyboard up: done once it has gone.
+    private var collapsesAfterKeyboard = false
+    private var collapseFallback: DispatchWorkItem?
+    /// Puts the keyboard away; tests replace it.
+    var resignKeyboard: () -> Void = {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    /// The last selection that was one of the offered heights.
+    private var lastOfferedSelection: PresentationDetent = MarkerSheetDetents.dock
+    private var typingTimeout: DispatchWorkItem?
+    private let center: NotificationCenter
+    private var observers: [NSObjectProtocol] = []
+
+    /// `notificationCenter` is injectable so tests simulate the keyboard privately.
+    init(notificationCenter: NotificationCenter = .default) {
+        center = notificationCenter
+        observers.append(center.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] note in
+            let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero
+            MainActor.assumeIsolated { self?.keyboardWillChange(to: frame) }
+        })
+        observers.append(center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.keyboardDidHide() }
+        })
+    }
+
+    deinit { observers.forEach(center.removeObserver) }
 
     func attach(_ binding: Binding<PresentationDetent>) { selection = binding }
 
@@ -112,6 +150,7 @@ final class MarkerSheetDetentController: ObservableObject {
     /// the marker it is about is visible on the chart above it.
     func enterAuthoring(select: PresentationDetent = MarkerSheetDetents.workspaceStart) {
         mode = .authoring
+        cancelPendingCollapse()
         resumeDetent = select == MarkerSheetDetents.dock ? MarkerSheetDetents.workspaceStart : select
         go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: select))
     }
@@ -129,49 +168,180 @@ final class MarkerSheetDetentController: ObservableObject {
     func leaveAuthoring() {
         guard mode != .standard else { return }
         mode = .standard
+        isTyping = false
+        cancelTypingTimeout()
+        cancelPendingCollapse()
         go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: planned.selection))
     }
 
     /// Show the chart: the workspace's capsule at the dock.
     func collapse() {
         guard mode == .authoring else { return }
-        rememberResume(planned.selection)
+        rememberResume(typingDetent ?? planned.selection)
+        if keyboardShown {
+            // Moving the sheet while the keyboard animates snaps (measured),
+            // and UIKit's own heights meanwhile would undo it: the keyboard
+            // goes first, riding the sheet down, then the sheet collapses.
+            guard !collapsesAfterKeyboard else { return }
+            collapsesAfterKeyboard = true
+            resignKeyboard()
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.finishPendingCollapse() }
+            }
+            collapseFallback = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+            return
+        }
+        isTyping = false
+        typingDetent = nil
+        cancelTypingTimeout()
         go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: MarkerSheetDetents.dock))
     }
 
     func resume() {
         guard mode == .authoring else { return }
+        cancelPendingCollapse()
         go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: resumeDetent))
+    }
+
+    /// The keyboard has gone (or never reported going): collapse now.
+    private func finishPendingCollapse() {
+        guard collapsesAfterKeyboard else { return }
+        cancelPendingCollapse()
+        keyboardShown = false
+        let started = typingDetent
+        endTyping()
+        restoreOfferedSelection(preferring: started)
+        collapse()
+    }
+
+    private func cancelPendingCollapse() {
+        collapsesAfterKeyboard = false
+        collapseFallback?.cancel()
+        collapseFallback = nil
     }
 
     /// The native selection changed: a user drag, or one of our own steps.
     func selectionChanged(to detent: PresentationDetent) {
         guard !applying else { return }
         if detents.contains(detent) {
+            lastOfferedSelection = detent
             if mode == .authoring { rememberResume(detent) }
             return
         }
-        // Something wrote a detent the sheet does not offer. Map it to the
-        // nearest meaning, never let the sheet fall back on its own.
-        let target = mode == .authoring ? resumeDetent : MarkerSheetDetents.dock
-        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: target))
+        // iOS 18 reports a height of its own while the keyboard pins a sheet
+        // to the top: UIKit's to manage until the keyboard has gone.
+        if keyboardShown || isTyping { return }
+        // Something else wrote a height the sheet does not offer: take the
+        // selection straight back to an offered one; never offer the foreign.
+        restoreOfferedSelection()
+    }
+
+    private func restoreOfferedSelection(preferring preferred: PresentationDetent? = nil) {
+        guard !detents.contains(currentSelection) else { return }
+        let candidates = [preferred, mode == .authoring ? resumeDetent : nil, lastOfferedSelection, MarkerSheetDetents.dock]
+        guard let target = candidates.compactMap({ $0 }).first(where: { detents.contains($0) }) else { return }
+        queue.removeAll()
+        apply(MarkerSheetDetentState(detents: detents, selection: target))
     }
 
     private func rememberResume(_ detent: PresentationDetent) {
         if detent != MarkerSheetDetents.dock, detents.contains(detent) { resumeDetent = detent }
     }
 
+    // MARK: Typing
+
+    /// A workspace text input is about to take focus. Returns true to let it
+    /// focus now; false while the sheet first narrows to the height it is at
+    /// (nothing moves), after which `focus` is called.
+    func shouldBeginEditing(focus: @escaping () -> Void) -> Bool {
+        // A hardware keyboard raises no software keyboard: its shortcut bar
+        // is undocked (handled below) or nothing comes, and the timeout
+        // offers every height again. Narrowing first is invisible either way.
+        guard mode == .authoring, !isTyping else { return true }
+        let current = planned.selection
+        // At the dock nothing types; at the tallest height there is nothing
+        // taller to jump to, so iOS keeps it (narrowing there makes iOS 18
+        // report a height of its own and bounce on the way back).
+        guard current != MarkerSheetDetents.dock, current != MarkerSheetDetents.tall else { return true }
+        isTyping = true
+        typingDetent = current
+        go(to: MarkerSheetDetentState(detents: [current], selection: current), then: focus)
+        // A floating or hardware keyboard never docks: offer the rest again.
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.endTyping() }
+        }
+        typingTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+        return false
+    }
+
+    private func keyboardWillChange(to screenFrame: CGRect) {
+        let screen = UIScreen.main.bounds
+        let onScreen = screenFrame.height > 1 && screenFrame.minY < screen.maxY - 1
+        // Leaving the screen still counts as shown until it has gone.
+        if onScreen { keyboardShown = Self.isDocked(screenFrame, screen: screen) }
+        guard isTyping else { return }
+        if Self.isDocked(screenFrame, screen: screen) {
+            cancelTypingTimeout()
+        } else if onScreen {
+            // Undocked or floating while on screen: no lift to protect.
+            endTyping()
+        }
+    }
+
+    private func keyboardDidHide() {
+        if collapsesAfterKeyboard { finishPendingCollapse(); return }
+        keyboardShown = false
+        let started = typingDetent
+        endTyping()
+        restoreOfferedSelection(preferring: started)
+    }
+
+    /// After the keyboard has gone (never during its animation), the sheet
+    /// offers every height again; it stays where it is.
+    private func endTyping() {
+        guard isTyping else { return }
+        isTyping = false
+        cancelTypingTimeout()
+        let started = typingDetent
+        typingDetent = nil
+        guard mode == .authoring else { return }
+        // A height UIKit reported meanwhile goes back to an offered one first.
+        restoreOfferedSelection(preferring: started)
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: planned.selection))
+    }
+
+    private func cancelTypingTimeout() {
+        typingTimeout?.cancel()
+        typingTimeout = nil
+    }
+
+    /// A full-width software keyboard attached to the bottom. A hardware
+    /// keyboard's shortcut bar is too short to count.
+    static func isDocked(_ frame: CGRect, screen: CGRect) -> Bool {
+        guard frame.height >= 150, frame.minY < screen.maxY - 1 else { return false }
+        return frame.width >= screen.width * 0.9 && frame.maxY >= screen.maxY - 1
+    }
+
     // MARK: Applying
 
-    private func go(to target: MarkerSheetDetentState) {
+    private func go(to target: MarkerSheetDetentState, then completion: (() -> Void)? = nil) {
         queue.append(contentsOf: MarkerSheetDetentSequencer.steps(from: planned, to: target))
+        if let completion { completions.append(completion) }
         drain()
     }
 
     /// One step per main-queue turn, so SwiftUI hands each to UIKit before
-    /// the next.
+    /// the next; completions run a turn after the last.
     private func drain() {
-        guard !isDraining, !queue.isEmpty else { return }
+        guard !isDraining else { return }
+        guard !queue.isEmpty else {
+            let pending = completions
+            completions = []
+            if !pending.isEmpty { DispatchQueue.main.async { pending.forEach { $0() } } }
+            return
+        }
         isDraining = true
         apply(queue.removeFirst())
         DispatchQueue.main.async { [weak self] in
@@ -184,6 +354,7 @@ final class MarkerSheetDetentController: ObservableObject {
     private func apply(_ step: MarkerSheetDetentState) {
         applying = true
         defer { applying = false }
+        if step.detents.contains(step.selection) { lastOfferedSelection = step.selection }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
             if detents != step.detents { detents = step.detents }
             if let selection, selection.wrappedValue != step.selection { selection.wrappedValue = step.selection }
@@ -205,6 +376,7 @@ struct MarkerSheetDetentHost: ViewModifier {
         if enabled {
             content
                 .presentationDetents(controller.detents, selection: $selection)
+                .environment(\.markerSheetDetents, controller)
                 .onAppear {
                     controller.attach($selection)
                     controller.reduceMotion = reduceMotion
@@ -240,5 +412,18 @@ struct MarkerSheetAuthoringSync: ViewModifier {
                     controller.leaveAuthoring()
                 }
             }
+    }
+}
+
+private struct MarkerSheetDetentsKey: EnvironmentKey {
+    static let defaultValue: MarkerSheetDetentController? = nil
+}
+
+extension EnvironmentValues {
+    /// Lets a workspace text input settle the sheet before the keyboard
+    /// rises. Nil outside the experiment's chart sheet.
+    var markerSheetDetents: MarkerSheetDetentController? {
+        get { self[MarkerSheetDetentsKey.self] }
+        set { self[MarkerSheetDetentsKey.self] = newValue }
     }
 }

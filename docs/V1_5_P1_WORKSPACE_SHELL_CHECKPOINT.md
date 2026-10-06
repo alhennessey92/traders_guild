@@ -2,7 +2,35 @@
 
 Claude, 6 October 2026. Branch `claude/1.5.0-marker-workspace` (worktree `.worktrees/marker-workspace-claude`), based on canonical `128ead3`. Nothing was merged into `feat/1.5.0-avatar-markers`. The scope is P0 and P1 only, stopping at the owner device gate before P2 (plan: `~/.claude/plans/users-alhennessey-downloads-claude-v1-5-synthetic-wand.md`).
 
-## Round 2 — owner device feedback (6 October), applied
+## Round 3: owner device feedback (6 October), applied
+
+The owner said the workspace "feels better, definitely" and approved moving on to P2 once the following points were fixed.
+
+| Feedback | Change |
+|---|---|
+| "Still a large jump when selecting the textbox and keyboard opens" | **Single-height lift.** When a field is about to take focus (`shouldBeginEditing`), the sheet first offers only the height it is already at, which is invisible because nothing moves. Focus follows a turn later. UIKit lifts a single-height sheet as one piece on top of the keyboard and keeps its height, so the sheet no longer jumps to its tallest size and the chart above it stays visible. Every height is offered again once the keyboard has fully gone, never during its animation. Exceptions: at the tallest height nothing narrows (there is nothing taller to jump to, and on iOS 18 narrowing there causes a bounce). A floating or hardware keyboard re-offers every height straight away. |
+| "Checkmark button on the top of the keyboard … doesn't need to be there" | The keyboard Done bar is gone from text keyboards, which are dismissed by dragging the content down. It remains only on number pads (Setup Target/Stop, level price), because a number pad has no return key and the bar is the only way to close it. |
+| "When opening the sheet up and down to different detents it sort of pauses … not smooth" | Cause: the workspace published its frozen size to the draft on every frame of a resize, which made the whole chart redraw each frame. The size is now kept privately by the sheet body, so resizing never touches the chart. |
+| Marker sheet darker than other sheets | Noted as P3 visual polish (the workspace uses the opaque sheet colour, while other sheets use the material gradient). |
+| (Owner, during the run) Keep the original Components tab layout for indicators and components | Adopted for P5. Add context will use the same Active · Indicators · Drawings · Timeframes tab scaffold as the chart's Components sheet, with the indicator category tabs, catalog rows and tool cards, all inline in the workspace. |
+
+**Found and fixed while verifying round 3:**
+- Tapping **Work on chart**, or **⌖**, while a number pad was up could leave the sheet at its typing height. The keyboard's own height reports on its way down undid the collapse. Now a collapse asked for with the keyboard up puts the keyboard away first, and the sheet collapses once it has gone. A fallback fires if the keyboard never reports going, and a Resume in the meantime cancels the collapse.
+- Because focus now waits a turn for the sheet, the tap that asked for it is gone by the time it arrives, and UIKit put the cursor at the start of the field. Typing a new price was therefore inserted in front of the old value. The remembered cursor, or the end of the text, is now restored.
+
+**Round 3 evidence** (`docs/visual-review/v1.5-p1-workspace/round3/`):
+
+| Check | Result |
+|---|---|
+| Focused unit suites (9) | **113/113**. New detent tests: narrows and focuses, then restores after the keyboard; no docked keyboard; undocked keyboard; at dock or tall, focus is immediate; foreign heights while typing; collapse while typing waits for the keyboard, has a fallback, and is cancelled by Resume; collapse without a keyboard is immediate |
+| Sheet journeys, iPhone 17 Pro / iOS 26.5 | **9/9**. Typing, two cycles each way: the sheet rests at 589pt and rises to 250pt on the keyboard, keeping its height. The chart layer holds at 724pt throughout. One presenting controller, no dock flash, the same lift both cycles, and back to rest after. |
+| Sheet journeys, iPhone SE / iOS 18.2 | **9/9**. The field is reached by raising the sheet first, a P3 compact-layout item. At the top, iOS 18's own height is left to UIKit and the sheet returns to an offered height. |
+| Existing workspace UI suites (large) | **47/50**, the same 3 baseline-stale failures. `testLevelChartHandoff…` caught both bugs above and passes with the fixes. |
+| Release build; signed device build | Succeeded |
+
+**iOS 18 notes.** If the keyboard pins an already-tall sheet to the top, iOS 18 reports a height of its own ("(id: Unknown)"). The controller leaves it to UIKit while the keyboard is up, then returns to the height typing began at. That height is never offered as a detent.
+
+## Round 2: owner device feedback (6 October), applied
 
 The owner reported that moving around the workspace "feels really nice". Changes made in response to the rest of the feedback:
 
@@ -58,7 +86,7 @@ The visual design of the screens themselves is unchanged in P1. That is P3–P5.
 | `TradingChart/overlays/MarkerGuidedPlacementViews.swift` | Persistent header; one scroll view per screen (each remembers its own position); direction-aware screen transition; VoiceOver screen-changed announcement; footer crossfade; the dock names the screen it returns to. Content measurement removed. |
 | `TradingChart/overlays/MarkerWorkspace.swift` | `workspaceDepth`, `isWorkspaceChartToolActive`, the new-Post autofocus rule. Dead measurement code removed. |
 | `TradingChart/overlays/MarkerWorkspaceViews.swift` | A screen renders the destination it was created for, so the one fading out never redraws as the next. |
-| `TradingChart/overlays/MarkerWorkspaceTextInput.swift` | One-time autofocus, read live from the draft; keyboard **Done** bar. |
+| `TradingChart/overlays/MarkerWorkspaceTextInput.swift` | Focus asks the sheet first, and the cursor is restored after a deferred focus. A **Done** bar on number pads only. (Autofocus was removed in round 2.) |
 | `TradingChart/overlays/MarkerSheetGeometry.swift` | Fixture/trace instrumentation only. The geometry probe no longer runs in normal builds, and there is a new per-frame sheet trace (`-MarkerSheetTrace`, DEBUG/isolated DEV only). |
 | `Features/Core/MainView.swift` | The experiment-on sheet goes through the controller. The chart sheet body is extracted (type-checker). Experiment-off detents and writes are unchanged. |
 | Harnesses, `chartSheetMarkersView.swift` | Moved to the controller; Add-tab measurement removed. |
@@ -78,6 +106,8 @@ The plan proposed a smaller "compose" height while typing, to keep a strip of ch
 | **Native expansion (no height change)** | **One monotonic motion each way, cold and warm; the selected detent never changes; Done returns to exactly the rest height.** |
 
 So typing uses the native expansion. While the keyboard is up the sheet covers most of the chart, as Apple Maps does. The chart returns the moment typing ends. This is the gate question below.
+
+**Superseded in round 3.** The owner still felt a jump. The sheet now keeps its height on top of the keyboard: it offers only its current height, which needs no height change, so none of the measured artefacts above apply. See Round 3.
 
 ## Evidence (all at this commit)
 
