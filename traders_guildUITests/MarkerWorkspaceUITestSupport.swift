@@ -18,7 +18,7 @@ extension XCUIApplication {
     /// unlike a swipe on a content element, never makes XCUITest scroll that
     /// element back into view first.
     func scrollMarkerWorkspace() {
-        let scroll = scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
+        let scroll = scrollViews["guided.screen"].firstMatch
         guard scroll.waitForExistence(timeout: 2) else { return }
         scroll.swipeUp(velocity: .fast)
         _ = XCTWaiter.wait(for: [XCTestExpectation(description: "scrolled")], timeout: 0.5)
@@ -35,7 +35,7 @@ extension XCUIApplication {
     /// content down (it dismisses interactively; text keyboards carry no
     /// Done bar).
     func dismissKeyboardInMarkerWorkspace() {
-        let scroll = scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
+        let scroll = scrollViews["guided.screen"].firstMatch
         for _ in 0..<3 where keyboards.firstMatch.exists {
             scroll.swipeDown(velocity: .fast)
             _ = keyboards.firstMatch.waitForNonExistence(timeout: 1.5)

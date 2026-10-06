@@ -116,16 +116,13 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         XCTAssertFalse(failure.label.contains("Warning"), "the warning glyph is not spoken separately")
     }
 
-    /// The step is announced as a heading that says where the author is and
-    /// what is asked, and a disabled Review always says why.
+    /// The workspace header names the task, then each screen, as a heading,
+    /// and a disabled Review always says why.
     func testDetailsNamesTheStepAndWhatIsMissing() throws {
         launch("analysisEmpty")
-        let header = app.staticTexts["guided.stepHeader"].exists
-            ? app.staticTexts["guided.stepHeader"]
-            : app.otherElements["guided.stepHeader"]
+        let header = app.staticTexts["guided.stepHeader"]
         XCTAssertTrue(header.waitForExistence(timeout: 5))
-        XCTAssertTrue(header.label.contains("Write analysis"), header.label)
-        XCTAssertTrue(header.label.contains("Step 1 of 2"), header.label)
+        XCTAssertEqual(header.label, "New Analysis")
 
         let review = app.buttons["guided.review"]
         XCTAssertFalse(review.isEnabled, "nothing written yet")
@@ -142,6 +139,7 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
                 .waitForExistence(timeout: 5),
             "Review says who will see the post"
         )
+        XCTAssertEqual(app.staticTexts["guided.stepHeader"].label, "Review", "the header names the screen")
         attachTree("tree-analysisEmpty-to-review")
     }
 
@@ -178,8 +176,8 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
         launch("analysisEmpty")
         let text = app.textViews["guided.text"].exists ? app.textViews["guided.text"] : app.textFields["guided.text"]
         XCTAssertTrue(text.waitForExistence(timeout: 5))
-        for element in [app.buttons["guided.intentPicker"], text, app.buttons["guided.addTitle"],
-                        app.buttons["guided.addContext"]] {
+        for element in [app.buttons["guided.intent.analysis"], app.buttons["guided.intent.question"], text,
+                        app.buttons["guided.addTitle"], app.buttons["guided.addContext"]] {
             XCTAssertTrue(element.isHittable, "\(element) is on screen")
         }
         attachScreenshot("working-sheet-analysis")

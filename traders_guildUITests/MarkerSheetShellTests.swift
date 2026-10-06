@@ -53,7 +53,9 @@ final class MarkerSheetShellTests: XCTestCase {
         XCTAssertTrue(app.buttons["guided.postToChart"].waitForExistence(timeout: 5))
         app.buttons["shell.guide"].tap()
         supported("details-analysis")
-        XCTAssertTrue(app.buttons["guided.intentPicker"].waitForExistence(timeout: 5))
+        // The type selector is a group of the two type buttons.
+        XCTAssertTrue(app.buttons["guided.intent.analysis"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["guided.intent.question"].exists)
         shot("guided-compose")
         app.buttons["shell.legacy"].tap()
         supported("placement")

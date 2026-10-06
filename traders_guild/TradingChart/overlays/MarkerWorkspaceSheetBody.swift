@@ -148,7 +148,7 @@ struct MarkerWorkspaceChartToolBar: View {
                             .lineLimit(1)
                         Text(isLevel ? MarkerGuidedFormat.displayPrice(Double(placementState.workspace.editorText)) : instruction)
                             .font(isLevel ? .system(.caption, design: .monospaced).weight(.semibold) : .caption2)
-                            .foregroundColor(isLevel ? AppColors.primaryForeground : AppColors.greyText)
+                            .foregroundColor(isLevel ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)

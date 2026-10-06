@@ -370,7 +370,7 @@ struct MarkerGuidedCreationHarness: View {
         let isSetup = [.setupTracked, .setupUntracked, .setupReview, .setupReasoning].contains(scenario)
         let isResponse = [.responseChooser, .responseDetails, .responseSetupReview, .responseSetupEntry, .setupMarketMoved].contains(scenario)
         if isResponse {
-            state.beginRespondingTo(MarkerLinkContext(
+            var context = MarkerLinkContext(
                 parentMarkerId: MarkerLinkFixtures.uuid(77),
                 parentGuildId: guildId,
                 parentSymbolId: symbolId,
@@ -379,7 +379,9 @@ struct MarkerGuidedCreationHarness: View {
                 parentTitle: "BTC breakout",
                 parentIntent: .analysis,
                 relationship: .challenges
-            ))
+            )
+            context.parentAvatar = MarkerAvatarIdentity(url: nil, initials: "SA")
+            state.beginRespondingTo(context)
         }
         state.prepareGuidedFlow()
         state.reset(to: isSetup ? .setup : .analysis, anchorTime: candle.timestamp, anchorPrice: candle.close)

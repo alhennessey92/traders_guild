@@ -327,6 +327,11 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
                 throw XCTSkip("no software keyboard on this simulator")
             }
             settle(1.2)
+            // With a hardware keyboard connected the simulator shows only a
+            // shortcut bar (or nothing): there is no lift to measure.
+            guard keyboard.frame.height >= 150, keyboard.frame.minY < app.frame.maxY - 1 else {
+                throw XCTSkip("hardware keyboard: no software keyboard on screen (height \(Int(keyboard.frame.height)))")
+            }
             if cycle == 1 { screenshot("p1-typing") }
             let entry = segment(since: mark, "typing-entry-\(cycle)")
             XCTAssertEqual(Set(entry.map(\.ctl)).count, 1, "one presentation")

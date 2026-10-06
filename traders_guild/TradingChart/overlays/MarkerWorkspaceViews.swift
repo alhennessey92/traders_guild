@@ -49,7 +49,7 @@ struct MarkerWorkspaceContent: View {
                 editorField("https://example.com/source", text: $placementState.workspace.editorText, keyboard: .URL)
                     .accessibilityIdentifier("workspace.sourceURL")
                 editorField("Title (optional)", text: $placementState.workspace.editorTitle)
-                Text("Use a complete http or https link.").font(.caption).foregroundColor(AppColors.greyText)
+                Text("Use a complete http or https link.").font(.caption).foregroundColor(AppColors.overlayPanelSecondaryText)
             case .noteEditor:
                 MarkerWorkspaceTextInput(placeholder: "Chart note", text: $placementState.workspace.editorText, placementState: placementState, fieldID: "contextNote")
                     .accessibilityIdentifier("workspace.note")
@@ -81,7 +81,7 @@ struct MarkerWorkspaceContent: View {
 
     private var contextSummary: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Optional. Your context stays with this draft.").font(.footnote).foregroundColor(AppColors.greyText)
+            Text("Optional. Your context stays with this draft.").font(.footnote).foregroundColor(AppColors.overlayPanelSecondaryText)
             ForEach(contextDrafts) { draft in
                 HStack {
                     Button { edit(draft) } label: {
@@ -171,7 +171,7 @@ struct MarkerWorkspaceContent: View {
     private var drawingEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Adjust this drawing on the chart. Done keeps it; Cancel restores it.")
-                .font(.footnote).foregroundColor(AppColors.greyText)
+                .font(.footnote).foregroundColor(AppColors.overlayPanelSecondaryText)
             routeRow("Work on chart", icon: "chart.xyaxis.line") { onBeginInteractiveDrawing?() }
             if let id = placementState.drawingSession.editingDraftId {
                 if let draft = placementState.components.first(where: { $0.id == id }),
@@ -200,7 +200,7 @@ struct MarkerWorkspaceContent: View {
 
     private var timeframePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Up to two supporting timeframes.").font(.caption).foregroundColor(AppColors.greyText)
+            Text("Up to two supporting timeframes.").font(.caption).foregroundColor(AppColors.overlayPanelSecondaryText)
             ForEach(RLChartTimeframe.allCases, id: \.rawValue) { timeframe in
                 let value = timeframe.toBackendString()
                 let linked = placementState.isTimeframeLinked(value)

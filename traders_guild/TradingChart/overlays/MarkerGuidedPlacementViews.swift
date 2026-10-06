@@ -51,7 +51,7 @@ struct MarkerGuidedCompactDock: View {
                         .lineLimit(1)
                     Text(progress)
                         .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -91,6 +91,8 @@ struct MarkerGuidedPlacementPanel: View {
     @ObservedObject var placementState: MarkerPlacementState
     /// The author: the viewer, who is placing it.
     let author: MarkerAvatarIdentity
+    /// "@name", as the guild sees it on the post.
+    var authorHandle: String? = nil
     let guildName: String?
     let currentChartTimeframe: RLChartTimeframe?
     var activeChartIndicators: [IndicatorPayload] = []
@@ -99,6 +101,10 @@ struct MarkerGuidedPlacementPanel: View {
     var onBeginInteractiveDrawing: (() -> Void)?
     var onShowChart: (() -> Void)? = nil
     var viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
+    /// Also post a new marker to the guild's Discord (Review), when the
+    /// guild has a usable channel.
+    var discordGuildId: UUID? = nil
+    var loadDiscordChannels: (() async -> Void)? = nil
 
     @State private var pendingChange: PendingChange?
     /// The optional title field, revealed on request — or already, when the
@@ -186,6 +192,7 @@ struct MarkerGuidedPlacementPanel: View {
             set: { placementState.workspace.scrollAnchors[destination] = $0 }
         ))
         .scrollDismissesKeyboard(.interactively)
+        .accessibilityIdentifier("guided.screen")
     }
 
     /// VoiceOver hears the new screen's name once it has settled.
@@ -211,17 +218,29 @@ struct MarkerGuidedPlacementPanel: View {
 
     // MARK: Header
 
+    /// The task's face and the screen's name. The header never moves: only
+    /// its title changes, cross-fading as the screen below slides, the way a
+    /// navigation bar does. Each screen therefore starts with its content.
     private var taskHeader: some View {
-        HStack(spacing: 10) {
+        let destination = placementState.workspaceDestination
+        return HStack(spacing: 12) {
             UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
                 .accessibilityHidden(true)
                 // Analysis ↔ Question recolours the face's ring in place.
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: placementState.intent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(placementState.guidedToolbarTitle ?? "New marker").font(.subheadline.weight(.bold))
-                Text(placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName))
-                    .font(.caption).foregroundColor(AppColors.greyText)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(headerTitle(destination))
+                    .font(.headline.weight(.bold))
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("guided.stepHeader")
+                Text(headerSubtitle(destination))
+                    .font(.caption).foregroundColor(AppColors.overlayPanelSecondaryText)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: destination)
             Spacer(minLength: 0)
             if let onShowChart {
                 Button { dismissKeyboard(); onShowChart() } label: {
@@ -233,18 +252,29 @@ struct MarkerGuidedPlacementPanel: View {
         }.foregroundColor(AppColors.primaryForeground)
     }
 
-    private func stepTitle(_ destination: MarkerWorkspaceDestination) -> String {
+    private var taskTitle: String { placementState.guidedToolbarTitle ?? "New marker" }
+
+    /// Details is the task itself ("New Analysis"); every other screen is
+    /// named, with the task beneath it.
+    private func headerTitle(_ destination: MarkerWorkspaceDestination) -> String {
         switch destination {
-        case .details: return placementState.intent == .setup ? "Setup details" : "Post details"
-        case .review: return "Review"
+        case .details: return taskTitle
+        case .review: return placementState.isGuidedEdit ? "Review changes" : "Review"
         default: return destination.title
         }
     }
 
-    private func stepHeader(_ destination: MarkerWorkspaceDestination) -> some View {
-        Text(stepTitle(destination))
-            .font(.title3.weight(.bold)).foregroundColor(AppColors.primaryForeground)
-            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("guided.stepHeader")
+    private func headerSubtitle(_ destination: MarkerWorkspaceDestination) -> String {
+        guard destination == .details else { return taskTitle }
+        return placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName)
+    }
+
+    /// What VoiceOver hears on arriving at a screen.
+    private func stepTitle(_ destination: MarkerWorkspaceDestination) -> String {
+        switch destination {
+        case .details: return placementState.intent == .setup ? "Setup details" : "Post details"
+        default: return headerTitle(destination)
+        }
     }
 
     // MARK: Details
@@ -253,7 +283,6 @@ struct MarkerGuidedPlacementPanel: View {
     /// and optional reasoning sections.
     private var details: some View {
         VStack(alignment: .leading, spacing: 10) {
-            stepHeader(.details).id("heading")
             responseSection.id("response")
             editRelationship.id("relationship")
             if placementState.isSocialDetails {
@@ -301,7 +330,7 @@ struct MarkerGuidedPlacementPanel: View {
         if remaining > 0 {
             Text("\(remaining) more character\(remaining == 1 ? "" : "s") needed")
                 .font(.caption)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .padding(.leading, 4)
         }
     }
@@ -330,7 +359,7 @@ struct MarkerGuidedPlacementPanel: View {
                     loss: placementState.estimatedTrackingRepLoss
                 ))
                 .font(.caption)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -400,8 +429,10 @@ struct MarkerGuidedPlacementPanel: View {
     @ViewBuilder
     private var responseSection: some View {
         if let context = placementState.linkSession.context {
-            MarkerLinkPlacementBanner(
+            MarkerWorkspaceResponseBanner(
                 context: context,
+                author: authorBadgeIdentity,
+                intent: placementState.intent,
                 failureMessage: placementState.linkSession.lastFailureMessage,
                 onChangeRelationship: { placementState.openWorkspace(.relationship) },
                 onRemove: { placementState.removeLink() }
@@ -428,12 +459,11 @@ struct MarkerGuidedPlacementPanel: View {
 
     private func contextEditor(_ destination: MarkerWorkspaceDestination) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            stepHeader(destination)
             Text(placementState.isGuidedEdit
                  ? "Optional. Nothing changes until you save."
                  : "Optional. Anything you add stays with your draft.")
                 .font(.footnote)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
             MarkerWorkspaceContent(placementState: placementState, currentChartTimeframe: currentChartTimeframe,
                                    activeChartIndicators: activeChartIndicators, activeChartDrawings: activeChartDrawings,
                                    onSelectTimeframe: onSelectTimeframe, onBeginInteractiveDrawing: onBeginInteractiveDrawing,
@@ -446,74 +476,114 @@ struct MarkerGuidedPlacementPanel: View {
     /// The post as the guild will read it, then where it goes.
     private var review: some View {
         VStack(alignment: .leading, spacing: 14) {
-            stepHeader(.review)
             // An edit leads with what saving changes, so it is in view at
-            // half height; the post as it will read follows.
+            // the small height; the post as it will read follows.
             if placementState.isGuidedEdit {
                 editChanges
             }
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
-                        .accessibilityHidden(true)
-                    MarkerGuidedIntentTag(intent: placementState.intent)
-                    if let timeframe = currentChartTimeframe {
-                        Text("\(timeframe.displayName) chart")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(AppColors.greyText)
-                            .accessibilityLabel("\(timeframe.displayName) chart")
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                if let context = placementState.linkSession.context {
-                    MarkerGuidedReviewLine(icon: context.relationship.icon, text: context.bannerSentence)
-                } else if placementState.isGuidedEdit, let sentence = placementState.guidedEditOriginal?.linkSentence {
-                    MarkerGuidedReviewLine(icon: "arrow.triangle.branch", text: sentence)
-                }
-
-                let title = placementState.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !title.isEmpty {
-                    Text(title)
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(AppColors.primaryForeground)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                let text = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty {
-                    Text(text)
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.primaryForeground)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if placementState.intent == .setup {
-                    setupReview
-                } else if let anchor = placementState.anchorDraft,
-                          let time = anchor.payload.anchorTime {
-                    MarkerGuidedReviewLine(
-                        icon: "mappin.and.ellipse",
-                        text: "At \(MarkerGuidedFormat.displayPrice(anchor.payload.levelPrice)) · \(time.formatted(date: .abbreviated, time: .shortened))"
-                    )
-                }
-
-                if let summary = MarkerGuidedFormat.contextSummary(placementState.components) {
-                    MarkerGuidedReviewLine(icon: "plus.viewfinder", text: summary)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(MarkerGuidedCardBackground())
+            reviewPreview
 
             Text(placementState.isGuidedEdit
                  ? MarkerGuidedFormat.editAudience(guildName)
                  : MarkerGuidedFormat.audience(guildName))
                 .font(.footnote)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // A new post can go to the guild's Discord as well; an edit has
+            // already been posted.
+            if !placementState.isGuidedEdit {
+                MarkerDiscordOptInSection(placementState: placementState, guildId: discordGuildId)
+                    .accessibilityIdentifier("guided.discord")
+            }
 
             submissionStatus
         }
+        .task { await loadDiscordChannels?() }
+    }
+
+    /// Laid out as a member reads the marker when they tap it: the face, who
+    /// and what, how it relates, then the title and the words. Framed, so it
+    /// reads as the preview it is.
+    private var reviewPreview: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .large, avatar: authorBadgeIdentity)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(authorHandle ?? "You")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .lineLimit(1)
+                    let metaLayout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                        : AnyLayout(HStackLayout(spacing: 6))
+                    metaLayout {
+                        Text(placementState.intent.displayName)
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(placementState.intent.color)
+                        Text(reviewMetaLine)
+                            .font(.caption)
+                            .foregroundColor(AppColors.overlayPanelSecondaryText)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if let context = placementState.linkSession.context {
+                MarkerGuidedReviewLine(icon: context.relationship.icon, text: context.bannerSentence)
+            } else if placementState.isGuidedEdit, let sentence = placementState.guidedEditOriginal?.linkSentence {
+                MarkerGuidedReviewLine(icon: "arrow.triangle.branch", text: sentence)
+            }
+
+            let title = placementState.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty || !text.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !title.isEmpty {
+                        Text(title)
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !text.isEmpty {
+                        Text(text)
+                            .font(.body)
+                            .foregroundColor(AppColors.primaryForeground)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            if placementState.intent == .setup {
+                setupReview
+            } else if let anchor = placementState.anchorDraft,
+                      let time = anchor.payload.anchorTime {
+                MarkerGuidedReviewLine(
+                    icon: "mappin.and.ellipse",
+                    text: "At \(MarkerGuidedFormat.displayPrice(anchor.payload.levelPrice)) · \(time.formatted(date: .abbreviated, time: .shortened))"
+                )
+            }
+
+            if let summary = MarkerGuidedFormat.contextSummary(placementState.components) {
+                MarkerGuidedReviewLine(icon: "plus.viewfinder", text: summary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(MarkerGuidedCardBackground())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("guided.reviewPreview")
+    }
+
+    /// "5 Minutes chart · now", as a member sees "· 2 hr. ago".
+    private var reviewMetaLine: String {
+        var parts: [String] = []
+        if let timeframe = currentChartTimeframe { parts.append("\(timeframe.displayName) chart") }
+        parts.append(placementState.isGuidedEdit ? "edited now" : "now")
+        return parts.joined(separator: " · ")
     }
 
     /// What saving changes, line by line.
@@ -545,7 +615,7 @@ struct MarkerGuidedPlacementPanel: View {
                 Spacer()
                 Text(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
             }
             MarkerGuidedValueRow(title: "Entry", value: MarkerGuidedFormat.displayPrice(placementState.guidedSetupEntryPrice),
                                  detail: placementState.isGuidedEdit ? "Set when posted" : "Latest price when you post",
@@ -574,7 +644,7 @@ struct MarkerGuidedPlacementPanel: View {
                 ProgressView()
                 Text(placementState.isGuidedEdit ? "Saving…" : "Posting…")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
             }
         case .failed(let message):
             HStack(alignment: .top, spacing: 8) {
@@ -587,7 +657,7 @@ struct MarkerGuidedPlacementPanel: View {
                         .foregroundColor(AppColors.primaryForeground)
                     Text(placementState.isGuidedEdit ? "\(message) Your changes are kept." : "\(message) Your draft is saved.")
                         .font(.caption)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
                     if placementState.guidedTrackedSetupLevelsNeedAdjusting {
                         Button("Adjust levels") {
                             placementState.backToDetails()
@@ -609,6 +679,100 @@ struct MarkerGuidedPlacementPanel: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("guided.submissionFailed")
         }
+    }
+}
+
+// MARK: - Response banner
+
+/// What a response answers, drawn as the chart draws it: the parent's face,
+/// tethered in the relationship's colour to yours. Your face wears the ring
+/// of what you are posting, so turning the response into a Setup shows here
+/// as well as on the chart.
+struct MarkerWorkspaceResponseBanner: View {
+    let context: MarkerLinkContext
+    let author: MarkerAvatarIdentity
+    let intent: RLMarkerIntent
+    let failureMessage: String?
+    let onChangeRelationship: () -> Void
+    let onRemove: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var accent: Color { context.relationship.accentColor }
+
+    private var detail: String {
+        context.parentTimeframe.map { "Parent on \($0.displayName) · Shared with the guild" } ?? "Shared with the guild"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                tether
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(context.bannerSentence)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(AppColors.primaryForeground)
+                        .lineLimit(2)
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .lineLimit(1)
+                }
+                .accessibilityElement(children: .combine)
+                Spacer(minLength: 0)
+                Button(action: onChangeRelationship) {
+                    Text("Change")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(accent)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Change relationship")
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .frame(width: 30, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove link")
+            }
+            if let failureMessage {
+                Text("\(failureMessage). Your response is still here — try again.")
+                    .font(.caption2)
+                    .foregroundColor(AppColors.statusNegative)
+            }
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(accent.opacity(0.10))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(accent.opacity(0.30), lineWidth: 1))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("guided.responseBanner")
+    }
+
+    /// Parent → relationship → you, as the chart's branch tether.
+    private var tether: some View {
+        HStack(spacing: 0) {
+            UnifiedMarkerBadge(intent: context.parentIntent ?? .analysis, sizeToken: .small,
+                               avatar: context.parentAvatar ?? .none)
+            ZStack {
+                Capsule().fill(accent).frame(width: 24, height: 2)
+                Image(systemName: context.relationship.icon)
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(accent))
+            }
+            UnifiedMarkerBadge(intent: intent, sizeToken: .small, avatar: author)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: intent)
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -653,7 +817,7 @@ struct MarkerGuidedPlacementBar: View {
                         && (placementState.setupSide == .inconsistent || placementState.setupSide == .invalidPrice)
                     Text(prompt)
                         .font(.footnote)
-                        .foregroundColor(isProblem ? AppColors.statusWarning : AppColors.greyText)
+                        .foregroundColor(isProblem ? AppColors.statusWarning : AppColors.overlayPanelSecondaryText)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                         .accessibilityIdentifier("guided.nextStep")
@@ -817,14 +981,14 @@ struct MarkerGuidedEntryCard: View {
                             .foregroundColor(AppColors.primaryForeground)
                         Text(subtitle)
                             .font(.caption)
-                            .foregroundColor(AppColors.greyText)
+                            .foregroundColor(AppColors.overlayPanelSecondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: isCurrent ? "checkmark" : "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(isCurrent ? intent.color : AppColors.greyText)
+                    .foregroundColor(isCurrent ? intent.color : AppColors.overlayPanelSecondaryText)
                     .accessibilityHidden(true)
             }
             .padding(14)
@@ -877,7 +1041,7 @@ struct MarkerGuidedSectionTitle: View {
         Text(title.uppercased())
             .font(.caption2.weight(.bold))
             .tracking(0.8)
-            .foregroundColor(AppColors.greyText)
+            .foregroundColor(AppColors.overlayPanelSecondaryText)
     }
 }
 
@@ -897,7 +1061,7 @@ struct MarkerGuidedTypeRow: View {
                         .foregroundColor(AppColors.primaryForeground)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 0)
@@ -925,19 +1089,41 @@ struct MarkerGuidedTypePicker: View {
     let selected: RLMarkerIntent
     let onSelect: (RLMarkerIntent) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Each type wears its marker badge: the glyph and colour its ring has
+    /// on the chart. The chosen one fills, as the face's ring recolours.
     var body: some View {
         HStack(spacing: 8) {
             ForEach(intents, id: \.self) { intent in
+                let isSelected = selected == intent
                 Button { onSelect(intent) } label: {
-                    Text(intent.displayName).font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Capsule().fill(selected == intent ? intent.color.opacity(0.2) : AppColors.whiteText.opacity(0.06)))
+                    HStack(spacing: 8) {
+                        Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(isSelected ? .white : intent.color)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(isSelected ? intent.color : intent.color.opacity(0.16)))
+                            .accessibilityHidden(true)
+                        Text(intent.displayName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                    }
+                    .padding(.leading, 7)
+                    .padding(.trailing, 16)
+                    .frame(minHeight: 40)
+                    .background(Capsule().fill(isSelected ? intent.color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
+                    .overlay(Capsule().stroke(isSelected ? intent.color.opacity(0.75) : Color.clear, lineWidth: 1.5))
+                    .padding(.vertical, 2)
+                    .contentShape(Capsule())
                 }
-                .buttonStyle(.plain).foregroundColor(AppColors.primaryForeground)
-                .accessibilityAddTraits(selected == intent ? .isSelected : [])
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
                 .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
             }
+            Spacer(minLength: 0)
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Type: \(selected.displayName)")
         .accessibilityIdentifier("guided.intentPicker")
@@ -970,14 +1156,14 @@ struct MarkerGuidedOptionalRow: View {
                     if let detail {
                         Text(detail)
                             .font(.caption)
-                            .foregroundColor(AppColors.greyText)
+                            .foregroundColor(AppColors.overlayPanelSecondaryText)
                             .lineLimit(2)
                     }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: trailingSymbol)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
@@ -1002,7 +1188,7 @@ struct MarkerGuidedSetupLevelsCard: View {
                 Spacer()
                 Text(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))
                     .font(.system(.caption, design: .monospaced).weight(.semibold))
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
                     .accessibilityLabel("Risk to reward, \(MarkerGuidedFormat.riskReward(placementState.guidedSetupRiskReward))")
             }
             MarkerGuidedValueRow(
@@ -1015,7 +1201,7 @@ struct MarkerGuidedSetupLevelsCard: View {
             MarkerGuidedLevelField(title: "Stop Loss", type: .levelSl, placementState: placementState)
             Text(placementState.isGuidedEdit ? "Type a new take profit or stop loss." : "Drag the lines on the chart, or type a price.")
                 .font(.caption)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
@@ -1046,7 +1232,7 @@ struct MarkerGuidedLockedSetupCard: View {
             if let explanation = placementState.guidedEditLockExplanation {
                 Text(explanation)
                     .font(.caption)
-                    .foregroundColor(AppColors.greyText)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -1085,21 +1271,6 @@ struct MarkerGuidedExtraChip: View {
 }
 
 /// The type, in its colour, at the top of the review.
-struct MarkerGuidedIntentTag: View {
-    let intent: RLMarkerIntent
-
-    var body: some View {
-        Label(intent.displayName, systemImage: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-            .font(.caption.weight(.bold))
-            .foregroundColor(intent.color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(intent.color.opacity(0.15)))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(intent.displayName)
-    }
-}
-
 struct MarkerGuidedTextField: View {
     let placeholder: String
     @Binding var text: String
@@ -1143,7 +1314,7 @@ struct MarkerGuidedValueRow: View {
                 if let detail {
                     Text(detail)
                         .font(.caption2)
-                        .foregroundColor(AppColors.greyText)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
                 }
             }
             if !dynamicTypeSize.isAccessibilitySize {
@@ -1219,7 +1390,7 @@ struct MarkerSetupSidePill: View {
             case .short?: return ("SHORT", AppColors.statusNegative)
             case .inconsistent?: return ("TP / SL same side", AppColors.statusWarning)
             case .invalidPrice?: return ("Check your prices", AppColors.statusWarning)
-            case nil: return ("Set TP and SL", AppColors.greyText)
+            case nil: return ("Set TP and SL", AppColors.overlayPanelSecondaryText)
             }
         }()
         Text(text)
@@ -1237,11 +1408,11 @@ struct MarkerUntrackedSetupNotice: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: RLTrackingState.draft.icon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .accessibilityHidden(true)
             Text("Untracked: this Setup won't be monitored and doesn't count toward accuracy or reputation.")
                 .font(.caption)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
@@ -1259,14 +1430,14 @@ struct MarkerGuidedReviewLine: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .frame(width: 16)
                 // Decorative: the text says it. Without this VoiceOver reads
                 // symbol names such as "plus.viewfinder".
                 .accessibilityHidden(true)
             Text(text)
                 .font(.caption)
-                .foregroundColor(AppColors.greyText)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)

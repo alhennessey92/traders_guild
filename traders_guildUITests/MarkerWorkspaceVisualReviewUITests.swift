@@ -1,0 +1,88 @@
+import XCTest
+
+/// P3 visual evidence: each Post, Review and response screen as the owner
+/// will see it on device, at the height the workspace opens at and raised.
+/// Screenshots are attached to the result bundle; the assertions only prove
+/// each screen is the one named.
+final class MarkerWorkspaceVisualReviewUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws { continueAfterFailure = false }
+
+    private func launchMain(setup: Bool = false) {
+        app = XCUIApplication()
+        var arguments = ["-MarkerMainViewSheetFixture", "-TGAvatarMarkersExperiment", "YES", "-MarkerMainViewFilledNote"]
+        if setup { arguments.append("-MarkerMainViewSetupFixture") }
+        app.launchArguments = arguments
+        app.launch()
+        XCTAssertTrue(app.staticTexts["mainFixture.geometry"].waitForExistence(timeout: 20))
+        settle(1.2)
+    }
+
+    private func launchHarness(_ scenario: String) {
+        app = XCUIApplication()
+        app.launchArguments = ["-MarkerGuidedCreationFixture", scenario, "-MarkerGuidedSheetFixture", "YES",
+                               "-TGAvatarMarkersExperiment", "YES"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Fixture")).firstMatch
+            .waitForExistence(timeout: 15))
+        settle(1.2)
+    }
+
+    private func settle(_ seconds: TimeInterval = 0.8) {
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: seconds)
+    }
+
+    private func shot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func header() -> String { app.staticTexts["guided.stepHeader"].label }
+
+    private func tap(_ id: String) {
+        let button = app.buttons[id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), id)
+        app.revealInMarkerWorkspace(button)
+        button.tap()
+        settle()
+    }
+
+    func testPostScreens() {
+        launchMain()
+        XCTAssertEqual(header(), "New Analysis")
+        shot("p3-analysis-small")
+        tap("guided.intent.question")
+        shot("p3-question-small")
+        tap("guided.intent.analysis")
+        app.raiseMarkerSheet()
+        settle()
+        shot("p3-analysis-raised")
+        tap("guided.review")
+        XCTAssertEqual(header(), "Review")
+        shot("p3-review")
+    }
+
+    func testSetupScreens() {
+        launchMain(setup: true)
+        XCTAssertEqual(header(), "New Setup")
+        shot("p3-setup-small")
+        app.raiseMarkerSheet()
+        settle()
+        shot("p3-setup-raised")
+        tap("guided.review")
+        shot("p3-setup-review")
+    }
+
+    func testResponseScreens() {
+        launchHarness("responseDetails")
+        XCTAssertTrue(app.otherElements["guided.responseBanner"].waitForExistence(timeout: 5))
+        shot("p3-response-small")
+        tap("guided.convertResponse")
+        XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5))
+        settle()
+        shot("p3-response-setup")
+    }
+}

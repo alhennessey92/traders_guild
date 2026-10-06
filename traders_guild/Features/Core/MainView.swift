@@ -130,25 +130,22 @@ struct MainView: View {
         .presentationBackgroundInteraction(.enabled)
         .interactiveDismissDisabled(true)
         .presentationContentInteraction(.resizes)
+        // The marker workspace wears the same sheet as the rest of the app
+        // (owner, 6 Oct: the opaque fill read darker than every other sheet).
         .presentationBackground {
-            if MarkerAvatarExperiment.isEnabled &&
-                (placementState.isGuidedFlowActive || isGuidedAddSheet) {
-                AppColors.sheetBackground
-            } else {
-                ZStack {
-                    Color.clear
-                        .background(.ultraThinMaterial)
-                    LinearGradient(
-                        colors: [
-                            AppColors.sheetBackground.opacity(0.7),
-                            AppColors.drawerBackground.opacity(0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
-                        .opacity(0.012)
-                }
+            ZStack {
+                Color.clear
+                    .background(.ultraThinMaterial)
+                LinearGradient(
+                    colors: [
+                        AppColors.sheetBackground.opacity(0.7),
+                        AppColors.drawerBackground.opacity(0.5)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                PatternOverlay(patternType: .honeycomb, hexSize: 16, strokeColor: AppColors.patternStroke)
+                    .opacity(0.012)
             }
         }
     }
@@ -294,13 +291,6 @@ struct MainView: View {
     @StateObject private var timeframePanelManager = TimeframePanelManager()
     @State private var selectedViewingMarkerAuthorRoute: MarkerAuthorProfileRoute?
     @State private var markerAuthorProfileDetent: PresentationDetent = .fraction(0.6)
-
-    /// Marker work uses a chart dock and a step-sized working state. Other
-    /// sheet content keeps its established detents.
-    private var isGuidedAddSheet: Bool {
-        MarkerAvatarExperiment.isEnabled && chartSheetTab == .markers && chartMarkerPrimaryTab == .add
-            && !chartControlVM.isMarkerPlacementMode && chartViewModel.selectedMarkerForSheet == nil
-    }
 
     /// The guided workspace owns the sheet: posting, responding or editing.
     private var isGuidedAuthoring: Bool {
@@ -3652,6 +3642,7 @@ struct ChartBottomSheet: View {
                 MarkerGuidedPlacementPanel(
                     placementState: placementState,
                     author: guidedPlacementAuthor,
+                    authorHandle: rlAppState.currentUser.map { $0.username.hasPrefix("@") ? $0.username : "@\($0.username)" },
                     guildName: rlAppState.currentGuild?.name,
                     currentChartTimeframe: chartViewModel.currentTimeframe,
                     activeChartIndicators: indicators,
@@ -3661,7 +3652,9 @@ struct ChartBottomSheet: View {
                     },
                     onBeginInteractiveDrawing: { sheetDetents.collapse() },
                     onShowChart: { sheetDetents.collapse() },
-                    viewportAnchorProvider: viewportAnchorProvider
+                    viewportAnchorProvider: viewportAnchorProvider,
+                    discordGuildId: rlAppState.currentGuild?.id,
+                    loadDiscordChannels: { await loadGuidedDiscordChannels() }
                 )
             } else {
                 MarkerPlacementPanel(
@@ -3686,6 +3679,17 @@ struct ChartBottomSheet: View {
     }
 
     /// The viewer, who is the author of whatever they are placing.
+    /// Where a new guided post can also go. Best-effort and silent, as in
+    /// the legacy composer: Discord being unreachable never stops a post.
+    /// Written only when it changes: the draft redraws the chart.
+    private func loadGuidedDiscordChannels() async {
+        var channels: [RLGuildDiscordChannelDTO] = []
+        if let guildId = rlAppState.currentGuild?.id {
+            channels = (try? await rlAppState.realApi.getGuildDiscordChannels(guildId: guildId))?.channels ?? []
+        }
+        if placementState.discordChannels != channels { placementState.discordChannels = channels }
+    }
+
     private var guidedPlacementAuthor: MarkerAvatarIdentity {
         var identity = MarkerAvatarIdentity.forCurrentUser(
             username: rlAppState.currentUser?.username,
@@ -3855,19 +3859,19 @@ struct ChartBottomSheet: View {
               marker.guildId == rlAppState.currentGuild?.id,
               marker.symbolId == chartViewModel.currentSymbol?.id else { return }
 
-        placementState.beginRespondingTo(
-            MarkerLinkContext(
-                parentMarkerId: marker.id,
-                parentGuildId: marker.guildId,
-                parentSymbolId: marker.symbolId,
-                parentCandleTimestamp: marker.candleTimestamp,
-                parentAuthorDisplayText: marker.author.username,
-                parentTitle: marker.title,
-                parentIntent: marker.intent,
-                parentTimeframe: RLChartTimeframe.fromBackendString(marker.timeframe),
-                relationship: relationship
-            )
+        var context = MarkerLinkContext(
+            parentMarkerId: marker.id,
+            parentGuildId: marker.guildId,
+            parentSymbolId: marker.symbolId,
+            parentCandleTimestamp: marker.candleTimestamp,
+            parentAuthorDisplayText: marker.author.username,
+            parentTitle: marker.title,
+            parentIntent: marker.intent,
+            parentTimeframe: RLChartTimeframe.fromBackendString(marker.timeframe),
+            relationship: relationship
         )
+        context.parentAvatar = MarkerAvatarIdentity.forMarker(marker)
+        placementState.beginRespondingTo(context)
 
         // With the avatar prototype on, a response is composed in the guided
         // flow; it still starts as Analysis, and "Change type" can make it a

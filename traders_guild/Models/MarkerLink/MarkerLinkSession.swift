@@ -23,6 +23,9 @@ struct MarkerLinkContext: Equatable {
     let parentTitle: String?
     let parentIntent: RLMarkerIntent?
     let parentTimeframe: RLChartTimeframe?
+    /// The parent author's face, for the v1.5 workspace's response banner.
+    /// Client-only; never sent.
+    var parentAvatar: MarkerAvatarIdentity? = nil
 
     /// Creation only ever uses a relationship this build understands; the
     /// tolerant wrapper exists for *reading* values a newer server may invent.
