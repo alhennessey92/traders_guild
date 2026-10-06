@@ -10,12 +10,38 @@ enum MarkerMainViewSheetFixture {
         false
         #endif
     }
+    /// Seeds the fixture draft as a Setup instead of an Analysis.
+    static var seedsSetup: Bool {
+        #if DEBUG || TG_ISOLATED_DEV
+        enabled && ProcessInfo.processInfo.arguments.contains("-MarkerMainViewSetupFixture")
+        #else
+        false
+        #endif
+    }
     static var anyMarkerFixture: Bool {
         #if DEBUG || TG_ISOLATED_DEV
         let arguments = ProcessInfo.processInfo.arguments
         return ["-MarkerMainViewSheetFixture", "-MarkerSheetShellFixture", "-MarkerGuidedCreationFixture", "-MarkerViewingFixture", "-MarkerLinkFixtures"].contains { arguments.contains($0) }
         #else
         return false
+        #endif
+    }
+    /// Lays the fixture's draft over the chart's own seeding. A filled note
+    /// (`-MarkerMainViewFilledNote`) makes Review available without typing.
+    @MainActor
+    static func seed(_ state: MarkerPlacementState, intent: RLMarkerIntent) {
+        #if DEBUG || TG_ISOLATED_DEV
+        state.reset(to: intent, anchorTime: Date(timeIntervalSince1970: 1770000000), anchorPrice: 63920)
+        if intent == .setup {
+            state.upsertComponent(.levelTp, payload: .levelTp(LevelPayload(price: 65000, label: "TP")))
+            state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: 63000, label: "SL")))
+            state.trackingEnabled = true
+            state.recordSetupLevelSeed()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-MarkerMainViewFilledNote") {
+            state.note = intent == .setup ? "Reclaim of the range low." : "Range low holds into the open."
+        }
+        state.captureDraftBaseline()
         #endif
     }
     static var user: RLUserDTO? {
@@ -40,9 +66,6 @@ struct MarkerSheetGeometry: Equatable {
         guard !intersection.isNull, intersection.width >= windowFrame.width * 0.9,
               intersection.maxY >= windowFrame.maxY - 1 else { return 0 }
         return intersection.height
-    }
-    var keyboardWorkingBudget: CGFloat {
-        max(160, windowFrame.height - keyboardOverlap - safeAreaInsets.top - safeAreaInsets.bottom - 12)
     }
     var visibleSheetHeight: CGFloat {
         let bottom = keyboardOverlap > 0 ? min(sheetFrame.maxY, keyboardFrame.minY) : sheetFrame.maxY
@@ -113,13 +136,7 @@ struct MarkerSheetGeometryProbe: UIViewRepresentable {
         override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); sample() }
         private func sample() {
             guard let window else { return }
-            var responder: UIResponder? = self
-            var controller: UIViewController?
-            while let next = responder {
-                if let candidate = next as? UIViewController { controller = candidate; break }
-                responder = next.next
-            }
-            while let parent = controller?.parent { controller = parent }
+            let controller = MarkerSheetTraceProbe.presentedController(from: self)
             let keyboard = keyboardScreenFrame == .zero ? CGRect.zero
                 : window.convert(keyboardScreenFrame, from: window.screen.coordinateSpace)
             let value = MarkerSheetGeometry(
@@ -132,29 +149,205 @@ struct MarkerSheetGeometryProbe: UIViewRepresentable {
         }
     }
 }
+
+/// Fixture and trace instrumentation only. Production builds have neither
+/// switch, so no probe is mounted and nothing is sampled.
 struct MarkerSheetGeometryObserver: ViewModifier {
-    @ObservedObject var model: MarkerSheetPresentationModel
     let selection: PresentationDetent
-    var enabled: Bool = true
+    var route: String = ""
+    var mode: String = ""
+    @State private var geometry = MarkerSheetGeometry()
+
+    private var showsReadout: Bool { MarkerMainViewSheetFixture.enabled }
+
     func body(content: Content) -> some View {
-        content.background {
-            if enabled {
-                MarkerSheetGeometryProbe(onMeasure: { value in
-                    model.updateGeometry(value, selection: selection)
-                    if MarkerMainViewSheetFixture.enabled {
+        content
+            .background {
+                if showsReadout {
+                    MarkerSheetGeometryProbe(onMeasure: { value in
+                        geometry = value
                         print("[MarkerSheetGeometry] selected:\(selection) \(value.summary)")
-                    }
-                }, selectionID: "\(selection)").allowsHitTesting(false).accessibilityHidden(true)
+                    }, selectionID: "\(selection)").allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+            .modifier(MarkerSheetTraceModifier(selection: selection, route: route, mode: mode))
+            .overlay(alignment: .topTrailing) {
+                if showsReadout {
+                    Text("selected:\(selection) \(geometry.summary)")
+                        .font(.system(size: 7, design: .monospaced)).foregroundStyle(.yellow)
+                        .padding(2).background(.black.opacity(0.8))
+                        .accessibilityIdentifier("mainFixture.geometry")
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
+// MARK: - Frame trace (fixture-only)
+
+/// Records the sheet's on-screen top edge every display frame, with the
+/// presenting controller's identity, the selected detent, the workspace route
+/// and whether the collapsed bar is showing. A UI test reads it back to prove
+/// that ordinary navigation never drops, hides or re-presents the sheet.
+/// Enabled only by `-MarkerSheetTrace` in DEBUG or isolated-DEV builds.
+@MainActor
+final class MarkerSheetTrace: NSObject, ObservableObject {
+    static let shared = MarkerSheetTrace()
+    static var isEnabled: Bool {
+        #if DEBUG || TG_ISOLATED_DEV
+        ProcessInfo.processInfo.arguments.contains("-MarkerSheetTrace")
+        #else
+        false
+        #endif
+    }
+
+    struct Sample: Codable, Equatable {
+        var t: Double
+        var top: Int
+        var ctl: Int
+        var sel: String
+        var route: String
+        var mode: String
+        var dock: Bool
+    }
+
+    @Published private(set) var json = "{}"
+    var selection = ""
+    var route = ""
+    var mode = ""
+    var dockVisible = false
+
+    private var samples: [Sample] = []
+    private var controllers: [ObjectIdentifier] = []
+    private weak var probe: UIView?
+    private var link: CADisplayLink?
+    private let start = CACurrentMediaTime()
+    private var lastPublish: CFTimeInterval = 0
+    private var dirty = false
+
+    func attach(_ view: UIView) {
+        probe = view
+        guard link == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    @objc private func tick() {
+        let now = CACurrentMediaTime()
+        var top = -1
+        var controllerIndex = -1
+        if let probe, let window = probe.window,
+           let controller = MarkerSheetTraceProbe.presentedController(from: probe) {
+            let layer = controller.view.layer.presentation() ?? controller.view.layer
+            let windowLayer = window.layer.presentation() ?? window.layer
+            top = Int(layer.convert(layer.bounds, to: windowLayer).minY.rounded())
+            let id = ObjectIdentifier(controller)
+            if let index = controllers.firstIndex(of: id) { controllerIndex = index } else {
+                controllers.append(id)
+                controllerIndex = controllers.count - 1
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if MarkerMainViewSheetFixture.enabled {
-                Text("selected:\(selection) \(model.geometry.summary)")
-                    .font(.system(size: 7, design: .monospaced)).foregroundStyle(.yellow)
-                    .padding(2).background(.black.opacity(0.8))
-                    .accessibilityIdentifier("mainFixture.geometry")
-                    .allowsHitTesting(false)
+        let sample = Sample(t: ((now - start) * 1000).rounded() / 1000, top: top, ctl: controllerIndex,
+                            sel: selection, route: route, mode: mode, dock: dockVisible)
+        if let last = samples.last, last.top == sample.top, last.ctl == sample.ctl, last.sel == sample.sel,
+           last.route == sample.route, last.mode == sample.mode, last.dock == sample.dock {
+            // Unchanged: only the reader's "now" advances.
+        } else {
+            samples.append(sample)
+            if samples.count > 600 { samples.removeFirst(samples.count - 600) }
+            dirty = true
+        }
+        if (dirty && now - lastPublish > 0.1) || now - lastPublish > 0.25 {
+            lastPublish = now
+            dirty = false
+            let payload = Payload(now: ((now - start) * 1000).rounded() / 1000, samples: samples)
+            if let data = try? JSONEncoder().encode(payload) {
+                json = String(decoding: data, as: UTF8.self)
             }
         }
+    }
+
+    private struct Payload: Codable {
+        let now: Double
+        let samples: [Sample]
+    }
+}
+
+/// Mounts the display-link probe inside the sheet and exposes the trace to
+/// UI tests as an accessibility value.
+private struct MarkerSheetTraceModifier: ViewModifier {
+    let selection: PresentationDetent
+    let route: String
+    let mode: String
+
+    func body(content: Content) -> some View {
+        if MarkerSheetTrace.isEnabled {
+            content
+                .background { MarkerSheetTraceProbe().allowsHitTesting(false).accessibilityHidden(true) }
+                .overlay(alignment: .bottomLeading) { MarkerSheetTraceReadout() }
+                .onAppear { update() }
+                .onChange(of: "\(selection)|\(route)|\(mode)") { _, _ in update() }
+        } else {
+            content
+        }
+    }
+
+    private func update() {
+        let trace = MarkerSheetTrace.shared
+        trace.selection = Self.label(selection)
+        trace.route = route
+        trace.mode = mode
+    }
+
+    static func label(_ detent: PresentationDetent) -> String {
+        switch detent {
+        case MarkerSheetDetents.dock: return "dock"
+        case MarkerSheetDetents.browse: return "browse"
+        case MarkerSheetDetents.working: return "working"
+        case MarkerSheetDetents.tall: return "tall"
+        default: return "\(detent)".replacingOccurrences(of: "PresentationDetent", with: "")
+        }
+    }
+}
+
+private struct MarkerSheetTraceReadout: View {
+    @ObservedObject private var trace = MarkerSheetTrace.shared
+    var body: some View {
+        Color.clear
+            .frame(width: 2, height: 2)
+            .accessibilityElement()
+            .accessibilityLabel("Sheet trace")
+            .accessibilityValue(trace.json)
+            .accessibilityIdentifier("sheetTrace")
+    }
+}
+
+struct MarkerSheetTraceProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = TraceView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+    func updateUIView(_ view: UIView, context: Context) {}
+
+    final class TraceView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { MainActor.assumeIsolated { MarkerSheetTrace.shared.attach(self) } }
+        }
+    }
+
+    /// The sheet's own presented controller: the outermost parent of the
+    /// controller that hosts this view.
+    static func presentedController(from view: UIView) -> UIViewController? {
+        var responder: UIResponder? = view
+        var controller: UIViewController?
+        while let next = responder {
+            if let candidate = next as? UIViewController { controller = candidate; break }
+            responder = next.next
+        }
+        while let parent = controller?.parent { controller = parent }
+        return controller
     }
 }

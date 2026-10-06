@@ -53,8 +53,6 @@ struct chartSheetMarkersView: View {
     private var primaryTabSelection: Binding<MarkerSheetPrimaryTab> {
         MarkerAvatarExperiment.isEnabled ? $guidedPrimaryTab : $legacyPrimaryTab
     }
-    var onMeasureAdd: ((MarkerSheetContentMeasurement) -> Void)? = nil
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedSubTab: MarkerSheetSubTab = .liveFeed
     @State private var selectedScopeToggle: MarkerScopeToggle = .everyone
 
@@ -168,10 +166,6 @@ struct chartSheetMarkersView: View {
             }
         }
         .padding(.top, MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? 8 : 15)
-        .modifier(MarkerSheetContentMeasure(
-            revision: "add-\(dynamicTypeSize)",
-            onMeasure: MarkerAvatarExperiment.isEnabled && selectedPrimaryTab == .add ? onMeasureAdd : nil
-        ))
         .task(id: visibleLoadKey) {
             await loadMarkerActivity(forceRefresh: false)
         }

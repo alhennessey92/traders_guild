@@ -10,13 +10,18 @@ struct MarkerWorkspaceContent: View {
     let activeChartDrawings: [ChartDrawing]
     let onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     let onBeginInteractiveDrawing: (() -> Void)?
+    /// The screen this view was created for. A screen being left keeps
+    /// rendering itself while it fades out, never the one replacing it.
+    var destination: MarkerWorkspaceDestination? = nil
+
+    private var current: MarkerWorkspaceDestination { destination ?? placementState.workspaceDestination }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let message = placementState.workspace.message {
                 Text(message).font(.footnote).foregroundColor(AppColors.statusWarning)
             }
-            switch placementState.workspaceDestination {
+            switch current {
             case .context: contextSummary
             case .indicators: indicatorPicker
             case .indicatorSettings:
@@ -236,7 +241,7 @@ struct MarkerWorkspaceContent: View {
 
     private func editorField(_ prompt: String, text: Binding<String>, keyboard: UIKeyboardType = .default) -> some View {
         MarkerWorkspaceLineInput(placeholder: prompt, text: text, placementState: placementState,
-                                 fieldID: "workspace.\(placementState.workspaceDestination.rawValue).\(prompt)", keyboard: keyboard)
+                                 fieldID: "workspace.\(current.rawValue).\(prompt)", keyboard: keyboard)
     }
 
     private func routeRow(_ title: String, icon: String, detail: String? = nil, action: @escaping () -> Void) -> some View {

@@ -11,11 +11,11 @@ struct MarkerSheetShellHarness: View {
     @StateObject private var draft = MarkerPlacementState()
     @StateObject private var overlay = MarkerOverlayState()
     @StateObject private var timeframes = TimeframePanelManager()
-    @StateObject private var presentation = MarkerSheetPresentationModel()
+    @StateObject private var sheetDetents = MarkerSheetDetentController()
     @State private var manager: MarkerManager
     @State private var selectedView: ChartBottomSheet.ChartView = .markers
     @State private var primaryTab: MarkerSheetPrimaryTab = .add
-    @State private var selectedDetent: PresentationDetent = .height(360)
+    @State private var selectedDetent: PresentationDetent = MarkerSheetDetents.working
 
     init() {
         let state = RLAppState(restoreSessionOnInit: false)
@@ -34,17 +34,22 @@ struct MarkerSheetShellHarness: View {
         _chart = StateObject(wrappedValue: model)
     }
 
-    private var surface: MarkerSheetSurface {
-        .resolve(experiment: MarkerAvatarExperiment.isEnabled, placing: controls.isMarkerPlacementMode,
-                 step: draft.guidedStep, intent: draft.intent, view: selectedView.rawValue,
-                 primaryAdd: primaryTab == .add, viewedMarker: chart.selectedMarkerForSheet?.id, workspace: draft.workspaceDestination)
+    /// The surface on screen, in the words the shell test checks.
+    private var route: String {
+        if controls.isMarkerPlacementMode {
+            return draft.isGuidedFlowActive ? "\(draft.workspaceDestination.rawValue)-\(draft.intent.rawValue)" : "placement"
+        }
+        if let viewed = chart.selectedMarkerForSheet?.id { return "view-\(viewed)" }
+        return selectedView == .markers && primaryTab == .add ? "add" : selectedView.rawValue
     }
-    private var policy: MarkerSheetPresentationPolicy { presentation.policy(for: surface) }
+    private var isAuthoring: Bool {
+        MarkerAvatarExperiment.isEnabled && controls.isMarkerPlacementMode && draft.isGuidedFlowActive
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Fixture · real chart sheet · no account/backend")
-            Text("\(surface.measurementID) · supported: \(policy.detents.contains(selectedDetent)) · fit: \(Int(policy.workingHeight)) · available: \(Int(presentation.availableHeight))")
+            Text("\(route) · supported: \(sheetDetents.detents.contains(selectedDetent)) · mode: \(sheetDetents.mode.rawValue) · available: \(Int(sheetDetents.availableHeight))")
                 .accessibilityIdentifier("shell.policy")
             HStack(spacing: 12) {
                 Button("Add") {
@@ -71,16 +76,20 @@ struct MarkerSheetShellHarness: View {
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppColors.sheetBackground.ignoresSafeArea())
-        .modifier(MarkerSheetContainerMeasure(model: presentation))
-        .modifier(MarkerSheetPresentationObserver(policy: policy, enabled: MarkerAvatarExperiment.isEnabled, selection: $selectedDetent))
+        .modifier(MarkerSheetContainerMeasure(controller: sheetDetents))
+        .onAppear { sheetDetents.attach($selectedDetent) }
+        .onChange(of: isAuthoring) { _, authoring in
+            if authoring { sheetDetents.enterAuthoring(intent: draft.intent, dynamicTypeSize: .large) }
+            else { sheetDetents.leaveAuthoring() }
+        }
         .sheet(isPresented: .constant(true)) {
             ChartBottomSheet(controlViewModel: controls, chartViewModel: chart,
                 placementState: draft, markerOverlayState: overlay, timeframePanelManager: timeframes,
-                sheetPresentation: presentation, selectedDetent: $selectedDetent,
+                sheetDetents: sheetDetents, selectedDetent: $selectedDetent,
                 selectedView: $selectedView, markerPrimaryTab: $primaryTab)
                 .environmentObject(appState)
-                .modifier(MarkerSheetGeometryObserver(model: presentation, selection: selectedDetent, enabled: draft.isGuidedFlowActive))
-                .presentationDetents(policy.detents, selection: $selectedDetent)
+                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, route: route, mode: sheetDetents.mode.rawValue))
+                .modifier(MarkerSheetDetentHost(controller: sheetDetents, selection: $selectedDetent, enabled: MarkerAvatarExperiment.isEnabled))
                 .presentationDragIndicator(.visible)
                 .presentationBackground(AppColors.sheetBackground)
                 .presentationBackgroundInteraction(.enabled)
@@ -90,7 +99,6 @@ struct MarkerSheetShellHarness: View {
     }
 
     private func beginDraft() {
-        presentation.resetGuidedCaptures()
         chart.selectedMarkerForSheet = nil
         let candle = MarkerLinkFixtures.candles()[5]
         draft.prepareGuidedFlow()

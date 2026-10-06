@@ -34,9 +34,11 @@ struct MarkerWorkspaceState {
     var scrollAnchors: [MarkerWorkspaceDestination: String] = [:]
     var textOffsets: [String: CGPoint] = [:]
     var textSelections: [String: NSRange] = [:]
-    var resumeSelection: PresentationDetent?
+    /// The size the hidden workspace keeps while the sheet is collapsed.
     var resumeSize = CGSize(width: 320, height: 400)
     var showsTitle = false
+    /// A new post's text takes focus once, when Details first appears.
+    var didAutofocus = false
     var editorBaselineText = ""
     var editorBaselineTitle = ""
     var indicatorDraft: IndicatorSettingsDraft?
@@ -67,6 +69,35 @@ extension MarkerPlacementState {
         }
     }
 
+    /// How deep the current screen sits, for the direction a new screen
+    /// enters from: Details 0, Review 1, Context and what it opens by path.
+    var workspaceDepth: Int {
+        switch guidedStep {
+        case .review?: return 1
+        case .context?: return max(1, workspace.path.count - 1)
+        case .details?, nil: return 0
+        }
+    }
+
+    /// A drawing or level is being worked on the chart itself; the collapsed
+    /// sheet shows that tool's bar instead of the resume dock.
+    var isWorkspaceChartToolActive: Bool {
+        guard guidedStep == .context else { return false }
+        switch workspace.destination {
+        case .drawingEditor: return true
+        case .levelEditor: return workspace.levelDrawingBaseline != nil
+        default: return false
+        }
+    }
+
+    /// A new post opens ready to type (owner decision, 6 Oct 2026). Never a
+    /// Setup, never an edit, and never a draft that already has words.
+    var shouldAutofocusPostText: Bool {
+        isGuidedFlowActive && !isGuidedEdit && guidedStep == .details
+            && (intent == .analysis || intent == .question)
+            && note.isEmpty && !workspace.didAutofocus
+    }
+
     /// Semantic client support intersected with typed backend components. Poll,
     /// future tools and an activated Setup cannot be created through this path.
     func workspaceAllows(_ type: RLComponentType) -> Bool {
@@ -77,17 +108,6 @@ extension MarkerPlacementState {
 
     var workspaceCanAddSource: Bool {
         workspaceAllows(.linkURL) && component(.linkURL) == nil
-    }
-
-    /// Capture a new fit for structural changes, never for a typed character.
-    var workspaceMeasurementRevision: String {
-        switch workspaceDestination {
-        case .context: return "context-\(components.count)"
-        case .indicatorSettings: return "indicator-\(workspace.indicatorDraft?.context.item.id ?? "none")"
-        case .drawingEditor: return "drawing-\(activeDrawingWorkflowTool?.rawValue ?? "none")-\(drawingSession.editingDraftId?.uuidString ?? "placing")"
-        case .levelEditor: return "level-\(workspace.selectedLevel?.rawValue ?? "none")"
-        default: return workspaceDestination.rawValue
-        }
     }
 
     var workspaceHasInvalidLevelInput: Bool {

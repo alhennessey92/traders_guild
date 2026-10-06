@@ -3,143 +3,230 @@ import UIKit
 import Testing
 @testable import traders_guild
 
+/// The detent rules that keep the chart sheet presented through ordinary
+/// workspace navigation (v1.5 workspace, P1):
+/// R1 the selected detent is always one the sheet offers;
+/// R2 no detent changes height during a session;
+/// R3 navigation never moves the selection;
+/// R4 only explicit moves (entry/exit, collapse/resume, a user drag) do.
 @MainActor
 struct MarkerSheetPresentationTests {
-    private func surface(view: String = "Markers", add: Bool = true, marker: UUID? = nil,
-                         placing: Bool = false, step: MarkerGuidedStep? = nil, experiment: Bool = true) -> MarkerSheetSurface {
-        .resolve(experiment: experiment, placing: placing, step: step, intent: .analysis,
-                 view: view, primaryAdd: add, viewedMarker: marker)
-    }
-    private func model() -> MarkerSheetPresentationModel {
-        let model = MarkerSheetPresentationModel()
-        model.setAvailableHeight(700)
-        model.capture(.init(revision: "base", height: 230, width: 370), surface: .add, chrome: 110)
-        return model
+    private let metrics = MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .large)
+
+    private func state(_ detents: Set<PresentationDetent>, _ selection: PresentationDetent) -> MarkerSheetDetentState {
+        MarkerSheetDetentState(detents: detents, selection: selection)
     }
 
-    @Test(arguments: ["Symbol", "Chat", "Components"])
-    func addCanLeaveForEveryRealTabAndReturn(_ tab: String) {
-        let model = model()
-        let add = model.policy(for: surface())
-        let destination = model.policy(for: surface(view: tab))
-        let selected = destination.normalized(add.working, from: add)
-        #expect(destination.detents.contains(selected))
-        #expect(selected == destination.working)
-        let returned = add.normalized(selected, from: destination)
-        #expect(returned == add.working)
-        for userChoice in [add.compact, add.tall] {
-            #expect(destination.normalized(userChoice, from: add) == userChoice)
-            #expect(add.normalized(userChoice, from: destination) == userChoice)
+    /// Every step keeps the selection inside the set, and each changes only
+    /// the set or the selection, so a selection change always animates.
+    private func assertSafe(_ start: MarkerSheetDetentState, _ steps: [MarkerSheetDetentState],
+                            reach target: MarkerSheetDetentState, sourceLocation: SourceLocation = #_sourceLocation) {
+        var previous = start
+        for (index, step) in steps.enumerated() {
+            #expect(step.detents.contains(step.selection), "R1 at step \(index)", sourceLocation: sourceLocation)
+            let setChanged = step.detents != previous.detents
+            let selectionChanged = step.selection != previous.selection
+            #expect(!(setChanged && selectionChanged), "one change per step at \(index)", sourceLocation: sourceLocation)
+            if selectionChanged {
+                #expect(previous.detents.contains(step.selection), "selection moves within offered detents", sourceLocation: sourceLocation)
+            }
+            previous = step
+        }
+        #expect((steps.last ?? start) == target, sourceLocation: sourceLocation)
+    }
+
+    @Test
+    func sequencerKeepsTheSelectionOfferedForEveryTransition() {
+        let standard = MarkerSheetDetents.standard
+        let authoring = metrics.authoring
+        let cases: [(MarkerSheetDetentState, MarkerSheetDetentState)] = [
+            (state(standard, MarkerSheetDetents.working), state(authoring, MarkerSheetDetents.working)),
+            (state(standard, MarkerSheetDetents.browse), state(authoring, MarkerSheetDetents.working)),
+            (state(standard, MarkerSheetDetents.dock), state(authoring, MarkerSheetDetents.tall)),
+            (state(authoring, MarkerSheetDetents.working), state(authoring, metrics.toolDetent)),
+            (state(authoring, metrics.toolDetent), state(authoring, MarkerSheetDetents.tall)),
+            (state(authoring, metrics.toolDetent), state(standard, MarkerSheetDetents.dock)),
+            (state(authoring, MarkerSheetDetents.tall), state(standard, MarkerSheetDetents.tall)),
+        ]
+        for (start, target) in cases {
+            assertSafe(start, MarkerSheetDetentSequencer.steps(from: start, to: target), reach: target)
         }
     }
 
     @Test
-    func selectionAndClearingWhileAddIsCurrentUseSupportedStates() {
-        let model = model()
-        let add = model.policy(for: surface())
-        let viewed = model.policy(for: surface(marker: UUID()))
-        #expect(viewed.surface != add.surface)
-        let selected = viewed.normalized(add.working, from: add)
-        #expect(viewed.detents.contains(selected))
-        #expect(add.detents.contains(add.normalized(selected, from: viewed)))
-        for userChoice in [add.compact, add.tall] {
-            #expect(viewed.normalized(userChoice, from: add) == userChoice)
-            #expect(add.normalized(userChoice, from: viewed) == userChoice)
-        }
+    func enteringFromHalfHeightOnlyChangesWhatIsOffered() {
+        // From the Add tab or a marker detail at half height, the workspace
+        // takes over without the selection ever changing.
+        let steps = MarkerSheetDetentSequencer.steps(from: state(MarkerSheetDetents.standard, MarkerSheetDetents.working),
+                                                     to: state(metrics.authoring, MarkerSheetDetents.working))
+        #expect(!steps.isEmpty)
+        #expect(steps.allSatisfy { $0.selection == MarkerSheetDetents.working })
     }
 
     @Test
-    func guidedOtherExitAndEndPlacementKeepTheDockAndTallChoice() {
-        let model = model()
-        let guided = model.policy(for: surface(placing: true, step: .details))
-        let other = model.policy(for: surface(placing: true))
-        let add = model.policy(for: surface())
-        let otherWorking = other.normalized(guided.working, from: guided)
-        #expect(other.detents.contains(otherWorking))
-        #expect(add.detents.contains(add.normalized(otherWorking, from: other)))
-        #expect(other.normalized(guided.compact, from: guided) == other.compact)
-        #expect(add.normalized(other.compact, from: other) == add.compact)
-        #expect(other.normalized(guided.tall, from: guided) == guided.tall)
-        #expect(add.normalized(guided.tall, from: guided) == guided.tall)
+    func reachingTheSameStateTakesNoSteps() {
+        let current = state(metrics.authoring, MarkerSheetDetents.working)
+        #expect(MarkerSheetDetentSequencer.steps(from: current, to: current).isEmpty)
     }
 
     @Test
-    func measuredFitUsesContainerBoundsAndFreezesAcrossTyping() {
-        let model = model()
-        let compose = surface(placing: true, step: .details)
-        model.capture(.init(revision: "title-closed", height: 220, width: 370), surface: compose, chrome: 100)
-        let first = model.policy(for: compose)
-        model.capture(.init(revision: "title-closed", height: 430, width: 370), surface: compose, chrome: 100)
-        #expect(model.policy(for: compose) == first, "typing does not resize the working state")
-        model.capture(.init(revision: "title-open", height: 270, width: 370), surface: compose, chrome: 100)
-        let titled = model.policy(for: compose)
-        #expect(titled.workingHeight > first.workingHeight)
-        #expect(titled.normalized(first.working, from: first) == titled.working)
-        model.setAvailableHeight(300)
-        let smaller = model.policy(for: compose)
-        #expect(smaller.workingHeight <= 300 * 0.9)
-        #expect(smaller.detents.contains(smaller.normalized(titled.working, from: titled)))
-        #expect(smaller.normalized(titled.tall, from: titled) == titled.tall)
+    func anUnofferedCurrentSelectionIsRepairedBeforeAnythingMoves() {
+        let broken = state(metrics.authoring, MarkerSheetDetents.dock)
+        let target = state(metrics.authoring, metrics.toolDetent)
+        let steps = MarkerSheetDetentSequencer.steps(from: broken, to: target)
+        #expect(steps.first?.detents.contains(MarkerSheetDetents.dock) == true)
+        for step in steps { #expect(step.detents.contains(step.selection)) }
+        #expect(steps.last == target)
     }
 
     @Test
-    func newDraftDiscardsGuidedMeasurementsButKeepsAddFit() {
-        let model = model()
-        let compose = surface(placing: true, step: .details)
-        model.capture(.init(revision: "long", height: 490, width: 370), surface: compose, chrome: 100)
-        let add = model.policy(for: surface())
-        model.resetGuidedCaptures()
-        #expect(model.policy(for: surface()) == add)
-        #expect(model.contentHeights[compose.measurementID] == nil)
+    func authoringDetentsAreFixedHeightsSharingTheStandardWorkingAndTall() {
+        #expect(metrics.authoring == [metrics.toolDetent, MarkerSheetDetents.working, MarkerSheetDetents.tall])
+        #expect(MarkerSheetDetents.standard.contains(MarkerSheetDetents.working))
+        #expect(MarkerSheetDetents.standard.contains(MarkerSheetDetents.tall))
+        #expect(metrics.toolDetent == .height(metrics.tool))
+        #expect(metrics == MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .large))
+        #expect(MarkerSheetDetents.standard == [.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)])
     }
 
     @Test
-    func experimentOffKeepsTheEstablishedDetentsRegardlessOfRoute() {
-        let model = model()
-        for route in [surface(experiment: false), surface(view: "Chat", experiment: false),
-                      surface(placing: true, step: .details, experiment: false)] {
-            let policy = model.policy(for: route)
-            #expect(policy.detents == [.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)])
-            for detent in policy.detents { #expect(policy.normalized(detent, from: nil) == detent) }
-        }
+    func metricsGrowForLargerTextAndShortScreensOpenSetupTall() {
+        let accessible = MarkerSheetDetentMetrics.make(availableHeight: 780, dynamicTypeSize: .accessibility3)
+        #expect(accessible.tool > metrics.tool)
+        #expect(accessible.prefersTallSetup)
+        #expect(!metrics.prefersTallSetup)
+        #expect(MarkerSheetDetentMetrics.make(availableHeight: 600, dynamicTypeSize: .large).prefersTallSetup)
     }
-    @Test
-    func keyboardRestrictsNativeDetentsWithinOneWindowWithoutResizingOnTyping() {
-        let model = model()
-        let compose = surface(placing: true, step: .details)
-        let original = model.policy(for: compose)
-        var geometry = MarkerSheetGeometry(keyboardFrame: CGRect(x: 0, y: 529, width: 402, height: 345),
-                               windowFrame: CGRect(x: 0, y: 0, width: 402, height: 874),
-                               safeAreaInsets: UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0))
-        model.updateGeometry(geometry, selection: original.tall)
-        let focused = model.policy(for: compose)
-        #expect(focused.keyboardConstrained)
-        #expect(focused.keyboardRestoreSelection == original.tall)
-        model.updateGeometry(geometry, selection: focused.working)
-        #expect(model.policy(for: compose).keyboardRestoreSelection == original.tall, "native selection replacement cannot overwrite the prior choice")
-        #expect(focused.detents == [focused.working])
-        #expect(focused.workingHeight <= 421)
-        #expect(focused.normalized(original.tall, from: original) == focused.working)
-        #expect(!model.policy(for: surface(view: "Chat")).keyboardConstrained)
-        geometry.keyboardFrame = CGRect(x: 80, y: 400, width: 220, height: 200)
-        model.updateGeometry(geometry, selection: focused.working)
-        #expect(!model.policy(for: compose).keyboardConstrained, "floating keyboards do not shrink the whole viewport")
-        geometry.keyboardFrame = .zero
-        model.updateGeometry(geometry, selection: original.tall)
-        #expect(model.policy(for: compose) == original)
+}
+
+/// The controller drives a real binding; each step is applied on its own
+/// main-queue turn.
+@MainActor
+@Suite(.serialized)
+struct MarkerSheetDetentControllerTests {
+    private final class Box { var selection: PresentationDetent = MarkerSheetDetents.working }
+
+    private func controller() -> (MarkerSheetDetentController, Box) {
+        let box = Box()
+        let controller = MarkerSheetDetentController()
+        controller.reduceMotion = true
+        controller.setAvailableHeight(780)
+        controller.attach(Binding(get: { box.selection }, set: { box.selection = $0 }))
+        return (controller, box)
+    }
+
+    private func settle() async {
+        for _ in 0..<12 { await Task.yield(); try? await Task.sleep(nanoseconds: 5_000_000) }
     }
 
     @Test
-    func nestedWorkspaceRoutesRestoreTheirOwnMeasuredHeight() {
-        let model = model()
-        let context = MarkerSheetSurface.workspace(.context, .analysis)
-        let settings = MarkerSheetSurface.workspace(.indicatorSettings, .analysis)
-        model.capture(.init(revision: "context", height: 200, width: 370), surface: context, chrome: 156)
-        let before = model.policy(for: context)
-        model.capture(.init(revision: "settings", height: 420, width: 370), surface: settings, chrome: 156)
-        #expect(model.policy(for: settings).workingHeight != before.workingHeight)
-        #expect(model.policy(for: context) == before)
-        #expect(model.policy(for: settings).compact == .fraction(0.18))
+    func enteringFromHalfHeightKeepsTheSheetWhereItIs() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.working)
+        #expect(sheet.detents == sheet.metrics.authoring)
+        #expect(sheet.mode == .authoring)
     }
 
+    @Test
+    func collapseAndResumeReturnToTheLastExpandedChoice() async {
+        let (sheet, box) = controller()
+        box.selection = MarkerSheetDetents.tall
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        sheet.collapse()
+        await settle()
+        #expect(box.selection == sheet.toolDetent)
+        #expect(sheet.isCollapsed(box.selection))
+        sheet.resume()
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.tall)
+    }
+
+    @Test
+    func aUserDragIsRememberedAsTheResumeChoice() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        box.selection = MarkerSheetDetents.tall
+        sheet.selectionChanged(to: MarkerSheetDetents.tall)
+        sheet.collapse()
+        await settle()
+        sheet.resume()
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.tall)
+    }
+
+    @Test
+    func leavingAuthoringFromAToolLandsOnTheDock() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        sheet.collapse()
+        await settle()
+        sheet.leaveAuthoring()
+        await settle()
+        #expect(sheet.mode == .standard)
+        #expect(sheet.detents == MarkerSheetDetents.standard)
+        #expect(box.selection == MarkerSheetDetents.dock)
+    }
+
+    @Test
+    func leavingAuthoringAtHalfHeightStaysThere() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        sheet.leaveAuthoring()
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.working)
+    }
+
+    @Test
+    func aStrayDockWriteDuringAuthoringBecomesACollapse() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        box.selection = MarkerSheetDetents.dock
+        sheet.selectionChanged(to: MarkerSheetDetents.dock)
+        await settle()
+        #expect(box.selection == sheet.toolDetent)
+        #expect(sheet.detents.contains(box.selection))
+    }
+
+    @Test
+    func heightsAreFixedForTheSession() async {
+        let (sheet, _) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        let fixed = sheet.metrics
+        sheet.setAvailableHeight(500)
+        sheet.enterAuthoring(intent: .setup, dynamicTypeSize: .accessibility2)
+        await settle()
+        #expect(sheet.metrics == fixed, "R2: a session keeps its identities")
+    }
+
+    @Test
+    func setupOnAShortScreenOpensTall() async {
+        let (sheet, box) = controller()
+        sheet.setAvailableHeight(600)
+        sheet.enterAuthoring(intent: .setup, dynamicTypeSize: .large)
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.tall)
+    }
+
+    @Test
+    func preferTallGrowsFromHalfHeightButNeverShrinks() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring(intent: .analysis, dynamicTypeSize: .large)
+        await settle()
+        sheet.preferTall()
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.tall)
+        sheet.collapse()
+        await settle()
+        sheet.preferTall()
+        await settle()
+        #expect(box.selection == sheet.toolDetent, "a collapsed sheet stays collapsed")
+    }
 }

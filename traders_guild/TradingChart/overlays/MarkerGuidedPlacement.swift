@@ -583,10 +583,3 @@ enum MarkerPlacementSubmitter {
         }
     }
 }
-
-// MARK: - Chart dock constants
-
-enum MarkerGuidedSheetHeight {
-    static let compact: CGFloat = 0.18
-    static let tall: CGFloat = 0.9
-}

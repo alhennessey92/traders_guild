@@ -83,18 +83,20 @@ struct MarkerGuidedCreationHarness: View {
         }
     }
 
-    @StateObject private var sheetPresentation = MarkerSheetPresentationModel()
-    private var surface: MarkerSheetSurface {
-        if scenario == .entry && !hasEntered { return .add }
-        if let step = placementState.guidedStep {
-            return step == .context ? .workspace(placementState.workspaceDestination, placementState.intent) : .guided(step, placementState.intent)
-        }
-        return .legacy("placement")
-    }
-    private var policy: MarkerSheetPresentationPolicy { sheetPresentation.policy(for: surface) }
-    private var panelHeight: CGFloat { policy.workingHeight - 88 }
+    @StateObject private var sheetDetents = MarkerSheetDetentController()
+    /// The inline (non-native) layout's panel height: room for a whole
+    /// Details screen, as the measured fit used to give it.
+    private var panelHeight: CGFloat { 560 }
     private var usesNativeSheet: Bool { UserDefaults.standard.bool(forKey: "MarkerGuidedSheetFixture") }
-    private var isCompact: Bool { selectedDetent == policy.compact }
+    private var isCompact: Bool { sheetDetents.isCollapsed(selectedDetent) }
+    private var isAuthoring: Bool {
+        usesNativeSheet && placementState.isGuidedFlowActive && (scenario != .entry || hasEntered)
+    }
+    private var traceRoute: String {
+        if scenario == .entry && !hasEntered { return "add" }
+        return placementState.isGuidedFlowActive
+            ? "\(placementState.workspaceDestination.rawValue)-\(placementState.intent.rawValue)" : "placement"
+    }
     @State private var selectedDetent: PresentationDetent
 
     static let symbolId = MarkerLinkFixtures.uuid(1)
@@ -125,7 +127,7 @@ struct MarkerGuidedCreationHarness: View {
         _markerManager = State(initialValue: manager)
         let draft = Self.makeDraft(for: scenario)
         _placementState = StateObject(wrappedValue: draft)
-        _selectedDetent = State(initialValue: .height(340))
+        _selectedDetent = State(initialValue: MarkerSheetDetents.working)
     }
 
     private var author: MarkerAvatarIdentity {
@@ -149,16 +151,23 @@ struct MarkerGuidedCreationHarness: View {
             }
         }
         .background(AppColors.tgGradientBackground.ignoresSafeArea())
-        .modifier(MarkerSheetContainerMeasure(model: sheetPresentation))
-        .modifier(MarkerSheetPresentationObserver(policy: policy, enabled: usesNativeSheet, selection: $selectedDetent))
+        .modifier(MarkerSheetContainerMeasure(controller: sheetDetents))
+        .onAppear {
+            sheetDetents.attach($selectedDetent)
+            if isAuthoring { sheetDetents.enterAuthoring(intent: placementState.intent, dynamicTypeSize: .large) }
+        }
+        .onChange(of: isAuthoring) { _, authoring in
+            if authoring { sheetDetents.enterAuthoring(intent: placementState.intent, dynamicTypeSize: .large) }
+            else { sheetDetents.leaveAuthoring() }
+        }
         .sheet(isPresented: .constant(usesNativeSheet)) {
             MarkerGuidedFixtureSheetHost(placementState: placementState, entered: $hasEntered) { entered in
                 sheet(entered: entered)
             }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("guided.fixtureSheet")
-                .modifier(MarkerSheetGeometryObserver(model: sheetPresentation, selection: selectedDetent, enabled: true))
-            .presentationDetents(policy.detents, selection: $selectedDetent)
+                .modifier(MarkerSheetGeometryObserver(selection: selectedDetent, route: traceRoute, mode: sheetDetents.mode.rawValue))
+                .modifier(MarkerSheetDetentHost(controller: sheetDetents, selection: $selectedDetent, enabled: true))
                 .presentationBackground(AppColors.sheetBackground)
                 .presentationBackgroundInteraction(.enabled)
                 .presentationDragIndicator(.visible)
@@ -237,11 +246,11 @@ struct MarkerGuidedCreationHarness: View {
                     }
                     placementState.captureDraftBaseline()
                     hasEntered = true
-                    selectedDetent = policy.working
                 }.padding(16)
             } else if placementState.isGuidedFlowActive {
                 if usesNativeSheet {
-                    MarkerGuidedRetainedPanel(placementState: placementState, policy: policy, selection: $selectedDetent) { guidedPanel }
+                    MarkerWorkspaceSheetBody(placementState: placementState, isCollapsed: isCompact,
+                                             onResume: { sheetDetents.resume() }) { guidedPanel }
                 } else {
                     guidedPanel.frame(height: panelHeight)
                 }
@@ -264,9 +273,8 @@ struct MarkerGuidedCreationHarness: View {
         MarkerGuidedPlacementPanel(
             placementState: placementState, author: author, guildName: "Alpha Traders",
             currentChartTimeframe: .h1, onSelectTimeframe: { _ in },
-            onBeginInteractiveDrawing: usesNativeSheet ? { selectedDetent = policy.compact } : nil,
-            onShowChart: usesNativeSheet ? { selectedDetent = policy.compact } : nil,
-            onContentMeasure: { sheetPresentation.capture($0, surface: surface, chrome: 156) }
+            onBeginInteractiveDrawing: usesNativeSheet ? { sheetDetents.collapse() } : nil,
+            onShowChart: usesNativeSheet ? { sheetDetents.collapse() } : nil
         )
         .padding(.horizontal, 16)
         .padding(.top, 12)

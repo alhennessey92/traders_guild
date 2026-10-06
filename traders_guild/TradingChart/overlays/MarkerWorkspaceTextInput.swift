@@ -8,6 +8,9 @@ struct MarkerWorkspaceTextInput: View {
     @Binding var text: String
     @ObservedObject var placementState: MarkerPlacementState
     let fieldID: String
+    /// Asked once, shortly after the field first appears: take focus then?
+    /// Read live from the draft, never from a copy made when it was shown.
+    var autofocus: (() -> Bool)? = nil
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -17,7 +20,9 @@ struct MarkerWorkspaceTextInput: View {
             ), offset: Binding(
                 get: { placementState.workspace.textOffsets[fieldID] ?? .zero },
                 set: { placementState.workspace.textOffsets[fieldID] = $0 }
-            ), placeholder: placeholder, onFocus: { placementState.isTextInputFocused = $0 })
+            ), placeholder: placeholder, onFocus: { placementState.isTextInputFocused = $0 },
+               autofocus: autofocus,
+               onAutofocus: { placementState.workspace.didAutofocus = true })
             if text.isEmpty {
                 Text(placeholder).font(.subheadline).foregroundColor(AppColors.greyText)
                     .padding(.horizontal, 5).padding(.top, 8).allowsHitTesting(false).accessibilityHidden(true)
@@ -35,6 +40,8 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     @Binding var offset: CGPoint
     let placeholder: String
     let onFocus: (Bool) -> Void
+    var autofocus: (() -> Bool)? = nil
+    var onAutofocus: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> UITextView {
@@ -44,6 +51,7 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.accessibilityLabel = placeholder
         view.delegate = context.coordinator
+        view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
         return view
     }
     func updateUIView(_ view: UITextView, context: Context) {
@@ -53,6 +61,16 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
         view.textColor = UIColor(AppColors.primaryForeground)
         view.tintColor = UIColor(AppColors.accentColor)
         context.coordinator.updating = false
+        if let autofocus, !context.coordinator.didAutofocus {
+            context.coordinator.didAutofocus = true
+            let done = onAutofocus
+            // After the screen's entrance, so the sheet and keyboard move once.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak view] in
+                guard let view, view.window != nil, !view.isFirstResponder, autofocus() else { return }
+                done?()
+                view.becomeFirstResponder()
+            }
+        }
     }
     /// UIKit owns text and cursor while an input method is composing.
     func updateDraft(in view: UITextView) {
@@ -72,6 +90,7 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: MarkerWorkspaceTextEditor
         var updating = false
+        var didAutofocus = false
         init(_ parent: MarkerWorkspaceTextEditor) { self.parent = parent }
         func textViewDidChange(_ view: UITextView) {
             guard !updating else { return }
@@ -131,6 +150,7 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .subheadline)
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
         return view
     }
     func updateUIView(_ view: UITextField, context: Context) {
@@ -178,5 +198,21 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
         }
         func textFieldDidBeginEditing(_ view: UITextField) { parent.onFocus(true) }
         func textFieldDidEndEditing(_ view: UITextField) { parent.onFocus(false) }
+    }
+}
+
+/// The standard keyboard bar with Done: a text view's Return adds a line and
+/// a decimal pad has none, so this is how typing ends without leaving the
+/// screen.
+enum MarkerKeyboardDoneBar {
+    static func make(for responder: UIResponder) -> UIToolbar {
+        let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        bar.sizeToFit()
+        let done = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak responder] _ in
+            responder?.resignFirstResponder()
+        })
+        done.accessibilityIdentifier = "workspace.keyboardDone"
+        bar.items = [UIBarButtonItem(systemItem: .flexibleSpace), done]
+        return bar
     }
 }

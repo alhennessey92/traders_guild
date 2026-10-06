@@ -101,6 +101,7 @@ final class MarkerGuidedSheetJourneyTests: XCTestCase {
     }
     func testEmptyTitleAndScrolledSectionSurviveChartMode() throws {
         launch("analysisEmpty", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        dismissAutofocusKeyboard()
         let addTitle = app.buttons["guided.addTitle"]
         for _ in 0..<5 {
             if addTitle.isHittable { break }
@@ -147,6 +148,16 @@ final class MarkerGuidedSheetJourneyTests: XCTestCase {
         XCTAssertTrue(app.buttons["guided.review"].waitForExistence(timeout: 5))
         XCTAssertEqual(grabber.frame.minY, tallTop, accuracy: 4)
         screenshot("retained-user-expansion")
+    }
+
+
+    /// A new, empty post opens with the keyboard up (owner decision, 6 Oct
+    /// 2026). Tests that start from the resting layout put it away first.
+    private func dismissAutofocusKeyboard() {
+        if app.keyboards.firstMatch.waitForExistence(timeout: 2) {
+            app.buttons["workspace.keyboardDone"].firstMatch.tap()
+            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
+        }
     }
 
 }

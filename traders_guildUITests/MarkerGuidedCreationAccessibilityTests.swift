@@ -155,8 +155,11 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
 
     func testResponseConvertsWithinDetails() throws {
         launch("responseDetails")
+        dismissAutofocusKeyboard()
         let convert = app.buttons["guided.convertResponse"]
-        for _ in 0..<5 { if convert.isHittable { break }; app.swipeUp() }
+        // Scroll the workspace itself: a swipe at the screen's centre now
+        // lands on the fixed-height sheet's edge and resizes it instead.
+        for _ in 0..<5 { if convert.isHittable { break }; scrollWorkspaceContent() }
         XCTAssertTrue(convert.isHittable)
         convert.tap()
         XCTAssertTrue(app.textFields["Take Profit"].waitForExistence(timeout: 5))
@@ -249,4 +252,25 @@ final class MarkerGuidedCreationAccessibilityTests: XCTestCase {
             }
         }
     }
+
+    /// A new, empty post opens with the keyboard up (owner decision, 6 Oct
+    /// 2026). Tests that start from the resting layout put it away first.
+    private func dismissAutofocusKeyboard() {
+        if app.keyboards.firstMatch.waitForExistence(timeout: 2) {
+            app.buttons["workspace.keyboardDone"].firstMatch.tap()
+            _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
+        }
+    }
+
+
+    /// Scrolls the workspace's content: a fast swipe on its own scroll view,
+    /// which scrolls without activating a row (a slow press-and-drag can
+    /// register as a tap) and, unlike a swipe on a content element, never
+    /// makes XCUITest scroll that element back into view first.
+    private func scrollWorkspaceContent() {
+        let scroll = app.scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
+        guard scroll.waitForExistence(timeout: 2) else { return }
+        scroll.swipeUp(velocity: .fast)
+    }
+
 }

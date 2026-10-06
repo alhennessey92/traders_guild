@@ -24,12 +24,9 @@ struct MarkerWorkspaceTests {
         let editor = state.workspace.indicatorDraft!
         editor.intValues["period"] = "137"
         state.workspace.scrollAnchors[.indicatorSettings] = "lineWidth"
-        state.workspace.resumeSelection = .fraction(0.9)
         state.workspace.textSelections["contextNote"] = NSRange(location: 2, length: 3)
-        // Docking is a presenter change; navigation/editor state does not move.
-        let model = MarkerSheetPresentationModel()
-        let policy = model.policy(for: .workspace(.indicatorSettings, .analysis))
-        #expect(policy.compact != state.workspace.resumeSelection)
+        // Collapsing the sheet is a presenter change; navigation and editor
+        // state live in the session and do not move.
         #expect(state.workspaceDestination == .indicatorSettings)
         #expect(state.workspace.indicatorDraft === editor)
         #expect(editor.intValues["period"] == "137")

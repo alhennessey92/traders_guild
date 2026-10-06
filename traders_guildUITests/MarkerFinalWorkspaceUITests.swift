@@ -118,7 +118,10 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         }
         setPrice("63820.00")
         tap("workspace.Work on chart")
-        tap("guided.compactDock")
+        // P1: while a level is worked on the chart the sheet is the tool's
+        // bar; Options returns to its editor.
+        XCTAssertTrue(app.otherElements["workspace.toolBar"].waitForExistence(timeout: 5))
+        tap("workspace.tool.options")
         XCTAssertEqual(field.value as? String, "63820.00")
         XCTAssertTrue(app.buttons["workspace.Work on chart"].exists)
         XCTAssertEqual(app.buttons["guided.back"].label, "Cancel")
@@ -128,7 +131,7 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         XCTAssertTrue(level.waitForExistence(timeout: 5)); level.tap()
         XCTAssertEqual(field.value as? String, original, "Cancel restores the selected original level")
         setPrice("63840.00")
-        tap("workspace.Work on chart"); tap("guided.compactDock")
+        tap("workspace.Work on chart"); tap("workspace.tool.options")
         tap("guided.contextDone")
         XCTAssertTrue(level.waitForExistence(timeout: 5))
         tap("guided.contextDone"); tap("guided.review"); tap("guided.post")

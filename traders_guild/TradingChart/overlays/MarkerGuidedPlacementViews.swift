@@ -23,6 +23,8 @@ struct MarkerGuidedCompactDock: View {
 
     private var progress: String {
         if placementState.guidedStep == .review { return "Review ready" }
+        // Reopening returns to this exact screen, so say which it is.
+        if placementState.guidedStep == .context { return "\(placementState.workspaceDestination.title) · kept as you left it" }
         if placementState.isGuidedEdit && placementState.hasMaterialEdits { return "Unsaved changes" }
         if let requirement = placementState.guidedNextStepPrompt { return requirement }
         return "Draft kept"
@@ -92,13 +94,16 @@ struct MarkerGuidedPlacementPanel: View {
     var onSelectTimeframe: ((RLChartTimeframe) -> Void)?
     var onBeginInteractiveDrawing: (() -> Void)?
     var onShowChart: (() -> Void)? = nil
-    var onContentMeasure: ((MarkerSheetContentMeasurement) -> Void)?
     var viewportAnchorProvider: (() -> (time: Date, price: Double)?)?
 
     @State private var pendingChange: PendingChange?
     /// The optional title field, revealed on request — or already, when the
     /// draft has a title.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The depth of the screen last shown: a deeper one enters from the
+    /// trailing side, a shallower one from the leading side.
+    @State private var shownDepth = 0
 
     /// A type change waiting on the author, and where it goes once confirmed.
     private struct PendingChange: Identifiable {
@@ -106,25 +111,24 @@ struct MarkerGuidedPlacementPanel: View {
         var id: UUID { change.id }
     }
 
+    /// One workspace: the header stays put, and only the screen below it
+    /// changes. Moving between screens never touches the sheet itself.
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             taskHeader
-            ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                switch placementState.guidedStep {
-                case .details?: details
-                case .context?: contextEditor
-                case .review?: review
-                case nil: EmptyView()
-                }
+            ZStack(alignment: .top) {
+                screen(placementState.workspaceDestination)
+                    .id(placementState.workspaceDestination)
+                    .transition(screenTransition)
             }
-            .padding(.bottom, 12).scrollTargetLayout().modifier(contentMeasurement)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
+            .animation(reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.28),
+                       value: placementState.workspaceDestination)
         }
-        .scrollPosition(id: Binding(
-            get: { placementState.workspace.scrollAnchors[placementState.workspaceDestination] },
-            set: { placementState.workspace.scrollAnchors[placementState.workspaceDestination] = $0 }
-        ))
-        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: placementState.workspaceDestination) { _, destination in
+            shownDepth = placementState.workspaceDepth
+            announce(destination)
         }
         .alert(item: $pendingChange) { pending in
             Alert(
@@ -139,6 +143,47 @@ struct MarkerGuidedPlacementPanel: View {
         }
         .onAppear {
             placementState.workspace.showsTitle = placementState.workspace.showsTitle || !placementState.title.isEmpty
+            shownDepth = placementState.workspaceDepth
+        }
+    }
+
+    // MARK: Screens
+
+    /// The screen arriving slides a short way in from the side it leads to;
+    /// the screen being left fades where it is, so its direction never
+    /// matters. Reduce Motion crossfades.
+    private var screenTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let deeper = placementState.workspaceDepth >= shownDepth
+        return .asymmetric(insertion: .opacity.combined(with: .offset(x: deeper ? 28 : -28)),
+                           removal: .opacity)
+    }
+
+    /// Each screen scrolls on its own and remembers where it was.
+    private func screen(_ destination: MarkerWorkspaceDestination) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                switch destination {
+                case .details: details
+                case .review: review
+                default: contextEditor(destination)
+                }
+            }
+            .padding(.bottom, 12)
+            .scrollTargetLayout()
+        }
+        .scrollPosition(id: Binding(
+            get: { placementState.workspace.scrollAnchors[destination] },
+            set: { placementState.workspace.scrollAnchors[destination] = $0 }
+        ))
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// VoiceOver hears the new screen's name once it has settled.
+    private func announce(_ destination: MarkerWorkspaceDestination) {
+        let title = stepTitle(destination)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            UIAccessibility.post(notification: .screenChanged, argument: title)
         }
     }
 
@@ -157,22 +202,12 @@ struct MarkerGuidedPlacementPanel: View {
 
     // MARK: Header
 
-    private var contentMeasurement: MarkerSheetContentMeasure {
-        // Text edits do not change the Compose detent. Structural additions,
-        // text size/width and the complete Review snapshot get a fresh fit.
-        let reviewRevision = placementState.guidedStep == .review
-            ? "\(placementState.note.hashValue)-\(placementState.title.hashValue)-\(placementState.components.count)-\(placementState.submissionPhase)"
-            : "compose"
-        return MarkerSheetContentMeasure(
-            revision: "\(placementState.workspaceDestination)-\(placementState.workspaceMeasurementRevision)-\(placementState.workspace.showsTitle)-\(dynamicTypeSize)-\(reviewRevision)",
-            onMeasure: onContentMeasure
-        )
-    }
-
     private var taskHeader: some View {
         HStack(spacing: 10) {
             UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
                 .accessibilityHidden(true)
+                // Analysis ↔ Question recolours the face's ring in place.
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: placementState.intent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(placementState.guidedToolbarTitle ?? "New marker").font(.subheadline.weight(.bold))
                 Text(placementState.isGuidedEdit ? "Editing your marker" : MarkerGuidedFormat.destination(guildName))
@@ -189,10 +224,16 @@ struct MarkerGuidedPlacementPanel: View {
         }.foregroundColor(AppColors.primaryForeground)
     }
 
-    private var stepHeader: some View {
-        Text(placementState.guidedStep == .context ? placementState.workspaceDestination.title
-             : placementState.guidedStep == .review ? "Review"
-             : placementState.intent == .setup ? "Setup details" : "Post details")
+    private func stepTitle(_ destination: MarkerWorkspaceDestination) -> String {
+        switch destination {
+        case .details: return placementState.intent == .setup ? "Setup details" : "Post details"
+        case .review: return "Review"
+        default: return destination.title
+        }
+    }
+
+    private func stepHeader(_ destination: MarkerWorkspaceDestination) -> some View {
+        Text(stepTitle(destination))
             .font(.title3.weight(.bold)).foregroundColor(AppColors.primaryForeground)
             .accessibilityAddTraits(.isHeader).accessibilityIdentifier("guided.stepHeader")
     }
@@ -203,7 +244,7 @@ struct MarkerGuidedPlacementPanel: View {
     /// and optional reasoning sections.
     private var details: some View {
         VStack(alignment: .leading, spacing: 10) {
-            stepHeader.id("heading")
+            stepHeader(.details).id("heading")
             responseSection.id("response")
             editRelationship.id("relationship")
             if placementState.isSocialDetails {
@@ -236,7 +277,8 @@ struct MarkerGuidedPlacementPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             MarkerWorkspaceTextInput(placeholder: placementState.intent == .question
                                      ? "Your question about this chart" : "What you see and why it matters",
-                                     text: $placementState.note, placementState: placementState, fieldID: "socialText")
+                                     text: $placementState.note, placementState: placementState, fieldID: "socialText",
+                                     autofocus: { placementState.shouldAutofocusPostText })
             .accessibilityIdentifier("guided.text")
             if placementState.intent == .question {
                 questionCounter
@@ -376,9 +418,9 @@ struct MarkerGuidedPlacementPanel: View {
 
     // MARK: Context
 
-    private var contextEditor: some View {
+    private func contextEditor(_ destination: MarkerWorkspaceDestination) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            stepHeader
+            stepHeader(destination)
             Text(placementState.isGuidedEdit
                  ? "Optional. Nothing changes until you save."
                  : "Optional. Anything you add stays with your draft.")
@@ -386,8 +428,8 @@ struct MarkerGuidedPlacementPanel: View {
                 .foregroundColor(AppColors.greyText)
             MarkerWorkspaceContent(placementState: placementState, currentChartTimeframe: currentChartTimeframe,
                                    activeChartIndicators: activeChartIndicators, activeChartDrawings: activeChartDrawings,
-                                   onSelectTimeframe: onSelectTimeframe, onBeginInteractiveDrawing: onBeginInteractiveDrawing)
-
+                                   onSelectTimeframe: onSelectTimeframe, onBeginInteractiveDrawing: onBeginInteractiveDrawing,
+                                   destination: destination)
         }
     }
 
@@ -396,7 +438,7 @@ struct MarkerGuidedPlacementPanel: View {
     /// The post as the guild will read it, then where it goes.
     private var review: some View {
         VStack(alignment: .leading, spacing: 14) {
-            stepHeader
+            stepHeader(.review)
             // An edit leads with what saving changes, so it is in view at
             // half height; the post as it will read follows.
             if placementState.isGuidedEdit {
@@ -571,6 +613,7 @@ struct MarkerGuidedPlacementBar: View {
     @ObservedObject var placementState: MarkerPlacementState
     var onShowChart: (() -> Void)? = nil
     let onPost: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 10) {
@@ -639,6 +682,8 @@ struct MarkerGuidedPlacementBar: View {
         }
         .padding(.horizontal, 20)
         .frame(height: 68)
+        // The footer stays put; only its actions change with the screen.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: placementState.workspaceDestination)
         // The sheet's bottom bar has a fixed height, like a tab bar: its text
         // stops growing at the first accessibility size, and a long press
         // shows the control in the Large Content Viewer instead.

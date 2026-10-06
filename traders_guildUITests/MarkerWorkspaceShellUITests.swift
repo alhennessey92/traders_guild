@@ -1,0 +1,329 @@
+import XCTest
+
+/// P1 evidence on the real MainView chart sheet (fixture draft, no account or
+/// backend). Every display frame the app records the sheet's top edge, the
+/// presenting controller's identity, the selected detent, the workspace screen
+/// and whether the collapsed bar is showing (`-MarkerSheetTrace`). Ordinary
+/// navigation must leave the sheet exactly where it is: no movement, no new
+/// controller (a re-presentation), no dismissal, no dock.
+final class MarkerWorkspaceShellUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws { continueAfterFailure = false }
+
+    private struct Trace: Decodable {
+        let now: Double
+        let samples: [Sample]
+    }
+    private struct Sample: Decodable {
+        let t: Double
+        let top: Int
+        let ctl: Int
+        let sel: String
+        let route: String
+        let mode: String
+        let dock: Bool
+    }
+
+    private func launch(setup: Bool = false, filledNote: Bool = true) {
+        app = XCUIApplication()
+        var arguments = ["-MarkerMainViewSheetFixture", "-TGAvatarMarkersExperiment", "YES", "-MarkerSheetTrace"]
+        if setup { arguments.append("-MarkerMainViewSetupFixture") }
+        if filledNote { arguments.append("-MarkerMainViewFilledNote") }
+        app.launchArguments = arguments
+        app.launch()
+        XCTAssertTrue(app.staticTexts["mainFixture.geometry"].waitForExistence(timeout: 20))
+        settle(1.2)
+    }
+
+    private func settle(_ seconds: TimeInterval = 0.9) {
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: seconds)
+    }
+
+    private func trace() -> Trace {
+        let element = app.descendants(matching: .any)["sheetTrace"]
+        XCTAssertTrue(element.waitForExistence(timeout: 5))
+        let json = element.value as? String ?? "{}"
+        guard let data = json.data(using: .utf8), let trace = try? JSONDecoder().decode(Trace.self, from: data) else {
+            XCTFail("unreadable trace: \(json.prefix(200))")
+            return Trace(now: 0, samples: [])
+        }
+        return trace
+    }
+
+    /// Samples from just before `mark` until now.
+    private func segment(since mark: Double, _ name: String) -> [Sample] {
+        let all = trace()
+        let attachment = XCTAttachment(string: (app.descendants(matching: .any)["sheetTrace"].value as? String) ?? "")
+        attachment.name = "trace-\(name).json"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let before = all.samples.last { $0.t < mark }
+        return (before.map { [$0] } ?? []) + all.samples.filter { $0.t >= mark }
+    }
+
+    private func screenshot(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// Brings a control on screen before a measured segment, as a user
+    /// would: raise the sheet by its grabber (small screens), then scroll.
+    private func reveal(_ id: String) {
+        let button = app.buttons[id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), id)
+        if !button.isHittable {
+            let grabber = app.buttons["Sheet Grabber"]
+            if grabber.exists {
+                grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                    .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
+                settle(0.8)
+            }
+        }
+        for _ in 0..<5 where !button.isHittable {
+            scrollWorkspaceContent()
+            settle(0.6)
+        }
+        XCTAssertTrue(button.isHittable, "\(id) revealed")
+    }
+
+    /// Scrolls the workspace's content: a fast swipe on its own scroll view,
+    /// which scrolls without activating a row (a slow press-and-drag can
+    /// register as a tap) and, unlike a swipe on a content element, never
+    /// makes XCUITest scroll that element back into view first.
+    private func scrollWorkspaceContent() {
+        let scroll = app.scrollViews.containing(.staticText, identifier: "guided.stepHeader").firstMatch
+        guard scroll.waitForExistence(timeout: 2) else { return }
+        scroll.swipeUp(velocity: .fast)
+    }
+
+    private func tap(_ id: String, file: StaticString = #filePath, line: UInt = #line) {
+        let button = app.buttons[id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), id, file: file, line: line)
+        XCTAssertTrue(button.isHittable, "\(id) hittable", file: file, line: line)
+        button.tap()
+    }
+
+    /// The sheet stayed put through the whole segment. A tap on sheet content
+    /// lets the native sheet track the touch by up to 2pt, so ±3pt is
+    /// "unmoved"; the rejected drop was hundreds of points.
+    private func assertStatic(_ samples: [Sample], _ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(samples.isEmpty, "\(name): no samples", file: file, line: line)
+        let controllers = Set(samples.map(\.ctl))
+        XCTAssertEqual(controllers.count, 1, "\(name): presenting controller changed \(controllers)", file: file, line: line)
+        XCTAssertFalse(samples.contains { $0.top < 0 }, "\(name): sheet left the window", file: file, line: line)
+        let tops = samples.map(\.top)
+        XCTAssertLessThanOrEqual((tops.max() ?? 0) - (tops.min() ?? 0), 3, "\(name): sheet moved \(tops)", file: file, line: line)
+        XCTAssertFalse(samples.contains { $0.dock }, "\(name): dock appeared", file: file, line: line)
+        XCTAssertEqual(Set(samples.map(\.sel)).count, 1, "\(name): selection changed \(Set(samples.map(\.sel)))", file: file, line: line)
+    }
+
+    // MARK: Ordinary navigation never moves the sheet
+
+    func testAnalysisQuestionSwitchingNeverMovesTheSheet() {
+        launch()
+        let mark = trace().now
+        for id in ["guided.intent.question", "guided.intent.analysis", "guided.intent.question", "guided.intent.analysis"] {
+            tap(id)
+            settle(0.6)
+        }
+        let samples = segment(since: mark, "analysis-question")
+        assertStatic(samples, "Analysis↔Question")
+        XCTAssertEqual(samples.last?.route, "details-analysis")
+        screenshot("p1-details-analysis")
+    }
+
+    func testDetailsReviewBackNeverMovesTheSheet() {
+        launch()
+        let mark = trace().now
+        tap("guided.review")
+        XCTAssertTrue(app.buttons["guided.post"].waitForExistence(timeout: 5))
+        settle()
+        screenshot("p1-review")
+        tap("guided.back")
+        XCTAssertTrue(app.buttons["guided.review"].waitForExistence(timeout: 5))
+        settle()
+        tap("guided.review")
+        settle()
+        tap("guided.back")
+        settle()
+        let samples = segment(since: mark, "details-review-back")
+        assertStatic(samples, "Details→Review→Back")
+        XCTAssertTrue(samples.contains { $0.route == "review-analysis" })
+        XCTAssertEqual(samples.last?.route, "details-analysis")
+    }
+
+    func testContextIndicatorSettingsAndBackNeverMoveTheSheet() {
+        launch()
+        reveal("guided.addContext")
+        let mark = trace().now
+        tap("guided.addContext")
+        settle(0.6)
+        tap("workspace.Add indicator")
+        settle(0.6)
+        tap("workspace.indicator.EMA")
+        XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
+        settle(0.6)
+        screenshot("p1-indicator-settings")
+        tap("guided.back") // Cancel the unsaved settings.
+        settle(0.6)
+        tap("guided.back") // Back to the Context summary.
+        settle(0.6)
+        tap("guided.contextDone")
+        settle()
+        let samples = segment(since: mark, "context-indicator")
+        assertStatic(samples, "Details→Context→Indicator→Settings→Back")
+        for route in ["context-analysis", "indicators-analysis", "indicatorSettings-analysis"] {
+            XCTAssertTrue(samples.contains { $0.route == route }, "visited \(route)")
+        }
+        XCTAssertEqual(samples.last?.route, "details-analysis")
+    }
+
+    func testSetupDetailsReviewBackNeverMovesTheSheet() {
+        launch(setup: true)
+        XCTAssertTrue(app.buttons["guided.review"].waitForExistence(timeout: 5))
+        screenshot("p1-setup-details")
+        let mark = trace().now
+        tap("guided.review")
+        XCTAssertTrue(app.buttons["guided.post"].waitForExistence(timeout: 5))
+        settle()
+        screenshot("p1-setup-review")
+        tap("guided.back")
+        settle()
+        let samples = segment(since: mark, "setup-review-back")
+        assertStatic(samples, "Setup Details→Review→Back")
+        XCTAssertTrue(samples.contains { $0.route == "review-setup" })
+        XCTAssertEqual(samples.last?.route, "details-setup")
+    }
+
+    // MARK: Explicit moves keep one presentation and exact state
+
+    func testCollapseAndResumeReturnToTheSameScreenAndValue() {
+        launch()
+        reveal("guided.addContext")
+        tap("guided.addContext")
+        tap("workspace.Add indicator")
+        tap("workspace.indicator.EMA")
+        let slider = app.sliders.firstMatch
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        slider.adjust(toNormalizedSliderPosition: 0.65)
+        let value = slider.value as? String
+        settle()
+        let mark = trace().now
+        tap("guided.showChart")
+        XCTAssertTrue(app.buttons["guided.compactDock"].waitForExistence(timeout: 5))
+        settle()
+        screenshot("p1-collapsed-dock")
+        tap("guided.compactDock")
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        settle()
+        XCTAssertEqual(slider.value as? String, value, "unsaved setting kept")
+        let samples = segment(since: mark, "collapse-resume")
+        XCTAssertEqual(Set(samples.map(\.ctl)).count, 1, "one presentation throughout")
+        XCTAssertFalse(samples.contains { $0.top < 0 })
+        XCTAssertTrue(samples.contains { $0.dock }, "the dock showed while collapsed")
+        XCTAssertEqual(samples.first?.top ?? 0, samples.last?.top ?? -99, accuracy: 1, "resumed at the same height")
+        XCTAssertEqual(samples.last?.route, "indicatorSettings-analysis")
+        XCTAssertFalse(samples.last?.dock ?? true)
+    }
+
+    /// A scrolled screen is exactly where it was after collapse and resume.
+    func testCollapseAndResumeKeepTheScrollPosition() {
+        launch()
+        reveal("guided.addContext")
+        tap("guided.addContext")
+        tap("workspace.Add indicator")
+        let last = app.buttons["workspace.indicator.Volume"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5))
+        for _ in 0..<8 where !last.isHittable {
+            scrollWorkspaceContent()
+            settle(0.5)
+        }
+        XCTAssertTrue(last.isHittable, "scrolled to the end of the catalogue")
+        settle()
+        let before = last.frame.minY
+        screenshot("p1-scrolled-before-collapse")
+        tap("guided.showChart")
+        XCTAssertTrue(app.buttons["guided.compactDock"].waitForExistence(timeout: 5))
+        settle()
+        tap("guided.compactDock")
+        settle(1.2)
+        screenshot("p1-scrolled-after-resume")
+        XCTAssertTrue(last.isHittable, "still on screen after resume")
+        XCTAssertEqual(last.frame.minY, before, accuracy: 4, "same scroll position")
+    }
+
+    // MARK: Keyboard
+
+    /// Typing uses the sheet's native keyboard expansion, twice in one
+    /// session: the first time the keyboard loads cold (a main-thread stall
+    /// in the simulator), the second warm. Each rise and each return must be
+    /// one monotonic motion, the selected detent must never change, and
+    /// Done returns the sheet exactly where typing began.
+    func testTypingExpandsNativelyAndReturns() throws {
+        launch()
+        let field = app.textViews["guided.text"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let keyboard = app.keyboards.firstMatch
+        let rest = trace().samples.last
+        let restTop = rest?.top ?? 0
+        var risenTops: [Int] = []
+        for cycle in 1...2 {
+            let mark = trace().now
+            field.tap()
+            guard keyboard.waitForExistence(timeout: 5) else {
+                throw XCTSkip("no software keyboard on this simulator")
+            }
+            settle(1.2)
+            if cycle == 1 { screenshot("p1-typing") }
+            let entry = segment(since: mark, "typing-entry-\(cycle)")
+            XCTAssertEqual(Set(entry.map(\.ctl)).count, 1, "one presentation")
+            XCTAssertEqual(Set(entry.map(\.sel)), [rest?.sel ?? ""], "the selected detent never changes")
+            let tops = entry.map(\.top)
+            XCTAssertLessThan(tops.last ?? 0, restTop, "the sheet rose with the keyboard")
+            XCTAssertLessThanOrEqual(tops.max() ?? 0, restTop + 3, "no drop before rising \(tops)")
+            XCTAssertTrue(zip(tops, tops.dropFirst()).allSatisfy { $1 <= $0 + 3 }, "one rising motion \(tops)")
+            risenTops.append(tops.last ?? 0)
+            XCTAssertLessThan(app.buttons["guided.review"].frame.maxY, keyboard.frame.minY + 1, "footer above the keyboard")
+            field.typeText(cycle == 1 ? " Buyers stepped in." : " Holding.")
+            let exitMark = trace().now
+            app.buttons["workspace.keyboardDone"].firstMatch.tap()
+            settle(1.2)
+            let exit = segment(since: exitMark, "typing-exit-\(cycle)")
+            XCTAssertFalse(keyboard.exists, "keyboard dismissed by Done")
+            XCTAssertEqual(Set(exit.map(\.ctl)).count, 1)
+            XCTAssertEqual(Set(exit.map(\.sel)), [rest?.sel ?? ""])
+            let exitTops = exit.map(\.top)
+            XCTAssertEqual(exitTops.last ?? 0, restTop, accuracy: 3, "back to where typing began")
+            XCTAssertTrue(zip(exitTops, exitTops.dropFirst()).allSatisfy { $1 >= $0 - 3 }, "one settling motion \(exitTops)")
+        }
+        XCTAssertEqual(risenTops[0], risenTops[1], accuracy: 2, "the same expansion both times")
+        // The second tap places the cursor where it lands; both are kept.
+        let text = field.value as? String ?? ""
+        XCTAssertTrue(text.contains("Buyers stepped in.") && text.contains("Holding."), text)
+    }
+
+    /// A new, empty post opens ready to type (owner decision, 6 Oct 2026).
+    func testNewEmptyPostAutofocuses() throws {
+        launch(filledNote: false)
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.waitForExistence(timeout: 6) else {
+            throw XCTSkip("no software keyboard on this simulator")
+        }
+        settle(1.0)
+        screenshot("p1-autofocus")
+        let samples = segment(since: 0, "autofocus")
+        XCTAssertEqual(samples.last?.sel, "working", "the workspace's own detent")
+        XCTAssertEqual(Set(samples.map(\.ctl)).count, 1, "one presentation")
+    }
+
+    /// A Setup never autofocuses.
+    func testSetupDoesNotAutofocus() {
+        launch(setup: true, filledNote: false)
+        settle(1.5)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertEqual(trace().samples.last?.mode, "authoring")
+    }
+}
