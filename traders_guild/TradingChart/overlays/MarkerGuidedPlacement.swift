@@ -158,6 +158,7 @@ extension MarkerPlacementState {
         guidedEditOriginal = nil
         workspace = MarkerWorkspaceState()
         isGuidedFlowActive = true
+        trackingUnavailableReason = nil
         submissionPhase = .idle
         draftBaseline = nil
         draftID = UUID()
@@ -171,6 +172,7 @@ extension MarkerPlacementState {
         guidedEditOriginal = nil
         workspace = MarkerWorkspaceState()
         isGuidedFlowActive = false
+        trackingUnavailableReason = nil
         submissionPhase = .idle
         draftBaseline = nil
         setupLevelSeed = nil
@@ -404,7 +406,7 @@ extension MarkerPlacementState {
         if intent == .setup || newIntent == .setup { workspace.levelInputs = [:] }
         setIntent(newIntent)
         if newIntent == .setup {
-            trackingEnabled = true
+            trackingEnabled = trackingUnavailableReason == nil
         }
     }
 

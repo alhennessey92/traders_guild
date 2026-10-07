@@ -383,16 +383,14 @@ struct chartSheetMarkersView: View {
             controlViewModel.cancelMarkerPlacement()
             return
         }
-        if let failure = placementPreflightFailure(for: intent) {
-            rlAppState.showError(
-                title: failure.toastTitle,
-                message: failure.userMessage,
-                severity: failure.toastSeverity,
-                style: .toast
-            )
-            return
-        }
+        // Tracking may be unavailable here (an open tracked Setup on this
+        // symbol and timeframe, or the guild's limit), but a Setup is not:
+        // it starts untracked, and the ticket says why.
+        let trackingBlock = placementPreflightFailure(for: intent)
         placementState.prepareGuidedFlow()
+        if let trackingBlock {
+            placementState.trackingUnavailableReason = trackingBlock.userMessage + " This Setup will be untracked."
+        }
         controlViewModel.startMarkerPlacement(intent: intent)
     }
 

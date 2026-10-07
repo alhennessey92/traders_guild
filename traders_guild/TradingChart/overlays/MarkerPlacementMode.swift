@@ -182,6 +182,10 @@ final class MarkerPlacementState: ObservableObject {
     @Published var visibility: String = "guild"
     @Published var confidence: Int?
     @Published var trackingEnabled: Bool = false
+    /// Why a guided Setup cannot be tracked here (an open tracked Setup on
+    /// this symbol and timeframe, or the guild's limit). It starts untracked
+    /// with the reason shown, instead of not starting at all.
+    @Published var trackingUnavailableReason: String?
     /// The Discord channel this marker will also be posted to, chosen here and
     /// now. Never a standing setting: an author opts one marker in at a time,
     /// which is what lets this work in an open guild where the guild-wide

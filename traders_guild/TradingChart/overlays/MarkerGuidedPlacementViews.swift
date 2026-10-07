@@ -379,17 +379,26 @@ struct MarkerGuidedPlacementPanel: View {
                 Text("Track this Setup")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(AppColors.primaryForeground)
-                Text(MarkerGuidedFormat.trackingSummary(
-                    tracked: placementState.trackingEnabled,
-                    gain: placementState.estimatedTrackingRepGain,
-                    loss: placementState.estimatedTrackingRepLoss
-                ))
-                .font(.caption)
-                .foregroundColor(AppColors.overlayPanelSecondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+                if let reason = placementState.trackingUnavailableReason {
+                    // Why not, in place of what tracking would earn.
+                    Label(reason, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(AppColors.statusWarning)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(MarkerGuidedFormat.trackingSummary(
+                        tracked: placementState.trackingEnabled,
+                        gain: placementState.estimatedTrackingRepGain,
+                        loss: placementState.estimatedTrackingRepLoss
+                    ))
+                    .font(.caption)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .tint(RLComponentType.levelEntry.color)
+        .disabled(placementState.trackingUnavailableReason != nil)
         .accessibilityIdentifier("guided.tracking")
     }
 

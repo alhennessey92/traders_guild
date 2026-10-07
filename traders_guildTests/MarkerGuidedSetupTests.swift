@@ -96,6 +96,25 @@ struct MarkerGuidedSetupTests {
         #expect(tp?.payload.guidedLevelPayload?.lineWidth == 2)
     }
 
+    // MARK: Tracking unavailable here
+
+    /// An open tracked Setup on this symbol and timeframe no longer stops a
+    /// Setup from starting: it starts untracked, and turning a post into a
+    /// Setup keeps it untracked; a new draft forgets the reason.
+    @Test
+    func aSetupWhereTrackingIsUnavailableStaysUntracked() {
+        let state = MarkerPlacementState()
+        state.prepareGuidedFlow()
+        state.trackingUnavailableReason = "You already have an open tracked setup on this symbol and timeframe."
+        state.reset(to: .analysis, anchorTime: Date(timeIntervalSince1970: 1770000000), anchorPrice: 100)
+        state.note = "A"
+        _ = state.requestGuidedIntentChange(to: .setup)
+        #expect(state.intent == .setup)
+        #expect(!state.trackingEnabled, "never switched on where it cannot be")
+        state.prepareGuidedFlow()
+        #expect(state.trackingUnavailableReason == nil)
+    }
+
     // MARK: Adjust on chart
 
     @Test

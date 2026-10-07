@@ -3203,7 +3203,7 @@ struct TradingChartView: View {
                 .levelSl,
                 payload: .levelSl(LevelPayload(price: slPrice, label: "SL"))
             )
-            placementState.trackingEnabled = true
+            placementState.trackingEnabled = placementState.trackingUnavailableReason == nil
         }
     }
 
@@ -3248,6 +3248,18 @@ struct TradingChartView: View {
             historicalRenderIndexOffset: chartData.historicalRenderIndexOffset,
             focusY: placementFocusY
         )
+    }
+
+    /// Keeps the draft on its candle when older candles are put in front.
+    private func shiftPlacementIndices(by count: Int) {
+        guard count > 0 else { return }
+        if previewCandleIndex >= 0 {
+            previewCandleIndex = min(previewCandleIndex + count, max(0, chartData.candles.count - 1))
+        }
+        if var prediction = predictionPlacement {
+            prediction.candleIndex = min(prediction.candleIndex + count, max(0, chartData.candles.count - 1))
+            predictionPlacement = prediction
+        }
     }
 
     // MARK: - Keeping the draft above the authoring sheet
@@ -3456,6 +3468,12 @@ struct TradingChartView: View {
     private func handleCandleCountChange(oldCount: Int, newCount: Int) {
         let historicalPrependedCount = chartData.consumeLastPrependedCandleCount()
         if historicalPrependedCount > 0 {
+            // Older candles went in front: every index moved along by that
+            // many. Saved markers are shifted by the chart model; the draft's
+            // own indices live here. Unshifted, the draft jumped a page of
+            // history to the left, off the screen, on the first pan that
+            // loaded one (owner report, 7 Oct).
+            shiftPlacementIndices(by: historicalPrependedCount)
             return
         }
         if placementState.isChangingResponseTimeframe {
