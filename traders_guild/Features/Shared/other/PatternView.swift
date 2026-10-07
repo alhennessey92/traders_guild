@@ -21,6 +21,10 @@ struct PatternOverlay: View {
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
+                // A sheet mid-transition can lay its background out at a zero,
+                // negative or non-finite size; nothing to draw, and the row
+                // and column ranges below would trap.
+                guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else { return }
                 switch patternType {
                 case .honeycomb:
                     drawHoneycomb(context: context, size: size, hexSize: hexSize)

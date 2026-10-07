@@ -76,6 +76,23 @@ final class MarkerWorkspaceVisualReviewUITests: XCTestCase {
         shot("p3-setup-review")
     }
 
+    func testContextScreens() {
+        launchHarness("context")
+        XCTAssertTrue(app.buttons["workspace.tab.indicators"].waitForExistence(timeout: 5))
+        shot("p5-context-indicators-small")
+        app.raiseMarkerSheet()
+        settle()
+        shot("p5-context-indicators")
+        tap("workspace.category.Momentum")
+        shot("p5-context-momentum")
+        tap("workspace.tab.drawings")
+        shot("p5-context-drawings")
+        tap("workspace.tab.timeframes")
+        shot("p5-context-timeframes")
+        tap("workspace.tab.notes")
+        shot("p5-context-notes")
+    }
+
     func testResponseScreens() {
         launchHarness("responseDetails")
         XCTAssertTrue(app.otherElements["guided.responseBanner"].waitForExistence(timeout: 5))

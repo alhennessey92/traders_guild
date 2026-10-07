@@ -144,21 +144,18 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         let mark = trace().now
         tap("guided.addContext")
         settle(0.6)
-        tap("workspace.Add indicator")
-        settle(0.6)
+        screenshot("p5-context")
         tap("workspace.indicator.EMA")
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
         settle(0.6)
         screenshot("p1-indicator-settings")
         tap("guided.back") // Cancel the unsaved settings.
         settle(0.6)
-        tap("guided.back") // Back to the Context summary.
-        settle(0.6)
-        tap("guided.contextDone")
+        tap("guided.contextDone") // Add context → Details.
         settle()
         let samples = segment(since: mark, "context-indicator")
         assertStatic(samples, "Details→Context→Indicator→Settings→Back")
-        for route in ["context-analysis", "indicators-analysis", "indicatorSettings-analysis"] {
+        for route in ["context-analysis", "indicatorSettings-analysis"] {
             XCTAssertTrue(samples.contains { $0.route == route }, "visited \(route)")
         }
         XCTAssertEqual(samples.last?.route, "details-analysis")
@@ -205,12 +202,14 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         settle(0.6)
         tap("guided.addContext")
         settle(0.6)
-        tap("workspace.Add indicator")
+        tap("workspace.category.Momentum")
         settle(0.6)
-        tap("workspace.indicator.EMA")
+        tap("workspace.tab.timeframes")
+        settle(0.6)
+        tap("workspace.tab.indicators")
+        settle(0.6)
+        tap("workspace.indicator.RSI")
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
-        settle(0.6)
-        tap("guided.back")
         settle(0.6)
         tap("guided.back")
         settle(0.6)
@@ -249,7 +248,6 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         launch()
         reveal("guided.addContext")
         tap("guided.addContext")
-        tap("workspace.Add indicator")
         tap("workspace.indicator.EMA")
         let slider = app.sliders.firstMatch
         XCTAssertTrue(slider.waitForExistence(timeout: 5))
@@ -279,8 +277,8 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         launch()
         reveal("guided.addContext")
         tap("guided.addContext")
-        tap("workspace.Add indicator")
-        let last = app.buttons["workspace.indicator.Volume"]
+        // The last Trend tile, below the fold at the opening height.
+        let last = app.buttons["workspace.indicator.SAR"]
         XCTAssertTrue(last.waitForExistence(timeout: 5))
         for _ in 0..<8 where !last.isHittable { app.scrollMarkerWorkspace() }
         XCTAssertTrue(last.isHittable, "scrolled to the end of the catalogue")

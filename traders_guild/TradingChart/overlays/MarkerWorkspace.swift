@@ -13,7 +13,7 @@ enum MarkerWorkspaceDestination: String, Hashable {
     var title: String {
         switch self {
         case .details: return "Details"
-        case .context: return "Context"
+        case .context: return "Add context"
         case .indicators: return "Add indicator"
         case .indicatorSettings: return "Indicator settings"
         case .drawings: return "Add drawing"
@@ -25,6 +25,53 @@ enum MarkerWorkspaceDestination: String, Hashable {
         case .relationship: return "Response relationship"
         case .responseTimeframe: return "Response timeframe"
         case .review: return "Review"
+        }
+    }
+}
+
+/// The Add context screen's tabs, one per kind of context. Indicators,
+/// drawings (with levels) and timeframes are the three arc families the
+/// guild sees on a selected marker; notes and links sit apart.
+enum MarkerContextTab: String, CaseIterable, UnifiedTabItem {
+    case indicators, drawings, timeframes, notes
+
+    var title: String {
+        switch self {
+        case .indicators: return "Indicators"
+        case .drawings: return "Drawings"
+        case .timeframes: return "Timeframes"
+        case .notes: return "Notes"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .indicators: return "chart.line.uptrend.xyaxis.circle"
+        case .drawings: return "pencil.circle"
+        case .timeframes: return "clock.circle"
+        case .notes: return "text.bubble"
+        }
+    }
+
+    /// The arc colour of the family; notes have no arc.
+    var color: Color {
+        switch self {
+        case .indicators: return MarkerComponentArcs.Category.indicators.color
+        case .drawings: return MarkerComponentArcs.Category.drawings.color
+        case .timeframes: return MarkerComponentArcs.Category.timeframesAndLinks.color
+        case .notes: return AppColors.overlayPanelSecondaryText
+        }
+    }
+
+    /// Which tab a piece of context belongs to.
+    static func of(_ type: RLComponentType) -> MarkerContextTab? {
+        switch type {
+        case .indicator: return .indicators
+        case .drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern,
+             .levelSupport, .levelResistance: return .drawings
+        case .timeframeLink: return .timeframes
+        case .textNote, .linkURL: return .notes
+        case .anchor, .levelEntry, .levelSl, .levelTp, .reactionEmoji: return nil
         }
     }
 }
@@ -56,6 +103,10 @@ struct MarkerWorkspaceState {
         nonmutating set { memory.textSelections = newValue }
     }
     var showsTitle = false
+    /// The Add context tab and indicator category last shown, so returning
+    /// from an editor (or the chart) lands where the author was.
+    var contextTab: MarkerContextTab = .indicators
+    var indicatorCategory: IndicatorSubTab = .trend
     var editorBaselineText = ""
     var editorBaselineTitle = ""
     var indicatorDraft: IndicatorSettingsDraft?
@@ -112,6 +163,32 @@ extension MarkerPlacementState {
 
     var workspaceCanAddSource: Bool {
         workspaceAllows(.linkURL) && component(.linkURL) == nil
+    }
+
+    /// The Add context tabs this draft can use, in order.
+    var workspaceContextTabs: [MarkerContextTab] {
+        MarkerContextTab.allCases.filter { tab in
+            switch tab {
+            case .indicators: return workspaceAllows(.indicator)
+            case .drawings:
+                return [RLComponentType.drawingTrendline, .drawingHorizontalLine, .drawingZone, .drawingPattern,
+                        .levelSupport, .levelResistance].contains(where: workspaceAllows)
+            case .timeframes: return workspaceAllows(.timeframeLink)
+            case .notes: return workspaceAllows(.textNote) || workspaceAllows(.linkURL)
+            }
+        }
+    }
+
+    /// The tab shown: the one last chosen, while this draft can still use it.
+    var workspaceContextTab: MarkerContextTab {
+        let tabs = workspaceContextTabs
+        return tabs.contains(workspace.contextTab) ? workspace.contextTab : (tabs.first ?? .indicators)
+    }
+
+    /// Opens Add context on a tab (from Details, or a summary chip).
+    func openContext(on tab: MarkerContextTab) {
+        workspace.contextTab = tab
+        if workspaceDestination != .context { openContext() }
     }
 
     var workspaceHasInvalidLevelInput: Bool {

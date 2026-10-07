@@ -118,6 +118,47 @@ struct MarkerWorkspaceSessionTests {
         #expect(state.workspace.textSelections.isEmpty, "no cursor carried into a new draft")
     }
 
+    // MARK: Add context tabs
+
+    @Test
+    func eachTypeGetsOnlyTheContextItCanCarry() {
+        #expect(draft(.analysis).workspaceContextTabs == [.indicators, .drawings, .timeframes, .notes])
+        #expect(draft(.question).workspaceContextTabs == [.indicators, .drawings, .timeframes, .notes],
+                "a Question carries notes, but no source or levels (filtered within the tabs)")
+        #expect(draft(.setup).workspaceContextTabs == [.indicators, .drawings, .timeframes, .notes])
+        let question = draft(.question)
+        #expect(!question.workspaceAllows(.linkURL))
+        #expect(!question.workspaceAllows(.levelSupport))
+    }
+
+    @Test
+    func theTabAndCategoryAreRememberedAcrossAnEditorAndAnnounceNothingToTheChart() {
+        let state = draft()
+        let chart = listen(to: state)
+        state.openContext(on: .timeframes)
+        #expect(state.workspaceDestination == .context)
+        #expect(state.workspaceContextTab == .timeframes)
+        state.workspace.contextTab = .indicators
+        state.workspace.indicatorCategory = .momentum
+        state.beginWorkspaceIndicator(IndicatorCatalogItem(type: .rsi))
+        #expect(state.workspaceDestination == .indicatorSettings)
+        state.goBack()
+        #expect(state.workspaceDestination == .context)
+        #expect(state.workspaceContextTab == .indicators)
+        #expect(state.workspace.indicatorCategory == .momentum)
+        #expect(chart.count == 0, "browsing context is the workspace's")
+    }
+
+    @Test
+    func aTabTheDraftCannotUseFallsBackToTheFirstItCan() {
+        let state = draft()
+        state.workspace.contextTab = .notes
+        #expect(state.workspaceContextTab == .notes)
+        state.isGuidedFlowActive = false
+        #expect(state.workspaceContextTabs.isEmpty)
+        #expect(state.workspaceContextTab == .indicators, "nothing usable: the first tab")
+    }
+
     @Test
     func typeChangesAndRefusedLevelsReturnStraightToDetails() {
         let state = draft()

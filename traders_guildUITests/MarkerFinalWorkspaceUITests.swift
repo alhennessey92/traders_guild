@@ -41,7 +41,6 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
     func testUnsavedNestedIndicatorCollapseResumeAndCancel() {
         launch("analysisDetails")
         tap("guided.addContext")
-        tap("workspace.Add indicator")
         tap("workspace.indicator.EMA")
         let slider = app.sliders.firstMatch
         XCTAssertTrue(slider.waitForExistence(timeout: 5))
@@ -58,8 +57,7 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         XCTAssertEqual(app.navigationBars.count, 0, "embedded editor has no second navigation sheet")
         capture("final-indicator-resumed")
         tap("guided.back")
-        XCTAssertTrue(app.buttons["workspace.indicator.EMA"].exists)
-        tap("guided.back")
+        XCTAssertTrue(app.buttons["workspace.indicator.EMA"].exists, "back on the Indicators tab")
         tap("guided.contextDone")
         tap("guided.review")
         tap("guided.post")
@@ -71,7 +69,7 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
     func testNestedIndicatorDoneCommitsToDraftAndPost() {
         launch("analysisDetails")
         tap("guided.addContext")
-        tap("workspace.Add indicator")
+        tap("workspace.category.Momentum")
         tap("workspace.indicator.RSI")
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
         app.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.4)
@@ -86,7 +84,8 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
     func testUnfinishedSourceLinkResumesWithoutCreatingPlaceholder() {
         launch("analysisDetails")
         tap("guided.addContext")
-        tap("workspace.Add source link")
+        tap("workspace.tab.notes")
+        tap("workspace.source.add")
         let field = app.textFields.containing(NSPredicate(format: "label == %@", "https://example.com/source")).firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["guided.contextDone"].isEnabled)
@@ -150,10 +149,14 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         launch("questionShort")
         XCTAssertFalse(app.buttons["guided.review"].isEnabled)
         tap("guided.addContext")
-        XCTAssertTrue(app.buttons["workspace.Add indicator"].exists)
-        XCTAssertFalse(app.buttons["workspace.Add source link"].exists)
-        XCTAssertFalse(app.buttons["workspace.Add support"].exists)
-        XCTAssertFalse(app.buttons["workspace.Add resistance"].exists)
+        XCTAssertTrue(app.buttons["workspace.tab.indicators"].exists)
+        XCTAssertTrue(app.buttons["workspace.indicator.EMA"].exists)
+        tap("workspace.tab.notes")
+        XCTAssertTrue(app.buttons["workspace.note.add"].exists)
+        XCTAssertFalse(app.buttons["workspace.source.add"].exists, "a Question carries no source")
+        tap("workspace.tab.drawings")
+        XCTAssertFalse(app.buttons["workspace.level.support"].exists, "nor support")
+        XCTAssertFalse(app.buttons["workspace.level.resistance"].exists, "nor resistance")
         capture("final-question-context")
     }
 
