@@ -284,6 +284,9 @@ struct TradingChartView: View {
     var floatingOverlayPanelClearance: CGFloat = 0
     /// Dedicated reserve for the bottom control row and current-price exclusion zone.
     var chartControlRowPanelReserve: CGFloat = 0
+    /// How much of the chart's bottom the v1.5 authoring sheet covers. Zero
+    /// everywhere else, so nothing else is framed differently.
+    var placementObscuredBottom: CGFloat = 0
 
     /// Current user/guild context for marker ownership and filtering.
     private let currentUserId: UUID
@@ -648,7 +651,8 @@ struct TradingChartView: View {
         indicatorPanelBottomPadding: CGFloat = 0,
         panelBottomBoundaryLabelReserve: CGFloat = 0,
         floatingOverlayPanelClearance: CGFloat = 0,
-        chartControlRowPanelReserve: CGFloat = 0
+        chartControlRowPanelReserve: CGFloat = 0,
+        placementObscuredBottom: CGFloat = 0
     ) {
         let resolvedMember = currentUserMember ?? RLGuildMemberDTO(
             membershipId: UUID(),
@@ -693,6 +697,7 @@ struct TradingChartView: View {
         self.panelBottomBoundaryLabelReserve = panelBottomBoundaryLabelReserve
         self.floatingOverlayPanelClearance = floatingOverlayPanelClearance
         self.chartControlRowPanelReserve = chartControlRowPanelReserve
+        self.placementObscuredBottom = placementObscuredBottom
     }
     
     // MARK: - Target Line Helpers
@@ -1064,6 +1069,9 @@ struct TradingChartView: View {
             }
             .onChange(of: placementState.drawingInteractionPhase) { _, _ in
                 reconcileDrawingInteractionState()
+            }
+            .onChange(of: placementObscuredBottom) { _, _ in
+                keepDraftAboveSheet()
             }
             .onChange(of: predictionPlacement) { _, _ in
                 syncSetupComponentsFromPredictionPlacement()
@@ -3090,6 +3098,12 @@ struct TradingChartView: View {
                 // What "unedited" means for this draft, so the guided flow can
                 // tell whether cancelling needs a confirmation.
                 placementState.captureDraftBaseline()
+
+                // The workspace opens over the bottom of the chart: once it
+                // has, make sure the draft is not behind it.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    keepDraftAboveSheet()
+                }
             }
         } else if oldValue && !newValue {
             // Exiting placement mode - reset to invalid index
@@ -3222,7 +3236,8 @@ struct TradingChartView: View {
         // only later moves count as edits worth confirming.
         placementState.recordSetupLevelSeed()
 
-        // Auto-scroll to latest candle with smooth animation
+        // Auto-scroll to latest candle with smooth animation; under the
+        // authoring sheet, into the strip of chart above it.
         gestureState.animateCenterOnMarker(
             at: lastIndex,
             chartWidth: chartSize.width > 0 ? chartSize.width : UIScreen.main.bounds.width,
@@ -3230,7 +3245,58 @@ struct TradingChartView: View {
             price: entryPrice,
             chartHeight: chartSize.height > 0 ? chartSize.height : UIScreen.main.bounds.height * 0.6,
             priceRange: chartData.priceRange,
-            historicalRenderIndexOffset: chartData.historicalRenderIndexOffset
+            historicalRenderIndexOffset: chartData.historicalRenderIndexOffset,
+            focusY: placementFocusY
+        )
+    }
+
+    // MARK: - Keeping the draft above the authoring sheet
+
+    /// The chart left visible above the authoring sheet, below the top bar;
+    /// nil without a sheet, or when too little is left to frame anything.
+    private var placementVisibleBand: ClosedRange<CGFloat>? {
+        guard placementObscuredBottom > 0, chartSize.height > 0 else { return nil }
+        let top: CGFloat = 114
+        let bottom = chartSize.height - placementObscuredBottom
+        guard bottom - top >= 140 else { return nil }
+        return top...bottom
+    }
+
+    /// Where a framed draft sits: the middle of the visible strip.
+    private var placementFocusY: CGFloat? {
+        placementVisibleBand.map { ($0.lowerBound + $0.upperBound) / 2 }
+    }
+
+    /// The price the draft is drawn at: a Setup's Entry, otherwise the top of
+    /// the post's candle, where its face sits.
+    private var draftFocusPrice: Double? {
+        if controlViewModel.currentMarkerIntent == .setup {
+            return predictionPlacement?.entryPrice
+        }
+        guard chartData.candles.indices.contains(effectiveCandleIndex) else { return nil }
+        return chartData.candles[effectiveCandleIndex].high
+    }
+
+    /// The sheet settled somewhere the draft would be hidden (behind it, or
+    /// under the top bar): move the chart up or down so it shows, keeping its
+    /// horizontal position. A draft already in view is left alone.
+    private func keepDraftAboveSheet() {
+        // A centring already under way (a new Setup's) frames above the sheet itself.
+        guard isMarkerPlacementMode, placementState.isGuidedFlowActive, !placementState.isEditingExistingMarker,
+              !isMarkerBeingDragged, !isInteractiveDrawingSessionActive, !gestureState.isCenteringAnimationActive,
+              let band = placementVisibleBand, let focusY = placementFocusY,
+              let price = draftFocusPrice else { return }
+        let range = chartData.priceRange
+        guard range.max > range.min else { return }
+        let normalized = CGFloat((price - range.min) / (range.max - range.min))
+        let y = chartSize.height - normalized * chartSize.height * gestureState.priceScale - gestureState.verticalPanOffset
+        // Room for the face itself (or a level's chip) inside the strip.
+        guard !(band.lowerBound + 30...band.upperBound - 40).contains(y) else { return }
+        gestureState.animateVerticalFocus(
+            price: price,
+            chartHeight: chartSize.height,
+            priceRange: range,
+            focusY: focusY
         )
     }
 

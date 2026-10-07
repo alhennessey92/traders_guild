@@ -476,7 +476,8 @@ class ChartGestureState: ObservableObject {
         chartHeight: CGFloat,
         priceRange: (min: Double, max: Double),
         historicalRenderIndexOffset: Int = 0,
-        duration: CFTimeInterval = 0.9
+        duration: CFTimeInterval = 0.9,
+        focusY: CGFloat? = nil
     ) {
         guard candleWidth > 0, chartWidth > 0 else { return }
         stopMomentum()
@@ -494,7 +495,9 @@ class ChartGestureState: ObservableObject {
         }
         let normalizedPrice = CGFloat((price - priceRange.min) / range)
         let scaledHeight = chartHeight * priceScale
-        let targetVertical = chartHeight / 2 - normalizedPrice * scaledHeight
+        // The price lands at `focusY` (by default the middle of the chart):
+        // y = height − normalised·scaled − verticalPanOffset.
+        let targetVertical = chartHeight - normalizedPrice * scaledHeight - (focusY ?? chartHeight / 2)
 
         // Store animation state
         centeringStartPanX = panOffset.width
@@ -529,6 +532,30 @@ class ChartGestureState: ObservableObject {
 
         panOffset.width = centeringStartPanX + (centeringTargetPanX - centeringStartPanX) * eased
         verticalPanOffset = centeringStartVertical + (centeringTargetVertical - centeringStartVertical) * eased
+    }
+
+    /// Moves the chart up or down so `price` sits at `focusY`, leaving its
+    /// horizontal position as it is: a marker kept in view above a sheet.
+    func animateVerticalFocus(
+        price: Double,
+        chartHeight: CGFloat,
+        priceRange: (min: Double, max: Double),
+        focusY: CGFloat,
+        duration: CFTimeInterval = 0.45
+    ) {
+        let range = priceRange.max - priceRange.min
+        guard range > 0, chartHeight > 0, price.isFinite, focusY.isFinite else { return }
+        stopMomentum()
+        stopCenteringAnimation()
+        let normalizedPrice = CGFloat((price - priceRange.min) / range)
+        centeringStartPanX = panOffset.width
+        centeringTargetPanX = panOffset.width
+        centeringStartVertical = verticalPanOffset
+        centeringTargetVertical = chartHeight - normalizedPrice * chartHeight * priceScale - focusY
+        centeringDuration = duration
+        centeringStartTime = CACurrentMediaTime()
+        centeringDisplayLink = CADisplayLink(target: self, selector: #selector(centeringTick))
+        centeringDisplayLink?.add(to: .main, forMode: .common)
     }
 
     /// A centre-on-marker animation is moving the chart.

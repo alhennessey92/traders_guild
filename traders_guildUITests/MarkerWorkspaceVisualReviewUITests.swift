@@ -93,6 +93,30 @@ final class MarkerWorkspaceVisualReviewUITests: XCTestCase {
         shot("p5-context-notes")
     }
 
+    // MARK: P6: the largest accessibility text size
+
+    private func launchHarnessLargeText(_ scenario: String) {
+        app = XCUIApplication()
+        app.launchArguments = ["-MarkerGuidedCreationFixture", scenario, "-MarkerGuidedSheetFixture", "YES",
+                               "-TGAvatarMarkersExperiment", "YES",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Fixture")).firstMatch
+            .waitForExistence(timeout: 15))
+        settle(1.2)
+    }
+
+    func testLargestTextSizeScreens() {
+        for (scenario, name) in [("entry", "add"), ("analysisDetails", "details"), ("context", "context"),
+                                 ("setupTracked", "setup"), ("editSetupArmedReview", "edit-review")] {
+            launchHarnessLargeText(scenario)
+            app.raiseMarkerSheet()
+            settle()
+            shot("p6-ax-\(name)")
+            app.terminate()
+        }
+    }
+
     func testResponseScreens() {
         launchHarness("responseDetails")
         XCTAssertTrue(app.otherElements["guided.responseBanner"].waitForExistence(timeout: 5))

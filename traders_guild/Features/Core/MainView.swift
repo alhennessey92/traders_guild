@@ -1751,8 +1751,25 @@ struct MainView: View {
             indicatorPanelBottomPadding: chartPanelsTotalHeight,
             panelBottomBoundaryLabelReserve: chartPanelsBottomLabelStripReserve,
             floatingOverlayPanelClearance: chartFloatingOverlayClearance,
-            chartControlRowPanelReserve: chartControlRowPanelReserve
+            chartControlRowPanelReserve: chartControlRowPanelReserve,
+            placementObscuredBottom: placementObscuredBottom
         )
+    }
+
+    /// How much of the chart the authoring sheet covers at its current
+    /// height, so the chart can keep the draft in view above it. Zero outside
+    /// the guided workspace.
+    private var placementObscuredBottom: CGFloat {
+        guard isGuidedAuthoring else { return 0 }
+        let fraction: CGFloat
+        switch selectedDetent {
+        case MarkerSheetDetents.dock: fraction = 0.11
+        case MarkerSheetDetents.browse: fraction = 0.35
+        case MarkerSheetDetents.working: fraction = 0.5
+        case MarkerSheetDetents.tall: fraction = 0.9
+        default: return 0
+        }
+        return UIScreen.main.bounds.height * fraction
     }
 
     private func configureNavigationBarAppearance() {

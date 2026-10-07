@@ -261,6 +261,8 @@ struct MarkerGuidedPlacementPanel: View {
                     .contentTransition(.opacity)
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: destination)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .accessibilityShowsLargeContentViewer()
             Spacer(minLength: 0)
             if let onShowChart {
                 Button { dismissKeyboard(); onShowChart() } label: {
@@ -975,85 +977,128 @@ enum MarkerGuidedFlowEntry {
     static let createIntents: [RLMarkerIntent] = [.analysis, .setup]
 }
 
-/// Two starting points with a type, purpose and chevron: "Post to the chart"
-/// starts Analysis, "Setup" starts a structured trade.
-struct MarkerGuidedEntryCard: View {
-    let author: MarkerAvatarIdentity
-    let intent: RLMarkerIntent
-    let title: String
-    let subtitle: String
-    let identifier: String
-    /// Optional selected styling for reusable cards.
-    var isCurrent: Bool = false
-    let action: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                // At accessibility sizes the icon sits above the words, which
-                // then get the card's width.
-                let content = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                    : AnyLayout(HStackLayout(spacing: 14))
-                content {
-                    UnifiedMarkerBadge(intent: intent, sizeToken: .medium, avatar: author)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(title)
-                            .font(.headline.weight(.bold))
-                            .foregroundColor(AppColors.primaryForeground)
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(AppColors.overlayPanelSecondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: isCurrent ? "checkmark" : "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(isCurrent ? intent.color : AppColors.overlayPanelSecondaryText)
-                    .accessibilityHidden(true)
-            }
-            .padding(14)
-            .background(MarkerGuidedCardBackground())
-            .contentShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier(identifier)
-    }
-}
-
-/// "Post to the chart" starts Analysis.
+/// Markers ▸ Add. Posting to the chart is what most people come to do, so it
+/// leads: a card in the colours of the post it makes, with one large button.
+/// Planning a trade sits below as the deliberate second choice, with what it
+/// involves. Both fit at the working height on a large phone.
 struct MarkerGuidedCreateEntries: View {
     let author: MarkerAvatarIdentity
     let onSelect: (RLMarkerIntent) -> Void
+
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             MarkerPostToChartCard(author: author) { onSelect(.analysis) }
-            MarkerGuidedEntryCard(author: author, intent: .setup, title: "Setup",
-                                 subtitle: "Entry, stop and target · optional tracking", identifier: "guided.planTrade") {
-                onSelect(.setup)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Or plan a trade")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+                    .accessibilityAddTraits(.isHeader)
+                MarkerPlanTradeCard(author: author) { onSelect(.setup) }
             }
         }
     }
 }
 
+/// The hero: your face, the two kinds of post, and one clear button.
 struct MarkerPostToChartCard: View {
     let author: MarkerAvatarIdentity
     let action: () -> Void
 
     var body: some View {
-        MarkerGuidedEntryCard(
-            author: author,
-            intent: .analysis,
-            title: "Post to the chart",
-            subtitle: "Share analysis or ask the guild a question",
-            identifier: "guided.postToChart",
-            action: action
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                UnifiedMarkerBadge(intent: .analysis, sizeToken: .medium, avatar: author)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        kind(.analysis)
+                        Text("Analysis or a question")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(AppColors.primaryForeground)
+                        kind(.question)
+                    }
+                    Text("Share what you see, or ask the guild. Your face marks the spot.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Text("Post to the chart")
+                        .font(.headline.weight(.bold))
+                    Image(systemName: "arrow.right")
+                        .font(.subheadline.weight(.bold))
+                        .accessibilityHidden(true)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Capsule().fill(RLMarkerIntent.analysis.color))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .accessibilityShowsLargeContentViewer()
+            .accessibilityHint("Starts a post at the middle of the chart")
+            .accessibilityIdentifier("guided.postToChart")
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(LinearGradient(
+                    colors: [RLMarkerIntent.analysis.color.opacity(0.22), RLMarkerIntent.question.color.opacity(0.10)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
         )
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RLMarkerIntent.analysis.color.opacity(0.35), lineWidth: 1))
+    }
+
+    /// A kind of post, as its small badge.
+    private func kind(_ intent: RLMarkerIntent) -> some View {
+        Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
+            .font(.system(size: 8, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(intent.color))
+            .accessibilityHidden(true)
+    }
+}
+
+/// The deliberate second choice: a Setup, with what it involves and why
+/// tracking it is worth it.
+struct MarkerPlanTradeCard: View {
+    let author: MarkerAvatarIdentity
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 12) {
+                UnifiedMarkerBadge(intent: .setup, sizeToken: .medium, avatar: author)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Setup")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                    Text("Entry, Take Profit and Stop Loss on the chart. Track it to build your accuracy and reputation.")
+                        .font(.caption)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .background(MarkerGuidedCardBackground())
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("guided.planTrade")
     }
 }
 
@@ -1114,11 +1159,16 @@ struct MarkerGuidedTypePicker: View {
     let onSelect: (RLMarkerIntent) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Each type wears its marker badge: the glyph and colour its ring has
-    /// on the chart. The chosen one fills, as the face's ring recolours.
+    /// on the chart. The chosen one fills, as the face's ring recolours. At
+    /// accessibility sizes the two stack, so neither name breaks.
     var body: some View {
-        HStack(spacing: 8) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 8))
+        layout {
             ForEach(intents, id: \.self) { intent in
                 let isSelected = selected == intent
                 Button { onSelect(intent) } label: {
@@ -1132,6 +1182,8 @@ struct MarkerGuidedTypePicker: View {
                         Text(intent.displayName)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .padding(.leading, 7)
                     .padding(.trailing, 16)
@@ -1209,20 +1261,24 @@ struct MarkerGuidedSetupLevelsCard: View {
     var onAdjustOnChart: (() -> Void)? = nil
     /// A side change that moves the author's levels, for the panel to confirm.
     var onConfirmSideChange: (MarkerSetupSideChange) -> Void = { _ in }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The trade ticket: the side, then each level marked with its line on
     /// the chart, then risk to reward. Colour marks the lines; the words stay
     /// readable on every sheet.
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
+            let topRow = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: 10))
+            topRow {
                 MarkerSetupDirectionPicker(selected: placementState.setupDirection) { direction in
                     if let change = placementState.requestSetupDirection(direction) {
                         onConfirmSideChange(change)
                         HapticFeedback.light.trigger()
                     }
                 }
-                Spacer(minLength: 4)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 4) }
                 MarkerSetupRiskRewardView(ratio: placementState.guidedSetupRiskReward)
             }
             if let problem = sideProblem {
@@ -1287,6 +1343,8 @@ struct MarkerSetupDirectionPicker: View {
                 Button { onSelect(direction) } label: {
                     Label(direction.title, systemImage: direction.icon)
                         .font(.subheadline.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .foregroundColor(isSelected ? .white : AppColors.overlayPanelSecondaryText)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 36)
@@ -1302,6 +1360,10 @@ struct MarkerSetupDirectionPicker: View {
         .background(Capsule().fill(AppColors.whiteText.opacity(0.07)))
         .padding(.vertical, 2)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selected)
+        // A control, like the footer: it stops growing at the first
+        // accessibility size and shows the Large Content Viewer.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityShowsLargeContentViewer()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Side")
     }
