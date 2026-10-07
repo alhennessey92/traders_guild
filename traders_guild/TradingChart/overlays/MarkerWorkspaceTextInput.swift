@@ -153,10 +153,9 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: .subheadline)
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        // A number pad has no return key: its Done bar is the only way out.
-        if keyboard == .decimalPad || keyboard == .numberPad {
-            view.inputAccessoryView = MarkerKeyboardDoneBar.make(for: view)
-        }
+        // No keyboard bar, number pads included (owner, 7 Oct): every
+        // keyboard goes by dragging the content down, or by moving on
+        // (Review, Adjust on chart, showing the chart).
         return view
     }
     func updateUIView(_ view: UITextField, context: Context) {
@@ -235,17 +234,3 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
     }
 }
 
-/// The standard keyboard bar with Done, for number pads only: they have no
-/// return key. Text keyboards are dismissed by dragging the content down.
-enum MarkerKeyboardDoneBar {
-    static func make(for responder: UIResponder) -> UIToolbar {
-        let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
-        bar.sizeToFit()
-        let done = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak responder] _ in
-            responder?.resignFirstResponder()
-        })
-        done.accessibilityIdentifier = "workspace.keyboardDone"
-        bar.items = [UIBarButtonItem(systemItem: .flexibleSpace), done]
-        return bar
-    }
-}

@@ -35,7 +35,7 @@ Screenshots: `docs/visual-review/v1.5-p4/`: the ticket, the side confirmation, t
 3. **Adjust on chart**: the workspace becomes the bar. Drag TP or SL and watch the readout. Tap ✕ to put them back, or ✓ to keep them.
 4. Edit one of your own ARMED Setups: its saved lines appear on the chart, TP and SL drag, and Entry stays put. Save shows "What changes".
 
-**Question:** the number pad still has its Done button (a floating blue checkmark on iOS 26), because a number pad has no return key. You can also dismiss it by dragging the content down. Keep it or remove it?
+**Resolved (owner, 7 October):** the number pad's Done button (a floating blue checkmark on iOS 26) is removed. Every keyboard goes by dragging the content down, or by moving on.
 
 ## Known, next
 

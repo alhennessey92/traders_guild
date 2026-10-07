@@ -32,8 +32,8 @@ extension XCUIApplication {
     }
 
     /// Puts the keyboard away as a user does: dragging the workspace's
-    /// content down (it dismisses interactively; text keyboards carry no
-    /// Done bar).
+    /// content down (it dismisses interactively; no keyboard carries a Done
+    /// bar).
     func dismissKeyboardInMarkerWorkspace() {
         let scroll = scrollViews["guided.screen"].firstMatch
         for _ in 0..<3 where keyboards.firstMatch.exists {

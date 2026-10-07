@@ -51,8 +51,8 @@ final class MarkerSetupTicketUITests: XCTestCase {
         input.tap()
         settle(0.6)
         input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (input.value as? String ?? "").count + 2) + value)
-        let done = app.buttons["workspace.keyboardDone"]
-        if done.waitForExistence(timeout: 2) { done.tap() }
+        // No keyboard bar: put the number pad away as a user does.
+        app.dismissKeyboardInMarkerWorkspace()
         settle()
     }
 
