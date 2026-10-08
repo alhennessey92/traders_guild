@@ -302,6 +302,19 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
         phase("begin", "\(name)-anchor")
         anchorOnSeededParent(selected: selected)
         phase("end", "\(name)-anchor")
+        if Self.references[name] == nil {
+            // The chart refits its price range on its first pan after a
+            // launch or a navigation, and re-anchoring keeps the refitted
+            // range (phone, 8 Oct 2026, base build 128ead3: 80–85k before the
+            // first pan, 82–85k at every anchor after it, so every later
+            // anchor missed the reference by the same 15.8). One unmeasured
+            // out-and-back pan settles it first, so the reference is the view
+            // every later anchor returns to.
+            phase("begin", "\(name)-settle")
+            panPair()
+            anchorOnSeededParent(selected: selected)
+            phase("end", "\(name)-settle")
+        }
         let anchored = chartFingerprint()
         let reference = Self.references[name] ?? anchored
         Self.references[name] = reference
