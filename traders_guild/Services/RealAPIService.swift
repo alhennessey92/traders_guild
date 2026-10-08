@@ -661,6 +661,9 @@ enum APIRequestLogRedactor {
             || normalized.contains("password")
             || normalized.hasSuffix("token")
             || normalized.contains("secret")
+            // An account's email is its sign-in name: keep it out of debug
+            // logs, which tests and tooling collect.
+            || normalized.hasSuffix("email")
     }
 }
 

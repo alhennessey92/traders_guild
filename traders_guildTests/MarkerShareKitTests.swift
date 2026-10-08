@@ -425,6 +425,20 @@ struct MarkerShareKitTests {
         #expect(!logged.contains(shareURL))
     }
 
+    /// The signed-in account's `/me` body carries its email, which is its
+    /// sign-in name; a debug log keeps the shape and drops the address.
+    @Test func debugLogsRedactAccountEmails() throws {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "auth_provider": "email",
+            "email": "qa-person@example.test",
+            "owner": ["contact_email": "owner@example.test", "username": "qa"],
+        ])
+        let logged = APIRequestLogRedactor.redactedJSONString(from: body)
+        #expect(!logged.contains("example.test"))
+        #expect(logged.contains("\"auth_provider\":\"email\""), "a value of \"email\" is not an address")
+        #expect(logged.contains("\"username\":\"qa\""))
+    }
+
     // MARK: - Share body
 
     /// Telegram renders the body and *then* unfurls the link separately, so a
