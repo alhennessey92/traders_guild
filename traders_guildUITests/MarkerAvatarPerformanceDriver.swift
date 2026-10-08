@@ -15,24 +15,28 @@ import XCTest
 /// launch arguments (`TG_PERF_LAUNCH_ARGS`, space-separated), so the
 /// experiment gate is the intended one from the first frame of the run.
 ///
-/// 1. `test0` signs a disposable local-DEV QA account in if the app is on the
-///    sign-in screen (`TG_QA_EMAIL` / `TG_QA_PASSWORD`; the password is pasted,
-///    never typed into the activity log, and the pasteboard is cleared).
-/// 2. `test1` loads in two windows. The app's launch-time member loading
-///    fetches avatars, so each window starts at the launch: a fresh process
-///    (parked on the marker-free 30m chart) opens the seeded parent
-///    (`TG_PERF_MARKER_URL`) and settles.
-///    - `first-launch-and-load` runs once, **outside** `measure`. XCTest runs
-///      every measure block once more than `iterationCount` and discards the
-///      first run as a warm-up, so a cold launch inside `measure` lands in the
-///      discarded run and the recorded run is a warm relaunch. Measure runs
-///      skip `test0` (sign-in belongs to the separate prepare run), so this is
-///      the first launch after the orchestrator rotates the avatar URLs:
-///      **cold** on a cold run, a **fresh process with the URL cache in
-///      place** on a warm run. Its evidence is the phase window: the device
-///      trace's frames, the server's avatar requests, the screenshot.
-///    - `relaunch-and-load` is measured (CPU, memory, clock, hitches): always
-///      a fresh process with the URL cache in place.
+/// 1. `test0` checks, in the drawer, that the run's disposable local-DEV QA
+///    account (`TG_QA_USERNAME`) is the one signed in. It never types
+///    credentials (XCTest's redaction of a secure field proved unreliable on
+///    the phone): a signed-out app, or one signed in to another local account,
+///    fails the run with a request to sign in or out by hand.
+/// 2. `test1` measures the **launch and load** as one phase window,
+///    `first-launch-and-load`: a fresh process (parked away from the seeded
+///    1h chart) opens the seeded parent (`TG_PERF_MARKER_URL`) and settles. It
+///    runs outside `measure`, and no test launches the app inside `measure`:
+///    - XCTest runs every measure block once more than `iterationCount` and
+///      discards the first run, so a cold launch inside `measure` lands in the
+///      discarded run;
+///    - on the phone, launches inside a `measure` block with the app CPU and
+///      memory metrics did not keep the refresh token they were issued (the
+///      server's rotation record shows each next launch presenting an older
+///      one), and the first launch more than 30 s later was signed out.
+///      Every launch outside `measure` kept its token.
+///    Measure runs skip `test0`, so this is the first launch after the
+///    orchestrator rotates the avatar URLs: **cold** on a cold run, a **fresh
+///    process with the URL cache in place** on a warm run. Its evidence is
+///    the phase window: the frames pass's trace, the server's avatar
+///    requests, the screenshot.
 /// 3. `test2` revisits: away to a second parent (`TG_PERF_OTHER_URL`) and
 ///    back, in the same process — the in-process warm path. (Its measure
 ///    block also runs twice, so its window holds two revisits.)
@@ -54,12 +58,14 @@ import XCTest
 ///    simulator pan in about 30 overshot to the latest-candle edge), the
 ///    next test re-anchors, and the count of such pans is part of the run's
 ///    summary.
-/// 5. `test5` parks the app on 30m, which holds no markers, so the next run's
-///    launch loads no avatars before its own measured load.
+/// 5. `test5` parks the app on BTC/USD away from the seeded 1h chart (opening
+///    the seeded parent first, so the symbol tab is there whatever symbol the
+///    app was on), so the next run's launch shows none of the seeded markers
+///    before its own measured load.
 ///
 /// Each phase prints `TG_PHASE <begin|end> <name> <ISO-8601 UTC>` so server
-/// requests can be attributed to phases, and screenshots are attached.
-/// Metrics: XCTHitchMetric (iOS 26), CPU, memory, clock.
+/// requests and the system trace's frames and hitches can be attributed to
+/// phases, and screenshots are attached. XCTest metrics: CPU, memory, clock.
 final class MarkerAvatarPerformanceDriver: XCTestCase {
 
     private static let bundleID = "co.tradersguild.app.linkeddev"
@@ -133,20 +139,29 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
                       "the seeded parent must be selected (\"\(Self.selectedTitle)\")")
     }
 
+    /// Hands a link to the running app, as tapping it elsewhere would.
+    /// Not `app.open(_:)`: that launches a new app process every time (the
+    /// pid changed on every link, and the server saw a full app start), so a
+    /// "revisit" was really a relaunch and every pan began just after one.
     private func open(_ key: String) {
         guard let link = env[key].flatMap(URL.init(string:)) else {
             XCTFail("\(key) is required")
             return
         }
-        app.open(link)
+        XCUIDevice.shared.system.open(link)
+        // The system may ask before handing a custom-scheme link to an app.
+        let confirm = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        if confirm.waitForExistence(timeout: 1) { confirm.tap() }
     }
 
+    /// No `XCTHitchMetric`: on the phone it competes with the run's system
+    /// trace for the kernel trace session. With both, the metric read 0 hitches
+    /// everywhere and the trace's frame data stopped when the first recorded
+    /// measure began. Frames and hitches come from the trace instead
+    /// (`hitches_by_phase.py`), for every window, the unmeasured first launch
+    /// included.
     private func metrics() -> [XCTMetric] {
-        var metrics: [XCTMetric] = [XCTCPUMetric(application: app), XCTMemoryMetric(application: app), XCTClockMetric()]
-        if #available(iOS 26.0, *) {
-            metrics.insert(XCTHitchMetric(application: app), at: 0)
-        }
-        return metrics
+        [XCTCPUMetric(application: app), XCTMemoryMetric(application: app), XCTClockMetric()]
     }
 
     private func once() -> XCTMeasureOptions {
@@ -264,8 +279,10 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
         let close = app.buttons["Close"]
         XCTAssertTrue(close.waitForExistence(timeout: 5), "the selection's Close control")
         close.tap()
-        Thread.sleep(forTimeInterval: 1.5)
-        XCTAssertFalse(selectedTitle.exists, "nothing may be selected")
+        // The deselect can take a moment (seen on the phone): wait for it.
+        let deselected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: selectedTitle)
+        XCTAssertEqual(XCTWaiter().wait(for: [deselected], timeout: 5), .completed, "nothing may be selected")
+        Thread.sleep(forTimeInterval: 1)
     }
 
     /// The first anchored view of each state; every later view is checked
@@ -306,67 +323,96 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
 
     // MARK: 0 — sign-in, with the run's gate
 
+    /// The left drawer's account card ("@username, Owner, …"). Only an
+    /// on-screen one counts: the right drawer waits off-screen with its own.
+    private func drawerAccountCard(timeout: TimeInterval = 10) -> XCUIElement? {
+        let width = app.windows.firstMatch.frame.width
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "@"))
+                .allElementsBoundByIndex
+                .first { $0.frame.minX >= 0 && $0.frame.maxX <= width && $0.isHittable }
+            if let card { return card }
+            Thread.sleep(forTimeInterval: 0.5)
+        } while Date() < deadline
+        return nil
+    }
+
+    /// Opens the left drawer and reports whether its account card shows the
+    /// run's account. Leaves the drawer open.
+    private func drawerShowsRunAccount(_ username: String) throws -> Bool {
+        // A selected marker replaces the drawer control with its Close.
+        let close = app.buttons["Close"]
+        if close.waitForExistence(timeout: 2) {
+            close.tap()
+            Thread.sleep(forTimeInterval: 1)
+        }
+        let drawer = app.buttons["shield.pattern.checkered"]
+        XCTAssertTrue(drawer.waitForExistence(timeout: 10), "the guild drawer control")
+        // Straight after sign-in the drawer can ignore a tap while the guild
+        // loads (seen on the phone), so tap again if it has not opened.
+        var card: XCUIElement?
+        for _ in 0..<3 where card == nil {
+            if drawer.isHittable { drawer.tap() }
+            card = drawerAccountCard(timeout: 6)
+        }
+        guard let card else {
+            attachScreenshot("0-drawer-without-account")
+            XCTFail("the drawer's account card")
+            return false
+        }
+        attachScreenshot("0-drawer-account")
+        return card.label == "@\(username)" || card.label.hasPrefix("@\(username),")
+    }
+
     func test0_signInIfNeeded() throws {
         phase("begin", "launch-signin-check")
         defer { phase("end", "launch-signin-check") }
+        guard let username = env["TG_QA_USERNAME"] else {
+            XCTFail("TG_QA_USERNAME is required")
+            return
+        }
         app.launch()
-        let emailEntry = app.buttons["Sign in with Email"]
-        guard emailEntry.waitForExistence(timeout: 8) else {
+        // The welcome screen shows until session restore finishes, which on
+        // the phone's first launch after an install can take several
+        // seconds: only a sign-in screen that stays without the chart means
+        // signed out.
+        let deadline = Date().addingTimeInterval(30)
+        while !onChart() && Date() < deadline { Thread.sleep(forTimeInterval: 0.5) }
+        if onChart() {
+            try requireChart(timeout: 30)
+            // Another local account would see none of the seeded fixtures.
+            // Logging out is left to a person (Settings → Logout): that list
+            // also holds Delete Account, which automation must never risk.
+            XCTAssertTrue(try drawerShowsRunAccount(username),
+                          "the app is signed in to another account: log out of TG LinkedDev (Settings → Logout), then rerun")
+            app.terminate()  // leave the drawer behind
+            app.launch()
             try requireChart(timeout: 30)
             attachScreenshot("0-signed-in-launch")
             return
         }
-        guard let email = env["TG_QA_EMAIL"], let password = env["TG_QA_PASSWORD"] else {
-            XCTFail("TG_QA_EMAIL / TG_QA_PASSWORD are required to sign in")
-            return
-        }
-        emailEntry.tap()
-        let field = app.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.typeText(email)
-        let secure = app.secureTextFields.firstMatch
-        XCTAssertTrue(secure.exists)
-        UIPasteboard.general.string = password
-        secure.tap()
-        secure.press(forDuration: 1.0)
-        let paste = app.menuItems["Paste"]
-        XCTAssertTrue(paste.waitForExistence(timeout: 5))
-        paste.tap()
-        UIPasteboard.general.string = ""
-        app.buttons["Sign In"].tap()
-        let enter = app.buttons["Enter \(Self.guildName)"]
-        if enter.waitForExistence(timeout: 15) { enter.tap() }
-        try requireChart(timeout: 30)
-        attachScreenshot("0-signed-in")
+        // The driver never types credentials: XCTest's log redaction of a
+        // secure field proved unreliable on the phone (the password appeared
+        // in the console log of one run). Sign the run's account in by hand.
+        XCTFail("the app is signed out: sign in as @\(username) by hand, then rerun")
+        return
     }
 
-    // MARK: 1 — load: first launch (cold on a cold run), then measured relaunches
+    // MARK: 1 — load: one launch (cold on a cold run, fresh-process warm on a warm run)
 
-    /// A fresh process from launch to the settled, selected parent.
-    private func launchAndLoad() {
-        app.launch()  // replaces any running process; parked on 30m
+    func test1_launchAndLoadSeededThesis() throws {
+        app.terminate()
+        phase("begin", "first-launch-and-load")
+        app.launch()  // parked away from the seeded chart
         XCTAssertTrue(waitForChart(timeout: 30), "the parked chart")
         XCTAssertFalse(selectedTitle.exists, "the run starts with nothing selected")
         Thread.sleep(forTimeInterval: 3)  // launch-time member and avatar loading
         open("TG_PERF_MARKER_URL")
         requireSelected()
         Thread.sleep(forTimeInterval: 6)  // markers, faces and thesis settle
-    }
-
-    func test1_launchAndLoadSeededThesis() throws {
-        app.terminate()
-        phase("begin", "first-launch-and-load")
-        launchAndLoad()
         phase("end", "first-launch-and-load")
         attachScreenshot("1-first-load-selected")
-        app.terminate()
-        phase("begin", "relaunch-and-load")
-        measure(metrics: metrics(), options: once()) {
-            launchAndLoad()
-        }
-        phase("end", "relaunch-and-load")
-        attachScreenshot("1-relaunch-selected")
     }
 
     // MARK: 2 — in-process revisit
@@ -405,6 +451,13 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
     func test5_parkOnMarkerFreeTimeframe() throws {
         app.activate()
         try requireChart()
+        open("TG_PERF_MARKER_URL")  // onto BTC/USD, whatever symbol the app was on
+        requireSelected()
+        Thread.sleep(forTimeInterval: 2)
+        let close = app.buttons["Close"]  // the symbol tab only shows with nothing selected
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "the selection's Close control")
+        close.tap()
+        Thread.sleep(forTimeInterval: 1)
         let symbolTab = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "BTC/USD")).firstMatch
         XCTAssertTrue(symbolTab.waitForExistence(timeout: 5))
         symbolTab.tap()

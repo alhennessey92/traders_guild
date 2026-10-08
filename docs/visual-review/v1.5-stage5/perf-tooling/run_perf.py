@@ -15,7 +15,7 @@ dest = sys.argv[5] if len(sys.argv) > 5 else "00008120-00186CA01470201E"
 MARKER = "0ab0ce3d-deca-4d49-8cc9-f8d388ae93fa"   # seeded parent, 3 responses, 30 Sep 18:00 1h
 OTHER = "0347baeb-3544-402c-a4cb-4387d61f53f6"    # seeded parent, 30 Sep 06:00 1h
 AUTHORS = json.load(open(f"{S}/stage5/author-ids.json"))  # user id -> username
-creds = json.load(open(f"{S}/stage4/qa-creds.json"))["accounts"]["a"]
+creds = json.load(open(f"{S}/stage4/qa-creds.json"))["accounts"][os.environ.get("TG_PERF_ACCOUNT", "a")]  # disposable local-DEV QA account
 stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 name = f"{label}-{stamp}"
 xctestrun = max(glob.glob(f"{dd}/Build/Products/*.xctestrun"), key=os.path.getmtime)  # the latest build
@@ -26,7 +26,8 @@ only = [f"-only-testing:traders_guildUITests/MarkerAvatarPerformanceDriver/{t}" 
     else ["-only-testing:traders_guildUITests/MarkerAvatarPerformanceDriver",
           "-skip-testing:traders_guildUITests/MarkerAvatarPerformanceDriver/test0_signInIfNeeded"]
 env = dict(os.environ,
-           TEST_RUNNER_TG_QA_EMAIL=creds["email"], TEST_RUNNER_TG_QA_PASSWORD=creds["password"],
+           # Only the username: the driver never types credentials (sign in by hand).
+           TEST_RUNNER_TG_QA_USERNAME=creds["username"],
            TEST_RUNNER_TG_PERF_LAUNCH_ARGS=launch_args,
            TEST_RUNNER_TG_PERF_MARKER_URL=f"tradersguild-linkeddev://marker/{MARKER}",
            TEST_RUNNER_TG_PERF_OTHER_URL=f"tradersguild-linkeddev://marker/{OTHER}")
