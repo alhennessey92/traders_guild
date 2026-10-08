@@ -1774,6 +1774,20 @@ enum MarkerGuidedFormat {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
+    /// A price dragged on the chart, kept to the digits the chart labels it
+    /// with (`displayPrice`), so the typed field shows 63,780.25 and not
+    /// 63780.2493184.
+    static func roundedPrice(_ value: Double) -> Double {
+        guard value.isFinite, value != 0 else { return value }
+        let magnitude = abs(value)
+        let digits: Int
+        if magnitude >= 1000 { digits = 2 }
+        else if magnitude >= 1 { digits = 4 }
+        else { digits = max(0, 6 - Int(floor(log10(magnitude))) - 1) }
+        let scale = pow(10, Double(digits))
+        return (value * scale).rounded() / scale
+    }
+
     /// One line under the type picker saying what the type is for.
     static func typeDescription(_ intent: RLMarkerIntent) -> String {
         switch intent {

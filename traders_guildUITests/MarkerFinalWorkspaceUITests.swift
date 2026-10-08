@@ -109,6 +109,10 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         launch("context")
         let level = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace.edit.")).firstMatch
         XCTAssertTrue(level.waitForExistence(timeout: 5)); level.tap()
+        // A level goes straight to the chart, with its handle: the sheet is
+        // the tool's bar, and Options opens its typed price.
+        XCTAssertTrue(app.otherElements["workspace.toolBar"].waitForExistence(timeout: 5))
+        tap("workspace.tool.options")
         let field = app.textFields["workspace.levelEditor.Price"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         let original = try XCTUnwrap(field.value as? String)
@@ -117,21 +121,19 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count) + value)
         }
         setPrice("63820.00")
-        tap("workspace.Work on chart")
-        // P1: while a level is worked on the chart the sheet is the tool's
-        // bar; Options returns to its editor.
+        tap("workspace.level.adjust")
         XCTAssertTrue(app.otherElements["workspace.toolBar"].waitForExistence(timeout: 5))
         tap("workspace.tool.options")
         XCTAssertEqual(field.value as? String, "63820.00")
-        XCTAssertTrue(app.buttons["workspace.Work on chart"].exists)
+        XCTAssertTrue(app.buttons["workspace.level.adjust"].exists)
         XCTAssertEqual(app.buttons["guided.back"].label, "Cancel")
         XCTAssertEqual(app.navigationBars.count, 0)
         capture("final-level-chart-handoff-resumed")
         tap("guided.back")
         XCTAssertTrue(level.waitForExistence(timeout: 5)); level.tap()
+        tap("workspace.tool.options")
         XCTAssertEqual(field.value as? String, original, "Cancel restores the selected original level")
         setPrice("63840.00")
-        tap("workspace.Work on chart"); tap("workspace.tool.options")
         tap("guided.contextDone")
         XCTAssertTrue(level.waitForExistence(timeout: 5))
         tap("guided.contextDone"); tap("guided.review"); tap("guided.post")
@@ -143,6 +145,27 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         let payload = try XCTUnwrap(support["payload"] as? [String: Any])
         XCTAssertEqual(payload["price"] as? Double, 63840)
         XCTAssertEqual(payload["label"] as? String, "Range low")
+    }
+
+    /// Owner, 8 Oct: a new support or resistance is a line on the chart with
+    /// a drag handle, not a number in the sheet.
+    func testNewLevelIsALineOnTheChartAndCancelTakesItOff() {
+        launch("context")
+        tap("workspace.tab.drawings")
+        let resistanceChip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                              "workspace.edit.", "Resistance")).firstMatch
+        XCTAssertFalse(resistanceChip.exists)
+        tap("workspace.level.resistance")
+        XCTAssertTrue(app.otherElements["workspace.toolBar"].waitForExistence(timeout: 5), "straight to the chart")
+        XCTAssertTrue(app.buttons["workspace.tool.options"].label.contains("Resistance"))
+        capture("final-level-new-on-chart")
+        tap("workspace.tool.cancel")
+        XCTAssertTrue(app.buttons["workspace.level.resistance"].waitForExistence(timeout: 5))
+        XCTAssertFalse(resistanceChip.exists, "Cancel takes a new level off")
+        tap("workspace.level.resistance")
+        XCTAssertTrue(app.otherElements["workspace.toolBar"].waitForExistence(timeout: 5))
+        tap("workspace.tool.done")
+        XCTAssertTrue(resistanceChip.waitForExistence(timeout: 5), "Done keeps it on the marker")
     }
 
     func testQuestionContextExcludesUnsupportedSourceAndLevels() {

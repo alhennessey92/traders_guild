@@ -3046,6 +3046,9 @@ struct TradingChartView: View {
     
     private func handleMarkerPlacementModeChange(oldValue: Bool, newValue: Bool) {
         if !oldValue && newValue {
+            placementState.chartLevelSeedPrice = Self.workspaceLevelSeed(
+                gestureState: gestureState, dataManager: chartData, chartSize: $chartSize
+            )
             // Prefer crosshair's target candle if active, otherwise fall back to center
             let preferredIndex: Int
             if let context = placementState.linkSession.context,
@@ -3113,6 +3116,7 @@ struct TradingChartView: View {
                 }
             }
         } else if oldValue && !newValue {
+            placementState.chartLevelSeedPrice = nil
             // Exiting placement mode - reset to invalid index
             previewCandleIndex = -1
             markerDragPosition = nil
@@ -3318,6 +3322,41 @@ struct TradingChartView: View {
             priceRange: range,
             focusY: focusY
         )
+    }
+
+    /// Where a new support or resistance line starts: about 72pt below
+    /// (support) or above (resistance) the draft's anchor at the current
+    /// scale, so it is clear of the face and on screen (the other side only
+    /// when the screen edge would push it onto the face). Reads the chart's
+    /// live scale each time; captures no view.
+    static func workspaceLevelSeed(
+        gestureState: ChartGestureState,
+        dataManager: ChartDataManager,
+        chartSize: Binding<CGSize>
+    ) -> (RLComponentType, Double) -> Double? {
+        { [weak gestureState, weak dataManager] type, anchor in
+            guard let gestureState, let dataManager else { return nil }
+            let height = chartSize.wrappedValue.height
+            let range = dataManager.priceRange
+            let scaled = height * gestureState.priceScale
+            guard height > 0, scaled > 0, range.max > range.min else { return nil }
+            let span = range.max - range.min
+            func y(_ price: Double) -> CGFloat {
+                height - CGFloat((price - range.min) / span) * scaled - gestureState.verticalPanOffset
+            }
+            func price(_ y: CGFloat) -> Double {
+                range.min + Double((height - y - gestureState.verticalPanOffset) / scaled) * span
+            }
+            let anchorY = y(anchor)
+            guard anchorY.isFinite else { return nil }
+            let top: CGFloat = 130, bottom = max(top + 1, height * 0.8)
+            func inView(_ value: CGFloat) -> CGFloat { min(max(value, top), bottom) }
+            let offset: CGFloat = type == .levelSupport ? 72 : -72
+            var target = inView(anchorY + offset)
+            // Pressed against the edge onto the face: the other side instead.
+            if abs(target - anchorY) < 32 { target = inView(anchorY - offset) }
+            return price(target)
+        }
     }
 
     /// The saved Setup under a guided edit, on its own candle. Without that
@@ -5507,7 +5546,7 @@ struct TradingChartView: View {
         liveDrawingGuidePoint = nil
 
         if drawingState.workspaceLevelChartComponentID != nil {
-            _ = drawingState.updateWorkspaceLevelFromChart(id: draftId, price: resolvedPrice)
+            _ = drawingState.updateWorkspaceLevelFromChart(id: draftId, price: MarkerGuidedFormat.roundedPrice(resolvedPrice))
             return
         }
 
@@ -8021,6 +8060,10 @@ struct TradingChartView: View {
 
         let totalOffset = gestureState.panOffset.width
         let totalVerticalOffset = clampedVerticalOffset(chartHeight: size.height)
+        // A guided edit draws the marker being edited as selected — full
+        // strength over the dimmed layer, at the size it had when Edit was
+        // tapped — because it is the subject of the open workspace.
+        let guidedEditMarkerId = placementState.isGuidedEdit ? placementState.editingMarkerId : nil
 
         ChartMarkerSystem.drawMarkers(
             context: markerContext,
@@ -8034,9 +8077,9 @@ struct TradingChartView: View {
             actualCandleWidth: actualCandleWidth,
             totalOffset: totalOffset - CGFloat(chartData.historicalRenderIndexOffset) * totalCandleWidth,
             markerManager: markerManager,
-            selectedMarkerId: markerManager.selectedMarker?.id ?? tappedMarkerId,
-            selectedMarkerScale: selectionScale,
-            selectedMarkerRotation: selectionRotation,
+            selectedMarkerId: guidedEditMarkerId ?? markerManager.selectedMarker?.id ?? tappedMarkerId,
+            selectedMarkerScale: guidedEditMarkerId == nil ? selectionScale : 1.5,
+            selectedMarkerRotation: guidedEditMarkerId == nil ? selectionRotation : 0,
             dimmed: controlViewModel.isMarkerPlacementMode,
             editingEmojiOverride: editingEmojiOverrideForMarkers,
             linkRender: linkRenderContext(plotRect: plotRect),

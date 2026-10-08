@@ -37,16 +37,7 @@ struct MarkerWorkspaceContent: View {
                     IndicatorSettingsEditorContent(draft: draft)
                 }
             case .drawingEditor: drawingEditor
-            case .levelEditor:
-                editorField("Price", text: placementState.workspaceLevelPriceInput, keyboard: .decimalPad)
-                if placementState.workspace.selectedComponentID != nil {
-                    routeRow("Work on chart", icon: "chart.xyaxis.line") {
-                        if placementState.beginWorkspaceLevelChartEditing() {
-                            dismissKeyboard()
-                            onBeginInteractiveDrawing?()
-                        }
-                    }.disabled(!placementState.workspaceCanEditLevelOnChart)
-                }
+            case .levelEditor: levelEditor
             case .sourceEditor:
                 editorField("https://example.com/source", text: $placementState.workspace.editorText, keyboard: .URL)
                     .accessibilityIdentifier("workspace.sourceURL")
@@ -86,33 +77,12 @@ struct MarkerWorkspaceContent: View {
         }
         let tint = MarkerContextTab.drawings.color
         return VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: tool?.icon ?? "pencil.and.ruler")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(tint.opacity(0.16)))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tool?.title ?? "Drawing")
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(AppColors.primaryForeground)
-                    Text(id == nil ? "Finish placing it on the chart first." : "Done keeps it; Cancel puts it back exactly.")
-                        .font(.caption)
-                        .foregroundColor(AppColors.overlayPanelSecondaryText)
-                }
+            editorHeader(icon: tool?.icon ?? "pencil.and.ruler", title: tool?.title ?? "Drawing",
+                         caption: id == nil ? "Finish placing it on the chart first." : "Done keeps it; Cancel puts it back exactly.",
+                         tint: tint)
+            chartButton(id == nil ? "Back to the chart" : "Move it on the chart", identifier: "workspace.drawing.adjust") {
+                onBeginInteractiveDrawing?()
             }
-            Button { onBeginInteractiveDrawing?() } label: {
-                Label(id == nil ? "Back to the chart" : "Move it on the chart", systemImage: "hand.draw")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(AppColors.primaryForeground)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
-                    .overlay(Capsule().stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("workspace.drawing.adjust")
             if let id, let draft {
                 if draft.componentType == .drawingHorizontalLine {
                     styleSection("Price") {
@@ -127,33 +97,98 @@ struct MarkerWorkspaceContent: View {
                         ), keyboard: .decimalPad)
                     }
                 }
-                styleSection("Line") {
-                    HStack(spacing: 8) {
-                        ForEach(MarkerDrawingLineStyle.allCases, id: \.self) { style in
-                            lineStyleChip(style, selected: placementState.drawingLineStyle(for: id) == style, tint: tint) {
-                                placementState.setDrawingLineStyle(style, for: id)
-                            }
-                        }
+                lineAndColour(for: id, tint: tint)
+            }
+        }
+    }
+
+    /// A support or resistance line. It is on the chart with its handle from
+    /// the moment it is chosen; this is its typed price and its style, and the
+    /// way back to the handle.
+    private var levelEditor: some View {
+        let type = placementState.workspace.selectedLevel
+        let id = placementState.workspaceLevelChartComponentID
+        let tint = MarkerContextTab.drawings.color
+        return VStack(alignment: .leading, spacing: 16) {
+            editorHeader(icon: type == .levelResistance ? "arrow.up.to.line" : "arrow.down.to.line",
+                         title: type?.displayName ?? "Level",
+                         caption: placementState.workspace.levelDrawingIsNew
+                            ? "Done adds it; Cancel removes it." : "Done keeps it; Cancel puts it back exactly.",
+                         tint: tint)
+            chartButton("Move it on the chart", identifier: "workspace.level.adjust") {
+                if placementState.beginWorkspaceLevelChartEditing() {
+                    dismissKeyboard()
+                    onBeginInteractiveDrawing?()
+                }
+            }
+            .disabled(!placementState.workspaceCanEditLevelOnChart)
+            styleSection("Price") {
+                editorField("Price", text: placementState.workspaceLevelPriceInput, keyboard: .decimalPad)
+            }
+            if let id { lineAndColour(for: id, tint: tint) }
+        }
+    }
+
+    private func editorHeader(icon: String, title: String, caption: String, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(tint.opacity(0.16)))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                Text(caption)
+                    .font(.caption)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+            }
+        }
+    }
+
+    private func chartButton(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "hand.draw")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(AppColors.primaryForeground)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Capsule().fill(AppColors.whiteText.opacity(0.08)))
+                .overlay(Capsule().stroke(AppColors.whiteText.opacity(0.12), lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder
+    private func lineAndColour(for id: UUID, tint: Color) -> some View {
+        styleSection("Line") {
+            HStack(spacing: 8) {
+                ForEach(MarkerDrawingLineStyle.allCases, id: \.self) { style in
+                    lineStyleChip(style, selected: placementState.drawingLineStyle(for: id) == style, tint: tint) {
+                        placementState.setDrawingLineStyle(style, for: id)
                     }
                 }
-                styleSection("Colour") {
-                    HStack(spacing: 12) {
-                        ForEach(Self.drawingSwatches, id: \.hex) { swatch in
-                            let selected = placementState.drawingColorHex(for: id)?.uppercased() == swatch.hex
-                            Button { placementState.setDrawingColorHex(swatch.hex, for: id) } label: {
-                                Circle()
-                                    .fill(Color(hex: swatch.hex) ?? .white)
-                                    .frame(width: 30, height: 30)
-                                    .overlay(Circle().stroke(AppColors.primaryForeground, lineWidth: selected ? 2.5 : 0).padding(-4))
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(swatch.name) colour")
-                            .accessibilityAddTraits(selected ? .isSelected : [])
-                            .accessibilityIdentifier("workspace.drawing.colour.\(swatch.name)")
-                        }
+            }
+        }
+        styleSection("Colour") {
+            HStack(spacing: 12) {
+                ForEach(Self.drawingSwatches, id: \.hex) { swatch in
+                    let selected = placementState.drawingColorHex(for: id)?.uppercased() == swatch.hex
+                    Button { placementState.setDrawingColorHex(swatch.hex, for: id) } label: {
+                        Circle()
+                            .fill(Color(hex: swatch.hex) ?? .white)
+                            .frame(width: 30, height: 30)
+                            .overlay(Circle().stroke(AppColors.primaryForeground, lineWidth: selected ? 2.5 : 0).padding(-4))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(swatch.name) colour")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("workspace.drawing.colour.\(swatch.name)")
                 }
             }
         }

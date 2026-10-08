@@ -109,6 +109,29 @@ The shell's Add fit test, the entry test, the opens-small tests (now expecting e
 
 Evidence for this round: unit tests **136/136**; large-simulator UI suites **60/60**; SE shell and visual suites **16/16 + 1 skipped**; Release build succeeded. The scroll step of the redraw journey now raises the sheet first: below the tallest height a swipe up grows the sheet, which is a height change, not a scroll. SE screenshots are in `docs/visual-review/v1.5-p6/se/`.
 
+## Owner device round (8 October)
+
+The owner tried P6 on the phone ("looks pretty good") and raised two things:
+
+- **The marker being edited was dimmed like every other marker.**
+  - Cause: during placement, the whole marker layer is drawn at 25%, and only a *selected* marker is exempt. Tapping Edit clears the selection.
+  - Fix: a guided edit now draws the marker being edited as selected. It is at full strength, at the 1.5× size it had when Edit was tapped, with its component arcs. Everything else stays dimmed. Only guided edits (experiment-on) are affected.
+- **Support and resistance could only be typed in the sheet.**
+  - Tapping Support or Resistance now puts the line straight on the chart, with the existing grip handle to drag it. The sheet steps aside to the tool bar (level name, live price, Cancel, Done).
+  - A saved level is picked up where it is, from its tile or its chip.
+  - A new level starts about 72pt below (support) or above (resistance) the draft's face at the current scale, clamped on screen. The chart supplies this through `chartLevelSeedPrice`. Without a chart it falls back to the anchor price.
+  - Cancel removes a new level and puts a saved one back exactly. Done keeps it.
+  - The tool bar's label opens the level editor, restyled like the drawing editor: "Move it on the chart", the typed price (the accessible alternative to dragging), line style and colour.
+  - Prices dragged on the chart round to the chart's label precision (`MarkerGuidedFormat.roundedPrice`), so the field shows 63,780.25, not 63780.2493184.
+
+New tests:
+- Unit: a new level starts on the chart and Cancel removes it; a saved level is picked up and Cancel restores it exactly; Question and Setup cannot start a level; rounding.
+- UI: the level handoff journey (rewritten for chart-first); a new resistance goes to the chart, Cancel takes it off, Done keeps it.
+
+Evidence: unit tests **140/141 + 1 skipped** (the local-backend integration test, which needs a signed-in stack); large-simulator UI suites **61/61**; SE suites **16/17 + 1 skipped**; Release build succeeded; device build installed and launched.
+
+Neither the dimming fix nor the seeded line can be seen in the simulator fixture, which has no chart. Both need the owner's phone.
+
 ## Still to do
 
 - A spoken VoiceOver walk-through on device (the route announcements are in place) and a Reduce Motion check (every transition reads the environment). Both need the owner's phone.

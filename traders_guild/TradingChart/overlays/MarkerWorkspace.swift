@@ -119,6 +119,9 @@ struct MarkerWorkspaceState {
     var levelDrawingBaseline: MarkerComponentDraft?
     var levelDrawingBaselineIndex: Int?
     var levelDrawingColor: String?
+    /// The level on the chart was added by this editor: Cancel removes it
+    /// rather than restoring a saved one.
+    var levelDrawingIsNew = false
     /// Drawing tools already mutate chart-native placement state. Cancel restores
     /// that editor's exact snapshot, including local component identities.
     var drawingBaseline: [MarkerComponentDraft]?
@@ -217,12 +220,18 @@ extension MarkerPlacementState {
             commitDrawingAndExit()
         }
         if workspace.destination == .levelEditor, let baseline = workspace.levelDrawingBaseline {
-            if let index = components.firstIndex(where: { $0.id == baseline.id }) { components[index] = baseline }
-            else { components.insert(baseline, at: min(workspace.levelDrawingBaselineIndex ?? components.count, components.count)) }
-            drawingColorOverrides[baseline.id] = workspace.levelDrawingColor
+            if workspace.levelDrawingIsNew {
+                components.removeAll { $0.id == baseline.id }
+                drawingColorOverrides.removeValue(forKey: baseline.id)
+            } else {
+                if let index = components.firstIndex(where: { $0.id == baseline.id }) { components[index] = baseline }
+                else { components.insert(baseline, at: min(workspace.levelDrawingBaselineIndex ?? components.count, components.count)) }
+                drawingColorOverrides[baseline.id] = workspace.levelDrawingColor
+            }
             commitDrawingAndExit()
         }
         workspace.levelDrawingBaseline = nil
+        workspace.levelDrawingIsNew = false
         workspace.levelDrawingBaselineIndex = nil
         workspace.levelDrawingColor = nil
         workspace.indicatorDraft = nil
@@ -295,6 +304,38 @@ extension MarkerPlacementState {
         workspace.selectedComponentID = prior?.id
         workspace.editorText = String(prior?.payload.levelPrice ?? anchorDraft?.payload.levelPrice ?? 0)
         workspace.editorBaselineText = workspace.editorText
+    }
+
+    /// Support and Resistance start on the chart: the line is there at once,
+    /// with its drag handle, and the sheet steps aside for it. A saved level is
+    /// picked up where it is; a new one starts a short way below (support) or
+    /// above (resistance) the draft, where the chart says that is in view.
+    /// The price stays typeable from the level's options. Cancel removes a new
+    /// level and puts a saved one back exactly.
+    @discardableResult
+    func beginWorkspaceLevelOnChart(_ type: RLComponentType, componentID: UUID? = nil) -> Bool {
+        beginWorkspaceLevel(type, componentID: componentID)
+        guard workspaceDestination == .levelEditor, workspace.selectedLevel == type else { return false }
+        if workspace.selectedComponentID == nil {
+            let anchor = anchorDraft?.payload.levelPrice ?? 0
+            guard anchor.isFinite, anchor > 0 else { return false }
+            let seeded = chartLevelSeedPrice?(type, anchor) ?? anchor
+            let price = seeded.isFinite && seeded > 0 ? MarkerGuidedFormat.roundedPrice(seeded) : anchor
+            let level = LevelPayload(price: price, label: type.displayName)
+            let id = appendComponent(type, payload: type == .levelSupport ? .levelSupport(level) : .levelResistance(level))
+            workspace.selectedComponentID = id
+            workspace.editorText = String(price)
+            workspace.editorBaselineText = workspace.editorText
+            workspace.levelDrawingIsNew = true
+        }
+        guard beginWorkspaceLevelChartEditing() else {
+            if workspace.levelDrawingIsNew, let id = workspace.selectedComponentID {
+                components.removeAll { $0.id == id }
+                workspace.levelDrawingIsNew = false
+            }
+            return false
+        }
+        return true
     }
 
     /// When chart editing belongs to a level editor, re-entry must keep its ID.
@@ -442,6 +483,7 @@ extension MarkerPlacementState {
             saveWorkspacePayload(type, payload: type == .levelSupport ? .levelSupport(level) : .levelResistance(level))
             if workspace.levelDrawingBaseline != nil { commitDrawingAndExit() }
             workspace.levelDrawingBaseline = nil // Done keeps the selected chart level.
+            workspace.levelDrawingIsNew = false
         case .drawingEditor:
             commitDrawingAndExit()
             workspace.drawingBaseline = nil // Done keeps the chart's changes.

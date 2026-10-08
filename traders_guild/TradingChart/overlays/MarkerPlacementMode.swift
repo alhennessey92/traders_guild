@@ -186,6 +186,10 @@ final class MarkerPlacementState: ObservableObject {
     /// this symbol and timeframe, or the guild's limit). It starts untracked
     /// with the reason shown, instead of not starting at all.
     @Published var trackingUnavailableReason: String?
+    /// Where a new support or resistance line starts, given the anchor price.
+    /// Set by the chart, which knows the scale, so the line lands clear of the
+    /// draft's face and in view. Nil leaves it at the anchor price.
+    var chartLevelSeedPrice: ((RLComponentType, Double) -> Double?)?
     /// The Discord channel this marker will also be posted to, chosen here and
     /// now. Never a standing setting: an author opts one marker in at a time,
     /// which is what lets this work in an open guild where the guild-wide

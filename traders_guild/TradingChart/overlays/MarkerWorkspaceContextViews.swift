@@ -251,7 +251,7 @@ struct MarkerWorkspaceContextScreen: View {
                 }
             }
             if placementState.workspaceAllows(.levelSupport) {
-                section("Levels", hint: "Set a price, or drag it on the chart.") {
+                section("Levels", hint: "Drag it into place on the chart.") {
                     grid {
                         levelCard(.levelSupport, title: "Support", icon: "arrow.down.to.line")
                         levelCard(.levelResistance, title: "Resistance", icon: "arrow.up.to.line")
@@ -267,9 +267,14 @@ struct MarkerWorkspaceContextScreen: View {
         }
     }
 
+    /// A level goes straight onto the chart with its handle; one already on
+    /// the marker shows its price and is picked up where it is.
     private func levelCard(_ type: RLComponentType, title: String, icon: String) -> some View {
-        card(icon: icon, title: title, detail: nil, tint: MarkerContextTab.drawings.color, state: .add) {
-            placementState.beginWorkspaceLevel(type)
+        let existing = placementState.component(type)
+        return card(icon: icon, title: title,
+                    detail: existing.map { MarkerGuidedFormat.displayPrice($0.payload.levelPrice) },
+                    tint: MarkerContextTab.drawings.color, state: existing == nil ? .go : .added(nil)) {
+            if placementState.beginWorkspaceLevelOnChart(type) { onBeginInteractiveDrawing?() }
         }
         .accessibilityIdentifier("workspace.level.\(type == .levelSupport ? "support" : "resistance")")
     }
@@ -499,7 +504,8 @@ struct MarkerWorkspaceContextScreen: View {
         case .link: placementState.beginWorkspaceText(.sourceEditor, componentID: draft.id)
         case .note: placementState.beginWorkspaceText(.noteEditor, componentID: draft.id)
         case .timeframeLink: placementState.workspace.contextTab = .timeframes
-        case .levelSupport, .levelResistance: placementState.beginWorkspaceLevel(draft.componentType, componentID: draft.id)
+        case .levelSupport, .levelResistance:
+            if placementState.beginWorkspaceLevelOnChart(draft.componentType, componentID: draft.id) { onBeginInteractiveDrawing?() }
         default:
             let tool: MarkerDrawingToolKind? = {
                 if case .drawingPattern(let payload) = draft.payload { return MarkerDrawingToolKind.from(patternKey: payload.patternKey) }

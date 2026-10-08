@@ -255,6 +255,72 @@ struct MarkerWorkspaceTests {
     }
 
     @Test
+    func newLevelStartsOnTheChartAndCancelRemovesIt() throws {
+        let state = draft()
+        state.chartLevelSeedPrice = { type, anchor in type == .levelSupport ? anchor - 2.123456 : anchor + 3 }
+        state.openContext()
+        let before = state.components
+        #expect(state.beginWorkspaceLevelOnChart(.levelSupport))
+        let id = try #require(state.workspace.selectedComponentID)
+        // On the chart at once, below the anchor, rounded as the chart labels it.
+        #expect(state.component(.levelSupport)?.id == id)
+        #expect(state.component(.levelSupport)?.payload.levelPrice == 97.8765)
+        #expect(state.drawingSession.editingDraftId == id)
+        #expect(state.isWorkspaceChartToolActive)
+        #expect(state.workspace.levelDrawingIsNew)
+        // Dragging moves it; Cancel takes it off the chart and the draft.
+        #expect(state.updateWorkspaceLevelFromChart(id: id, price: 96))
+        state.cancelWorkspaceEditor()
+        #expect(state.components == before)
+        #expect(!state.drawingSession.isActive)
+        #expect(state.workspaceDestination == .context)
+        // Again, and Done keeps it where it was dragged, labelled.
+        #expect(state.beginWorkspaceLevelOnChart(.levelResistance))
+        let resistance = try #require(state.workspace.selectedComponentID)
+        #expect(state.component(.levelResistance)?.payload.levelPrice == 103)
+        #expect(state.updateWorkspaceLevelFromChart(id: resistance, price: 104.5))
+        #expect(state.commitWorkspaceEditor())
+        #expect(state.component(.levelResistance)?.payload.levelPrice == 104.5)
+        #expect(state.component(.levelResistance)?.payload.guidedLevelPayload?.label == "Resistance")
+        #expect(!state.workspace.levelDrawingIsNew && !state.drawingSession.isActive)
+        #expect(state.workspaceDestination == .context)
+    }
+
+    @Test
+    func savedLevelOnTheChartIsPickedUpAndCancelPutsItBack() {
+        let state = draft()
+        let id = state.appendComponent(.levelSupport, payload: .levelSupport(LevelPayload(price: 95, label: "Range low", colorHex: "#10B981", lineStyle: .dotted, lineWidth: 2)))
+        state.openContext()
+        let before = state.components
+        // The tile picks up the one already there; it adds no second support.
+        #expect(state.beginWorkspaceLevelOnChart(.levelSupport))
+        #expect(state.workspace.selectedComponentID == id && !state.workspace.levelDrawingIsNew)
+        #expect(state.drawingSession.editingDraftId == id)
+        #expect(state.updateWorkspaceLevelFromChart(id: id, price: 93))
+        state.setDrawingColorHex("#F43F5E", for: id)
+        state.cancelWorkspaceEditor()
+        #expect(state.components == before, "Cancel puts the saved level back exactly")
+    }
+
+    @Test
+    func levelsNeverStartOnTheChartWhereTheIntentCannotCarryThem() {
+        for intent in [RLMarkerIntent.question, .setup] {
+            let state = draft(intent)
+            let before = state.components
+            #expect(!state.beginWorkspaceLevelOnChart(.levelSupport))
+            #expect(state.components == before && !state.drawingSession.isActive)
+        }
+    }
+
+    @Test
+    func chartPricesRoundToTheChartsLabels() {
+        #expect(MarkerGuidedFormat.roundedPrice(63780.2493184) == 63780.25)
+        #expect(MarkerGuidedFormat.roundedPrice(1.234567) == 1.2346)
+        #expect(MarkerGuidedFormat.roundedPrice(0.000123456789) == 0.000123457)
+        #expect(MarkerGuidedFormat.roundedPrice(0) == 0)
+    }
+
+    @Test
     func incompleteSetupPriceSurvivesNavigationAndPreventsReview() {
         let state = draft(.setup)
         state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: 99)))
