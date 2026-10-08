@@ -1005,16 +1005,61 @@ struct MarkerGuidedCreateEntries: View {
     let onSelect: (RLMarkerIntent) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            MarkerPostToChartCard(author: author) { onSelect(.analysis) }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Or plan a trade")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(AppColors.overlayPanelSecondaryText)
-                    .accessibilityAddTraits(.isHeader)
-                MarkerPlanTradeCard(author: author) { onSelect(.setup) }
+        if MarkerSheetDetents.isCompactHeight {
+            // A compact-height phone: both must fit at the working height,
+            // so posting is one prominent row and Setup the row beneath.
+            VStack(spacing: 10) {
+                MarkerPostToChartRow(author: author) { onSelect(.analysis) }
+                MarkerPlanTradeCard(author: author, compact: true) { onSelect(.setup) }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                MarkerPostToChartCard(author: author) { onSelect(.analysis) }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Or plan a trade")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .accessibilityAddTraits(.isHeader)
+                    MarkerPlanTradeCard(author: author) { onSelect(.setup) }
+                }
             }
         }
+    }
+}
+
+/// The hero folded into one row for compact-height phones: still the
+/// filled, leading action.
+struct MarkerPostToChartRow: View {
+    let author: MarkerAvatarIdentity
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                UnifiedMarkerBadge(intent: .analysis, sizeToken: .medium, avatar: author)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Post to the chart")
+                        .font(.headline.weight(.bold))
+                    Text("Analysis or a question")
+                        .font(.caption)
+                }
+                .foregroundColor(.white)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.white)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 14).fill(RLMarkerIntent.analysis.color))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Starts a post at the middle of the chart")
+        .accessibilityIdentifier("guided.postToChart")
     }
 }
 
@@ -1088,6 +1133,8 @@ struct MarkerPostToChartCard: View {
 /// tracking it is worth it.
 struct MarkerPlanTradeCard: View {
     let author: MarkerAvatarIdentity
+    /// One line of description, for compact-height phones.
+    var compact = false
     let action: () -> Void
 
     var body: some View {
@@ -1099,10 +1146,12 @@ struct MarkerPlanTradeCard: View {
                     Text("Setup")
                         .font(.headline.weight(.bold))
                         .foregroundColor(AppColors.primaryForeground)
-                    Text("Entry, Take Profit and Stop Loss on the chart. Track it to build your accuracy and reputation.")
+                    Text(compact ? "Entry, stop and target · trackable"
+                         : "Entry, Take Profit and Stop Loss on the chart. Track it to build your accuracy and reputation.")
                         .font(.caption)
                         .foregroundColor(AppColors.overlayPanelSecondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(compact ? 1 : nil)
+                        .fixedSize(horizontal: false, vertical: !compact)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")

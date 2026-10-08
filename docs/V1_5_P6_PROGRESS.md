@@ -95,7 +95,21 @@ The framing from part 1 now applies to guided **edits** as well. The edited mark
 | Release build | Succeeded |
 | Device build | Not run: the phone was unavailable. Install when it is back. |
 
-## Still to do in P6
+## Compact-height phones (SE class, screens under 700pt)
 
-- An SE compact pass on the new Add hero and the context tiles, and a Reduce Motion run-through.
-- The plan's VoiceOver route announcements: they exist; a spoken walk-through on device needs the owner.
+The SE pass found two problems:
+- At the small height, Details showed only the header, the type chips and one line of text.
+- The Add hero and Setup card no longer fit at the working height.
+
+Changes, on compact-height phones only:
+- **The workspace opens at the working height**, not the small one (`MarkerSheetDetents.workspaceStart`). The whole text box is in view. The draft stays visible in the strip above, which the framing keeps it in.
+- **Markers ▸ Add uses a compact form.** Post to the chart is one filled teal row (face, "Post to the chart", "Analysis or a question", →), with the Setup row ("Entry, stop and target · trackable") beneath. Both fit without scrolling. The hero card stays on larger phones.
+
+The shell's Add fit test, the entry test, the opens-small tests (now expecting each device's own opening height) and the Post screens all pass on the iPhone SE simulator.
+
+Evidence for this round: unit tests **136/136**; large-simulator UI suites **60/60**; SE shell and visual suites **16/16 + 1 skipped**; Release build succeeded. The scroll step of the redraw journey now raises the sheet first: below the tallest height a swipe up grows the sheet, which is a height change, not a scroll. SE screenshots are in `docs/visual-review/v1.5-p6/se/`.
+
+## Still to do
+
+- A spoken VoiceOver walk-through on device (the route announcements are in place) and a Reduce Motion check (every transition reads the environment). Both need the owner's phone.
+- **The P6 gate is owner hands-on acceptance.**

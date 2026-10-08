@@ -40,6 +40,9 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         settle(1.2)
     }
 
+    /// Where the workspace opens: small, or working on a compact-height phone.
+    private var openingHeight: String { app.frame.height < 700 ? "working" : "browse" }
+
     private func settle(_ seconds: TimeInterval = 0.9) {
         _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: seconds)
     }
@@ -216,6 +219,10 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         tap("guided.contextDone")
         let navigation = shellRenders() - start
 
+        // Scroll at the tallest height: below it, a swipe up grows the sheet
+        // first (a height change, which MainView rightly redraws for).
+        app.raiseMarkerSheet()
+        settle(0.6)
         let beforeScroll = shellRenders()
         app.scrollMarkerWorkspace()
         let scrolling = shellRenders() - beforeScroll
@@ -385,7 +392,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         settle(1.5)
         XCTAssertFalse(app.keyboards.firstMatch.exists, "no keyboard until the text is tapped")
         let samples = segment(since: 0, "opens-small")
-        XCTAssertEqual(samples.last?.sel, "browse", "opens at the small height")
+        XCTAssertEqual(samples.last?.sel, openingHeight, "opens at the small height (working on a compact phone)")
         XCTAssertEqual(Set(samples.map(\.ctl)).count, 1, "one presentation")
         screenshot("p1-opens-small")
     }
@@ -394,7 +401,7 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         launch(setup: true, filledNote: false)
         settle(1.5)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
-        XCTAssertEqual(trace().samples.last?.sel, "browse")
+        XCTAssertEqual(trace().samples.last?.sel, openingHeight)
         XCTAssertEqual(trace().samples.last?.mode, "authoring")
     }
 }

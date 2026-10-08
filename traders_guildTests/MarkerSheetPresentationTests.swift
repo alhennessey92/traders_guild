@@ -68,7 +68,7 @@ struct MarkerSheetPresentationTests {
     @Test
     func theWorkspaceUsesTheAppsOwnHeightsAndOpensSmall() {
         #expect(MarkerSheetDetents.standard == [.fraction(0.11), .fraction(0.35), .fraction(0.5), .fraction(0.9)])
-        #expect(MarkerSheetDetents.workspaceStart == .fraction(0.35))
+        #expect(MarkerSheetDetents.workspaceStart == (MarkerSheetDetents.isCompactHeight ? .fraction(0.5) : .fraction(0.35)))
     }
 }
 

@@ -31,8 +31,13 @@ enum MarkerSheetDetents {
     static let tall: PresentationDetent = .fraction(0.9)
     /// The whole sheet, with the experiment on or off. The established set.
     static let standard: Set<PresentationDetent> = [dock, browse, working, tall]
-    /// Where a marker workspace opens: small, so the marker shows above it.
-    static let workspaceStart: PresentationDetent = browse
+    /// A compact-height phone (SE class): the small height leaves too little
+    /// to write in there.
+    static var isCompactHeight: Bool { UIScreen.main.bounds.height < 700 }
+    /// Where a marker workspace opens: small, so the marker shows above it;
+    /// on a compact-height phone, the working height (the chart keeps the
+    /// draft in view in the strip above).
+    static var workspaceStart: PresentationDetent { isCompactHeight ? working : browse }
 }
 
 // MARK: - Sequencing
