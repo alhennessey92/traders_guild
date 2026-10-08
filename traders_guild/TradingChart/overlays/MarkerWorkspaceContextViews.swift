@@ -118,17 +118,18 @@ struct MarkerWorkspaceContextScreen: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
-                    .foregroundColor(isSelected ? .white : AppColors.overlayPanelSecondaryText)
+                    // Tinted with an outline in the family colour: white words
+                    // on a bright orange or cyan fill failed contrast.
+                    .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(RoundedRectangle(cornerRadius: 11).fill(isSelected ? item.color.opacity(0.9) : Color.clear))
+                    .background(RoundedRectangle(cornerRadius: 11).fill(isSelected ? item.color.opacity(0.26) : Color.clear))
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(isSelected ? item.color : Color.clear, lineWidth: 1.5))
                     .overlay(alignment: .topTrailing) {
                         if let count = count(item) {
-                            Text("\(count)")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(isSelected ? item.color : .white)
-                                .frame(minWidth: 16, minHeight: 16)
-                                .background(Circle().fill(isSelected ? .white : item.color))
-                                .padding(4)
+                            Circle()
+                                .fill(item.color)
+                                .frame(width: 8, height: 8)
+                                .padding(6)
                                 .accessibilityHidden(true)
                         }
                     }
@@ -154,19 +155,13 @@ struct MarkerWorkspaceContextScreen: View {
 
     private var indicators: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                ForEach(Array(IndicatorSubTab.allCases.enumerated()), id: \.element) { index, category in
-                    UnifiedTabButton(
-                        tab: category,
-                        isSelected: category == placementState.workspace.indicatorCategory,
-                        size: .compact,
-                        theme: .deepSubTab,
-                        index: index
-                    ) {
-                        placementState.workspace.indicatorCategory = category
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(IndicatorSubTab.allCases, id: \.self) { category in
+                        categoryChip(category)
                     }
-                    .accessibilityIdentifier("workspace.category.\(category.rawValue)")
                 }
+                .padding(.vertical, 1)
             }
             if !activeChartIndicators.isEmpty {
                 copyRow("Use my chart's indicators", count: activeChartIndicators.count) {
@@ -180,6 +175,29 @@ struct MarkerWorkspaceContextScreen: View {
                 }
             }
         }
+    }
+
+    /// The original category tabs as workspace chips: text that scales and
+    /// reads on every sheet; the chosen one tinted and outlined in orange.
+    private func categoryChip(_ category: IndicatorSubTab) -> some View {
+        let isSelected = category == placementState.workspace.indicatorCategory
+        let color = MarkerContextTab.indicators.color
+        return Button {
+            placementState.workspace.indicatorCategory = category
+        } label: {
+            Label(category.title, systemImage: category.icon)
+                .font(.footnote.weight(.semibold))
+                .lineLimit(1)
+                .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 36)
+                .background(Capsule().fill(isSelected ? color.opacity(0.24) : AppColors.whiteText.opacity(0.06)))
+                .overlay(Capsule().stroke(isSelected ? color : Color.clear, lineWidth: 1.2))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("workspace.category.\(category.rawValue)")
     }
 
     private func attachedCount(_ item: IndicatorCatalogItem) -> Int {

@@ -3086,6 +3086,13 @@ struct TradingChartView: View {
                 if placementState.isGuidedEdit, placementState.intent == .setup, !placementState.isGuidedEditLocked {
                     initializeSavedSetupPlacement()
                 }
+                // The marker being edited stays in view above the workspace,
+                // as a new draft does.
+                if placementState.isGuidedEdit {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        keepDraftAboveSheet()
+                    }
+                }
             } else {
                 // Initialize the on-chart placement state with anchor at the selected candle
                 initializePlacementState()
@@ -3280,7 +3287,8 @@ struct TradingChartView: View {
     }
 
     /// The price the draft is drawn at: a Setup's Entry, otherwise the top of
-    /// the post's candle, where its face sits.
+    /// the post's candle, where its face sits. An edited marker is on its
+    /// own candle (`previewCandleIndex` is set to it).
     private var draftFocusPrice: Double? {
         if controlViewModel.currentMarkerIntent == .setup {
             return predictionPlacement?.entryPrice
@@ -3294,7 +3302,7 @@ struct TradingChartView: View {
     /// horizontal position. A draft already in view is left alone.
     private func keepDraftAboveSheet() {
         // A centring already under way (a new Setup's) frames above the sheet itself.
-        guard isMarkerPlacementMode, placementState.isGuidedFlowActive, !placementState.isEditingExistingMarker,
+        guard isMarkerPlacementMode, placementState.isGuidedFlowActive,
               !isMarkerBeingDragged, !isInteractiveDrawingSessionActive, !gestureState.isCenteringAnimationActive,
               let band = placementVisibleBand, let focusY = placementFocusY,
               let price = draftFocusPrice else { return }

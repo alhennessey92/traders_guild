@@ -245,7 +245,10 @@ struct MarkerGuidedPlacementPanel: View {
         let destination = placementState.workspaceDestination
         return HStack(spacing: 12) {
             UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
-                .accessibilityHidden(true)
+                // One element with a name: hiding the badge's parts left
+                // its picture and glyph exposed to the audit unlabelled.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Your marker, \(placementState.intent.displayName)")
                 // Analysis ↔ Question recolours the face's ring in place.
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: placementState.intent)
             VStack(alignment: .leading, spacing: 1) {
@@ -443,10 +446,15 @@ struct MarkerGuidedPlacementPanel: View {
                 }
             }
             if placementState.linkSession.isActive && !placementState.isGuidedEdit {
-                Button(placementState.intent == .setup ? "Return to post" : "Respond with a Setup") {
+                Button {
                     choose(placementState.intent == .setup ? .analysis : .setup)
+                } label: {
+                    Text(placementState.intent == .setup ? "Return to post" : "Respond with a Setup")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .frame(minHeight: 44).accessibilityIdentifier("guided.convertResponse")
+                .accessibilityIdentifier("guided.convertResponse")
             }
         }
     }
@@ -909,7 +917,9 @@ struct MarkerGuidedPlacementBar: View {
             Label(title, systemImage: "chevron.left")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(AppColors.primaryForeground)
-                .padding(.vertical, 10)
+                .padding(.trailing, 8)
+                .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityShowsLargeContentViewer()
@@ -1027,8 +1037,8 @@ struct MarkerPostToChartCard: View {
                         kind(.question)
                     }
                     Text("Share what you see, or ask the guild. Your face marks the spot.")
-                        .font(.caption)
-                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .font(.footnote)
+                        .foregroundColor(AppColors.primaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
@@ -1184,9 +1194,9 @@ struct MarkerGuidedTypePicker: View {
                     HStack(spacing: 8) {
                         Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(isSelected ? .white : intent.color)
+                            .foregroundColor(.white)
                             .frame(width: 26, height: 26)
-                            .background(Circle().fill(isSelected ? intent.color : intent.color.opacity(0.16)))
+                            .background(Circle().fill(isSelected ? intent.color : intent.color.opacity(0.45)))
                             .accessibilityHidden(true)
                         Text(intent.displayName)
                             .font(.subheadline.weight(.semibold))
@@ -1203,7 +1213,9 @@ struct MarkerGuidedTypePicker: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(intent.displayName)
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
             }
             Spacer(minLength: 0)
@@ -1354,10 +1366,11 @@ struct MarkerSetupDirectionPicker: View {
                         .font(.subheadline.weight(.bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                        .foregroundColor(isSelected ? .white : AppColors.overlayPanelSecondaryText)
+                        .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 36)
-                        .background(Capsule().fill(isSelected ? color : Color.clear))
+                        .background(Capsule().fill(isSelected ? color.opacity(0.28) : Color.clear))
+                        .overlay(Capsule().stroke(isSelected ? color : Color.clear, lineWidth: 1.5))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -1589,10 +1602,11 @@ struct MarkerSetupSidePill: View {
         let filled = side == .long || side == .short
         Text(text)
             .font(.caption.weight(.bold))
-            .foregroundColor(filled ? .white : color)
+            .foregroundColor(filled ? AppColors.primaryForeground : color)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Capsule().fill(filled ? color : color.opacity(0.15)))
+            .background(Capsule().fill(color.opacity(filled ? 0.28 : 0.15)))
+            .overlay(Capsule().stroke(filled ? color : Color.clear, lineWidth: 1.2))
     }
 }
 

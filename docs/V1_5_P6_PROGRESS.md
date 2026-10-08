@@ -49,8 +49,53 @@ Body text still scales fully, and context tiles go to one column.
 
 Screenshots: `docs/visual-review/v1.5-p6/` (the Add surface on the main sheet and the harness; the accessibility XXXL set).
 
-## Next in P6
+## Owner device round (7 October)
 
-- Framing a guided **edit**: the saved marker kept above the sheet.
-- VoiceOver walk-through of every route, Reduce Motion check, Light Grey theme screenshots, and the SE compact pass.
-- The drawing editor screen restyle.
+- **The draft marker vanishing**, confirmed fixed by the owner. It happened on the *first pan* after starting a post, not on a sheet move. That pan loaded a page of older candles and shifted every candle index. Saved markers were shifted by `ChartViewModel`, but the draft's `previewCandleIndex` and a Setup's prediction index were not, so the draft jumped a page of history off-screen. Both are now shifted (`8aafa76`).
+- **"Setup not allowed on this symbol and timeframe"**, confirmed. An open tracked Setup there blocked starting any Setup. It now starts untracked: the tracking switch is disabled and shows the reason.
+- The **number-pad Done bar** is removed at the owner's request (`323d902`).
+
+# P6 part 2
+
+## Accessibility audit (`MarkerWorkspaceAccessibilityAuditUITests`)
+
+Apple's `performAccessibilityAudit` ran on seven workspace screens: Add, Details, Review, Add context, Setup, a response, and an edit's Review. Every issue is written to an attachment. Fixed:
+- **Contrast.** White words on bright fills failed: the selected context tab on orange or cyan, Long on green, the LONG pill. Selected controls are now tinted with an outline in their colour and use readable words. The hero caption is full-strength text.
+- **Indicator category tabs.** They were a shared component with fixed font sizes, so they didn't scale with Dynamic Type and failed contrast unselected. They are now workspace chips with text styles.
+- **Hit areas.** The footer's Back/Edit/Cancel and "Respond with a Setup" are now full 44pt targets.
+- **Unlabelled images.** The header's face exposed its picture and its badge glyph ("waveform.path.ecg") despite `accessibilityHidden`. It is now one element, "Your marker, Analysis". The type chips carry explicit labels.
+
+152 issues became 125. What remains has been reviewed:
+- "Text clipped" on text inside the scrolling sheet that is fully visible.
+- "Dynamic Type partially unsupported" on the controls deliberately capped at accessibility1 (with the Large Content Viewer).
+- "Nearly passed" contrast on the app's standard primary buttons.
+- The shared badge's initials.
+- Two price-field labels hidden on purpose because the field speaks its own name.
+- Three contrast flags on text that is legible in screenshots, on gradient or translucent fills.
+
+## Light Grey theme
+
+Add, Details, Review, Add context, Setup and a response were captured with `-appTheme lightGrey` (`docs/visual-review/v1.5-p6/`). Every surface adapts, with no hard-coded dark colours.
+
+## Drawing editor restyled
+
+Editing an attached drawing now shows: the tool ("Horizontal Line", with its icon in the drawings colour), "Done keeps it; Cancel puts it back exactly", a full-width **Move it on the chart** button, a **Price** field for horizontal lines, **Line** chips that preview their stroke, and larger **Colour** swatches with a selected ring. The old system picker and the small dots are gone. The header says "Edit drawing".
+
+## Editing keeps the marker in view
+
+The framing from part 1 now applies to guided **edits** as well. The edited marker (or a Setup's saved Entry) is moved into the strip above the sheet when the edit opens and whenever the sheet settles somewhere that would hide it.
+
+## Evidence (part 2)
+
+| Check | Result |
+|---|---|
+| Focused unit suites (11) | **136/136** |
+| Workspace UI suites, iPhone 17 Pro / iOS 26.5 | **60/60**, including the drawing editor and Light Grey captures |
+| Sheet journeys + visual review, iPhone SE / iOS 18.2 | **14/14 + 1 skipped** (hardware keyboard) |
+| Release build | Succeeded |
+| Device build | Not run: the phone was unavailable. Install when it is back. |
+
+## Still to do in P6
+
+- An SE compact pass on the new Add hero and the context tiles, and a Reduce Motion run-through.
+- The plan's VoiceOver route announcements: they exist; a spoken walk-through on device needs the owner.

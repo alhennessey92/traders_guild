@@ -117,6 +117,50 @@ final class MarkerWorkspaceVisualReviewUITests: XCTestCase {
         }
     }
 
+    // MARK: P6: the drawing editor
+
+    func testDrawingEditor() {
+        launchHarness("context")
+        app.raiseMarkerSheet()
+        settle()
+        tap("workspace.tab.drawings")
+        tap("workspace.drawing.horizontalLine")
+        // The workspace hands over to the chart; its bar's label returns.
+        let options = app.buttons["workspace.tool.options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 5))
+        shot("p6-drawing-toolbar")
+        options.tap()
+        settle(1.2)
+        app.raiseMarkerSheet()
+        settle()
+        XCTAssertTrue(app.buttons["workspace.drawing.adjust"].waitForExistence(timeout: 5))
+        shot("p6-drawing-editor")
+        if app.buttons["workspace.drawing.style.dotted"].exists {
+            tap("workspace.drawing.style.dotted")
+            tap("workspace.drawing.colour.Violet")
+            shot("p6-drawing-editor-styled")
+        }
+    }
+
+    // MARK: P6: the Light Grey theme
+
+    func testLightGreyThemeScreens() {
+        for (scenario, name) in [("entry", "add"), ("analysisDetails", "details"), ("analysisReview", "review"),
+                                 ("context", "context"), ("setupTracked", "setup"), ("responseDetails", "response")] {
+            app = XCUIApplication()
+            app.launchArguments = ["-MarkerGuidedCreationFixture", scenario, "-MarkerGuidedSheetFixture", "YES",
+                                   "-TGAvatarMarkersExperiment", "YES", "-appTheme", "lightGrey"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Fixture")).firstMatch
+                .waitForExistence(timeout: 15))
+            settle(1.2)
+            app.raiseMarkerSheet()
+            settle()
+            shot("p6-light-\(name)")
+            app.terminate()
+        }
+    }
+
     func testResponseScreens() {
         launchHarness("responseDetails")
         XCTAssertTrue(app.otherElements["guided.responseBanner"].waitForExistence(timeout: 5))

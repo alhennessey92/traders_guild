@@ -17,7 +17,7 @@ enum MarkerWorkspaceDestination: String, Hashable {
         case .indicators: return "Add indicator"
         case .indicatorSettings: return "Indicator settings"
         case .drawings: return "Add drawing"
-        case .drawingEditor: return "Drawing"
+        case .drawingEditor: return "Edit drawing"
         case .levelEditor: return "Level"
         case .timeframes: return "Supporting timeframes"
         case .sourceEditor: return "Source link"
