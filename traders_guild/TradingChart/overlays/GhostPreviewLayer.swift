@@ -172,9 +172,14 @@ struct GhostPreviewLayer: View {
             totalWidth: width,
             labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
+        // v1.5: support and resistance stop short of their price chip rather
+        // than running through its label.
+        let chipLineEndX = ChartAxisMetrics.lineEndBeforeChip(plotWidth: width)
         for draft in placementState.components where draft.componentType.isLevel {
             guard shouldRenderSetupCoreLevelLine(for: draft.componentType) else { continue }
             guard let price = draft.payload.levelPrice, let y = yForPrice(price) else { continue }
+            let hasChip = draft.componentType == .levelSupport || draft.componentType == .levelResistance
+            let endX = MarkerAvatarExperiment.isEnabled && hasChip ? chipLineEndX : lineEndX
             let isFixedSetupEntry = placementState.intent == .setup && draft.componentType == .levelEntry
             let lineColor = drawingColor(for: draft)
             let lineStyle = draft.payload.drawingLineStyle ?? (isFixedSetupEntry ? .solid : .dashed)
@@ -185,7 +190,7 @@ struct GhostPreviewLayer: View {
 
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: lineEndX, y: y))
+            path.addLine(to: CGPoint(x: endX, y: y))
 
             context.stroke(
                 path,
@@ -278,7 +283,8 @@ struct GhostPreviewLayer: View {
                     payload.lineWidth
                     ?? defaultIndicatorLineWidth(for: payload.lineStyle ?? .dashed)
                 ),
-                isEditing: drawingInteractionPhase == .editing && editingDrawingId == line.id
+                isEditing: drawingInteractionPhase == .editing && editingDrawingId == line.id,
+                endsBeforeChip: MarkerAvatarExperiment.isEnabled
             )
         }
     }
@@ -289,13 +295,16 @@ struct GhostPreviewLayer: View {
         color: Color,
         lineStyle: MarkerDrawingLineStyle,
         lineWidth: CGFloat,
-        isEditing: Bool
+        isEditing: Bool,
+        endsBeforeChip: Bool = false
     ) {
         let startX: CGFloat = 0
-        let endX = ChartAxisMetrics.horizontalLineEndX(
-            totalWidth: width,
-            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
-        )
+        let endX = endsBeforeChip
+            ? ChartAxisMetrics.lineEndBeforeChip(plotWidth: width)
+            : ChartAxisMetrics.horizontalLineEndX(
+                totalWidth: width,
+                labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
+            )
         var path = Path()
         path.move(to: CGPoint(x: startX, y: y))
         path.addLine(to: CGPoint(x: endX, y: y))

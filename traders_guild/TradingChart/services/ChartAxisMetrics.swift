@@ -40,6 +40,14 @@ enum ChartAxisMetrics {
         max(0, totalWidth - axisLaneWidth)
     }
 
+    /// Where a level line drawn in the plot area stops so it does not run
+    /// through its own price chip. The chip sits at the chart's trailing edge
+    /// and overhangs the plot by `chipWidth - yAxisLaneWidth`; this ends the
+    /// line a few points before the chip's leading edge.
+    static func lineEndBeforeChip(plotWidth: CGFloat, chipWidth: CGFloat = secondaryPriceChipWidth) -> CGFloat {
+        max(0, trailingLabelMinX(totalWidth: plotWidth + yAxisLaneWidth, width: chipWidth) - 3)
+    }
+
     static func horizontalLineEndX(totalWidth: CGFloat, labelWidth: CGFloat? = nil) -> CGFloat {
         guard let labelWidth else {
             return plotWidth(totalWidth: totalWidth)

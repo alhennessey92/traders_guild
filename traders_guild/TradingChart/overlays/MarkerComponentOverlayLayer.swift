@@ -71,16 +71,21 @@ struct MarkerComponentOverlayLayer: View {
             totalWidth: width,
             labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
         )
+        // v1.5: support and resistance stop short of their price chip rather
+        // than running through its label.
+        let chipLineEndX = ChartAxisMetrics.lineEndBeforeChip(plotWidth: width)
         for component in levelComponents {
             guard let price = component.payload.levelPrice,
                   let y = yForPrice(price),
                   y.isFinite else {
                 continue
             }
+            let hasChip = component.componentTypeEnum == .levelSupport || component.componentTypeEnum == .levelResistance
+            let endX = MarkerAvatarExperiment.isEnabled && hasChip ? chipLineEndX : lineEndX
 
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: lineEndX, y: y))
+            path.addLine(to: CGPoint(x: endX, y: y))
 
             context.stroke(
                 path,
@@ -100,10 +105,12 @@ struct MarkerComponentOverlayLayer: View {
     }
 
     private func drawHorizontalLines(context: GraphicsContext) {
-        let endX = ChartAxisMetrics.horizontalLineEndX(
-            totalWidth: width,
-            labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
-        )
+        let endX = MarkerAvatarExperiment.isEnabled
+            ? ChartAxisMetrics.lineEndBeforeChip(plotWidth: width)
+            : ChartAxisMetrics.horizontalLineEndX(
+                totalWidth: width,
+                labelWidth: ChartAxisMetrics.secondaryPriceChipWidth
+            )
         for component in horizontalLineComponents {
             guard case let .drawingHorizontalLine(payload) = component.payload,
                   let y = yForPrice(payload.price),

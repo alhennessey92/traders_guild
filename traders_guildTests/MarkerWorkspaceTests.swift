@@ -312,6 +312,19 @@ struct MarkerWorkspaceTests {
         }
     }
 
+    @Test(arguments: [CGFloat(311), 329, 366])
+    func levelLinesStopBeforeTheirPriceChip(_ plotWidth: CGFloat) {
+        // The chip is laid out on the full width; the line in the plot area.
+        let chipMinX = ChartAxisMetrics.trailingLabelMinX(
+            totalWidth: plotWidth + ChartAxisMetrics.yAxisLaneWidth,
+            width: ChartAxisMetrics.secondaryPriceChipWidth
+        )
+        let end = ChartAxisMetrics.lineEndBeforeChip(plotWidth: plotWidth)
+        #expect(end < chipMinX && end > chipMinX - 8)
+        // The old end ran into the chip's label.
+        #expect(ChartAxisMetrics.horizontalLineEndX(totalWidth: plotWidth, labelWidth: ChartAxisMetrics.secondaryPriceChipWidth) > chipMinX)
+    }
+
     @Test
     func chartPricesRoundToTheChartsLabels() {
         #expect(MarkerGuidedFormat.roundedPrice(63780.2493184) == 63780.25)
