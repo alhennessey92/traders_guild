@@ -12,7 +12,12 @@ Branch `claude/1.5.0-marker-workspace`. P6 was accepted by the owner on 8 Octobe
 
 - **Found:** the chart-service bind-mounts its code from a temporary export of backend `5061824`, under another session's scratchpad. That export had been emptied (0 files). The service kept working only because Python had already loaded its modules; any restart would have failed to start it. The other services mount the stable `linked-markers-backend` worktree.
 - **Repaired in place**, without a restart: `git archive 5061824 shared services/chart-service/app` back into the mounted folder. That is 151 shared files and 11 chart-service files, matching git. All 150 Python files compile inside the container, the schema has the text-only Analysis rule (`780398f`, an ancestor of `5061824`), and health stayed 200 throughout.
-- **Still fragile:** the folder is still under `/private/tmp`, so it could be cleaned again. A durable fix is to point the chart-service at a stable checkout, which takes one container recreate. That is the owner's decision.
+- **Made durable (9 October, owner: "do whatever you think is best").**
+  - The stack's third compose file (`stage4/compose.stage4-5061824.yml`) had been cleaned away too.
+  - Rebuilt as `~/TradersGuildLocal/backend-5061824/compose.chart-5061824.yml`. It mounts that folder's `git archive 5061824` copy and sets `LINKED_MARKERS_ENABLED=true`, which the lost override had set.
+  - The rendered config was compared with the running container before anything changed, printing names only: environment identical, same mount targets, and only the mount sources differ.
+  - Only the chart-service was recreated (`up -d --no-deps --no-build chart-service`, with `--env-file .env.local` and the base and safe files from `linked-markers-backend`). It was healthy after about 4 s. The Discord flags are still off, the text-only Analysis rule is present, there are no errors, and the other services were untouched (still up 9 days).
+  - Recreate the chart-service the same way in future.
 
 ## Outbound-safety preflight
 
