@@ -502,11 +502,14 @@ struct MarkerGuidedPlacementPanel: View {
 
     private func contextEditor(_ destination: MarkerWorkspaceDestination) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(placementState.isGuidedEdit
-                 ? "Optional. Nothing changes until you save."
-                 : "Optional. Anything you add stays with your draft.")
-                .font(.footnote)
-                .foregroundColor(AppColors.overlayPanelSecondaryText)
+            // The Add context screen says this in its "On this marker" row.
+            if ![MarkerWorkspaceDestination.context, .indicators, .drawings, .timeframes].contains(destination) {
+                Text(placementState.isGuidedEdit
+                     ? "Optional. Nothing changes until you save."
+                     : "Optional. Anything you add stays with your draft.")
+                    .font(.footnote)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+            }
             MarkerWorkspaceContent(placementState: placementState, currentChartTimeframe: currentChartTimeframe,
                                    activeChartIndicators: activeChartIndicators, activeChartDrawings: activeChartDrawings,
                                    onSelectTimeframe: onSelectTimeframe, onBeginInteractiveDrawing: onBeginInteractiveDrawing,

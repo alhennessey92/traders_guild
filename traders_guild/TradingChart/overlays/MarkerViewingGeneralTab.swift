@@ -245,17 +245,57 @@ struct MarkerViewingGeneralTab: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !text.isEmpty {
-                    Text(text)
-                        .font(.body)
-                        .foregroundColor(AppColors.primaryForeground)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                    refinedDescription(text)
+                        .padding(.top, title.isEmpty ? 0 : 4)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if liveMarker.intent != .setup {
             placeholderText(liveMarker.intent == .question ? "No question provided" : "No analysis provided")
         }
+    }
+
+    /// What the author wrote, as the post's centrepiece rather than loose text
+    /// under the title (owner, 9 Oct): its own card in the intent's colour, an
+    /// accent bar, a label saying what it is, and text a step up in weight.
+    private func refinedDescription(_ text: String) -> some View {
+        let color = liveMarker.intent.color
+        let label: String = {
+            switch liveMarker.intent {
+            case .setup: return "WHY THIS TRADE"
+            case .question: return "QUESTION"
+            default: return "ANALYSIS"
+            }
+        }()
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.caption.weight(.bold))
+                .tracking(0.8)
+                .foregroundColor(color)
+                .accessibilityAddTraits(.isHeader)
+            Text(text)
+                .font(.body.weight(.medium))
+                .foregroundColor(AppColors.primaryForeground)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 14)
+        .padding(.leading, 18)
+        .padding(.trailing, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(color.opacity(0.10)))
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(color)
+                .frame(width: 3)
+                .padding(.vertical, 12)
+                .padding(.leading, 7)
+                .accessibilityHidden(true)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.25), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("marker.description")
     }
 
     /// Respond and Share side by side: the two things a reader does next.
@@ -642,6 +682,9 @@ struct MarkerViewingGeneralTab: View {
                     .font(.system(size: 10, weight: .bold))
                     .tracking(0.8)
                     .foregroundColor(AppColors.greyText)
+                if MarkerAvatarExperiment.isEnabled {
+                    trackingSteps(labels: labels, currentIndex: currentIndex, state: state)
+                } else {
                 HStack(alignment: .top, spacing: 4) {
                     ForEach(0..<labels.count, id: \.self) { index in
                         VStack(spacing: 5) {
@@ -665,9 +708,54 @@ struct MarkerViewingGeneralTab: View {
                         }
                     }
                 }
+                }
             }
             .padding(.top, 3)
         }
+    }
+
+    /// One equal column per step, the connectors drawn between the dots, so
+    /// each label has a quarter of the width and "Tracking" stays on one line
+    /// (owner, 9 Oct: seven equal slots left it about 48pt and it wrapped).
+    private func trackingSteps(labels: [String], currentIndex: Int, state: RLTrackingState) -> some View {
+        func segment(_ index: Int) -> Color {
+            AppColors.greyText.opacity(index < currentIndex ? 0.55 : 0.22)
+        }
+        return HStack(alignment: .top, spacing: 0) {
+            ForEach(0..<labels.count, id: \.self) { index in
+                VStack(spacing: 5) {
+                    Image(systemName: index == currentIndex ? state.icon : "circle.fill")
+                        .font(.system(size: index == currentIndex ? 16 : 9, weight: .bold))
+                        .foregroundColor(index == currentIndex ? state.color : AppColors.greyText.opacity(index < currentIndex ? 0.9 : 0.4))
+                        .frame(height: 18)
+                        .accessibilityHidden(true)
+                    Text(labels[index])
+                        .font(.caption2.weight(index == currentIndex ? .bold : .regular))
+                        .foregroundColor(index == currentIndex ? AppColors.primaryForeground : AppColors.greyText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(index == currentIndex ? .isSelected : [])
+            }
+        }
+        // Each connector is one line from dot to dot, drawn behind the
+        // columns (two half-lines met on different pixel rows).
+        .background(alignment: .top) {
+            GeometryReader { proxy in
+                let column = proxy.size.width / CGFloat(labels.count)
+                ForEach(0..<(labels.count - 1), id: \.self) { index in
+                    Rectangle()
+                        .fill(segment(index))
+                        .frame(width: max(0, column - 26), height: 2)
+                        .position(x: column * CGFloat(index + 1), y: 9)
+                }
+            }
+            .frame(height: 18)
+            .accessibilityHidden(true)
+        }
+        .accessibilityIdentifier("marker.trackingSteps")
     }
 
     @ViewBuilder

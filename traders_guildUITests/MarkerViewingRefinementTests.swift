@@ -96,6 +96,31 @@ final class MarkerViewingRefinementTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Invalidated below the shelf."].exists, "the thesis is shown under the title")
     }
 
+    /// Owner, 9 Oct: the description read as loose text, and "Tracking"
+    /// wrapped onto two lines.
+    func testTheDescriptionIsACardAndTrackingFitsOnOneLine() throws {
+        launch("setup")
+        let description = app.descendants(matching: .any)["marker.description"]
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertTrue(description.label.contains("WHY THIS TRADE") && description.label.contains("Invalidated below the shelf."),
+                      description.label)
+        let title = app.staticTexts["Long the range-low retest"]
+        XCTAssertLessThan(title.frame.maxY, description.frame.minY, "the title, then the description")
+        let tracking = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Tracking")).firstMatch
+        XCTAssertTrue(tracking.exists)
+        // "Draft" is a step like "Tracking" ("Active" is also the status pill).
+        let draft = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Draft")).firstMatch
+        XCTAssertEqual(tracking.frame.height, draft.frame.height, accuracy: 0.5, "Tracking is one line, as tall as Draft")
+        XCTAssertEqual(tracking.frame.minY, draft.frame.minY, accuracy: 0.5, "on the same row")
+        attachScreenshot("refined-setup-description-tracking")
+
+        launch("analysis")
+        let analysis = app.descendants(matching: .any)["marker.description"]
+        XCTAssertTrue(analysis.waitForExistence(timeout: 5))
+        XCTAssertTrue(analysis.label.hasPrefix("ANALYSIS"), analysis.label)
+        attachScreenshot("refined-analysis-description")
+    }
+
     func testWithTheExperimentOffTheShippedLayoutIsUnchanged() throws {
         launch("analysis", experiment: false)
         let respond = app.buttons["marker.respond"]

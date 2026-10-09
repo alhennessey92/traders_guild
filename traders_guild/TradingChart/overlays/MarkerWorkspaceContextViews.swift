@@ -42,22 +42,51 @@ struct MarkerWorkspaceContextScreen: View {
         placementState.components.filter { MarkerContextTab.of($0.componentType) != nil }
     }
 
+    /// One row, always on screen, so attaching the first item or removing the
+    /// last never pushes the tabs and tiles below it (owner, 9 Oct: the first
+    /// timeframe's tile dropped while its fill animated). It also carries the
+    /// screen's "optional" line, so it costs a small phone almost nothing.
     @ViewBuilder
     private var attachedStrip: some View {
-        let drafts = contextDrafts
-        if !drafts.isEmpty {
+        if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 6) {
-                Text("On this marker")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(AppColors.overlayPanelSecondaryText)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(drafts) { draft in chip(draft) }
-                    }
-                    .padding(.vertical, 1)
-                }
+                attachedLabel
+                attachedItems
+            }
+        } else {
+            HStack(spacing: 10) {
+                attachedLabel
+                attachedItems
             }
         }
+    }
+
+    private var attachedLabel: some View {
+        Text("On this marker")
+            .font(.caption.weight(.semibold))
+            .foregroundColor(AppColors.overlayPanelSecondaryText)
+            .fixedSize()
+    }
+
+    private var attachedItems: some View {
+        let drafts = contextDrafts
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if drafts.isEmpty {
+                    Text(placementState.isGuidedEdit ? "Nothing yet. Nothing changes until you save."
+                                                     : "Nothing yet. All optional.")
+                        .font(.footnote)
+                        .foregroundColor(AppColors.overlayPanelSecondaryText)
+                        .lineLimit(1)
+                        .frame(minHeight: 34)
+                        .accessibilityIdentifier("workspace.attached.empty")
+                } else {
+                    ForEach(drafts) { draft in chip(draft) }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+        .scrollDisabled(drafts.isEmpty)
     }
 
     private func chip(_ draft: MarkerComponentDraft) -> some View {

@@ -168,6 +168,27 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         XCTAssertTrue(resistanceChip.waitForExistence(timeout: 5), "Done keeps it on the marker")
     }
 
+    /// Owner, 9 Oct: linking the first timeframe pushed the tiles down while
+    /// the chosen one filled, and unlinking the last pulled them back up.
+    func testLinkingTheFirstTimeframeMovesNothing() {
+        launch("analysisDetails")
+        tap("guided.addContext")
+        tap("workspace.tab.timeframes")
+        XCTAssertTrue(app.descendants(matching: .any)["workspace.attached.empty"].waitForExistence(timeout: 5))
+        let tile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isEnabled == true", "workspace.timeframe.")).element(boundBy: 0)
+        XCTAssertTrue(tile.waitForExistence(timeout: 5))
+        let before = tile.frame.minY
+        tile.tap()
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.6)
+        XCTAssertTrue(tile.label.contains("linked"), tile.label)
+        XCTAssertEqual(tile.frame.minY, before, accuracy: 0.5, "the tile stays where it was")
+        capture("final-first-timeframe-linked")
+        tile.tap()
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.6)
+        XCTAssertEqual(tile.frame.minY, before, accuracy: 0.5, "and unlinking the last moves nothing either")
+        XCTAssertTrue(app.descendants(matching: .any)["workspace.attached.empty"].exists)
+    }
+
     func testQuestionContextExcludesUnsupportedSourceAndLevels() {
         launch("questionShort")
         XCTAssertFalse(app.buttons["guided.review"].isEnabled)

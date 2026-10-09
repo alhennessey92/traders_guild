@@ -82,7 +82,25 @@ Evidence (this session's scratchpad `perf/`):
 - per-run `run-p7c-*-requests.json`, `metrics-p7c-*.json` and `rb-perf-p7c-*.xcresult`;
 - `sequence-summary-20261009T203330Z.json`.
 
-## Owner hand pass (signed in to a local QA account on the phone)
+## Owner hand pass (9 October): "looks good to me", three fixes, owner-verified on device
+
+The owner went through the workspace and viewing sheets signed in as QA account `a` on local DEV and reported three things, all fixed in the v1.5 experiment-on paths only:
+
+1. **Linking the first timeframe, or unlinking the last, moved the tiles.**
+   - Cause: the "On this marker" strip only existed once something was attached. Inserting it pushed the tab down while the chosen tile's fill animated.
+   - Fix: the strip is always on screen as a single row, "On this marker" followed by the chips, or "Nothing yet. All optional." when empty. It replaces the screen's "Optional…" sentence, so it costs a small phone almost nothing.
+   - A first, two-row version pushed the indicator tiles below the fold at half height on the iPhone SE simulator. That broke 3 SE shell tests, which caught it before it reached the phone.
+   - Test: `testLinkingTheFirstTimeframeMovesNothing`. The tile's position is unchanged after linking and after unlinking.
+2. **The description did not look important enough.**
+   - The refined view sheet now shows it as a card in the intent's colour: a tinted surface, an accent bar, a label (ANALYSIS, QUESTION, or WHY THIS TRADE for a Setup) and medium-weight body text.
+   - Checked in dark and Light Grey.
+3. **"Tracking" wrapped onto two lines in a Setup's tracking stepper.**
+   - Cause: four labels and three connectors shared seven equal slots, about 48pt each.
+   - Fix: under the experiment, each step gets a quarter of the width, and each connector is one line drawn from dot to dot. Two half-lines had met on different pixel rows. Labels are single-line and scale down slightly if needed, and step icons are hidden from VoiceOver.
+   - The shipped stepper is unchanged with the experiment off. It came with the 1.4.1 baseline `480b79b`.
+   - Test: `testTheDescriptionIsACardAndTrackingFitsOnOneLine`.
+
+## Owner hand pass checklist (as given)
 
 1. Post a plain-text Analysis, see it on the chart, then edit it.
 2. Post a Question (at least 10 characters).
