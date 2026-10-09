@@ -6,7 +6,7 @@ Branch `claude/1.5.0-marker-workspace`. P6 was accepted by the owner on 8 Octobe
 
 - Restore the local chart-service's code in place (no restart).
 - Signed-in journeys: the owner tests by hand, and Claude also runs the opt-in integration test from the protected QA file.
-- Same-device performance comparison: yes, when the owner is ready.
+- Same-device performance comparison: yes, when the owner is ready. Run on 9 October.
 
 ## Local stack
 
@@ -41,18 +41,41 @@ Checked on the running containers, printing only whether each setting is set, ne
 - **Fixed** in `cae9329`: the DEBUG redactor now also masks keys ending in "email", with a test.
 - No tokens or passwords appeared.
 
-## Performance comparison (prepared, waiting for the owner)
+## Performance comparison (owner's iPhone 14 Pro, 9 October): no regression
 
-- The perf driver hardening from `claude/1.5.0-avatar-markers` is in (`847449c`). It is the final state of the 9 test commits, and the driver never types credentials. The Stage 5 session docs and the QA password-rotation script were left on their branch.
+- **What ran:** the perf driver hardening from `claude/1.5.0-avatar-markers` (`847449c`: the final state of its 9 test commits, which never types credentials), plus one fix made here (`8d409b5`, described under "What it took").
 - **Builds:**
-  - base: canonical `128ead3`, in a temporary worktree carrying the identical driver file;
+  - base: canonical `128ead3`, in a temporary worktree with the identical driver file;
   - proto: this branch.
-  - Both are optimized DevProfile, built for the owner's iPhone, with the experiment on.
-- **Sequence:** prepare, then base, proto, base, proto. Runs are warm only and interleaved to even out thermal drift. There is no avatar rotation, so no local data changes.
-- **Inputs:**
-  - the seeded thesis markers `0ab0ce3d…` and `0347baeb…`, which are still in the QA guild;
-  - slot `a` of the protected file, which is a member of that guild.
-- **Owner steps:** sign in as QA account `a` on the phone by hand, unlock it, and keep it on the cable. Each measured run takes about 15 minutes.
+  - Both are optimized DevProfile with the experiment on.
+- **Account:** signed in by hand as QA account `a` (`stage4658f08a`).
+- **Sequence:** prepare, then base, proto, base, proto. All runs were warm, with no avatar rotation, no trace and no stack changes. All 5 runs passed.
+
+Medians per measured pan, pooled over 5 tests per state (CPU is the app process):
+
+| | base run 1 | proto run 1 | base run 2 | proto run 2 |
+|---|---|---|---|---|
+| Pan with the thesis selected: CPU s | 3.85 | 3.63 | 3.44 | 3.54 |
+| Pan with nothing selected: CPU s | 3.73 | 3.65 | 3.49 | 3.45 |
+| Revisit in process: CPU s | 3.60 | 2.58 | 2.89 | 2.80 |
+| Pan clock s (fixed gesture) | 8.64 / 8.81 | 8.64 / 8.73 | 8.64 / 8.81 | 8.74 / 8.64 |
+| Pans ending off the seeded view | 0 of 10 | 0 of 10 | 0 of 10 | 0 of 10 |
+| Avatar requests | 4 revalidations at launch, none after | same | same | same |
+
+**Reading:**
+- The workspace branch is level with base on every viewing path: selected and unselected pans, revisits, and launch avatar traffic. Its averages are marginally lower (selected pans 3.59 vs 3.65 s, unselected 3.55 vs 3.61 s, revisit 2.69 vs 3.24 s). The base-to-base spread (3.85 vs 3.44) is larger than any base-to-proto difference, so treat these as equal within noise rather than as an improvement.
+- **Not measured here:**
+  - Frame hitches: the device trace is off; see below.
+  - The authoring sheet itself. Its performance was checked in P2 with render counters, which showed the chart is not invalidated while typing or scrolling.
+
+**What it took** (tooling, not app, problems):
+1. **Selected-pan checks failing on the base build.** The chart refits its price range on the first pan and keeps it through re-anchoring, so the driver's first reference view never matched again. Fix: one unmeasured settling pan before each reference (`8d409b5`, test-only, in both builds).
+2. **The phone running out of storage.** The system-wide Animation Hitches trace reached 26 GB on the Mac for one run, and unfinalised traces were left on the phone. Fix: the trace is off by default (`TG_PERF_TRACE=1` opts in). The owner restarted the phone, which cleared the stranded data.
+3. **"Timed out while enabling automation mode" after the restart.** The owner re-confirmed Settings ▸ Developer ▸ Enable UI Automation.
+
+Evidence (this session's scratchpad `perf/`):
+- per-run `run-p7c-*-requests.json`, `metrics-p7c-*.json` and `rb-perf-p7c-*.xcresult`;
+- `sequence-summary-20261009T203330Z.json`.
 
 ## Owner hand pass (signed in to a local QA account on the phone)
 
