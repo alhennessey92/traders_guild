@@ -301,9 +301,7 @@ extension MarkerPlacementState {
             if componentPrice(.levelTp) == nil || componentPrice(.levelSl) == nil {
                 return "Set a take profit and a stop loss"
             }
-            return setupSide == .inconsistent
-                ? "Put Entry between your stop and target"
-                : "Check your prices"
+            return setupSide == .inconsistent ? setupLevelsStraddlePrompt : "Check your prices"
         }
         // A locked Setup's levels are not this edit's to fix.
         let unmetItems = isGuidedEditLocked
@@ -326,10 +324,22 @@ extension MarkerPlacementState {
         case "setup_levels_required":
             return "Set a take profit and a stop loss"
         case "setup_direction_required":
-            return "Put Entry between your stop and target"
+            return setupLevelsStraddlePrompt
         default:
             return unmet.title
         }
+    }
+
+    /// The stop and target must sit either side of Entry, and Entry is not the
+    /// author's to move: on a new Setup it is the live price (refreshed by each
+    /// new candle and again at Post), on an edit the saved one. So the prompt
+    /// says where Entry is rather than asking to move it (owner, 10 Oct: tight
+    /// levels on BTC 5m read as wrongly refused when the price drifted).
+    var setupLevelsStraddlePrompt: String {
+        let price = MarkerGuidedFormat.displayPrice(guidedSetupEntryPrice)
+        return isGuidedEdit
+            ? "Keep your stop and target either side of Entry, \(price)"
+            : "Price is \(price): keep your stop and target either side"
     }
 
     /// Retained for fixture/test callers. The product header has no step track.

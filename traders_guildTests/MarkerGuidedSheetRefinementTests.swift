@@ -131,7 +131,8 @@ struct MarkerGuidedSheetRefinementTests {
         #expect(!state.continueToReview())
 
         setLevels(state, tp: 240, sl: 120)  // both above Entry
-        #expect(state.guidedNextStepPrompt == "Put Entry between your stop and target")
+        let price = MarkerGuidedFormat.displayPrice(state.guidedSetupEntryPrice)
+        #expect(state.guidedNextStepPrompt == "Price is \(price): keep your stop and target either side")
         #expect(!state.continueToReview())
 
         setLevels(state, tp: 240, sl: -120)

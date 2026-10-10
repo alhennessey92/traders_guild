@@ -279,7 +279,8 @@ struct MarkerGuidedEditingTests {
         e.state.upsertComponent(.levelSl, payload: .levelSl(LevelPayload(price: 64_000, label: "SL")))  // above Entry
         #expect(e.state.guidedTrackedSetupLevelsNeedAdjusting)
         #expect(!e.state.canContinueToReview)
-        #expect(e.state.guidedNextStepPrompt == "Put Entry between your stop and target")
+        let entry = MarkerGuidedFormat.displayPrice(e.state.guidedSetupEntryPrice)
+        #expect(e.state.guidedNextStepPrompt == "Keep your stop and target either side of Entry, \(entry)")
     }
 
     // MARK: Clearing optional values
