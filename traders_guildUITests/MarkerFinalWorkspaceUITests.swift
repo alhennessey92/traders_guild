@@ -189,6 +189,36 @@ final class MarkerFinalWorkspaceUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["workspace.attached.empty"].exists)
     }
 
+    /// Owner, 10 Oct: the editor's button says what it does ("Add EMA 10"),
+    /// and what is on the marker wraps onto more lines instead of scrolling.
+    func testTheEditorNamesItsActionAndAttachedItemsWrapInView() {
+        launch("analysisDetails")
+        tap("guided.addContext")
+        tap("workspace.indicator.EMA")
+        let commit = app.buttons["guided.contextDone"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 5))
+        XCTAssertTrue(commit.label.hasPrefix("Add EMA"), commit.label)
+        let before = commit.label
+        XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5))
+        app.sliders.firstMatch.adjust(toNormalizedSliderPosition: 0.8)
+        XCTAssertNotEqual(commit.label, before, "the title follows the period")
+        XCTAssertTrue(commit.label.hasPrefix("Add EMA"), commit.label)
+        tap("guided.contextDone")
+        tap("workspace.tab.timeframes")
+        let tiles = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isEnabled == true", "workspace.timeframe."))
+        tiles.element(boundBy: 0).tap()
+        tiles.element(boundBy: 1).tap()
+        let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace.edit."))
+        XCTAssertEqual(chips.count, 3)
+        let width = app.windows.firstMatch.frame.width
+        for index in 0..<chips.count {
+            let frame = chips.element(boundBy: index).frame
+            XCTAssertTrue(chips.element(boundBy: index).isHittable, "chip \(index) is in view")
+            XCTAssertLessThanOrEqual(frame.maxX, width, "chip \(index) is not clipped")
+        }
+        capture("final-attached-chips-wrap")
+    }
+
     func testQuestionContextExcludesUnsupportedSourceAndLevels() {
         launch("questionShort")
         XCTAssertFalse(app.buttons["guided.review"].isEnabled)

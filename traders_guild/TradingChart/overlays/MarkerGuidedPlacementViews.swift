@@ -876,8 +876,12 @@ struct MarkerGuidedPlacementBar: View {
             case .context?:
                 backButton(placementState.workspaceDestination.isEditor ? "Cancel" : "Back")
                 Spacer()
-                primaryButton("Done", enabled: placementState.workspaceCanCommit, identifier: "guided.contextDone") {
-                    placementState.commitWorkspaceEditor()
+                // An indicator's title follows its period field as it is typed.
+                if let draft = placementState.workspace.indicatorDraft,
+                   placementState.workspaceDestination == .indicatorSettings {
+                    MarkerIndicatorDraftObserver(draft: draft) { contextCommitButton }
+                } else {
+                    contextCommitButton
                 }
             case .review?:
                 backButton("Edit")
@@ -934,9 +938,18 @@ struct MarkerGuidedPlacementBar: View {
 
     /// Filled in the type's colour when it can be pressed; a quiet outline
     /// when it cannot, so "not yet" never looks like "go".
+    private var contextCommitButton: some View {
+        primaryButton(placementState.workspaceCommitTitle, enabled: placementState.workspaceCanCommit,
+                      identifier: "guided.contextDone") {
+            placementState.commitWorkspaceEditor()
+        }
+    }
+
     private func primaryButton(_ title: String, enabled: Bool, identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(enabled ? .white : AppColors.greyText)
                 .padding(.horizontal, 26)
@@ -1849,3 +1862,12 @@ enum MarkerGuidedFormat {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
+
+/// Re-renders its content when an indicator draft's values change, so a
+/// footer title built from them ("Add EMA 10") follows the field.
+private struct MarkerIndicatorDraftObserver<Content: View>: View {
+    @ObservedObject var draft: IndicatorSettingsDraft
+    @ViewBuilder let content: () -> Content
+    var body: some View { content() }
+}
+

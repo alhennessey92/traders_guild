@@ -42,51 +42,33 @@ struct MarkerWorkspaceContextScreen: View {
         placementState.components.filter { MarkerContextTab.of($0.componentType) != nil }
     }
 
-    /// One row, always on screen, so attaching the first item or removing the
-    /// last never pushes the tabs and tiles below it (owner, 9 Oct: the first
-    /// timeframe's tile dropped while its fill animated). It also carries the
-    /// screen's "optional" line, so it costs a small phone almost nothing.
-    @ViewBuilder
+    /// "On this marker" and everything on it, always on screen. It wraps onto
+    /// more lines as items are added rather than scrolling sideways, so all of
+    /// it can be read at once (owner, 10 Oct); while empty or short it is one
+    /// line, so attaching the first item or removing the last moves nothing
+    /// below it (owner, 9 Oct). It also carries the screen's "optional" line.
     private var attachedStrip: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 6) {
-                attachedLabel
-                attachedItems
-            }
-        } else {
-            HStack(spacing: 10) {
-                attachedLabel
-                attachedItems
-            }
-        }
-    }
-
-    private var attachedLabel: some View {
-        Text("On this marker")
-            .font(.caption.weight(.semibold))
-            .foregroundColor(AppColors.overlayPanelSecondaryText)
-            .fixedSize()
-    }
-
-    private var attachedItems: some View {
         let drafts = contextDrafts
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if drafts.isEmpty {
-                    Text(placementState.isGuidedEdit ? "Nothing yet. Nothing changes until you save."
-                                                     : "Nothing yet. All optional.")
-                        .font(.footnote)
-                        .foregroundColor(AppColors.overlayPanelSecondaryText)
-                        .lineLimit(1)
-                        .frame(minHeight: 34)
-                        .accessibilityIdentifier("workspace.attached.empty")
-                } else {
-                    ForEach(drafts) { draft in chip(draft) }
-                }
+        return MarkerChipFlowLayout(spacing: 8, lineSpacing: 8) {
+            Text("On this marker")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
+                .padding(.trailing, 2)
+            if drafts.isEmpty {
+                Text(placementState.isGuidedEdit ? "Nothing yet. Nothing changes until you save."
+                                                 : "Nothing yet. All optional.")
+                    .font(.footnote)
+                    .foregroundColor(AppColors.overlayPanelSecondaryText)
+                    .lineLimit(1)
+                    .frame(minHeight: 34)
+                    .accessibilityIdentifier("workspace.attached.empty")
+            } else {
+                ForEach(drafts) { draft in chip(draft) }
             }
-            .padding(.vertical, 1)
         }
-        .scrollDisabled(drafts.isEmpty)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("workspace.attached")
     }
 
     private func chip(_ draft: MarkerComponentDraft) -> some View {
@@ -603,3 +585,60 @@ struct MarkerTileGrid: Layout {
         }
     }
 }
+
+/// Items left to right, wrapping onto a new line when the next one does not
+/// fit; each line's items centred on its height. An item wider than the line
+/// is offered the line's width (chips truncate their title).
+struct MarkerChipFlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var lineSpacing: CGFloat = 8
+
+    private struct Line { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func lines(for subviews: Subviews, width: CGFloat) -> ([Line], [CGSize]) {
+        let sizes = subviews.map { subview -> CGSize in
+            let ideal = subview.sizeThatFits(.unspecified)
+            guard width.isFinite, ideal.width > width else { return ideal }
+            return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        }
+        var lines: [Line] = []
+        var line = Line()
+        for (index, size) in sizes.enumerated() {
+            let needed = line.indices.isEmpty ? size.width : line.width + spacing + size.width
+            if !line.indices.isEmpty, width.isFinite, needed > width {
+                lines.append(line)
+                line = Line()
+            }
+            line.width = line.indices.isEmpty ? size.width : line.width + spacing + size.width
+            line.height = max(line.height, size.height)
+            line.indices.append(index)
+        }
+        if !line.indices.isEmpty { lines.append(line) }
+        return (lines, sizes)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let (lines, _) = lines(for: subviews, width: width)
+        let height = lines.reduce(0) { $0 + $1.height } + lineSpacing * CGFloat(max(0, lines.count - 1))
+        return CGSize(width: proposal.width ?? (lines.map(\.width).max() ?? 0), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (lines, sizes) = lines(for: subviews, width: bounds.width)
+        var y = bounds.minY
+        for line in lines {
+            var x = bounds.minX
+            for index in line.indices {
+                let size = sizes[index]
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (line.height - size.height) / 2),
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + spacing
+            }
+            y += line.height + lineSpacing
+        }
+    }
+}
+

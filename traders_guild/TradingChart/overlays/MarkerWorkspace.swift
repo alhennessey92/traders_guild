@@ -338,6 +338,44 @@ extension MarkerPlacementState {
         return true
     }
 
+    /// An editor's commit action, named for what it does (owner, 10 Oct): "Add
+    /// EMA 10" for a new indicator and "Save EMA 10" for one already on the
+    /// marker; "Add note", "Save source", "Add support", "Add trendline". Screens
+    /// that are not editors keep "Done".
+    var workspaceCommitTitle: String {
+        let isNew: Bool
+        let noun: String
+        switch workspace.destination {
+        case .indicatorSettings:
+            guard let draft = workspace.indicatorDraft else { return "Done" }
+            isNew = draft.context.draftId == nil
+            noun = Self.indicatorCommitNoun(draft)
+        case .sourceEditor:
+            isNew = workspace.selectedComponentID == nil
+            noun = "source"
+        case .noteEditor:
+            isNew = workspace.selectedComponentID == nil
+            noun = "note"
+        case .levelEditor:
+            isNew = workspace.levelDrawingIsNew || workspace.selectedComponentID == nil
+            noun = workspace.selectedLevel == .levelResistance ? "resistance" : "support"
+        case .drawingEditor:
+            isNew = workspace.selectedComponentID == nil
+            noun = activeDrawingWorkflowTool?.title.lowercased() ?? "drawing"
+        default:
+            return "Done"
+        }
+        return "\(isNew ? "Add" : "Save") \(noun)"
+    }
+
+    /// "EMA 10": the indicator's short name and, when it has one, its period as
+    /// typed, so the button follows the field.
+    static func indicatorCommitNoun(_ draft: IndicatorSettingsDraft) -> String {
+        let name = draft.context.item.title
+        let period = draft.intValues["period"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return period.isEmpty ? name : "\(name) \(period)"
+    }
+
     /// When chart editing belongs to a level editor, re-entry must keep its ID.
     /// Nil leaves the existing drawing selection behaviour unchanged elsewhere.
     var workspaceLevelChartComponentID: UUID? {
