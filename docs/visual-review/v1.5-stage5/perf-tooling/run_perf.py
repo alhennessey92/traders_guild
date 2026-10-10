@@ -20,7 +20,10 @@ stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 name = f"{label}-{stamp}"
 xctestrun = max(glob.glob(f"{dd}/Build/Products/*.xctestrun"), key=os.path.getmtime)  # the latest build
 rb = f"{S}/stage5/rb-perf-{name}.xcresult"
-tests = ["test0_signInIfNeeded", "test5_parkOnMarkerFreeTimeframe"] if mode == "prepare" else None
+tests = (["test0_signInIfNeeded", "test5_parkOnMarkerFreeTimeframe"] if mode == "prepare"
+         else [f"test{group}_{name}_{i}" for group, name in (("3", "pansWithSelectedThesis"), ("4", "pansUnselected"))
+               for i in range(1, 6)] if mode == "pans"
+         else None)
 # Measure runs skip the sign-in check: test1's launch must be the first after any avatar rotation.
 only = [f"-only-testing:traders_guildUITests/MarkerAvatarPerformanceDriver/{t}" for t in tests] if tests \
     else ["-only-testing:traders_guildUITests/MarkerAvatarPerformanceDriver",
@@ -36,7 +39,13 @@ SIMULATOR = "9B8DAACB-DB63-4F23-A75B-3BC6C52E5705"
 # Frame behaviour fallback for physical devices: a system-wide Animation Hitches trace for the
 # whole invocation (survives the app relaunches a run makes), stopped with SIGINT so it finalises.
 trace = None
-if mode == "measure" and dest != SIMULATOR:
+# Off unless asked for (TG_PERF_TRACE=1): a whole-run Animation Hitches trace
+# reached 26 GB, and unfinalised ones were left on the phone until it ran out of
+# storage. Without it the driver records XCTHitchMetric per measured pan.
+system_trace = mode in ("measure", "pans") and dest != SIMULATOR and os.environ.get("TG_PERF_TRACE") == "1"
+if system_trace:
+    env["TEST_RUNNER_TG_PERF_SYSTEM_TRACE"] = "1"
+if system_trace:
     trace_path = f"{S}/stage5/trace-{name}.trace"
     trace = subprocess.Popen(["xcrun", "xctrace", "record", "--device", dest, "--template", "Animation Hitches",
                               "--all-processes", "--time-limit", "900s", "--output", trace_path],

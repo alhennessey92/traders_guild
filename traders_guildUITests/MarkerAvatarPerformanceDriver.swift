@@ -160,8 +160,17 @@ final class MarkerAvatarPerformanceDriver: XCTestCase {
     /// measure began. Frames and hitches come from the trace instead
     /// (`hitches_by_phase.py`), for every window, the unmeasured first launch
     /// included.
+    ///
+    /// Without a system trace (`TG_PERF_SYSTEM_TRACE` unset, the default since
+    /// a whole-run trace reached 26 GB and filled the phone), `XCTHitchMetric`
+    /// is back: each measured pan's hitches, recorded on the device with no
+    /// trace file at all. With a trace, it stays out, for the reason above.
     private func metrics() -> [XCTMetric] {
-        [XCTCPUMetric(application: app), XCTMemoryMetric(application: app), XCTClockMetric()]
+        var metrics: [XCTMetric] = [XCTCPUMetric(application: app), XCTMemoryMetric(application: app), XCTClockMetric()]
+        if ProcessInfo.processInfo.environment["TG_PERF_SYSTEM_TRACE"] != "1", #available(iOS 26.0, *) {
+            metrics.insert(XCTHitchMetric(application: app), at: 0)
+        }
+        return metrics
     }
 
     private func once() -> XCTMeasureOptions {
