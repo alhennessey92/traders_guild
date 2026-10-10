@@ -6,26 +6,35 @@
 //
 
 import Foundation
+import os
 
-/// Whether the avatar-led marker prototype is on.
+/// Whether the v1.5 avatar-led markers are on.
 ///
-/// Available only in the isolated DEV configurations (`TG_ISOLATED_DEV`:
-/// DevDebug and the optimised DevProfile), so it can be exercised in a build
-/// that profiles like the shipping app. Every other configuration — Release,
-/// GCP Public Prod, Prod QA and the plain Debug schemes — compiles the switch
-/// to a constant `false`: no launch argument or saved preference is read, so
-/// neither can turn it on.
+/// The server decides, in every configuration: the authenticated runtime flag
+/// `avatar_markers_enabled` (`GET /users/me/runtime-flags`; an env master
+/// switch with an admin kill switch under it). The app **fails closed**: with
+/// no answer from the server, ever, it runs the old marker system.
 ///
-/// Off by default. Two development controls, launch first:
+/// Decided once per launch, so nothing switches under the user's hands:
+/// - if the server's answer arrives before anything asks (the usual case: the
+///   flags are fetched as soon as the app is signed in), it decides this launch;
+/// - otherwise the answer last persisted from the server decides, and a new
+///   answer takes effect on the next launch.
+///
+/// The isolated DEV configurations (`TG_ISOLATED_DEV`: DevDebug and the
+/// optimised DevProfile) keep two development controls that win over the
+/// server, launch first:
 /// - Launch override, for reproducible device and simulator runs:
 ///   `-TGAvatarMarkersExperiment YES` (or `NO`). Not persisted.
-/// - Persisted switch, for launches from the home screen, which carry no
-///   arguments: set from the marker fixture gallery. Read at launch.
+/// - Persisted switch, set from the marker fixture gallery.
+/// No other configuration reads either.
 enum MarkerAvatarExperiment {
     static let defaultsKey = "TGAvatarMarkersExperiment"
+    /// The server's last answer, kept for launches before the next fetch.
+    static let serverFlagKey = "TGAvatarMarkersServerFlag"
     static let launchArgument = "-TGAvatarMarkersExperiment"
 
-    /// Whether this build can host the experiment at all.
+    /// Whether this build offers the development controls.
     static var isAvailable: Bool {
         #if TG_ISOLATED_DEV
         return true
@@ -34,20 +43,34 @@ enum MarkerAvatarExperiment {
         #endif
     }
 
-    /// Decided once per launch. Marker badges read this in view bodies, so it
-    /// must not touch `UserDefaults` every time; a changed saved switch takes
-    /// effect on the next launch.
-    static let isEnabled: Bool = evaluate()
+    private static let launchLatch = MarkerLaunchLatch()
 
-    /// The switch as it stands right now.
-    static func evaluate() -> Bool {
+    /// Decided once per launch. Marker badges read this in view bodies, so
+    /// after the first read it is one uncontended lock and a stored value.
+    static var isEnabled: Bool {
+        launchLatch.value { evaluate() }
+    }
+
+    /// The server's answer, from the runtime flags. Persisted for the next
+    /// launch; it also decides this launch if nothing has asked yet.
+    static func recordServerFlag(_ enabled: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: serverFlagKey)
+        launchLatch.offer { evaluate(serverFlag: enabled) }
+    }
+
+    /// The switch as it stands right now: the development controls in an
+    /// isolated build, then the server's answer (given, or last persisted),
+    /// then off.
+    static func evaluate(serverFlag: Bool? = nil) -> Bool {
+        let server = serverFlag ?? persistedServerFlag(in: .standard)
         #if TG_ISOLATED_DEV
         return resolve(
             arguments: ProcessInfo.processInfo.arguments,
-            persisted: persistedValue(in: .standard)
+            persisted: persistedValue(in: .standard),
+            serverFlag: server
         )
         #else
-        return false
+        return resolve(arguments: [], persisted: nil, serverFlag: server)
         #endif
     }
 
@@ -69,10 +92,21 @@ enum MarkerAvatarExperiment {
     // MARK: - Resolution
 
     /// The rule, separate from where its inputs come from so it can be tested
-    /// in any configuration. A launch override wins; otherwise the saved switch;
-    /// otherwise off.
-    static func resolve(arguments: [String], persisted: Bool?) -> Bool {
-        launchOverride(in: arguments) ?? persisted ?? false
+    /// in any configuration. A launch override wins; then the saved development
+    /// switch; then the server; otherwise off (fail closed).
+    static func resolve(arguments: [String], persisted: Bool?, serverFlag: Bool? = nil) -> Bool {
+        launchOverride(in: arguments) ?? persisted ?? serverFlag ?? false
+    }
+
+    /// The server's last answer, if it has ever given one. Like the saved
+    /// switch, read from the app's own persistent domain only, so a launch
+    /// argument can never stand in for the server.
+    static func persistedServerFlag(in defaults: UserDefaults) -> Bool? {
+        if defaults === UserDefaults.standard {
+            guard let domainName = Bundle.main.bundleIdentifier else { return nil }
+            return defaults.persistentDomain(forName: domainName)?[serverFlagKey] as? Bool
+        }
+        return defaults.object(forKey: serverFlagKey) as? Bool
     }
 
     /// `YES`/`NO` (or `true`/`false`, `1`/`0`) after the argument. A missing or
@@ -98,3 +132,28 @@ enum MarkerAvatarExperiment {
         return defaults.object(forKey: defaultsKey) as? Bool
     }
 }
+
+/// A value decided once per launch: by whichever comes first, the first read
+/// (from what is known then) or an offer of a fresher answer. Later offers do
+/// not change it.
+final class MarkerLaunchLatch: @unchecked Sendable {
+    private let state = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+
+    func value(_ evaluate: () -> Bool) -> Bool {
+        state.withLock { value in
+            if let value { return value }
+            let decided = evaluate()
+            value = decided
+            return decided
+        }
+    }
+
+    func offer(_ evaluate: () -> Bool) {
+        state.withLock { value in
+            if value == nil { value = evaluate() }
+        }
+    }
+
+    var isDecided: Bool { state.withLock { $0 != nil } }
+}
+

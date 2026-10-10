@@ -339,7 +339,7 @@ enum MarkerAvatarLayout {
 /// on, they honour it — the marker takes its selected size at once and does
 /// not wiggle — so faces, the most prominent thing on the prototype chart, do
 /// not bounce for someone who has asked the system for less motion. With the
-/// experiment off, and in every production configuration, nothing changes.
+/// v1.5 markers off (the server flag, or the old system by default), nothing changes.
 enum MarkerSelectionMotion {
     static func pop(
         reduceMotion: Bool,

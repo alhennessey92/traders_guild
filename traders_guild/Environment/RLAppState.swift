@@ -1520,6 +1520,9 @@ class RLAppState: ObservableObject {
 
         do {
             runtimeFlags = try await realApi.getRuntimeFlags()
+            // v1.5 markers: only a real answer from the server is recorded, so
+            // a failed fetch never turns them on (or off) by accident.
+            MarkerAvatarExperiment.recordServerFlag(runtimeFlags.avatarMarkersEnabled)
         } catch is CancellationError {
             return
         } catch {

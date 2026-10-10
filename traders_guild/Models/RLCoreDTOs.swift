@@ -1963,24 +1963,30 @@ struct RLRuntimeFlagsDTO: Codable, Equatable {
     /// server that predates the capability behaves exactly like 1.2.1: existing
     /// links still render as ordinary markers, and no link affordances appear.
     let linkedMarkersEnabled: Bool
+    /// v1.5 avatar-led markers. Defaults to **off**: a server that predates the
+    /// flag, or that says no, keeps the old marker system (fail closed).
+    let avatarMarkersEnabled: Bool
 
     static let disabled = RLRuntimeFlagsDTO(
         betaWelcomeEnabled: false,
         betaFeedbackEnabled: false,
         awardsEnabled: false,
-        linkedMarkersEnabled: false
+        linkedMarkersEnabled: false,
+        avatarMarkersEnabled: false
     )
 
     init(
         betaWelcomeEnabled: Bool = false,
         betaFeedbackEnabled: Bool = false,
         awardsEnabled: Bool = false,
-        linkedMarkersEnabled: Bool = false
+        linkedMarkersEnabled: Bool = false,
+        avatarMarkersEnabled: Bool = false
     ) {
         self.betaWelcomeEnabled = betaWelcomeEnabled
         self.betaFeedbackEnabled = betaFeedbackEnabled
         self.awardsEnabled = awardsEnabled
         self.linkedMarkersEnabled = linkedMarkersEnabled
+        self.avatarMarkersEnabled = avatarMarkersEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -1989,6 +1995,7 @@ struct RLRuntimeFlagsDTO: Codable, Equatable {
         betaFeedbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .betaFeedbackEnabled) ?? false
         awardsEnabled = try container.decodeIfPresent(Bool.self, forKey: .awardsEnabled) ?? false
         linkedMarkersEnabled = try container.decodeIfPresent(Bool.self, forKey: .linkedMarkersEnabled) ?? false
+        avatarMarkersEnabled = try container.decodeIfPresent(Bool.self, forKey: .avatarMarkersEnabled) ?? false
     }
 }
 
