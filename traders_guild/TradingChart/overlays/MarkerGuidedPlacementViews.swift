@@ -162,7 +162,9 @@ struct MarkerGuidedPlacementPanel: View {
                     title: Text("Switch to \(change.targetIntent.displayName)?"),
                     message: Text("This removes context \(change.targetIntent.displayName) can't carry: \(change.incompatibleSummary)."),
                     primaryButton: .destructive(Text("Remove and Switch")) {
-                        placementState.applyGuidedIntentChange(change)
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                            placementState.applyGuidedIntentChange(change)
+                        }
                         placementState.backToDetails()
                     },
                     secondaryButton: .cancel()
@@ -228,7 +230,13 @@ struct MarkerGuidedPlacementPanel: View {
     /// Guided types go back to Details; other types leave for the legacy panel.
     /// Either way nothing is removed without the author agreeing.
     private func choose(_ intent: RLMarkerIntent) {
-        if let change = placementState.requestGuidedIntentChange(to: intent) {
+        // The type's own settings (choices, urgency, Title) fade in and out
+        // as it changes; nothing slides.
+        var pending: MarkerGuidedIntentChange?
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+            pending = placementState.requestGuidedIntentChange(to: intent)
+        }
+        if let change = pending {
             pendingChange = .intent(change)
             HapticFeedback.light.trigger()
             return
@@ -244,14 +252,19 @@ struct MarkerGuidedPlacementPanel: View {
     private var taskHeader: some View {
         let destination = placementState.workspaceDestination
         return HStack(spacing: 12) {
-            UnifiedMarkerBadge(intent: placementState.intent, alertSeverity: draftAlertSeverity,
-                               sizeToken: .medium, avatar: authorBadgeIdentity)
-                // One element with a name: hiding the badge's parts left
-                // its picture and glyph exposed to the audit unlabelled.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Your marker, \(placementState.intent.displayName)")
-                // Analysis ↔ Question recolours the face's ring in place.
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: placementState.intent)
+            ZStack {
+                // A type change cross-fades the face to its new ring and
+                // badge; animating one colour into the other passed through
+                // clear for an alert's theme-aware amber.
+                UnifiedMarkerBadge(intent: placementState.intent, alertSeverity: draftAlertSeverity,
+                                   sizeToken: .medium, avatar: authorBadgeIdentity)
+                    .id(placementState.intent)
+                    .transition(.opacity)
+            }
+            // One element with a name: hiding the badge's parts left
+            // its picture and glyph exposed to the audit unlabelled.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Your marker, \(placementState.intent.displayName)")
             VStack(alignment: .leading, spacing: 1) {
                 Text(headerTitle(destination))
                     .font(.headline.weight(.bold))
@@ -349,12 +362,14 @@ struct MarkerGuidedPlacementPanel: View {
                 pollQuestionCounter
                 MarkerGuidedPollChoicesEditor(placementState: placementState)
                     .padding(.top, 4)
+                    .transition(.opacity)
             case .alert:
                 minimumCounter(placementState.trimmedAlertDescription.count)
                 MarkerGuidedAlertSeverityPicker(selected: placementState.alertSeverity) { severity in
                     placementState.alertSeverity = severity
                 }
                 .padding(.top, 4)
+                .transition(.opacity)
             default:
                 EmptyView()
             }
@@ -474,6 +489,7 @@ struct MarkerGuidedPlacementPanel: View {
                     MarkerGuidedExtraChip(icon: "plus", title: "Title", identifier: "guided.addTitle") {
                         withAnimation(.easeInOut(duration: 0.2)) { placementState.workspace.showsTitle = true }
                     }
+                    .transition(.opacity)
                 }
                 // A locked Setup's context cannot change (the server refuses it).
                 if !placementState.isGuidedEditLocked {
@@ -1205,12 +1221,7 @@ struct MarkerPostToChartCard: View {
 
     /// A kind of post, as its small badge.
     private func kind(_ intent: RLMarkerIntent) -> some View {
-        Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-            .font(.system(size: 8, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 16, height: 16)
-            .background(Circle().fill(MarkerIntentBadge.accentColor(for: intent)))
-            .accessibilityHidden(true)
+        MarkerIntentGlyph(intent: intent, size: 17)
     }
 }
 
@@ -1350,31 +1361,37 @@ struct MarkerGuidedTypePicker: View {
             .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
     }
 
-    private func badge(_ intent: RLMarkerIntent, isSelected: Bool) -> some View {
-        let color = MarkerIntentBadge.accentColor(for: intent)
-        return Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 26, height: 26)
-            .background(Circle().fill(isSelected ? color : color.opacity(0.45)))
-            .accessibilityHidden(true)
+    /// The chosen look is laid over the resting one and faded in, rather
+    /// than one colour animated into another (see `MarkerIntentGlyph`).
+    private func selectionBackground<S: InsettableShape>(_ shape: S, color: Color, isSelected: Bool) -> some View {
+        ZStack {
+            shape.fill(AppColors.whiteText.opacity(0.05))
+            shape.fill(color.opacity(0.18)).opacity(isSelected ? 1 : 0)
+            shape.strokeBorder(color.opacity(0.75), lineWidth: 1.5).opacity(isSelected ? 1 : 0)
+        }
+    }
+
+    /// One label whose opacity fades: two cross-fading labels read dimmer
+    /// than either halfway through.
+    private func name(_ intent: RLMarkerIntent, isSelected: Bool, font: Font, scale: CGFloat) -> some View {
+        Text(intent.displayName)
+            .foregroundColor(AppColors.primaryForeground)
+            .opacity(isSelected ? 1 : 0.62)
+            .font(font)
+            .lineLimit(1)
+            .minimumScaleFactor(scale)
     }
 
     private func tile(_ intent: RLMarkerIntent) -> some View {
         let isSelected = selected == intent
         let color = MarkerIntentBadge.accentColor(for: intent)
         return VStack(spacing: 5) {
-            badge(intent, isSelected: isSelected)
-            Text(intent.displayName)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+            MarkerIntentGlyph(intent: intent, size: 26, emphasised: isSelected)
+            name(intent, isSelected: isSelected, font: .caption.weight(.semibold), scale: 0.75)
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, minHeight: 60)
-        .background(RoundedRectangle(cornerRadius: 12).fill(isSelected ? color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? color.opacity(0.75) : Color.clear, lineWidth: 1.5))
+        .background(selectionBackground(RoundedRectangle(cornerRadius: 12), color: color, isSelected: isSelected))
         .padding(.vertical, 2)
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -1383,18 +1400,13 @@ struct MarkerGuidedTypePicker: View {
         let isSelected = selected == intent
         let color = MarkerIntentBadge.accentColor(for: intent)
         return HStack(spacing: 8) {
-            badge(intent, isSelected: isSelected)
-            Text(intent.displayName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            MarkerIntentGlyph(intent: intent, size: 26, emphasised: isSelected)
+            name(intent, isSelected: isSelected, font: .subheadline.weight(.semibold), scale: 0.7)
         }
         .padding(.leading, 7)
         .padding(.trailing, 16)
         .frame(minHeight: 40)
-        .background(Capsule().fill(isSelected ? color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
-        .overlay(Capsule().stroke(isSelected ? color.opacity(0.75) : Color.clear, lineWidth: 1.5))
+        .background(selectionBackground(Capsule(), color: color, isSelected: isSelected))
         .padding(.vertical, 2)
         .contentShape(Capsule())
     }

@@ -9,6 +9,46 @@
 
 import SwiftUI
 
+// MARK: - Type glyph
+
+/// A Post type's badge on the sheet: the glyph its face wears on the chart,
+/// on a circle, and an alert's on a shield (owner, 11 Oct: the crest look).
+/// Selection fades the shape's opacity; its colour never animates. An
+/// alert's theme-aware amber faded through clear when it did, so the shape
+/// vanished and came back between selections.
+struct MarkerIntentGlyph: View {
+    let intent: RLMarkerIntent
+    var size: CGFloat = 26
+    var emphasised = true
+
+    var body: some View {
+        let color = MarkerIntentBadge.accentColor(for: intent)
+        ZStack {
+            if intent == .alert {
+                Image(systemName: "shield.fill")
+                    .font(.system(size: size * 0.98))
+                    .foregroundColor(color)
+                    .opacity(emphasised ? 1 : 0.45)
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: size * 0.40, weight: .heavy))
+                    .foregroundColor(.white)
+                    .offset(y: -size * 0.04)
+            } else {
+                Circle()
+                    .fill(color)
+                    .opacity(emphasised ? 1 : 0.45)
+                Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
+                    // The bars are wide for their height: smaller, so they
+                    // sit inside the circle as the other glyphs do.
+                    .font(.system(size: size * (intent == .poll ? 0.36 : 0.46), weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Alert severity
 
 /// How urgent an alert is, in the four words the server and older apps use
