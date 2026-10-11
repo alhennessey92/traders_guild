@@ -976,12 +976,19 @@ struct ChatInputFooter: View {
         .padding(.vertical, 16)
         .padding(.horizontal, 20)
         .background(
+            // The panel floats over the conversation: an opaque sheet base
+            // under the tint keeps messages from showing through it.
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(AppColors.chatAttachmentActionPanelFill)
+                .fill(AppColors.sheetBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppColors.chatAttachmentActionPanelFill)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(AppColors.chatAttachmentActionPanelStroke, lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(0.28), radius: 14, x: 0, y: 6)
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
