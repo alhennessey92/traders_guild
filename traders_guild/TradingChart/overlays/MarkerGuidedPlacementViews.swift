@@ -38,12 +38,18 @@ struct MarkerGuidedCompactDock: View {
     @ViewBuilder private var observedBody: some View {
         Button(action: onResume) {
             HStack(spacing: 10) {
-                Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(MarkerIntentBadge.accentColor(for: placementState.intent))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(MarkerIntentBadge.accentColor(for: placementState.intent).opacity(0.16)))
-                    .accessibilityHidden(true)
+                Group {
+                    if MarkerIntentBadge.usesPaletteSymbol(intent: placementState.intent) {
+                        MarkerIntentGlyph(intent: placementState.intent, size: 36, alertSeverity: placementState.alertSeverity)
+                    } else {
+                        Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(placementState.draftAccentColor)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(placementState.draftAccentColor.opacity(0.16)))
+                    }
+                }
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(taskTitle)
                         .font(.footnote.weight(.bold))
@@ -59,7 +65,7 @@ struct MarkerGuidedCompactDock: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(MarkerIntentBadge.accentColor(for: placementState.intent)))
+                    .background(Circle().fill(placementState.draftAccentColor))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 7)
@@ -346,7 +352,8 @@ struct MarkerGuidedPlacementPanel: View {
     private var socialTypePicker: some View {
         MarkerGuidedTypePicker(
             intents: MarkerGuidedFlowEntry.socialIntents,
-            selected: placementState.intent
+            selected: placementState.intent,
+            alertSeverity: placementState.alertSeverity
         ) { choose($0) }
     }
 
@@ -633,7 +640,7 @@ struct MarkerGuidedPlacementPanel: View {
                     metaLayout {
                         Text(placementState.intent.displayName)
                             .font(.caption.weight(.bold))
-                            .foregroundColor(MarkerIntentBadge.accentColor(for: placementState.intent))
+                            .foregroundColor(placementState.draftAccentColor)
                         Text(reviewMetaLine)
                             .font(.caption)
                             .foregroundColor(AppColors.overlayPanelSecondaryText)
@@ -910,6 +917,9 @@ struct MarkerWorkspaceResponseBanner: View {
 /// Details, Post on Review, Done in context. While Review is unavailable the
 /// bar says what is missing.
 struct MarkerGuidedPlacementBar: View {
+    /// Fixed, like a tab bar; the sheet keeps the workspace content clear of it.
+    static let height: CGFloat = 68
+
     @ObservedObject var placementState: MarkerPlacementState
     var onShowChart: (() -> Void)? = nil
     let onPost: () -> Void
@@ -990,7 +1000,7 @@ struct MarkerGuidedPlacementBar: View {
             }
         }
         .padding(.horizontal, 20)
-        .frame(height: 68)
+        .frame(height: Self.height)
         // The footer stays put; only its actions change with the screen.
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: placementState.workspaceDestination)
         // The sheet's bottom bar has a fixed height, like a tab bar: its text
@@ -1033,12 +1043,12 @@ struct MarkerGuidedPlacementBar: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(enabled ? .white : AppColors.greyText)
+                .foregroundColor(enabled ? placementState.draftOnAccentColor : AppColors.greyText)
                 .padding(.horizontal, 26)
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(enabled ? MarkerIntentBadge.accentColor(for: placementState.intent) : AppColors.whiteText.opacity(0.06))
+                        .fill(enabled ? placementState.draftAccentColor : AppColors.whiteText.opacity(0.06))
                         .overlay(Capsule().stroke(AppColors.whiteText.opacity(enabled ? 0 : 0.14), lineWidth: 1))
                 )
         }
@@ -1221,7 +1231,7 @@ struct MarkerPostToChartCard: View {
 
     /// A kind of post, as its small badge.
     private func kind(_ intent: RLMarkerIntent) -> some View {
-        MarkerIntentGlyph(intent: intent, size: 17)
+        MarkerIntentGlyph(intent: intent, size: 22)
     }
 }
 
@@ -1320,6 +1330,8 @@ struct MarkerGuidedTypeRow: View {
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent
+    /// The Alert tile wears the chosen urgency's shape and colour.
+    var alertSeverity: MarkerAlertSeverity? = nil
     let onSelect: (RLMarkerIntent) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1382,15 +1394,20 @@ struct MarkerGuidedTypePicker: View {
             .minimumScaleFactor(scale)
     }
 
+    private func severity(for intent: RLMarkerIntent) -> MarkerAlertSeverity? {
+        intent == .alert ? alertSeverity : nil
+    }
+
     private func tile(_ intent: RLMarkerIntent) -> some View {
         let isSelected = selected == intent
-        let color = MarkerIntentBadge.accentColor(for: intent)
+        let color = MarkerIntentBadge.accentColor(for: intent, alertSeverity: severity(for: intent))
         return VStack(spacing: 5) {
-            MarkerIntentGlyph(intent: intent, size: 26, emphasised: isSelected)
+            MarkerIntentGlyph(intent: intent, size: 32, emphasised: isSelected, alertSeverity: severity(for: intent))
             name(intent, isSelected: isSelected, font: .caption.weight(.semibold), scale: 0.75)
         }
         .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, minHeight: 60)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, minHeight: 64)
         .background(selectionBackground(RoundedRectangle(cornerRadius: 12), color: color, isSelected: isSelected))
         .padding(.vertical, 2)
         .contentShape(RoundedRectangle(cornerRadius: 12))
@@ -1398,9 +1415,9 @@ struct MarkerGuidedTypePicker: View {
 
     private func capsule(_ intent: RLMarkerIntent) -> some View {
         let isSelected = selected == intent
-        let color = MarkerIntentBadge.accentColor(for: intent)
+        let color = MarkerIntentBadge.accentColor(for: intent, alertSeverity: severity(for: intent))
         return HStack(spacing: 8) {
-            MarkerIntentGlyph(intent: intent, size: 26, emphasised: isSelected)
+            MarkerIntentGlyph(intent: intent, size: 30, emphasised: isSelected, alertSeverity: severity(for: intent))
             name(intent, isSelected: isSelected, font: .subheadline.weight(.semibold), scale: 0.7)
         }
         .padding(.leading, 7)

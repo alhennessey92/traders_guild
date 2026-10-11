@@ -3501,7 +3501,15 @@ struct ChartMarkerSystem {
         )
 
         // 9. Intent badge, outward — what this face is saying.
-        if showsIntentDecorations {
+        if showsIntentDecorations && MarkerIntentBadge.usesPaletteSymbol(intent: marker.intent) {
+            drawPaletteBadge(
+                context: drawContext,
+                intent: marker.intent,
+                severity: markerSeverity,
+                in: MarkerIntentBadge.paletteRect(center: position, isBelow: isBelow, scale: scale),
+                pass: pass
+            )
+        } else if showsIntentDecorations {
             let status: MarkerIntentBadge.SetupStatus = marker.intent == .setup
                 ? .from(marker.marker)
                 : .unknown
@@ -3509,16 +3517,52 @@ struct ChartMarkerSystem {
                 intent: marker.intent, setupStatus: status, alertSeverity: marker.alertSeverity
             ) {
                 let rect = MarkerIntentBadge.rect(center: position, isBelow: isBelow, scale: scale)
-                drawContext.fill(
-                    Path(roundedRect: rect, cornerRadius: MarkerLinkRenderer.badgeSize / 2),
-                    with: .color(style.color)
-                )
-                drawContext.draw(
-                    pass.badgeGlyph(named: style.symbol, in: drawContext),
-                    at: CGPoint(x: rect.midX, y: rect.midY)
-                )
+                if let shape = style.shape {
+                    // An alert's urgency shape stands in for the disc.
+                    var outline = pass.badgeShape(named: shape, in: drawContext)
+                    outline.shading = .color(style.color)
+                    drawContext.draw(outline, at: CGPoint(x: rect.midX, y: rect.midY))
+                } else {
+                    drawContext.fill(
+                        Path(roundedRect: rect, cornerRadius: MarkerLinkRenderer.badgeSize / 2),
+                        with: .color(style.color)
+                    )
+                }
+                var glyph = pass.badgeGlyph(named: style.symbol, in: drawContext)
+                if let glyphColor = style.glyphColor { glyph.shading = .color(glyphColor) }
+                drawContext.draw(glyph, at: CGPoint(x: rect.midX, y: rect.midY + rect.height * style.glyphOffset))
             }
         }
+    }
+
+    /// The intent's own palette symbol on a small glass disc: the icon the
+    /// marker wore before it wore a face, now beside the face. The symbol is
+    /// the canvas's own (rendered once at selected size) scaled to the disc.
+    private static func drawPaletteBadge(
+        context: GraphicsContext,
+        intent: RLMarkerIntent,
+        severity: MarkerAlertSeverity?,
+        in rect: CGRect,
+        pass: MarkerDrawPass
+    ) {
+        let disc = Path(ellipseIn: rect)
+        context.fill(disc, with: .color(pass.markerFill))
+        if let severity {
+            context.fill(disc, with: .color(severity.color.opacity(0.25)))
+        }
+        context.stroke(
+            disc,
+            with: .color(severity.map { $0.color.opacity(0.6) } ?? pass.glassStroke),
+            lineWidth: MarkerVisualSpec.glassStrokeWidth
+        )
+        let id = MarkerSymbolID(intent: intent, alertSeverity: severity, isSelected: true)
+        guard let symbol = context.resolveSymbol(id: id.tag) else { return }
+        let factor = rect.width / (MarkerVisualSpec.baseCanvasDiameter * MarkerVisualSpec.selectedScale)
+        let size = CGSize(width: symbol.size.width * factor, height: symbol.size.height * factor)
+        context.draw(symbol, in: CGRect(
+            x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
+            width: size.width, height: size.height
+        ))
     }
 
     /// Whether a marker wears the avatar prototype's badge, ring and arcs:

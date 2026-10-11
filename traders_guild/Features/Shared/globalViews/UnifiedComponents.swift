@@ -1906,20 +1906,35 @@ struct UnifiedMarkerBadge: View {
             x: 0, y: 1
         )
         .overlay {
-            if let style = intentBadgeStyle {
+            if showsAvatar, MarkerAvatarPresentation.experimentIntents.contains(intent),
+               MarkerIntentBadge.usesPaletteSymbol(intent: intent) {
+                // The intent's own palette symbol on a small glass disc, as on
+                // the chart: the marker it was before it wore a face.
+                let pip = max(14, size * 0.46)
+                let offset = size / 2 * 0.7071
+                MarkerIntentGlyph(intent: intent, size: pip, alertSeverity: alertSeverity)
+                    .offset(x: offset, y: -offset)
+            } else if let style = intentBadgeStyle {
                 // Straddles the rim at 45°, top-right, as on the chart.
                 let pip = max(10, size * 0.36)
                 let offset = size / 2 * 0.7071
-                Circle()
-                    .fill(style.color)
-                    .frame(width: pip, height: pip)
-                    .overlay(
-                        Image(systemName: style.symbol)
-                            .font(.system(size: pip * 0.55, weight: .heavy))
-                            .foregroundColor(AppColors.onAccentForeground)
-                    )
-                    .offset(x: offset, y: -offset)
-                    .accessibilityHidden(true)
+                ZStack {
+                    if let shape = style.shape {
+                        // An alert's urgency shape stands in for the disc.
+                        Image(systemName: shape)
+                            .font(.system(size: pip * 0.95))
+                            .foregroundColor(style.color)
+                    } else {
+                        Circle().fill(style.color)
+                    }
+                    Image(systemName: style.symbol)
+                        .font(.system(size: pip * 0.55, weight: .heavy))
+                        .foregroundColor(style.glyphColor ?? AppColors.onAccentForeground)
+                        .offset(y: pip * style.glyphOffset)
+                }
+                .frame(width: pip, height: pip)
+                .offset(x: offset, y: -offset)
+                .accessibilityHidden(true)
             }
         }
     }

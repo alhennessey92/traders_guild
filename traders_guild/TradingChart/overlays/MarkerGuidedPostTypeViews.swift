@@ -9,6 +9,21 @@
 
 import SwiftUI
 
+// MARK: - Draft colour
+
+extension MarkerPlacementState {
+    /// The draft's colour in the sheet (buttons, its name, the dock): an
+    /// alert's follows its urgency once chosen.
+    var draftAccentColor: Color {
+        MarkerIntentBadge.accentColor(for: intent, alertSeverity: intent == .alert ? alertSeverity : nil)
+    }
+
+    /// Text on that colour: dark on Severe's yellow.
+    var draftOnAccentColor: Color {
+        MarkerIntentBadge.onAccentForeground(for: intent, alertSeverity: intent == .alert ? alertSeverity : nil)
+    }
+}
+
 // MARK: - Type glyph
 
 /// A Post type's badge on the sheet: the glyph its face wears on the chart,
@@ -20,30 +35,34 @@ struct MarkerIntentGlyph: View {
     let intent: RLMarkerIntent
     var size: CGFloat = 26
     var emphasised = true
+    /// An alert's urgency, once chosen: its icon and palette.
+    var alertSeverity: MarkerAlertSeverity? = nil
 
+    /// The marker as it was before it wore a face: a glass disc with the
+    /// type's own multi-colour SF Symbol (owner, 11 Oct). Selection fades the
+    /// whole disc; nothing animates one colour into another.
     var body: some View {
-        let color = MarkerIntentBadge.accentColor(for: intent)
-        ZStack {
-            if intent == .alert {
-                Image(systemName: "shield.fill")
-                    .font(.system(size: size * 0.98))
-                    .foregroundColor(color)
-                    .opacity(emphasised ? 1 : 0.45)
-                Image(systemName: "exclamationmark")
-                    .font(.system(size: size * 0.40, weight: .heavy))
-                    .foregroundColor(.white)
-                    .offset(y: -size * 0.04)
+        Group {
+            if intent == .alert && alertSeverity == nil {
+                // No urgency yet: the shield in amber, rather than the legacy
+                // grey that reads as disabled.
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill(MarkerVisualSpec.glassTint(for: .alert))
+                    Circle().stroke(MarkerIntentBadge.alertAccent.opacity(0.4), lineWidth: MarkerVisualSpec.glassStrokeWidth)
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .symbolRenderingMode(.palette)
+                        .font(.system(size: MarkerVisualSpec.iconSize(for: size, intent: .alert), weight: .bold))
+                        .foregroundStyle(MarkerVisualSpec.iconBaseColor,
+                                         MarkerIntentBadge.alertAccent.opacity(0.9),
+                                         MarkerIntentBadge.alertAccent.opacity(0.6))
+                }
+                .clipShape(Circle())
             } else {
-                Circle()
-                    .fill(color)
-                    .opacity(emphasised ? 1 : 0.45)
-                Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-                    // The bars are wide for their height: smaller, so they
-                    // sit inside the circle as the other glyphs do.
-                    .font(.system(size: size * (intent == .poll ? 0.36 : 0.46), weight: .bold))
-                    .foregroundColor(.white)
+                UnifiedMarkerBadge(intent: intent, alertSeverity: intent == .alert ? alertSeverity : nil, size: size)
             }
         }
+        .opacity(emphasised ? 1 : 0.55)
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }

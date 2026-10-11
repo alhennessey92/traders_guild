@@ -46,6 +46,7 @@ struct MarkerDrawPass {
 
     private var resolvedSymbols: [String: GraphicsContext.ResolvedImage] = [:]
     private var resolvedBadgeGlyphs: [String: GraphicsContext.ResolvedImage] = [:]
+    private var resolvedBadgeShapes: [String: GraphicsContext.ResolvedImage] = [:]
 
     init() {
         markerShadow = AppColors.canvasMarkerShadow
@@ -99,6 +100,18 @@ struct MarkerDrawPass {
         var image = context.resolve(Image(uiImage: MarkerBadgeGlyphImages.image(named: name)).renderingMode(.template))
         image.shading = .color(onAccent)
         resolvedBadgeGlyphs[name] = image
+        return image
+    }
+
+    /// A badge outline (an alert's urgency shape) at badge size, resolved
+    /// once per pass like the glyphs; the caller shades it per marker.
+    mutating func badgeShape(
+        named name: String,
+        in context: GraphicsContext
+    ) -> GraphicsContext.ResolvedImage {
+        if let hit = resolvedBadgeShapes[name] { return hit }
+        let image = context.resolve(Image(uiImage: MarkerBadgeGlyphImages.shape(named: name)).renderingMode(.template))
+        resolvedBadgeShapes[name] = image
         return image
     }
 }
@@ -708,6 +721,19 @@ enum MarkerBadgeGlyphImages {
         let image = (UIImage(systemName: name, withConfiguration: configuration) ?? UIImage())
             .withRenderingMode(.alwaysTemplate)
         cache[name] = image
+        return image
+    }
+
+    /// A filled outline sized to stand in for the badge's disc.
+    static func shape(named name: String) -> UIImage {
+        let key = "shape:" + name
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = cache[key] { return hit }
+        let configuration = UIImage.SymbolConfiguration(pointSize: MarkerLinkRenderer.badgeSize * 0.92, weight: .regular)
+        let image = (UIImage(systemName: name, withConfiguration: configuration) ?? UIImage())
+            .withRenderingMode(.alwaysTemplate)
+        cache[key] = image
         return image
     }
 }

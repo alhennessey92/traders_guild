@@ -39,6 +39,41 @@ struct MarkerIntentDecorationTests {
     }
 
     @Test
+    func anAlertBadgeTakesItsUrgencysShape() {
+        // The shapes its glyphs have always had: circled "i", shield,
+        // triangle, octagon; the shield before an urgency is chosen.
+        let expected: [(MarkerAlertSeverity?, String)] = [
+            (nil, "shield.fill"), (.mild, "circle.fill"), (.moderate, "shield.fill"),
+            (.severe, "triangle.fill"), (.critical, "octagon.fill"),
+        ]
+        for (severity, shape) in expected {
+            #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: severity)?.shape == shape)
+            #expect(MarkerIntentBadge.alertShape(for: severity).shape == shape)
+        }
+        // Every other badge keeps its disc.
+        for intent in [RLMarkerIntent.analysis, .question, .poll, .setup] {
+            #expect(MarkerIntentBadge.style(intent: intent)?.shape == nil)
+        }
+    }
+
+    @Test
+    func anAlertsColourAndTextFollowItsUrgency() {
+        for severity in MarkerAlertSeverity.allCases {
+            #expect(MarkerIntentBadge.accentColor(for: .alert, alertSeverity: severity) == severity.color)
+        }
+        // Dark on Severe's yellow, where white does not read; white elsewhere.
+        #expect(MarkerIntentBadge.onAccentForeground(for: .alert, alertSeverity: .severe) != .white)
+        #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: .severe)?.glyphColor != nil)
+        for severity in [MarkerAlertSeverity.mild, .moderate, .critical] {
+            #expect(MarkerIntentBadge.onAccentForeground(for: .alert, alertSeverity: severity) == .white)
+            #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: severity)?.glyphColor == nil)
+        }
+        // Only an alert follows a severity.
+        #expect(MarkerIntentBadge.accentColor(for: .analysis, alertSeverity: .critical) == RLMarkerIntent.analysis.color)
+        #expect(MarkerIntentBadge.onAccentForeground(for: .poll, alertSeverity: .severe) == .white)
+    }
+
+    @Test
     func aSetupBadgeFollowsItsLifecycle() {
         typealias Status = MarkerIntentBadge.SetupStatus
         let win = RLPredictionResultDTO(resultType: "take_profit", triggerPrice: 1, triggeredAt: .now,

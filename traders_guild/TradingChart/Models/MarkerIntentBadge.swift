@@ -20,6 +20,14 @@ enum MarkerIntentBadge {
     struct Style: Equatable {
         let symbol: String
         let color: Color
+        /// The badge's outline as a filled SF Symbol, for an alert: its
+        /// urgency's shape. Nil for the plain disc every other badge wears.
+        var shape: String? = nil
+        /// Moves the glyph inside a shape whose visual centre is not its
+        /// frame's centre (a triangle's sits low), as a fraction of the badge.
+        var glyphOffset: CGFloat = 0
+        /// The glyph's colour where the on-accent white would not read.
+        var glyphColor: Color? = nil
     }
 
     /// A Setup's lifecycle, as far as the badge is concerned.
@@ -76,10 +84,30 @@ enum MarkerIntentBadge {
     /// amber says "look here". Its badge carries the severity's own colour.
     static var alertAccent: Color { AppColors.statusWarning }
 
-    /// The colour an intent wears in the prototype: its ring, its badge when
-    /// nothing more specific applies, and its name in the sheet.
-    static func accentColor(for intent: RLMarkerIntent) -> Color {
-        intent == .alert ? alertAccent : intent.color
+    /// The colour an intent wears in the prototype: its ring, its badge, its
+    /// name and buttons in the sheet. An alert wears its urgency's colour once
+    /// it has one.
+    static func accentColor(for intent: RLMarkerIntent, alertSeverity: MarkerAlertSeverity? = nil) -> Color {
+        guard intent == .alert else { return intent.color }
+        return alertSeverity?.color ?? alertAccent
+    }
+
+    /// Text or a glyph on a filled accent: dark on Severe's yellow, where
+    /// white does not read; white everywhere else.
+    static func onAccentForeground(for intent: RLMarkerIntent, alertSeverity: MarkerAlertSeverity? = nil) -> Color {
+        intent == .alert && alertSeverity == .severe ? Color.black.opacity(0.82) : .white
+    }
+
+    /// An alert's badge outline and mark, by urgency: the shapes its glyphs
+    /// have always had (owner, 11 Oct): a circled "i", a shield, a triangle,
+    /// an octagon. Without an urgency yet, the shield.
+    static func alertShape(for severity: MarkerAlertSeverity?) -> (shape: String, glyph: String, glyphOffset: CGFloat) {
+        switch severity {
+        case .mild?: return ("circle.fill", "info", 0)
+        case .severe?: return ("triangle.fill", "exclamationmark", 0.1)
+        case .critical?: return ("octagon.fill", "exclamationmark", 0)
+        case .moderate?, nil: return ("shield.fill", "exclamationmark", -0.04)
+        }
     }
 
     /// The badge for an intent, or `nil` for intents that keep their glyph.
@@ -97,9 +125,13 @@ enum MarkerIntentBadge {
         case .poll:
             return Style(symbol: "chart.bar.fill", color: AppColors.intentPollPurple)
         case .alert:
+            let look = alertShape(for: alertSeverity)
             return Style(
-                symbol: alertSeverity == .mild ? "info" : "exclamationmark",
-                color: alertSeverity?.color ?? alertAccent
+                symbol: look.glyph,
+                color: accentColor(for: .alert, alertSeverity: alertSeverity),
+                shape: look.shape,
+                glyphOffset: look.glyphOffset,
+                glyphColor: alertSeverity == .severe ? onAccentForeground(for: .alert, alertSeverity: .severe) : nil
             )
         case .setup:
             switch setupStatus {
@@ -121,6 +153,28 @@ enum MarkerIntentBadge {
         case .news, .reaction, .personal:
             return nil
         }
+    }
+
+    // MARK: Palette badges
+
+    /// Analysis, Question, Poll and Alert wear their own multi-colour SF
+    /// Symbol (the icons the markers had before v1.5) on a small glass disc,
+    /// rather than a glyph on a coloured disc (owner, 11 Oct: "much cleaner").
+    /// An alert's is its urgency's (shield, triangle, octagon, circled "i").
+    /// A Setup keeps its lifecycle badge: it says where the trade stands.
+    static func usesPaletteSymbol(intent: RLMarkerIntent) -> Bool {
+        [.analysis, .question, .poll, .alert].contains(intent)
+    }
+
+    /// A palette badge is larger than a glyph badge, so its second colour
+    /// reads.
+    static let paletteDiameter: CGFloat = 19
+
+    /// A palette badge's frame, centred where a glyph badge's would be.
+    static func paletteRect(center: CGPoint, isBelow: Bool, scale: CGFloat = 1) -> CGRect {
+        let glyph = rect(center: center, isBelow: isBelow, scale: scale)
+        let side = paletteDiameter
+        return CGRect(x: glyph.midX - side / 2, y: glyph.midY - side / 2, width: side, height: side)
     }
 
     /// Where the badge sits: on the side away from the candle, mirroring the

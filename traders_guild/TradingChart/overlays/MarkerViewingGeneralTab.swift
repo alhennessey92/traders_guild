@@ -215,7 +215,7 @@ struct MarkerViewingGeneralTab: View {
                 metaLayout {
                     Text(liveMarker.intent.displayName)
                         .font(.caption.weight(.bold))
-                        .foregroundColor(MarkerIntentBadge.accentColor(for: liveMarker.intent))
+                        .foregroundColor(MarkerIntentBadge.accentColor(for: liveMarker.intent, alertSeverity: liveMarker.alertSeverity))
                     Text(refinedMetaLine)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
