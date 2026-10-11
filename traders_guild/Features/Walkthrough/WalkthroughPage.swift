@@ -46,7 +46,7 @@ enum WalkthroughPage: Int, CaseIterable, Identifiable {
         case .hero:
             return "Traders Guild is a live chart your guild shares. What anyone marks, everyone sees — in real time."
         case .placeMarker:
-            return "Tap the marker button, pick a type — setup, analysis, alert, question, poll, news, reaction — and it's pinned to the exact candle. Attach your indicators and drawings so the guild sees your full analysis."
+            return "Tap the marker button, then Post to the chart or Setup. Your face is pinned to the exact candle — add indicators, drawings or levels when you want the guild to see your working."
         case .trackedSetup:
             return "Setup markers carry entry, stop-loss and take-profit. The app watches price and records the result — that's your accuracy record and your place on the leaderboard."
         case .respondChat:

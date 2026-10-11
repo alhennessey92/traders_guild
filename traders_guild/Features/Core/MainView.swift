@@ -1675,15 +1675,19 @@ struct MainView: View {
         }
     }
 
-    /// Hands the sheet slot back to the chart sheet — on the Markers tab at
-    /// half height when the user asked to place their first marker, which is
-    /// the type grid the walkthrough just described.
+    /// Hands the sheet slot back to the chart sheet — on Markers ▸ Add at half
+    /// height when the user asked to place their first marker, which is what
+    /// the walkthrough just described.
     private func releaseWalkthroughSlot(outcome: WalkthroughOutcome) {
         pendingWalkthroughCTA = nil
         if outcome == .placeFirstMarker {
-            // Both are read when the sheet presents, so they must be set before
-            // the reservation flips and the sheet condition becomes true.
+            // All are read when the sheet presents, so they must be set before
+            // the reservation flips and the sheet condition becomes true. A
+            // walkthrough replayed from Settings may find the Markers tab on
+            // its list; only the v1.5 sheet reads this tab, the legacy one
+            // keeps its own (which starts on Add).
             chartSheetTab = .markers
+            chartMarkerPrimaryTab = .add
             selectedDetent = .fraction(0.5)
         }
         walkthroughSlotReserved = false

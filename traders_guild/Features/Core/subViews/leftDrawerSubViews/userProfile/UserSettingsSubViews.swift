@@ -1608,7 +1608,7 @@ struct HelpCenterView: View {
         ]),
         ("Trading & Charts", "chart.line.uptrend.xyaxis", AppColors.accentColor, [
             ("What markets are supported?", "We support Forex, Stocks, Crypto, Commodities, and Indices. The available symbols depend on your data subscription and guild preferences."),
-            ("How do I add a marker to a chart?", "Long-press on any point on the chart to open the marker menu. Select the marker type, add your notes, and tap Save. Your marker will be visible to guild members with chart access."),
+            ("How do I add a marker to a chart?", "Tap the marker button on the chart's bottom bar, then Add. Choose what to post, write your call and post it. It's pinned to the candle, and your guild sees it live."),
             ("Can I import my own chart data?", "Currently, chart data is provided through our market data partners. Custom data import is planned for a future release."),
         ]),
         ("Messaging", "message.fill", .purple, [
