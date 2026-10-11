@@ -168,6 +168,12 @@ enum MarkerPlacementRequirements {
     /// Was a bare `10` in four places across this file. Mirrors Android
     /// `MarkerPlacementController.MIN_CONTEXT_CHARACTERS`.
     static let minimumContextCharacters = 10
+    /// A poll's question is its title on the server, which holds 200.
+    static let maximumPollQuestionCharacters = 200
+    /// The guided sheet offers two to four choices, each short enough to read
+    /// as one row (the server stores up to 200 characters).
+    static let maximumPollChoices = 4
+    static let maximumPollChoiceCharacters = 80
 }
 
 @MainActor
@@ -795,10 +801,13 @@ final class MarkerPlacementState: ObservableObject {
         guard anchorCount == 1 else { return false }
 
         if intent == .poll {
-            let validOptions = pollOptions
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            return !pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && validOptions.count >= 2
+            guard !trimmedPollQuestion.isEmpty, validPollOptions.count >= 2 else { return false }
+            // The guided sheet also holds the server's limits, so a long
+            // question or choice is caught here rather than refused.
+            guard isGuidedFlowActive else { return true }
+            return trimmedPollQuestion.count <= MarkerPlacementRequirements.maximumPollQuestionCharacters
+                && validPollOptions.count <= MarkerPlacementRequirements.maximumPollChoices
+                && validPollOptions.allSatisfy { $0.count <= MarkerPlacementRequirements.maximumPollChoiceCharacters }
         }
 
         switch intent {
@@ -961,16 +970,18 @@ final class MarkerPlacementState: ObservableObject {
             upsertComponent(.reactionEmoji, payload: .reactionEmoji(anchoredEmojiPayload(emoji: "🎯")))
         }
 
+        // The guided sheet keeps a poll's choices and an alert's severity while
+        // the author tries other types; only the chosen type's are sent.
         if newIntent == .poll {
             if pollOptions.count < 2 {
                 pollOptions = ["", ""]
             }
-        } else {
+        } else if !isGuidedFlowActive {
             pollQuestion = ""
             pollOptions = ["", ""]
         }
 
-        if newIntent != .alert {
+        if newIntent != .alert && !isGuidedFlowActive {
             alertSeverity = nil
         }
 
@@ -2177,8 +2188,8 @@ final class MarkerPlacementState: ObservableObject {
         let requestComponents = requestComponentsForCurrentState(resolvedAnchorTime: resolvedAnchorTime)
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedPollQuestion = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The guided sheet writes a poll's question in its text field.
+        let trimmedPollQuestion = self.trimmedPollQuestion
         let resolvedTitle: String? = {
             if intent == .poll {
                 return trimmedPollQuestion.isEmpty ? nil : trimmedPollQuestion
@@ -2199,7 +2210,7 @@ final class MarkerPlacementState: ObservableObject {
             timeframe: timeframe,
             intent: intent.rawValue,
             title: resolvedTitle,
-            note: trimmedNote.isEmpty ? nil : trimmedNote,
+            note: requestNote,
             visibility: resolvedVisibility,
             confidence: resolvedConfidence,
             trackingEnabled: trackingEnabled,
@@ -2457,8 +2468,32 @@ final class MarkerPlacementState: ObservableObject {
         trimmedNote
     }
 
-    private var trimmedPollQuestion: String {
-        pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// A poll's question. The guided sheet writes it in its one text field;
+    /// the legacy composer has a field of its own.
+    var trimmedPollQuestion: String {
+        (isGuidedFlowActive ? note : pollQuestion).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The note as sent. The guided sheet keeps an alert's severity apart
+    /// from its description, so the severity goes back on the front here,
+    /// the way the server and older apps read it ("[Warning] …"). A guided
+    /// poll's text is its question and goes as the title instead. The legacy
+    /// composer's note is sent as written.
+    var requestNote: String? {
+        let trimmed = trimmedNote
+        if isGuidedFlowActive {
+            switch intent {
+            case .poll:
+                return nil
+            case .alert:
+                if let severity = alertSeverity {
+                    return "[\(severity.displayLabel)] \(trimmedAlertDescription)"
+                }
+            default:
+                break
+            }
+        }
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// Exposed (was private) so the General tab can show a live character-count hint.
@@ -2467,7 +2502,7 @@ final class MarkerPlacementState: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var validPollOptions: [String] {
+    var validPollOptions: [String] {
         pollOptions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -2501,7 +2536,7 @@ final class MarkerPlacementState: ObservableObject {
             || timeframeLinkCount > 0
     }
 
-    private var resolvedAlertSeverity: MarkerAlertSeverity? {
+    var resolvedAlertSeverity: MarkerAlertSeverity? {
         alertSeverity ?? inferredAlertSeverity(from: trimmedNote)
     }
 

@@ -160,9 +160,9 @@ struct MarkerWorkspaceChartToolBar: View {
                 HStack(spacing: 10) {
                     Image(systemName: showsValue ? "arrow.up.and.down" : "hand.draw")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(placementState.intent.color)
+                        .foregroundColor(MarkerIntentBadge.accentColor(for: placementState.intent))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(placementState.intent.color.opacity(0.16)))
+                        .background(Circle().fill(MarkerIntentBadge.accentColor(for: placementState.intent).opacity(0.16)))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
                             .font(.footnote.weight(.bold))
@@ -209,7 +209,7 @@ struct MarkerWorkspaceChartToolBar: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(canCommit ? .white : AppColors.greyText)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(canCommit ? placementState.intent.color : AppColors.whiteText.opacity(0.06)))
+                    .background(Circle().fill(canCommit ? MarkerIntentBadge.accentColor(for: placementState.intent) : AppColors.whiteText.opacity(0.06)))
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }

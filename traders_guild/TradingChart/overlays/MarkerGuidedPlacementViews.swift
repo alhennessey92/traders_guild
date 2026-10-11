@@ -40,9 +40,9 @@ struct MarkerGuidedCompactDock: View {
             HStack(spacing: 10) {
                 Image(systemName: MarkerIntentBadge.style(intent: placementState.intent)?.symbol ?? placementState.intent.icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(placementState.intent.color)
+                    .foregroundColor(MarkerIntentBadge.accentColor(for: placementState.intent))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(placementState.intent.color.opacity(0.16)))
+                    .background(Circle().fill(MarkerIntentBadge.accentColor(for: placementState.intent).opacity(0.16)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(taskTitle)
@@ -59,7 +59,7 @@ struct MarkerGuidedCompactDock: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(placementState.intent.color))
+                    .background(Circle().fill(MarkerIntentBadge.accentColor(for: placementState.intent)))
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 7)
@@ -244,7 +244,8 @@ struct MarkerGuidedPlacementPanel: View {
     private var taskHeader: some View {
         let destination = placementState.workspaceDestination
         return HStack(spacing: 12) {
-            UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .medium, avatar: authorBadgeIdentity)
+            UnifiedMarkerBadge(intent: placementState.intent, alertSeverity: draftAlertSeverity,
+                               sizeToken: .medium, avatar: authorBadgeIdentity)
                 // One element with a name: hiding the badge's parts left
                 // its picture and glyph exposed to the audit unlabelled.
                 .accessibilityElement(children: .ignore)
@@ -338,22 +339,63 @@ struct MarkerGuidedPlacementPanel: View {
 
     private var socialFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MarkerWorkspaceTextInput(placeholder: placementState.intent == .question
-                                     ? "Your question about this chart" : "What you see and why it matters",
+            MarkerWorkspaceTextInput(placeholder: socialPlaceholder,
                                      text: $placementState.note, placementState: placementState, fieldID: "socialText")
             .accessibilityIdentifier("guided.text")
-            if placementState.intent == .question {
-                questionCounter
+            switch placementState.intent {
+            case .question:
+                minimumCounter(placementState.trimmedQuestionNote.count)
+            case .poll:
+                pollQuestionCounter
+                MarkerGuidedPollChoicesEditor(placementState: placementState)
+                    .padding(.top, 4)
+            case .alert:
+                minimumCounter(placementState.trimmedAlertDescription.count)
+                MarkerGuidedAlertSeverityPicker(selected: placementState.alertSeverity) { severity in
+                    placementState.alertSeverity = severity
+                }
+                .padding(.top, 4)
+            default:
+                EmptyView()
             }
         }
     }
 
-    /// Counts toward the 10 characters a question needs; gone once met.
+    private var socialPlaceholder: String {
+        switch placementState.intent {
+        case .question: return "Your question about this chart"
+        case .poll: return "Ask the guild something to vote on"
+        case .alert: return "What should the guild watch, and why?"
+        default: return "What you see and why it matters"
+        }
+    }
+
+    /// Counts toward the 10 characters a question or an alert needs; gone
+    /// once met.
     @ViewBuilder
-    private var questionCounter: some View {
-        let remaining = max(0, MarkerPlacementRequirements.minimumContextCharacters - placementState.trimmedQuestionNote.count)
+    private func minimumCounter(_ count: Int) -> some View {
+        let remaining = max(0, MarkerPlacementRequirements.minimumContextCharacters - count)
         if remaining > 0 {
             Text("\(remaining) more character\(remaining == 1 ? "" : "s") needed")
+                .font(.caption)
+                .foregroundColor(AppColors.overlayPanelSecondaryText)
+                .padding(.leading, 4)
+        }
+    }
+
+    /// A poll's question is its title on the server: say so as the limit
+    /// nears, and by how much it is over.
+    @ViewBuilder
+    private var pollQuestionCounter: some View {
+        let limit = MarkerPlacementRequirements.maximumPollQuestionCharacters
+        let left = limit - placementState.trimmedPollQuestion.count
+        if left < 0 {
+            Text("\(-left) character\(left == -1 ? "" : "s") over the limit")
+                .font(.caption)
+                .foregroundColor(AppColors.statusWarning)
+                .padding(.leading, 4)
+        } else if left <= 30 {
+            Text("\(left) character\(left == 1 ? "" : "s") left")
                 .font(.caption)
                 .foregroundColor(AppColors.overlayPanelSecondaryText)
                 .padding(.leading, 4)
@@ -417,8 +459,10 @@ struct MarkerGuidedPlacementPanel: View {
 
     /// Title and chart context: one compact row, available, never in the way.
     private var optionalExtras: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if placementState.workspace.showsTitle {
+        // A poll's question is its title on the server, so it has no other.
+        let offersTitle = placementState.intent != .poll
+        return VStack(alignment: .leading, spacing: 8) {
+            if offersTitle && placementState.workspace.showsTitle {
                 MarkerWorkspaceLineInput(placeholder: "Title", text: $placementState.title, placementState: placementState, fieldID: "guided.title")
                     .accessibilityIdentifier("guided.title")
             }
@@ -426,7 +470,7 @@ struct MarkerGuidedPlacementPanel: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                 : AnyLayout(HStackLayout(spacing: 8))
             rowLayout {
-                if !placementState.workspace.showsTitle {
+                if offersTitle && !placementState.workspace.showsTitle {
                     MarkerGuidedExtraChip(icon: "plus", title: "Title", identifier: "guided.addTitle") {
                         withAnimation(.easeInOut(duration: 0.2)) { placementState.workspace.showsTitle = true }
                     }
@@ -457,6 +501,11 @@ struct MarkerGuidedPlacementPanel: View {
                 .accessibilityIdentifier("guided.convertResponse")
             }
         }
+    }
+
+    /// An alert draft's chosen severity, for its badge; nil for every other type.
+    private var draftAlertSeverity: MarkerAlertSeverity? {
+        placementState.intent == .alert ? placementState.alertSeverity : nil
     }
 
     /// The viewer's face, with the Setup badge following tracking.
@@ -554,7 +603,8 @@ struct MarkerGuidedPlacementPanel: View {
     private var reviewPreview: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
-                UnifiedMarkerBadge(intent: placementState.intent, sizeToken: .large, avatar: authorBadgeIdentity)
+                UnifiedMarkerBadge(intent: placementState.intent, alertSeverity: draftAlertSeverity,
+                                   sizeToken: .large, avatar: authorBadgeIdentity)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(authorHandle ?? "You")
@@ -567,7 +617,7 @@ struct MarkerGuidedPlacementPanel: View {
                     metaLayout {
                         Text(placementState.intent.displayName)
                             .font(.caption.weight(.bold))
-                            .foregroundColor(placementState.intent.color)
+                            .foregroundColor(MarkerIntentBadge.accentColor(for: placementState.intent))
                         Text(reviewMetaLine)
                             .font(.caption)
                             .foregroundColor(AppColors.overlayPanelSecondaryText)
@@ -584,7 +634,13 @@ struct MarkerGuidedPlacementPanel: View {
                 MarkerGuidedReviewLine(icon: "arrow.triangle.branch", text: sentence)
             }
 
-            let title = placementState.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if placementState.intent == .alert, let severity = placementState.alertSeverity {
+                MarkerGuidedAlertSeverityPill(severity: severity)
+            }
+
+            // A poll's question is its title on the server; it has no other.
+            let title = placementState.intent == .poll
+                ? "" : placementState.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let text = placementState.note.trimmingCharacters(in: .whitespacesAndNewlines)
             if !title.isEmpty || !text.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -601,6 +657,16 @@ struct MarkerGuidedPlacementPanel: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            }
+
+            if placementState.intent == .poll {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(placementState.validPollOptions.enumerated()), id: \.offset) { _, choice in
+                        MarkerGuidedPollChoiceRow(text: choice)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Choices")
             }
 
             if placementState.intent == .setup {
@@ -956,7 +1022,7 @@ struct MarkerGuidedPlacementBar: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(enabled ? placementState.intent.color : AppColors.whiteText.opacity(0.06))
+                        .fill(enabled ? MarkerIntentBadge.accentColor(for: placementState.intent) : AppColors.whiteText.opacity(0.06))
                         .overlay(Capsule().stroke(AppColors.whiteText.opacity(enabled ? 0 : 0.14), lineWidth: 1))
                 )
         }
@@ -1007,8 +1073,9 @@ struct MarkerGuidedDiscardConfirmation: ViewModifier {
 
 /// Which types the entry hierarchy leads to.
 enum MarkerGuidedFlowEntry {
-    /// Social Details offers Analysis and Question.
-    static let socialIntents: [RLMarkerIntent] = [.analysis, .question]
+    /// Post's Details offers four types on one writing surface, each with
+    /// its own small setting: a poll's choices, an alert's severity.
+    static let socialIntents: [RLMarkerIntent] = [.analysis, .question, .poll, .alert]
     static let createIntents: [RLMarkerIntent] = [.analysis, .setup]
 }
 
@@ -1057,8 +1124,10 @@ struct MarkerPostToChartRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Post to the chart")
                         .font(.headline.weight(.bold))
-                    Text("Analysis or a question")
+                    Text("Analysis, question, poll or alert")
                         .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .foregroundColor(.white)
                 Spacer(minLength: 0)
@@ -1090,14 +1159,14 @@ struct MarkerPostToChartCard: View {
                 UnifiedMarkerBadge(intent: .analysis, sizeToken: .medium, avatar: author)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        kind(.analysis)
-                        Text("Analysis or a question")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(AppColors.primaryForeground)
-                        kind(.question)
+                    HStack(spacing: 4) {
+                        ForEach(MarkerGuidedFlowEntry.socialIntents, id: \.self) { kind($0) }
                     }
-                    Text("Share what you see, or ask the guild. Your face marks the spot.")
+                    .padding(.bottom, 2)
+                    Text("Analysis, question, poll or alert")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(AppColors.primaryForeground)
+                    Text("Share what you see, ask or poll the guild, or flag an area. Your face marks the spot.")
                         .font(.footnote)
                         .foregroundColor(AppColors.primaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1140,7 +1209,7 @@ struct MarkerPostToChartCard: View {
             .font(.system(size: 8, weight: .bold))
             .foregroundColor(.white)
             .frame(width: 16, height: 16)
-            .background(Circle().fill(intent.color))
+            .background(Circle().fill(MarkerIntentBadge.accentColor(for: intent)))
             .accessibilityHidden(true)
     }
 }
@@ -1236,7 +1305,7 @@ struct MarkerGuidedTypeRow: View {
 
 // MARK: - Small parts
 
-/// The two social choices share one writing surface.
+/// The Post types share one writing surface.
 struct MarkerGuidedTypePicker: View {
     let intents: [RLMarkerIntent]
     let selected: RLMarkerIntent
@@ -1246,49 +1315,88 @@ struct MarkerGuidedTypePicker: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Each type wears its marker badge: the glyph and colour its ring has
-    /// on the chart. The chosen one fills, as the face's ring recolours. At
-    /// accessibility sizes the two stack, so neither name breaks.
+    /// on the chart. The chosen one fills, as the face's ring recolours.
+    /// Four fit side by side as tiles, badge over name; at accessibility
+    /// sizes they stack as capsules, so no name breaks.
     var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 8))
-        layout {
-            ForEach(intents, id: \.self) { intent in
-                let isSelected = selected == intent
-                Button { onSelect(intent) } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 26, height: 26)
-                            .background(Circle().fill(isSelected ? intent.color : intent.color.opacity(0.45)))
-                            .accessibilityHidden(true)
-                        Text(intent.displayName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(intents, id: \.self) { intent in
+                        option(intent) { capsule(intent) }
                     }
-                    .padding(.leading, 7)
-                    .padding(.trailing, 16)
-                    .frame(minHeight: 40)
-                    .background(Capsule().fill(isSelected ? intent.color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
-                    .overlay(Capsule().stroke(isSelected ? intent.color.opacity(0.75) : Color.clear, lineWidth: 1.5))
-                    .padding(.vertical, 2)
-                    .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(intent.displayName)
-                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-                .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(intents, id: \.self) { intent in
+                        option(intent) { tile(intent) }
+                    }
+                }
             }
-            Spacer(minLength: 0)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Type: \(selected.displayName)")
         .accessibilityIdentifier("guided.intentPicker")
+    }
+
+    private func option<Label: View>(_ intent: RLMarkerIntent, @ViewBuilder label: () -> Label) -> some View {
+        let isSelected = selected == intent
+        return Button { onSelect(intent) } label: { label() }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(intent.displayName)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityIdentifier("guided.intent.\(intent.rawValue)")
+    }
+
+    private func badge(_ intent: RLMarkerIntent, isSelected: Bool) -> some View {
+        let color = MarkerIntentBadge.accentColor(for: intent)
+        return Image(systemName: MarkerIntentBadge.style(intent: intent)?.symbol ?? intent.icon)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(isSelected ? color : color.opacity(0.45)))
+            .accessibilityHidden(true)
+    }
+
+    private func tile(_ intent: RLMarkerIntent) -> some View {
+        let isSelected = selected == intent
+        let color = MarkerIntentBadge.accentColor(for: intent)
+        return VStack(spacing: 5) {
+            badge(intent, isSelected: isSelected)
+            Text(intent.displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .background(RoundedRectangle(cornerRadius: 12).fill(isSelected ? color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? color.opacity(0.75) : Color.clear, lineWidth: 1.5))
+        .padding(.vertical, 2)
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func capsule(_ intent: RLMarkerIntent) -> some View {
+        let isSelected = selected == intent
+        let color = MarkerIntentBadge.accentColor(for: intent)
+        return HStack(spacing: 8) {
+            badge(intent, isSelected: isSelected)
+            Text(intent.displayName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(isSelected ? AppColors.primaryForeground : AppColors.overlayPanelSecondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.leading, 7)
+        .padding(.trailing, 16)
+        .frame(minHeight: 40)
+        .background(Capsule().fill(isSelected ? color.opacity(0.18) : AppColors.whiteText.opacity(0.05)))
+        .overlay(Capsule().stroke(isSelected ? color.opacity(0.75) : Color.clear, lineWidth: 1.5))
+        .padding(.vertical, 2)
+        .contentShape(Capsule())
     }
 }
 

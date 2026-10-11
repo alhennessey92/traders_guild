@@ -1826,7 +1826,7 @@ struct UnifiedMarkerBadge: View {
     /// current presentation.
     private var intentBadgeStyle: MarkerIntentBadge.Style? {
         guard showsAvatar, MarkerAvatarPresentation.experimentIntents.contains(intent) else { return nil }
-        return MarkerIntentBadge.style(intent: intent, setupStatus: avatar.setupStatus)
+        return MarkerIntentBadge.style(intent: intent, setupStatus: avatar.setupStatus, alertSeverity: alertSeverity)
     }
 
     private var avatarDiameter: CGFloat {

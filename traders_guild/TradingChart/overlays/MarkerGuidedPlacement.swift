@@ -37,6 +37,8 @@ struct MarkerDraftFingerprint: Equatable {
     var trackingEnabled: Bool
     var pollQuestion: String
     var pollOptions: [String]
+    /// An alert's severity, which the guided sheet keeps apart from its text.
+    var alertSeverity: MarkerAlertSeverity? = nil
     /// Sorted "type|payload" for every component other than the anchor and a
     /// Setup's own levels.
     var contextComponents: [String]
@@ -51,6 +53,7 @@ struct MarkerDraftFingerprint: Equatable {
             && trackingEnabled == other.trackingEnabled
             && pollQuestion == other.pollQuestion
             && pollOptions == other.pollOptions
+            && alertSeverity == other.alertSeverity
             && contextComponents == other.contextComponents
     }
 
@@ -249,9 +252,9 @@ extension MarkerPlacementState {
         workspace.path = [.details]
     }
 
-    /// Whether the details step is the social one (Analysis / Question) or
-    /// Setup's.
-    var isSocialDetails: Bool { intent == .analysis || intent == .question }
+    /// Whether the details step is the social one (Analysis, Question, Poll
+    /// or Alert: one text field and that type's own settings) or Setup's.
+    var isSocialDetails: Bool { MarkerGuidedFlowEntry.socialIntents.contains(intent) }
 
     /// The toolbar title for the guided flow: the task as a whole. The sheet
     /// names the step, so the two never repeat each other. A drawing tool's
@@ -308,6 +311,7 @@ extension MarkerPlacementState {
             ? unmetRequiredChecklistItems.filter { !$0.id.hasPrefix("setup_") }
             : unmetRequiredChecklistItems
         guard let unmet = unmetItems.first else {
+            if let limit = guidedPollLimitPrompt { return limit }
             // Review requires an actual change for every saved type.
             return isGuidedEdit && !guidedEditHasChanges ? "Make a change to review it" : nil
         }
@@ -321,6 +325,17 @@ extension MarkerPlacementState {
             return trimmedQuestionNote.isEmpty
                 ? "Write your question to continue"
                 : "Write \(remaining) more character\(remaining == 1 ? "" : "s")"
+        case "poll_question":
+            return "Ask your poll question to continue"
+        case "poll_options_required":
+            return "Add at least two choices"
+        case "alert_severity":
+            return "Choose how urgent this is"
+        case "alert_context":
+            let remaining = max(1, MarkerPlacementRequirements.minimumContextCharacters - trimmedAlertDescription.count)
+            return trimmedAlertDescription.isEmpty
+                ? "Say what the guild should watch"
+                : "Write \(remaining) more character\(remaining == 1 ? "" : "s")"
         case "setup_levels_required":
             return "Set a take profit and a stop loss"
         case "setup_direction_required":
@@ -328,6 +343,20 @@ extension MarkerPlacementState {
         default:
             return unmet.title
         }
+    }
+
+    /// A poll over the guided sheet's limits: the question is the server's
+    /// title (200 characters) and each choice reads as one row.
+    var guidedPollLimitPrompt: String? {
+        guard intent == .poll else { return nil }
+        let questionOver = trimmedPollQuestion.count - MarkerPlacementRequirements.maximumPollQuestionCharacters
+        if questionOver > 0 {
+            return "Shorten your question by \(questionOver) character\(questionOver == 1 ? "" : "s")"
+        }
+        if validPollOptions.contains(where: { $0.count > MarkerPlacementRequirements.maximumPollChoiceCharacters }) {
+            return "Keep each choice to \(MarkerPlacementRequirements.maximumPollChoiceCharacters) characters"
+        }
+        return nil
     }
 
     /// The stop and target must sit either side of Entry, and Entry is not the
@@ -368,6 +397,8 @@ extension MarkerPlacementState {
         case .details?:
             switch intent {
             case .question: return "What do you want to ask?"
+            case .poll: return "What should the guild vote on?"
+            case .alert: return "What should the guild watch?"
             case .setup: return "Plan your trade"
             default: return linkSession.isActive ? "What's your view?" : "What are you seeing?"
             }
@@ -438,6 +469,7 @@ extension MarkerPlacementState {
             trackingEnabled: trackingEnabled,
             pollQuestion: pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines),
             pollOptions: pollOptions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) },
+            alertSeverity: alertSeverity,
             contextComponents: context,
             setupLevels: levels
         )

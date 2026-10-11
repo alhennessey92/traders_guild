@@ -3505,7 +3505,9 @@ struct ChartMarkerSystem {
             let status: MarkerIntentBadge.SetupStatus = marker.intent == .setup
                 ? .from(marker.marker)
                 : .unknown
-            if let style = MarkerIntentBadge.style(intent: marker.intent, setupStatus: status) {
+            if let style = MarkerIntentBadge.style(
+                intent: marker.intent, setupStatus: status, alertSeverity: marker.alertSeverity
+            ) {
                 let rect = MarkerIntentBadge.rect(center: position, isBelow: isBelow, scale: scale)
                 drawContext.fill(
                     Path(roundedRect: rect, cornerRadius: MarkerLinkRenderer.badgeSize / 2),

@@ -71,13 +71,36 @@ enum MarkerIntentBadge {
         }
     }
 
+    /// An alert's ring and accent under the prototype. The legacy alert colour
+    /// is a neutral grey that reads as "disabled" beside the other rings;
+    /// amber says "look here". Its badge carries the severity's own colour.
+    static var alertAccent: Color { AppColors.statusWarning }
+
+    /// The colour an intent wears in the prototype: its ring, its badge when
+    /// nothing more specific applies, and its name in the sheet.
+    static func accentColor(for intent: RLMarkerIntent) -> Color {
+        intent == .alert ? alertAccent : intent.color
+    }
+
     /// The badge for an intent, or `nil` for intents that keep their glyph.
-    static func style(intent: RLMarkerIntent, setupStatus: SetupStatus = .unknown) -> Style? {
+    /// An alert's badge takes its severity's colour when it is known.
+    static func style(
+        intent: RLMarkerIntent,
+        setupStatus: SetupStatus = .unknown,
+        alertSeverity: MarkerAlertSeverity? = nil
+    ) -> Style? {
         switch intent {
         case .analysis:
             return Style(symbol: "waveform.path.ecg", color: AppColors.intentAnalysisTeal)
         case .question:
             return Style(symbol: "questionmark", color: AppColors.intentQuestionBlue)
+        case .poll:
+            return Style(symbol: "chart.bar.fill", color: AppColors.intentPollPurple)
+        case .alert:
+            return Style(
+                symbol: alertSeverity == .mild ? "info" : "exclamationmark",
+                color: alertSeverity?.color ?? alertAccent
+            )
         case .setup:
             switch setupStatus {
             case .untracked:
@@ -95,7 +118,7 @@ enum MarkerIntentBadge {
             case .unknown:
                 return Style(symbol: "scope", color: AppColors.intentSetupGreen)
             }
-        case .alert, .poll, .news, .reaction, .personal:
+        case .news, .reaction, .personal:
             return nil
         }
     }
@@ -122,7 +145,7 @@ enum MarkerIntentRing {
 
     static func color(for intent: RLMarkerIntent) -> Color? {
         guard MarkerAvatarPresentation.experimentIntents.contains(intent) else { return nil }
-        return intent.color
+        return MarkerIntentBadge.accentColor(for: intent)
     }
 
     /// The ring to stroke at the disc edge, or `nil` for the ordinary glass

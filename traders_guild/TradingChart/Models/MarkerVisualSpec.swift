@@ -285,8 +285,9 @@ struct MarkerAvatarIdentity: Equatable {
 
 /// Which intents wear their author's face on the chart canvas.
 enum MarkerAvatarPresentation {
-    /// The prototype's intents. Everything else keeps its glyph.
-    static let experimentIntents: Set<RLMarkerIntent> = [.analysis, .question, .setup]
+    /// The prototype's intents: the four Post types and Setup. News,
+    /// reactions and personal markers keep their current presentation.
+    static let experimentIntents: Set<RLMarkerIntent> = [.analysis, .question, .poll, .alert, .setup]
 
     /// `.personal` always has; the prototype adds its three.
     static func avatarIntents(experimentEnabled: Bool) -> Set<RLMarkerIntent> {

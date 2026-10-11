@@ -11,12 +11,30 @@ struct MarkerIntentDecorationTests {
     // MARK: Badge content
 
     @Test
-    func theThreeIntentsHaveABadgeAndTheRestKeepTheirGlyph() {
+    func thePostTypesAndSetupHaveABadgeAndTheRestKeepTheirGlyph() {
         #expect(MarkerIntentBadge.style(intent: .analysis)?.symbol == "waveform.path.ecg")
         #expect(MarkerIntentBadge.style(intent: .question)?.symbol == "questionmark")
+        #expect(MarkerIntentBadge.style(intent: .poll)?.symbol == "chart.bar.fill")
+        #expect(MarkerIntentBadge.style(intent: .alert)?.symbol == "exclamationmark")
         #expect(MarkerIntentBadge.style(intent: .setup) != nil)
-        for intent in [RLMarkerIntent.alert, .poll, .news, .reaction, .personal] {
+        for intent in [RLMarkerIntent.news, .reaction, .personal] {
             #expect(MarkerIntentBadge.style(intent: intent) == nil)
+        }
+    }
+
+    @Test
+    func anAlertBadgeWearsItsSeverity() {
+        #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: .mild)?.symbol == "info")
+        for severity in [MarkerAlertSeverity.moderate, .severe, .critical] {
+            #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: severity)?.symbol == "exclamationmark")
+            #expect(MarkerIntentBadge.style(intent: .alert, alertSeverity: severity)?.color == severity.color)
+        }
+        // Without one, the alert accent, never the legacy grey.
+        #expect(MarkerIntentBadge.style(intent: .alert)?.color == MarkerIntentBadge.alertAccent)
+        #expect(MarkerIntentRing.color(for: .alert) == MarkerIntentBadge.alertAccent)
+        // The other types' colours are unchanged.
+        for intent in [RLMarkerIntent.analysis, .question, .poll, .setup] {
+            #expect(MarkerIntentBadge.accentColor(for: intent) == intent.color)
         }
     }
 
@@ -65,7 +83,7 @@ struct MarkerIntentDecorationTests {
         let off = MarkerAvatarPresentation.avatarIntents(experimentEnabled: false)
         let fixtures = MarkerLinkFixtures.mixedLegacy().markers
         for marker in fixtures {
-            let expected = [RLMarkerIntent.analysis, .question, .setup].contains(marker.intent)
+            let expected = [RLMarkerIntent.analysis, .question, .poll, .alert, .setup].contains(marker.intent)
             #expect(ChartMarkerSystem.wearsIntentDecorations(marker, avatarIntents: on) == expected)
             #expect(ChartMarkerSystem.wearsIntentDecorations(marker, avatarIntents: off) == false)
         }
@@ -168,7 +186,7 @@ struct MarkerIntentDecorationTests {
                                        unavailable: unavailable, intent: intent)
         }
 
-        for intent in [RLMarkerIntent.analysis, .question, .setup] {
+        for intent in [RLMarkerIntent.analysis, .question, .poll, .alert, .setup] {
             let identity = MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: on)
             #expect(identity.authorId == MarkerLinkFixtures.uuid(401))
             #expect(identity.url == MarkerAvatarFixtureImages.defaultURL(forUsername: "alex"))
@@ -178,7 +196,7 @@ struct MarkerIntentDecorationTests {
             #expect(MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: off) == .none)
         }
         // Personal and legacy intents keep their thesis-row glyph either way.
-        for intent in [RLMarkerIntent.personal, .news, .poll, .alert, .reaction] {
+        for intent in [RLMarkerIntent.personal, .news, .reaction] {
             #expect(MarkerAvatarIdentity.forPreview(preview(intent), avatarIntents: on) == .none)
         }
         #expect(MarkerAvatarIdentity.forPreview(preview(.analysis, unavailable: true), avatarIntents: on) == .none)

@@ -2,7 +2,7 @@
 //  MarkerGuidedEditing.swift
 //  traders_guild
 //
-//  v1.5 guided editing: an existing Analysis, Question or Setup is edited in
+//  v1.5 guided editing: an existing Analysis, Question, Poll, Alert or Setup is edited in
 //  the guided sheet (Details → Review → Save changes) under the avatar
 //  prototype. The same `MarkerPlacementState`, seeded by `beginEditingMarker`;
 //  the update is the existing PUT, sent with only what changed.
@@ -138,7 +138,7 @@ extension MarkerPlacementState {
         for intent: RLMarkerIntent,
         experimentEnabled: Bool = MarkerAvatarExperiment.isEnabled
     ) -> Bool {
-        experimentEnabled && [RLMarkerIntent.analysis, .question, .setup].contains(intent)
+        experimentEnabled && [RLMarkerIntent.analysis, .question, .poll, .alert, .setup].contains(intent)
     }
 
     /// The guided sheet is editing an existing marker.
@@ -153,6 +153,19 @@ extension MarkerPlacementState {
     /// edit closes without asking.
     func prepareGuidedEdit(of marker: ChartMarkerUI) {
         guard isEditingExistingMarker, editingMarkerId == marker.id else { return }
+        // The sheet has one text field. A poll's is its question (the
+        // server's title); an alert's is its description, with the severity
+        // kept apart — read here, before the baseline, as the sheet posts them.
+        switch marker.intent {
+        case .poll:
+            note = pollQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+            title = ""
+        case .alert:
+            alertSeverity = resolvedAlertSeverity
+            note = trimmedAlertDescription
+        default:
+            break
+        }
         let matched = matchSavedComponents(of: marker)
         workspace = MarkerWorkspaceState()
         isGuidedFlowActive = true
@@ -316,6 +329,7 @@ extension MarkerPlacementState {
         guard let original = guidedEditOriginal else { return false }
         let now = draftFingerprint()
         if now.title != original.title || now.note != original.note { return true }
+        if now.alertSeverity != original.fingerprint.alertSeverity { return true }
         if isGuidedEditLocked { return false }
         return guidedEditComponentsChanged
             || (intent == .setup && trackingEnabled != original.trackingEnabled)
@@ -356,6 +370,29 @@ extension MarkerPlacementState {
         let sendsComponents = !isGuidedEditLocked && guidedEditComponentsChanged
             && original.componentsMatched
         let sendsTracking = !isGuidedEditLocked && intent == .setup && trackingEnabled != original.trackingEnabled
+        let sendsComponentsValue = sendsComponents ? guidedEditRequestComponents() : nil
+        switch intent {
+        case .poll:
+            // The question is the poll's title on the server. Its choices
+            // are fixed once posted (the server keeps them, votes and all).
+            return RLUpdateMarkerRequest(
+                title: noteChanged ? now.note : nil,
+                components: sendsComponentsValue,
+                pollQuestion: noteChanged ? now.note : nil
+            )
+        case .alert:
+            // The severity rides at the front of the note, so a change to
+            // either sends both.
+            let severityChanged = now.alertSeverity != original.fingerprint.alertSeverity
+            return RLUpdateMarkerRequest(
+                title: titleChanged && !now.title.isEmpty ? now.title : nil,
+                note: noteChanged || severityChanged ? requestNote : nil,
+                components: sendsComponentsValue,
+                clearsTitle: titleChanged && now.title.isEmpty
+            )
+        default:
+            break
+        }
         return RLUpdateMarkerRequest(
             intent: nil,
             title: titleChanged && !now.title.isEmpty ? now.title : nil,
@@ -381,8 +418,17 @@ extension MarkerPlacementState {
             else { lines.append("\(name) edited") }
         }
         describe("Title", from: original.title, to: now.title)
-        describe(intent == .setup ? "Thesis" : (intent == .question ? "Question" : "Text"),
-                 from: original.note, to: now.note)
+        let textName: String
+        switch intent {
+        case .setup: textName = "Thesis"
+        case .question, .poll: textName = "Question"
+        case .alert: textName = "Description"
+        default: textName = "Text"
+        }
+        describe(textName, from: original.note, to: now.note)
+        if let old = original.fingerprint.alertSeverity, let new = now.alertSeverity, old != new {
+            lines.append("Severity: \(old.displayLabel) → \(new.displayLabel)")
+        }
         guard !isGuidedEditLocked else { return lines }
         for (type, name) in [(RLComponentType.levelTp, "Take Profit"), (.levelSl, "Stop Loss")] {
             let old = original.fingerprint.setupLevels[type]

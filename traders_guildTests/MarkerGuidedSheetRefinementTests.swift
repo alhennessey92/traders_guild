@@ -253,8 +253,9 @@ struct MarkerGuidedSheetRefinementTests {
     func theAudienceLineNamesTheGuild() {
         #expect(MarkerGuidedFormat.audience("Alpha Traders") == "Members of Alpha Traders will see this on the chart.")
         #expect(MarkerGuidedFormat.audience(nil) == "Your guild will see this on the chart.")
-        // The approved separation: Setup is not in the social selector.
-        #expect(MarkerGuidedFlowEntry.socialIntents == [.analysis, .question])
+        // The approved separation: Setup is not in the Post selector, which
+        // offers Analysis, Question, Poll and Alert (owner, 11 Oct).
+        #expect(MarkerGuidedFlowEntry.socialIntents == [.analysis, .question, .poll, .alert])
         #expect(MarkerGuidedFlowEntry.createIntents == [.analysis, .setup])
     }
 }

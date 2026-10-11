@@ -139,11 +139,11 @@ struct MarkerAvatarExperimentTests {
     }
 
     @Test
-    func thePrototypeCoversExactlyItsThreeIntents() {
+    func thePrototypeCoversThePostTypesAndSetup() {
         #expect(MarkerAvatarPresentation.avatarIntents(experimentEnabled: false) == [.personal])
         #expect(
             MarkerAvatarPresentation.avatarIntents(experimentEnabled: true)
-                == [.analysis, .question, .setup, .personal]
+                == [.analysis, .question, .poll, .alert, .setup, .personal]
         )
     }
 }

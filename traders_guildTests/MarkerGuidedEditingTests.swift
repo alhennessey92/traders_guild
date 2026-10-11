@@ -423,10 +423,10 @@ struct MarkerGuidedEditingTests {
     @Test
     func otherTypesAndTheExperimentOffKeepTheExistingEditor() {
         #expect(!MarkerPlacementState.usesGuidedEdit(for: .analysis, experimentEnabled: false))
-        for intent in [RLMarkerIntent.analysis, .question, .setup] {
+        for intent in [RLMarkerIntent.analysis, .question, .poll, .alert, .setup] {
             #expect(MarkerPlacementState.usesGuidedEdit(for: intent, experimentEnabled: true))
         }
-        for intent in [RLMarkerIntent.alert, .poll, .news, .reaction, .personal] {
+        for intent in [RLMarkerIntent.news, .reaction, .personal] {
             #expect(!MarkerPlacementState.usesGuidedEdit(for: intent, experimentEnabled: true))
         }
         let legacy = MarkerPlacementState()

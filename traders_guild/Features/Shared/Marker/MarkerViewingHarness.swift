@@ -28,6 +28,10 @@ struct MarkerViewingHarness: View {
         case setup
         /// The viewer's own Analysis: Edit and Delete.
         case own
+        /// Another member's Poll with votes, one of them the viewer's.
+        case poll
+        /// Another member's Severe Alert.
+        case alert
 
         static var launch: Scenario? {
             UserDefaults.standard.string(forKey: "MarkerViewingFixture").flatMap(Scenario.init(rawValue:))
@@ -109,6 +113,9 @@ struct MarkerViewingHarness: View {
         var parent: UUID?
         var relationship: String?
         var preview: RLMarkerLinkPreviewDTO?
+        var pollQuestion: String?
+        var pollOptions: [RLPollOptionDTO]?
+        var userPollVote: UUID?
         switch scenario {
         case .analysis, .own:
             intent = .analysis
@@ -133,6 +140,24 @@ struct MarkerViewingHarness: View {
                 level(.levelTp, 64_400, order: 1),
                 level(.levelSl, 63_700, order: 2),
             ]
+        case .poll:
+            intent = .poll
+            title = "Which target gets hit first?"
+            pollQuestion = title
+            note = nil
+            components = []
+            let voted = MarkerLinkFixtures.uuid(9_102)
+            pollOptions = [
+                RLPollOptionDTO(id: MarkerLinkFixtures.uuid(9_101), text: "Range high, 64.4k", voteCount: 7, hasVoted: false),
+                RLPollOptionDTO(id: voted, text: "Range low, 63.2k", voteCount: 4, hasVoted: true),
+                RLPollOptionDTO(id: MarkerLinkFixtures.uuid(9_103), text: "Neither this session", voteCount: 1, hasVoted: false),
+            ]
+            userPollVote = voted
+        case .alert:
+            intent = .alert
+            title = "Liquidity sweep below Asia"
+            note = "[Severe] Stops under 63.5k got run on rising volume. Watch for a reclaim before trusting longs."
+            components = MarkerLinkFixtures.fixtureComponents([.drawingZone], marker: 1)
         }
         return RLChartMarkerDTO(
             id: MarkerLinkFixtures.uuid(1), symbolId: MarkerLinkFixtures.uuid(1), guildId: MarkerLinkFixtures.uuid(2),
@@ -143,7 +168,7 @@ struct MarkerViewingHarness: View {
             likeCount: 4, isLikedByCurrentUser: false, commentCount: 2, comments: [],
             isCurrentUserMarker: isOwn, canEdit: isOwn, canDelete: isOwn,
             components: components, primaryComponentId: nil,
-            pollQuestion: nil, pollOptions: nil, userPollVote: nil, predictionResult: nil,
+            pollQuestion: pollQuestion, pollOptions: pollOptions, userPollVote: userPollVote, predictionResult: nil,
             parentMarkerId: parent, linkRelationship: relationship, parentPreview: preview,
             directResponseCount: scenario == .analysis ? 2 : 0
         )

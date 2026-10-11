@@ -141,13 +141,13 @@ struct MarkerViewingGeneralTab: View {
 
     // MARK: - Refined layout (v1.5 avatar prototype)
 
-    /// Analysis, Question and Setup under the avatar prototype read in one
+    /// The four Post types and Setup under the avatar prototype read in one
     /// order: who posted what and when, what they said, how it relates, then
-    /// what you can do. Every other type, and every marker with the experiment
-    /// off, keeps the shipped layout.
+    /// what you can do. News, reactions, personal markers, and every marker
+    /// with the experiment off, keep the shipped layout.
     private var usesRefinedLayout: Bool {
         MarkerAvatarExperiment.isEnabled
-            && [RLMarkerIntent.analysis, .question, .setup].contains(liveMarker.intent)
+            && MarkerAvatarPresentation.experimentIntents.contains(liveMarker.intent)
     }
 
     @ViewBuilder
@@ -192,6 +192,7 @@ struct MarkerViewingGeneralTab: View {
             } label: {
                 UnifiedMarkerBadge(
                     intent: liveMarker.intent,
+                    alertSeverity: liveMarker.alertSeverity,
                     sizeToken: .large,
                     avatar: MarkerAvatarIdentity.forMarker(liveMarker)
                 )
@@ -214,7 +215,7 @@ struct MarkerViewingGeneralTab: View {
                 metaLayout {
                     Text(liveMarker.intent.displayName)
                         .font(.caption.weight(.bold))
-                        .foregroundColor(liveMarker.intent.color)
+                        .foregroundColor(MarkerIntentBadge.accentColor(for: liveMarker.intent))
                     Text(refinedMetaLine)
                         .font(.caption)
                         .foregroundColor(AppColors.greyText)
@@ -231,9 +232,20 @@ struct MarkerViewingGeneralTab: View {
         }
     }
 
-    /// The title, then the text, as plain reading — no boxes within boxes.
+    /// What the post says, by type: a poll's question and its choices, an
+    /// alert's urgency and description, otherwise the title and the text.
     @ViewBuilder
     private var refinedContent: some View {
+        switch liveMarker.intent {
+        case .poll: refinedPoll
+        case .alert: refinedAlert
+        default: refinedTextContent
+        }
+    }
+
+    /// The title, then the text, as plain reading — no boxes within boxes.
+    @ViewBuilder
+    private var refinedTextContent: some View {
         let title = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let text = trimmedNote
         if !title.isEmpty || !text.isEmpty {
@@ -259,11 +271,13 @@ struct MarkerViewingGeneralTab: View {
     /// under the title (owner, 9 Oct): its own card in the intent's colour, an
     /// accent bar, a label saying what it is, and text a step up in weight.
     private func refinedDescription(_ text: String) -> some View {
-        let color = liveMarker.intent.color
+        let color = refinedAccent
         let label: String = {
             switch liveMarker.intent {
             case .setup: return "WHY THIS TRADE"
             case .question: return "QUESTION"
+            case .poll: return "POLL"
+            case .alert: return "ALERT"  // its urgency has its own pill above
             default: return "ANALYSIS"
             }
         }()
@@ -296,6 +310,125 @@ struct MarkerViewingGeneralTab: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.25), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("marker.description")
+    }
+
+    /// The post's colour: an alert takes its urgency's.
+    private var refinedAccent: Color {
+        if liveMarker.intent == .alert, let severity = liveMarker.alertSeverity { return severity.color }
+        return MarkerIntentBadge.accentColor(for: liveMarker.intent)
+    }
+
+    // MARK: Refined poll and alert
+
+    /// A poll: its question as the centrepiece, then the choices, each one
+    /// filling with its share of the votes. Tapping one votes, as before.
+    private var refinedPoll: some View {
+        let question = pollQuestionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let note = trimmedNote
+        let total = pollOptions.reduce(0) { $0 + $1.voteCount }
+        return VStack(alignment: .leading, spacing: 10) {
+            if question.isEmpty {
+                placeholderText("No poll question")
+            } else {
+                refinedDescription(question)
+            }
+            // A poll from the earlier composer can carry a note as well.
+            if !note.isEmpty && note != question {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.primaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if pollOptions.isEmpty {
+                placeholderText("No poll options")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(pollOptions) { option in
+                        refinedPollOption(option, total: total)
+                    }
+                }
+                Text("\(total) vote\(total == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundColor(AppColors.greyText)
+                    .padding(.leading, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func refinedPollOption(_ option: RLPollOptionDTO, total: Int) -> some View {
+        let isSelected = selectedPollOptionId == option.id || option.hasVoted
+        let isSubmitting = isSubmittingPollVote && submittingPollVoteOptionId == option.id
+        let share = total > 0 ? Double(option.voteCount) / Double(total) : 0
+        let color = AppColors.intentPollPurple
+        return Button {
+            handlePollVote(optionId: option.id)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(color)
+                    .accessibilityHidden(true)
+                Text(option.text)
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                    .foregroundColor(AppColors.primaryForeground)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if isSubmitting {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(MarkerPollStyleTokens.progressSubmittingTint)
+                } else {
+                    Text(total > 0 ? "\(Int((share * 100).rounded()))%" : "–")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundColor(isSelected ? color : AppColors.greyText)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(alignment: .leading) {
+                GeometryReader { proxy in
+                    Rectangle()
+                        .fill(color.opacity(isSelected ? 0.28 : 0.16))
+                        .frame(width: proxy.size.width * share)
+                }
+            }
+            .background(AppColors.whiteText.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(color.opacity(isSelected ? 0.7 : 0.22), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .disabled(isSubmittingPollVote)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(option.text), \(option.voteCount) vote\(option.voteCount == 1 ? "" : "s")")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("marker.poll.option")
+    }
+
+    /// An alert: how urgent, an optional title, then what to watch.
+    private var refinedAlert: some View {
+        let title = liveMarker.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = alertBodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return VStack(alignment: .leading, spacing: 10) {
+            if let severity = liveMarker.alertSeverity {
+                MarkerGuidedAlertSeverityPill(severity: severity)
+            }
+            if !title.isEmpty {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(AppColors.primaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if text.isEmpty {
+                placeholderText("No alert note")
+            } else {
+                refinedDescription(text)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Respond and Share side by side: the two things a reader does next.
