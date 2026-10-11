@@ -26,9 +26,23 @@ extension XCUIApplication {
 
     /// Brings an element on screen: raise the sheet once, then scroll.
     func revealInMarkerWorkspace(_ element: XCUIElement, scrolls: Int = 5) {
-        guard element.waitForExistence(timeout: 5), !element.isHittable else { return }
+        guard element.waitForExistence(timeout: 5), !isRevealedInMarkerWorkspace(element) else { return }
         raiseMarkerSheet()
-        for _ in 0..<scrolls where !element.isHittable { scrollMarkerWorkspace() }
+        for _ in 0..<scrolls where !isRevealedInMarkerWorkspace(element) { scrollMarkerWorkspace() }
+    }
+
+    /// Hittable, and — for the sheet's content — clear of the footer bar,
+    /// which is drawn over the scrolling content: XCUITest can call a tile
+    /// half under it "hittable" while a tap at its centre lands on the footer
+    /// (iPhone SE, 10 Oct 2026).
+    func isRevealedInMarkerWorkspace(_ element: XCUIElement) -> Bool {
+        guard element.isHittable else { return false }
+        let footerIDs = ["guided.back", "guided.review", "guided.contextDone", "guided.post", "guided.save"]
+        guard !footerIDs.contains(element.identifier) else { return true }
+        let footerTop = footerIDs.map { buttons[$0] }.filter { $0.exists }.map(\.frame.minY).min()
+        guard let footerTop else { return true }
+        // The bar's padding sits above its buttons.
+        return element.frame.maxY <= footerTop - 12
     }
 
     /// Puts the keyboard away as a user does: dragging the workspace's

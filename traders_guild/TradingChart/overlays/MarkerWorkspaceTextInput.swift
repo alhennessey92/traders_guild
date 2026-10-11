@@ -106,7 +106,15 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
             guard !updating, scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else { return }
             parent.offset = scrollView.contentOffset
         }
-        func textViewDidBeginEditing(_ view: UITextView) { parent.onFocus(true) }
+        func textViewDidBeginEditing(_ view: UITextView) {
+            // Record where UIKit put the cursor as editing begins. Until now
+            // nothing had, so the next re-render (the sheet re-laying out as the
+            // keyboard rises) applied the default, the end, and moved the cursor
+            // under fast typing: the first letters at one place, the rest at the
+            // other, and one lost in between (SE simulator, 10 Oct 2026).
+            if !updating { parent.selection = view.selectedRange }
+            parent.onFocus(true)
+        }
         func textViewDidEndEditing(_ view: UITextView) { parent.onFocus(false) }
     }
 }
@@ -219,6 +227,9 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
             }
         }
         func textFieldDidBeginEditing(_ view: UITextField) {
+            // As the text view does: record the cursor UIKit placed, so a
+            // re-render does not move it to the remembered default.
+            if !updating { saveSelection(view) }
             parent.onFocus(true)
             // A price is replaced far more often than corrected: select it,
             // so typing replaces it wherever the field was tapped (its text
