@@ -52,6 +52,11 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     }
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
+        // A keystroke is handed up in two writes, text then cursor. A render
+        // between them saw the new text with the old cursor and put the cursor
+        // back: typing then continued before the first letter ("iquidity…L",
+        // SE simulator, 11 Oct 2026). The view is the truth until both land.
+        guard !context.coordinator.propagating else { return }
         context.coordinator.updating = true
         updateDraft(in: view)
         view.textColor = UIColor(AppColors.primaryForeground)
@@ -76,6 +81,8 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: MarkerWorkspaceTextEditor
         var updating = false
+        /// A change from the view is being written up to the draft.
+        var propagating = false
         init(_ parent: MarkerWorkspaceTextEditor) { self.parent = parent }
         func textViewShouldBeginEditing(_ view: UITextView) -> Bool {
             guard let sheet = parent.sheetDetents else { return true }
@@ -93,6 +100,8 @@ struct MarkerWorkspaceTextEditor: UIViewRepresentable {
         }
         func textViewDidChange(_ view: UITextView) {
             guard !updating else { return }
+            propagating = true
+            defer { propagating = false }
             parent.text = view.text
             parent.selection = view.selectedRange
         }
@@ -168,6 +177,8 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
     }
     func updateUIView(_ view: UITextField, context: Context) {
         context.coordinator.parent = self
+        // As the text view: never between a keystroke's text and its cursor.
+        guard !context.coordinator.propagating else { return }
         context.coordinator.updating = true
         if view.markedTextRange == nil, view.text != text { view.text = text }
         view.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor(AppColors.greyText)])
@@ -194,9 +205,13 @@ private struct MarkerWorkspaceLineEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: MarkerWorkspaceLineEditor
         var updating = false
+        /// A change from the field is being written up to the draft.
+        var propagating = false
         init(_ parent: MarkerWorkspaceLineEditor) { self.parent = parent }
         @objc func changed(_ view: UITextField) {
             guard !updating else { return }
+            propagating = true
+            defer { propagating = false }
             parent.text = view.text ?? ""
             saveSelection(view)
         }
