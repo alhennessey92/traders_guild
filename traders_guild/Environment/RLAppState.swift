@@ -1512,6 +1512,12 @@ class RLAppState: ObservableObject {
         }
     }
 
+    /// The runtime flags for session restore; nil on any failure.
+    private func fetchLaunchRuntimeFlags(hasToken: Bool) async -> RLRuntimeFlagsDTO? {
+        guard hasToken else { return nil }
+        return try? await realApi.getRuntimeFlags()
+    }
+
     func refreshRuntimeFlags() async {
         guard isAuthenticated, accessToken != nil else {
             runtimeFlags = .disabled
@@ -1707,6 +1713,13 @@ class RLAppState: ObservableObject {
         let cachedUser = getUserFromKeychain()
         let cachedUserId = getUserIdFromKeychain() ?? cachedUser?.id
 
+        // v1.5 markers are decided once per launch, the first time the chart
+        // asks. Ask the server now, alongside /users/me, so its answer is
+        // known before the chart can appear and the first launch after an
+        // update already shows them. Fails closed: on any error nothing is
+        // recorded (the server's last answer, or the old system, stands).
+        async let launchRuntimeFlags = fetchLaunchRuntimeFlags(hasToken: resolvedAccessToken != nil)
+
         if resolvedAccessToken != nil {
             do {
                 let liveUser = try await realApi.getCurrentUser()
@@ -1735,6 +1748,11 @@ class RLAppState: ObservableObject {
             }
         } else if let cachedUser, cachedUserId == cachedUser.id {
             resolvedUser = cachedUser
+        }
+
+        if let flags = await launchRuntimeFlags {
+            runtimeFlags = flags
+            MarkerAvatarExperiment.recordServerFlag(flags.avatarMarkersEnabled)
         }
 
         if let user = resolvedUser {
