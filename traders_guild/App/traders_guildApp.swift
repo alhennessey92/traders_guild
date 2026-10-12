@@ -223,6 +223,12 @@ struct traders_guildApp: App {
     private var viewingFixture: MarkerViewingHarness.Scenario? {
         MarkerViewingHarness.Scenario.launch
     }
+
+    /// Drawer Theses / threaded Live Feed fixture:
+    /// `-DrawerThesesFixture theses|feed`. Backend-free.
+    private var thesesDrawerFixture: DrawerMarkerTab? {
+        MarkerThesesDrawerHarness.launchTab
+    }
     #endif
 
     #if DEBUG
@@ -237,7 +243,7 @@ struct traders_guildApp: App {
     /// Always false outside Debug and isolated-DEV builds.
     private var isFixtureLaunch: Bool {
         #if DEBUG || TG_ISOLATED_DEV
-        guidedCreationFixture != nil || viewingFixture != nil || wantsMarkerLinkFixtures || ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") || MarkerMainViewSheetFixture.enabled
+        guidedCreationFixture != nil || viewingFixture != nil || thesesDrawerFixture != nil || wantsMarkerLinkFixtures || ProcessInfo.processInfo.arguments.contains("-MarkerSheetShellFixture") || MarkerMainViewSheetFixture.enabled
         #else
         false
         #endif
@@ -254,6 +260,8 @@ struct traders_guildApp: App {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
         } else if let viewingFixture {
             MarkerViewingHarness(scenario: viewingFixture)
+        } else if let thesesDrawerFixture {
+            MarkerThesesDrawerHarness(tab: thesesDrawerFixture)
         } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else if wantsWalkthroughPreview {
@@ -270,6 +278,8 @@ struct traders_guildApp: App {
             MarkerGuidedCreationHarness(scenario: guidedCreationFixture)
         } else if let viewingFixture {
             MarkerViewingHarness(scenario: viewingFixture)
+        } else if let thesesDrawerFixture {
+            MarkerThesesDrawerHarness(tab: thesesDrawerFixture)
         } else if wantsMarkerLinkFixtures {
             MarkerLinkFixtureGallery()
         } else {

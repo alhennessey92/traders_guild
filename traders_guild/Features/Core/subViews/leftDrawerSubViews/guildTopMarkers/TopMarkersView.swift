@@ -3,7 +3,8 @@
 //  traders_guild
 //
 //  Left drawer marker activity feed.
-//  Live Feed | Setups | By Symbol | All
+//  Theses | Live Feed | Setups | By Symbol | All
+//  (Theses only from servers that send thesis context.)
 //  Scope via inline pill toggle (Everyone / Friends / Mine)
 //
 
@@ -22,11 +23,13 @@ struct TopMarkersView: View {
     @State private var selectedScope: DrawerScopeToggle = .everyone
 
     @State private var recentMarkers: [RLMarkerActivityItemDTO] = []
+    @State private var thesesMarkers: [RLMarkerActivityItemDTO] = []
     @State private var archiveMarkers: [RLMarkerActivityItemDTO] = []
     @State private var setupsLiveMarkers: [RLMarkerActivityItemDTO] = []
     @State private var setupsResolvedMarkers: [RLMarkerActivityItemDTO] = []
 
     @State private var recentCache: [String: [RLMarkerActivityItemDTO]] = [:]
+    @State private var thesesCache: [String: [RLMarkerActivityItemDTO]] = [:]
     @State private var archiveCache: [String: [RLMarkerActivityItemDTO]] = [:]
     @State private var archiveTotalCountCache: [String: Int] = [:]
     @State private var setupsCache: [String: TopMarkerSetupCacheEntry] = [:]
@@ -39,6 +42,9 @@ struct TopMarkersView: View {
     @State private var activeLoadRequestId = 0
     @State private var archiveTotalCount = 0
     @State private var refreshNonce = 0
+    /// Whether the server sends thesis context, as last seen; offers the
+    /// Theses tab from launch rather than after the first load.
+    @AppStorage("TGDrawerThesesSupported") private var thesesSupported = false
 
     var onNavigateToMarker: ((RLTopMarkerDTO) -> Void)? = nil
 
@@ -52,8 +58,18 @@ struct TopMarkersView: View {
         "\(reloadKey)|\(selectedTab.rawValue)|\(selectedScope.rawValue)|\(refreshNonce)"
     }
 
+    private var visibleTabs: [DrawerMarkerTab] {
+        thesesSupported ? DrawerMarkerTab.allCases : DrawerMarkerTab.allCases.filter { $0 != .theses }
+    }
+
+    private var theses: [MarkerThesis] {
+        MarkerThesisFeed.theses(from: thesesMarkers)
+    }
+
     private var currentTotalCount: Int {
         switch selectedTab {
+        case .theses:
+            return theses.count
         case .liveFeed:
             return recentMarkers.count
         case .setups:
@@ -71,6 +87,7 @@ struct TopMarkersView: View {
         VStack(spacing: 0) {
             UnifiedTabBar(
                 selectedTab: $selectedTab,
+                tabs: visibleTabs,
                 size: .compact,
                 theme: .markerNavigation,
                 spacing: 6
@@ -125,7 +142,7 @@ struct TopMarkersView: View {
                 .font(.caption)
                 .foregroundColor(AppColors.statusInfo80)
 
-            Text("\(selectedTab.title) \u{2022} \(selectedScope.rawValue) \u{2022} \(currentTotalCount) markers")
+            Text("\(selectedTab.title) \u{2022} \(selectedScope.rawValue) \u{2022} \(currentTotalCount) \(selectedTab == .theses ? "theses" : "markers")")
                 .font(.caption2)
                 .foregroundColor(AppColors.secondaryForeground)
                 .lineLimit(1)
@@ -165,10 +182,10 @@ struct TopMarkersView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isLoading && recentMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+        if isLoading && recentMarkers.isEmpty && thesesMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
             UnifiedLoadingState(message: "Loading marker activity...")
                 .padding(.top, 40)
-        } else if let loadError, recentMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
+        } else if let loadError, recentMarkers.isEmpty && thesesMarkers.isEmpty && archiveMarkers.isEmpty && setupsLiveMarkers.isEmpty && setupsResolvedMarkers.isEmpty {
             UnifiedEmptyState(
                 icon: "exclamationmark.triangle",
                 title: "Unable to load marker activity",
@@ -177,6 +194,8 @@ struct TopMarkersView: View {
             .padding(.top, 36)
         } else {
             switch selectedTab {
+            case .theses:
+                thesesContent
             case .liveFeed:
                 liveFeedContent
             case .setups:
@@ -198,9 +217,49 @@ struct TopMarkersView: View {
                 subtitle: "Recent \(selectedScope.rawValue.lowercased()) marker activity will appear here."
             )
             .padding(.top, 36)
+        } else if MarkerThesisFeed.isSupported(recentMarkers) {
+            threadedMarkerList(recentMarkers)
         } else {
             markerList(recentMarkers)
         }
+    }
+
+    @ViewBuilder
+    private var thesesContent: some View {
+        if theses.isEmpty {
+            UnifiedEmptyState(
+                icon: "point.3.connected.trianglepath.dotted",
+                title: "No Theses Yet",
+                subtitle: "When someone supports, challenges or builds on a marker, the debate appears here."
+            )
+            .padding(.top, 36)
+        } else {
+            MarkerThesesList(
+                theses: theses,
+                onOpen: { openThesis($0) },
+                onOpenReply: { handleMarkerTap(marker: $0) }
+            )
+        }
+    }
+
+    /// The Live Feed with each reply beneath the marker it answers.
+    private func threadedMarkerList(_ markers: [RLMarkerActivityItemDTO]) -> some View {
+        MarkerThreadedFeed(
+            markers: markers,
+            item: { marker in
+                MarkerListItem(
+                    marker: marker,
+                    style: .capsule,
+                    showMyBadge: marker.isCurrentUserMarker,
+                    currentPrice: symbolCache[marker.symbolId]?.currentPrice,
+                    likeAnimationMarkerId: likedMarkerId,
+                    onLike: { handleLike(marker: marker) },
+                    onTap: { handleMarkerTap(marker: marker) }
+                )
+            },
+            onTapReply: { handleMarkerTap(marker: $0) },
+            onOpenParent: { openParent(of: $0) }
+        )
     }
 
     @ViewBuilder
@@ -363,6 +422,15 @@ struct TopMarkersView: View {
 
         if !forceRefresh {
             switch requestTab {
+            case .theses:
+                if let cachedMarkers = thesesCache[loadKey] {
+                    applyIfCurrentRequest(requestId) {
+                        thesesMarkers = cachedMarkers
+                        loadError = nil
+                        isLoading = false
+                    }
+                    return
+                }
             case .liveFeed:
                 if let cachedMarkers = recentCache[loadKey] {
                     applyIfCurrentRequest(requestId) {
@@ -401,6 +469,8 @@ struct TopMarkersView: View {
         if forceRefresh {
             applyIfCurrentRequest(requestId) {
                 switch requestTab {
+                case .theses:
+                    thesesCache.removeValue(forKey: loadKey)
                 case .liveFeed:
                     recentCache.removeValue(forKey: loadKey)
                 case .setups:
@@ -419,6 +489,23 @@ struct TopMarkersView: View {
 
         do {
             switch requestTab {
+            case .theses:
+                let markers = try await loadMarkers(
+                    guildId: guildId,
+                    scope: scope,
+                    loadMode: .theses
+                )
+
+                guard isCurrentRequest(requestId) else { return }
+
+                applyIfCurrentRequest(requestId) {
+                    thesesCache[loadKey] = markers
+                    thesesMarkers = markers
+                    noteThesisSupport(in: markers)
+                    loadError = nil
+                    isLoading = false
+                }
+
             case .liveFeed:
                 let markers = try await loadMarkers(
                     guildId: guildId,
@@ -431,6 +518,7 @@ struct TopMarkersView: View {
                 applyIfCurrentRequest(requestId) {
                     recentCache[loadKey] = markers
                     recentMarkers = markers
+                    noteThesisSupport(in: markers)
                     loadError = nil
                     isLoading = false
                 }
@@ -584,10 +672,13 @@ struct TopMarkersView: View {
     }
 
     private func handleMarkerTap(marker: RLMarkerActivityItemDTO) {
+        navigate(to: marker.asTopMarkerDTO())
+    }
+
+    private func navigate(to topMarker: RLTopMarkerDTO) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
 
-        let topMarker = marker.asTopMarkerDTO()
         if let onNavigateToMarker {
             onNavigateToMarker(topMarker)
         } else {
@@ -595,8 +686,41 @@ struct TopMarkersView: View {
         }
     }
 
+    /// Opens a thesis on the chart: the marker itself, or, when the feed only
+    /// knows it from its replies, the place their preview names.
+    private func openThesis(_ thesis: MarkerThesis) {
+        switch thesis.head {
+        case .item(let item):
+            handleMarkerTap(marker: item)
+        case .preview(let preview):
+            if let target = preview.navigationTarget(guildFallback: rlAppState.currentGuild?.id) {
+                navigate(to: target)
+            } else if let reply = thesis.replies.first {
+                handleMarkerTap(marker: reply)
+            }
+        }
+    }
+
+    private func openParent(of reply: RLMarkerActivityItemDTO) {
+        if let target = reply.parentPreview?.navigationTarget(guildFallback: rlAppState.currentGuild?.id) {
+            navigate(to: target)
+        } else {
+            handleMarkerTap(marker: reply)
+        }
+    }
+
+    /// Remembers whether the server sends thesis context, from any non-empty
+    /// load: offered when it does, withdrawn if a server stops.
+    private func noteThesisSupport(in markers: [RLMarkerActivityItemDTO]) {
+        guard !markers.isEmpty else { return }
+        let supported = MarkerThesisFeed.isSupported(markers)
+        if thesesSupported != supported { thesesSupported = supported }
+        if !supported && selectedTab == .theses { selectedTab = .liveFeed }
+    }
+
     private func updateMarkerLike(markerId: UUID, isLiked: Bool, likeCount: Int) {
         updateLike(in: &recentMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+        updateLike(in: &thesesMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
         updateLike(in: &archiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
         updateLike(in: &setupsLiveMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
         updateLike(in: &setupsResolvedMarkers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
@@ -605,6 +729,12 @@ struct TopMarkersView: View {
             guard var markers = recentCache[key] else { continue }
             updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
             recentCache[key] = markers
+        }
+
+        for key in thesesCache.keys {
+            guard var markers = thesesCache[key] else { continue }
+            updateLike(in: &markers, markerId: markerId, isLiked: isLiked, likeCount: likeCount)
+            thesesCache[key] = markers
         }
 
         for key in archiveCache.keys {
@@ -645,6 +775,8 @@ struct TopMarkersView: View {
 
     private func resetAllState() {
         recentMarkers = []
+        thesesMarkers = []
+        thesesCache = [:]
         archiveMarkers = []
         archiveTotalCount = 0
         setupsLiveMarkers = []

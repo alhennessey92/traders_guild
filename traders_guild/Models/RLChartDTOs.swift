@@ -2008,6 +2008,9 @@ enum MarkerScopeToggle: String, CaseIterable {
 // =============================================================================
 
 enum DrawerMarkerTab: String, CaseIterable, UnifiedTabItem {
+    /// Markers with replies, as debates. Offered only by servers that send
+    /// thesis context (see `MarkerThesisFeed.isSupported`).
+    case theses = "Theses"
     case liveFeed = "Live Feed"
     case setups = "Setups"
     case bySymbol = "By Symbol"
@@ -2017,6 +2020,7 @@ enum DrawerMarkerTab: String, CaseIterable, UnifiedTabItem {
 
     var icon: String {
         switch self {
+        case .theses: return "point.3.connected.trianglepath.dotted"
         case .liveFeed: return "bolt.horizontal.fill"
         case .setups: return "target"
         case .bySymbol: return "list.bullet.rectangle.fill"
@@ -2083,6 +2087,19 @@ struct RLMarkerActivityItemDTO: Codable, Identifiable, Equatable, Hashable {
     var isLikedByCurrentUser: Bool
     let commentCount: Int
     let isCurrentUserMarker: Bool
+
+    // Where the marker sits in a thesis. Sent by 1.5 servers; absent from
+    // older ones, so every field is optional and defaulted (the memberwise init
+    // and the decoder both tolerate its absence). Counts are direct responses.
+    var parentMarkerId: UUID? = nil
+    var linkRelationship: String? = nil
+    var parentPreview: RLMarkerLinkPreviewDTO? = nil
+    var directResponseCount: Int? = nil
+    /// Direct responses by relationship. Keys arrive as the wire's
+    /// `supports` / `challenges` / `builds_on`, or camel-cased by the decoder;
+    /// read through `MarkerThesisStance`, which accepts either.
+    var responseCounts: [String: Int]? = nil
+    var lastResponseAt: Date? = nil
 
     var authorAccuracyFormatted: String? {
         guard let rate = authorAccuracyRate else { return nil }

@@ -2,13 +2,16 @@ import Foundation
 
 enum MarkerActivityListLoadMode: Equatable {
     case recentFeed
+    /// The recent feed, deeper, for the drawer's Theses tab: a debate shows
+    /// the replies that arrive in the same page.
+    case theses
     case archive
     case setupsLive
     case setupsResolved
 
     var state: RLMarkerActivityState {
         switch self {
-        case .recentFeed, .archive:
+        case .recentFeed, .theses, .archive:
             return .all
         case .setupsLive:
             return .active
@@ -17,11 +20,11 @@ enum MarkerActivityListLoadMode: Equatable {
         }
     }
 
-    var limit: Int { 60 }
+    var limit: Int { self == .theses ? 200 : 60 }
 
     var fetchAllPages: Bool {
         switch self {
-        case .recentFeed:
+        case .recentFeed, .theses:
             return false
         case .archive, .setupsLive, .setupsResolved:
             return true
