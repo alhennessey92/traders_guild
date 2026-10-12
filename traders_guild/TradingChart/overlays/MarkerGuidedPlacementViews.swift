@@ -1118,7 +1118,22 @@ struct MarkerGuidedCreateEntries: View {
     let author: MarkerAvatarIdentity
     let onSelect: (RLMarkerIntent) -> Void
 
+    @State private var showsGuide = false
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            entries
+            guideLink
+        }
+        .sheet(isPresented: $showsGuide) {
+            MarkerGuideView(identity: author) { showsGuide = false }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var entries: some View {
         if MarkerSheetDetents.isCompactHeight {
             // A compact-height phone: both must fit at the working height,
             // so posting is one prominent row and Setup the row beneath.
@@ -1138,6 +1153,23 @@ struct MarkerGuidedCreateEntries: View {
                 }
             }
         }
+    }
+
+    /// How to read a marker: the rings, badges, arcs and lines explained.
+    private var guideLink: some View {
+        Button { showsGuide = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "questionmark.circle")
+                    .accessibilityHidden(true)
+                Text("How markers work")
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(AppColors.overlayPanelSecondaryText)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("guided.markerGuide")
     }
 }
 
