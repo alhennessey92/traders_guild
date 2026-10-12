@@ -117,6 +117,7 @@ struct MarkerGuidedPlacementPanel: View {
     /// draft has a title.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.markerWorkspaceKeyboardScrollRoom) private var keyboardScrollRoom
     /// The depth of the screen last shown: a deeper one enters from the
     /// trailing side, a shallower one from the leading side.
     @State private var shownDepth = 0
@@ -220,6 +221,9 @@ struct MarkerGuidedPlacementPanel: View {
             set: { placementState.workspace.scrollAnchors[destination] = $0 }
         ))
         .scrollDismissesKeyboard(.interactively)
+        // The content keeps its size while the keyboard is up (see the
+        // sheet); the rows the keyboard covers can still scroll into view.
+        .contentMargins(.bottom, keyboardScrollRoom, for: .scrollContent)
         .accessibilityIdentifier("guided.screen")
     }
 

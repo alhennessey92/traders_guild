@@ -9,6 +9,86 @@
 
 import SwiftUI
 
+// MARK: - Keyboard
+
+private struct MarkerWorkspaceKeyboardScrollRoomKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// How far the keyboard (and the bar riding on it) covers the workspace's
+    /// content, which keeps its size while typing: room to scroll every row
+    /// into view without the content collapsing.
+    var markerWorkspaceKeyboardScrollRoom: CGFloat {
+        get { self[MarkerWorkspaceKeyboardScrollRoomKey.self] }
+        set { self[MarkerWorkspaceKeyboardScrollRoomKey.self] = newValue }
+    }
+}
+
+/// How far the keyboard covers this view: its own bottom edge in the window
+/// against the keyboard's final frame. Placed behind content that ignores the
+/// keyboard, so its frame (the sheet's full height) never depends on what it
+/// reports, and the report cannot feed back into its own layout.
+struct MarkerKeyboardOverlapReader: UIViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeUIView(context: Context) -> Reader {
+        let view = Reader()
+        view.onChange = onChange
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ view: Reader, context: Context) {
+        view.onChange = onChange
+    }
+
+    final class Reader: UIView {
+        var onChange: ((CGFloat) -> Void)?
+        private var keyboardScreenFrame: CGRect = .zero
+        private var reported: CGFloat = -1
+        private var observers: [NSObjectProtocol] = []
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    guard let self else { return }
+                    keyboardScreenFrame = name == UIResponder.keyboardWillHideNotification ? .zero
+                        : (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero)
+                    report()
+                })
+            }
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            report()
+        }
+
+        private func report() {
+            guard let window else { return }
+            var overlap: CGFloat = 0
+            if keyboardScreenFrame != .zero {
+                let keyboard = window.convert(keyboardScreenFrame, from: window.screen.coordinateSpace)
+                // A floating or undocked keyboard covers nothing at the bottom.
+                if keyboard.maxY >= window.bounds.maxY - 1, keyboard.width >= window.bounds.width * 0.9 {
+                    overlap = max(0, convert(bounds, to: window).maxY - keyboard.minY)
+                }
+            }
+            overlap = overlap.rounded()
+            guard overlap != reported else { return }
+            reported = overlap
+            let value = overlap
+            DispatchQueue.main.async { [weak self] in self?.onChange?(value) }
+        }
+    }
+}
+
 // MARK: - Draft colour
 
 extension MarkerPlacementState {

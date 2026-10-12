@@ -3037,6 +3037,11 @@ struct ChartBottomSheet: View {
         chartViewModel.selectedMarkerForSheet != nil
     }
 
+    /// How far the keyboard covers the workspace, whose content keeps its size
+    /// while typing: room to scroll every row into view, and the bar's cue to
+    /// cover what it rides over.
+    @State private var guidedKeyboardScrollRoom: CGFloat = 0
+
     private var shouldIgnoreKeyboardSafeArea: Bool {
         if controlViewModel.isMarkerPlacementMode && placementState.isGuidedFlowActive { return false }
         if isMarkerDetailActive && markerDetailTab == .chat { return false }
@@ -3065,6 +3070,37 @@ struct ChartBottomSheet: View {
                 } footer: {
                     chatInputFooter
                 }
+            } else if controlViewModel.isMarkerPlacementMode && placementState.isGuidedFlowActive {
+                // The workspace: only its bar rides up on the keyboard. Its
+                // content keeps its size: shrinking it for the keyboard while
+                // iOS also lifted and fitted the sheet briefly collapsed it to
+                // a blank box that grew back (owner, on device, 11 Oct 2026).
+                // The rows the keyboard covers get room to scroll instead.
+                ZStack(alignment: .bottom) {
+                    sheetPrimaryContent
+                        .environment(\.markerWorkspaceKeyboardScrollRoom, guidedKeyboardScrollRoom)
+                        .padding(.bottom, isGuidedCompact ? 0 : MarkerGuidedPlacementBar.height)
+                        .background {
+                            // What the keyboard covers, read off the sheet's
+                            // full height (never off the content, which
+                            // would feed the room back into itself).
+                            MarkerKeyboardOverlapReader { guidedKeyboardScrollRoom = $0 }
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
+                    sheetBottomBar
+                        .background {
+                            // Over the content while the keyboard has lifted
+                            // it; at rest the bar sits below the content.
+                            ZStack {
+                                Rectangle().fill(.ultraThinMaterial)
+                                AppColors.sheetBackground.opacity(0.88)
+                            }
+                            .opacity(guidedKeyboardScrollRoom > 0 ? 1 : 0)
+                        }
+                }
+
             } else {
                 VStack(spacing: 0) {
                     sheetPrimaryContent
