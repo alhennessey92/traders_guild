@@ -1591,14 +1591,18 @@ struct DataPrivacyView: View {
 struct HelpCenterView: View {
     let onBack: () -> Void
     let onContactSupport: () -> Void
+    /// The reader's face for "How markers work"; the card shows only while
+    /// markers wear faces.
+    var markerGuideIdentity: MarkerAvatarIdentity? = nil
     
     @State private var searchText: String = ""
     @State private var expandedFAQ: String? = nil
+    @State private var showsMarkerGuide = false
     
     private let faqCategories: [(category: String, icon: String, color: Color, faqs: [(question: String, answer: String)])] = [
         ("Getting Started", "play.circle.fill", .green, [
             ("How do I join a guild?", "You can join a guild by searching for guilds in the Discover tab, or by accepting an invitation from an existing member. Open guilds can be joined directly, while closed guilds require approval from an admin."),
-            ("What are chart markers?", "Chart markers are annotations you can place on trading charts to share analysis with guild members. You can add entry points, targets, stop losses, and custom notes that other members can see and discuss."),
+            ("What are chart markers?", "Markers are posts pinned to a candle on the chart: an analysis, a question, a poll, an alert or a trade Setup. Your guild sees them live, and can like them, reply with markers of their own and discuss them in chat."),
             ("How does reputation work?", "Reputation is earned through positive contributions to your guild - accurate predictions, helpful analysis, and community engagement. Higher reputation unlocks additional privileges within your guild."),
         ]),
         ("Account & Profile", "person.circle.fill", .blue, [
@@ -1636,6 +1640,9 @@ struct HelpCenterView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
+                        if searchText.isEmpty, markerGuideIdentity != nil, MarkerAvatarExperiment.isEnabled {
+                            markerGuideCard
+                        }
                         ForEach(faqCategories, id: \.category) { category in
                             let filteredFAQs = searchText.isEmpty ? category.faqs : category.faqs.filter {
                                 $0.question.localizedCaseInsensitiveContains(searchText) ||
@@ -1697,6 +1704,41 @@ struct HelpCenterView: View {
             }
         }
         .dismissKeyboardOnTapAndDragBackground()
+        .sheet(isPresented: $showsMarkerGuide) {
+            MarkerGuideView(identity: markerGuideIdentity ?? .none) { showsMarkerGuide = false }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var markerGuideCard: some View {
+        Button { showsMarkerGuide = true } label: {
+            HStack(spacing: 14) {
+                UnifiedMarkerBadge(intent: .analysis, size: 40, avatar: markerGuideIdentity ?? .none)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("How markers work")
+                        .font(.headline)
+                        .foregroundColor(AppColors.whiteText)
+                    Text("Rings, badges, arcs and reply lines explained")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.greyText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(AppColors.greyText)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .background(AppColors.insetPanelBackground)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 25)
+        .accessibilityIdentifier("helpCenter.markerGuide")
     }
 }
 

@@ -34,6 +34,16 @@ struct UserSettingsSheetView: View {
     private let biometricManager = BiometricAuthManager.shared
     @State private var isBiometricEnabled = BiometricAuthManager.shared.isBiometricEnabled
     
+    /// The reader's face, for Help Center's "How markers work".
+    private var markerGuideIdentity: MarkerAvatarIdentity {
+        var identity = MarkerAvatarIdentity.forCurrentUser(
+            username: rlAppState.currentUser?.username,
+            avatarUrl: rlAppState.currentUser?.avatarUrl
+        )
+        identity.authorId = rlAppState.currentUser?.id
+        return identity
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -115,7 +125,8 @@ struct UserSettingsSheetView: View {
         case .helpCenter:
             HelpCenterView(
                 onBack: { currentDestination = nil },
-                onContactSupport: { currentDestination = .contactSupport }
+                onContactSupport: { currentDestination = .contactSupport },
+                markerGuideIdentity: markerGuideIdentity
             )
             
         case .contactSupport:
