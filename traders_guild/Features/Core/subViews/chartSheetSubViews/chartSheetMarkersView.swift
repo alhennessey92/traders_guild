@@ -438,6 +438,8 @@ struct chartSheetMarkersView: View {
                 subtitle: emptyStateSubtitle
             )
             .padding(.top, 20)
+        } else if selectedSubTab == .liveFeed && MarkerThesisFeed.isSupported(selectedFlatMarkers) {
+            threadedMarkerList(selectedFlatMarkers)
         } else {
             markerList(selectedFlatMarkers)
         }
@@ -747,6 +749,27 @@ struct chartSheetMarkersView: View {
         }
     }
 
+    /// The Live Feed with each reply beneath the marker it answers, as in the
+    /// drawer.
+    private func threadedMarkerList(_ markers: [RLMarkerActivityItemDTO]) -> some View {
+        MarkerThreadedFeed(
+            markers: markers,
+            item: { marker in
+                MarkerListItem(
+                    marker: marker,
+                    style: .capsule,
+                    showMyBadge: marker.isCurrentUserMarker,
+                    currentPrice: activeSymbolPrice,
+                    likeAnimationMarkerId: likedMarkerId,
+                    onLike: { handleLike(marker: marker) },
+                    onTap: { openMarker(marker) }
+                )
+            },
+            onTapReply: { openMarker($0) },
+            onOpenParent: { openParent(of: $0) }
+        )
+    }
+
     private func analysisSectionCard<Content: View>(
         title: String,
         icon: String,
@@ -860,6 +883,17 @@ struct chartSheetMarkersView: View {
 
     private func openMarker(_ marker: RLMarkerActivityItemDTO) {
         onNavigateToMarker?(marker.asTopMarkerDTO())
+        onMarkerSelection?()
+    }
+
+    /// The marker a reply answers, from the preview it carries; the reply
+    /// itself when the preview cannot be opened.
+    private func openParent(of reply: RLMarkerActivityItemDTO) {
+        guard let target = reply.parentPreview?.navigationTarget(guildFallback: reply.guildId) else {
+            openMarker(reply)
+            return
+        }
+        onNavigateToMarker?(target)
         onMarkerSelection?()
     }
 
