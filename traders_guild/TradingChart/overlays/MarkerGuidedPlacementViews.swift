@@ -298,7 +298,8 @@ struct MarkerGuidedPlacementPanel: View {
                 }.buttonStyle(.plain).disabled(placementState.isGuidedSubmissionInFlight)
                     .accessibilityLabel("Show chart").accessibilityIdentifier("guided.showChart")
             }
-        }.foregroundColor(AppColors.primaryForeground)
+        }
+        .foregroundColor(AppColors.primaryForeground)
     }
 
     private var taskTitle: String { placementState.guidedToolbarTitle ?? "New marker" }

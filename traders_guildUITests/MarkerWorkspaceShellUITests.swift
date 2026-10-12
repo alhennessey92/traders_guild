@@ -385,6 +385,34 @@ final class MarkerWorkspaceShellUITests: XCTestCase {
         XCTAssertTrue(text.contains("Buyers stepped in.") && text.contains("Holding."), text)
     }
 
+    /// Owner, on device, 12 Oct 2026: typing from the small height held the
+    /// sheet there. Its header is the handle: up takes it to the top with the
+    /// keyboard still up; down puts the keyboard away.
+    func testDraggingTheHeaderWhileTypingRaisesTheSheetOrPutsTheKeyboardAway() throws {
+        launch()
+        let field = app.textViews["guided.text"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        guard field.isHittable else { throw XCTSkip("the small height does not reach the text on this phone") }
+        field.tap()
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.waitForExistence(timeout: 5), keyboard.frame.height >= 150 else {
+            throw XCTSkip("hardware keyboard: no software keyboard on screen")
+        }
+        settle(1.2)
+        let header = app.staticTexts["guided.stepHeader"]
+        let start = header.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -140)))
+        settle(1.5)
+        XCTAssertEqual(trace().samples.last?.sel, "tall", "up to the top")
+        XCTAssertTrue(keyboard.exists, "still typing")
+        XCTAssertLessThan(app.buttons["guided.review"].frame.maxY, keyboard.frame.minY + 1, "footer above the keyboard")
+        screenshot("header-raised-while-typing")
+        let raised = header.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        raised.press(forDuration: 0.05, thenDragTo: raised.withOffset(CGVector(dx: 0, dy: 140)))
+        settle(1.5)
+        XCTAssertFalse(keyboard.exists, "the keyboard went")
+    }
+
     /// A new post opens small, with no keyboard, so its marker shows on the
     /// chart above the sheet (owner decision, 6 Oct 2026).
     func testANewPostOpensSmallWithoutTheKeyboard() {

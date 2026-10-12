@@ -3087,6 +3087,13 @@ struct ChartBottomSheet: View {
                             MarkerKeyboardOverlapReader { guidedKeyboardScrollRoom = $0 }
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
+                            // While the sheet holds its height on the keyboard,
+                            // a pull on it moves it (up) or ends typing (down).
+                            MarkerSheetDriftWatcher(isArmed: sheetDetents.watchesTypingDrift) { up in
+                                sheetDetents.typingDrift(up: up)
+                            }
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                         }
                         .ignoresSafeArea(.keyboard, edges: .bottom)
                     sheetBottomBar

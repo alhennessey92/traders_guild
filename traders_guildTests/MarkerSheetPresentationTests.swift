@@ -213,6 +213,69 @@ struct MarkerSheetDetentControllerTests {
         #expect(box.selection == MarkerSheetDetents.browse, "and it stays where it is")
     }
 
+    /// Owner, on device, 12 Oct 2026: typing from a small height held the
+    /// sheet there; it could not be pulled up to see more.
+    @Test
+    func draggingTheHeaderUpWhileTypingTakesTheSheetToTheTop() async {
+        let (sheet, box) = controller()
+        sheet.enterAuthoring()
+        await settle()
+        _ = sheet.shouldBeginEditing { }
+        await settle()
+        keyboard(docked: true)
+        await settle()
+        #expect(sheet.detents == [MarkerSheetDetents.browse], "held while the keyboard is up")
+        sheet.raiseWhileTyping()
+        await settle()
+        #expect(box.selection == MarkerSheetDetents.tall)
+        #expect(sheet.detents == MarkerSheetDetents.standard, "every height, as typing from the top")
+        keyboard(docked: false)
+        await settle()
+        #expect(!sheet.isTyping)
+        #expect(box.selection == MarkerSheetDetents.tall, "it stays where the author took it")
+    }
+
+    @Test
+    func aPullIsWatchedForOnlyWhileTheSheetHoldsOnTheKeyboard() async {
+        let (sheet, _) = controller()
+        sheet.enterAuthoring()
+        await settle()
+        _ = sheet.shouldBeginEditing { }
+        await settle()
+        #expect(!sheet.watchesTypingDrift, "not while the keyboard rises")
+        keyboard(docked: true)
+        keyboardCenter.post(name: UIResponder.keyboardDidShowNotification, object: nil)
+        await settle()
+        #expect(sheet.watchesTypingDrift)
+        sheet.typingDrift(up: true)
+        await settle()
+        #expect(!sheet.watchesTypingDrift, "once, then it is the move's")
+        keyboard(docked: false)
+        await settle()
+        #expect(!sheet.watchesTypingDrift)
+    }
+
+    @Test
+    func draggingTheHeaderDownWhileTypingPutsTheKeyboardAway() async {
+        let (sheet, box) = controller()
+        var resigned = 0
+        sheet.resignKeyboard = { resigned += 1 }
+        sheet.enterAuthoring()
+        await settle()
+        _ = sheet.shouldBeginEditing { }
+        await settle()
+        sheet.lowerWhileTyping()
+        #expect(resigned == 0, "no keyboard yet, nothing to put away")
+        keyboard(docked: true)
+        await settle()
+        sheet.lowerWhileTyping()
+        #expect(resigned == 1)
+        keyboard(docked: false)
+        await settle()
+        #expect(!sheet.isTyping)
+        #expect(box.selection == MarkerSheetDetents.browse, "where typing began")
+    }
+
     @Test
     func withoutADockedKeyboardEveryHeightComesBack() async {
         let (sheet, box) = controller()

@@ -89,6 +89,64 @@ struct MarkerKeyboardOverlapReader: UIViewRepresentable {
     }
 }
 
+/// Watches the sheet's own position while it holds its height on the
+/// keyboard, and reports the author pulling it up or down. The sheet's own
+/// drag is used rather than a gesture of ours: a gesture competed with it, and
+/// only registered once the finger had reversed. Runs only while armed.
+struct MarkerSheetDriftWatcher: UIViewRepresentable {
+    let isArmed: Bool
+    let onDrift: (_ up: Bool) -> Void
+
+    func makeUIView(context: Context) -> Watcher {
+        let view = Watcher()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ view: Watcher, context: Context) {
+        view.onDrift = onDrift
+        view.setArmed(isArmed)
+    }
+
+    static func dismantleUIView(_ view: Watcher, coordinator: ()) {
+        view.setArmed(false)
+    }
+
+    final class Watcher: UIView {
+        /// A pull past this, either way, is deliberate.
+        static let threshold: CGFloat = 10
+        var onDrift: ((Bool) -> Void)?
+        private var link: CADisplayLink?
+        private var restTop: CGFloat?
+
+        func setArmed(_ armed: Bool) {
+            if armed, link == nil {
+                restTop = nil
+                let link = CADisplayLink(target: self, selector: #selector(tick))
+                link.add(to: .main, forMode: .common)
+                self.link = link
+            } else if !armed {
+                link?.invalidate()
+                link = nil
+                restTop = nil
+            }
+        }
+
+        @objc private func tick() {
+            guard let window,
+                  let sheet = MarkerSheetTraceProbe.presentedController(from: self)?.view else { return }
+            let top = sheet.convert(sheet.bounds, to: window).minY
+            guard let rest = restTop else { restTop = top; return }
+            let moved = top - rest
+            guard abs(moved) > Self.threshold else { return }
+            setArmed(false)
+            let up = moved < 0
+            DispatchQueue.main.async { [weak self] in self?.onDrift?(up) }
+        }
+    }
+}
+
 // MARK: - Draft colour
 
 extension MarkerPlacementState {

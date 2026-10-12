@@ -102,6 +102,10 @@ final class MarkerSheetDetentController: ObservableObject {
 
     /// A workspace field has focus and the sheet offers only its current height.
     private(set) var isTyping = false
+    /// The keyboard has settled with the sheet holding its height on it: a
+    /// pull on the sheet now means the author wants it moved (see
+    /// `MarkerSheetDriftWatcher`).
+    @Published private(set) var watchesTypingDrift = false
     /// The height typing began at, restored after the keyboard if UIKit
     /// reported a height of its own meanwhile.
     private var typingDetent: PresentationDetent?
@@ -130,6 +134,9 @@ final class MarkerSheetDetentController: ObservableObject {
         })
         observers.append(center.addObserver(forName: UIResponder.keyboardDidHideNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.keyboardDidHide() }
+        })
+        observers.append(center.addObserver(forName: UIResponder.keyboardDidShowNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.keyboardDidShow() }
         })
     }
 
@@ -232,6 +239,11 @@ final class MarkerSheetDetentController: ObservableObject {
         if detents.contains(detent) {
             lastOfferedSelection = detent
             if mode == .authoring { rememberResume(detent) }
+            // Pulled down to the dock while typing: the keyboard goes first,
+            // then the sheet settles there, rather than springing back.
+            if mode == .authoring, keyboardShown, detent == MarkerSheetDetents.dock, !collapsesAfterKeyboard {
+                collapse()
+            }
             return
         }
         // iOS 18 reports a height of its own while the keyboard pins a sheet
@@ -295,6 +307,37 @@ final class MarkerSheetDetentController: ObservableObject {
         }
     }
 
+    /// The keyboard is up and the sheet sits on it: from here a pull on the
+    /// sheet is the author's.
+    private func keyboardDidShow() {
+        guard mode == .authoring, isTyping, keyboardShown, detents.count == 1 else { return }
+        watchesTypingDrift = true
+    }
+
+    /// The author pulled the sheet while it held its height on the keyboard
+    /// (owner, on device, 12 Oct 2026: it could not be pulled up to see more,
+    /// and sprang back when pulled down). Up takes it to the top, where typing
+    /// offers every height, as typing from the top always has; down puts the
+    /// keyboard away and it settles where typing began. Offering every height
+    /// without the move made UIKit re-place the lifted sheet: a visible jump.
+    func typingDrift(up: Bool) {
+        watchesTypingDrift = false
+        if up { raiseWhileTyping() } else { lowerWhileTyping() }
+    }
+
+    func raiseWhileTyping() {
+        guard mode == .authoring, isTyping, keyboardShown,
+              planned.selection != MarkerSheetDetents.tall else { return }
+        watchesTypingDrift = false
+        go(to: MarkerSheetDetentState(detents: MarkerSheetDetents.standard, selection: MarkerSheetDetents.tall))
+    }
+
+    func lowerWhileTyping() {
+        guard mode == .authoring, keyboardShown, !collapsesAfterKeyboard else { return }
+        watchesTypingDrift = false
+        resignKeyboard()
+    }
+
     private func keyboardDidHide() {
         if collapsesAfterKeyboard { finishPendingCollapse(); return }
         keyboardShown = false
@@ -306,6 +349,7 @@ final class MarkerSheetDetentController: ObservableObject {
     /// After the keyboard has gone (never during its animation), the sheet
     /// offers every height again; it stays where it is.
     private func endTyping() {
+        watchesTypingDrift = false
         guard isTyping else { return }
         isTyping = false
         cancelTypingTimeout()
