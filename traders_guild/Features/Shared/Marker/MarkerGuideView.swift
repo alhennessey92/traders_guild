@@ -364,7 +364,7 @@ struct MarkerGuideView: View {
             legendRow(3, "Badge", "The type at a glance, in its own colours.")
             legendRow(4, "Arcs", "When selected: what is attached. Orange indicators, purple drawings and levels, cyan timeframes and links.")
             legendRow(5, "Counts", "Red counts likes. Grey counts the replies to it.")
-            legendRow(6, "Lines", "Join it to its replies: green supports, red challenges, blue builds on. A reply's own badge says the same.")
+            legendRow(6, "Lines", "Join it to its replies: green supports, red challenges, teal builds on. A reply's own badge says the same.")
         }
     }
 

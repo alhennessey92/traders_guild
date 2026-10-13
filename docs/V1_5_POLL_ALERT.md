@@ -43,7 +43,7 @@ Owner request, 11 October 2026: offer Poll and Alert beside Analysis and Questio
 | Alert | `intent: "alert"`, `note` = `"[Severity] description"` (`[Informational]`, `[Warning]`, `[Severe]` or `[Critical]`), optional `title` |
 
 **Updates:**
-- A poll sends `title` and `poll_question` when the question changes, and never `poll_options`.
+- A poll sends only `title` when the question changes (the server reads a poll's question from its title; `UpdateMarkerRequest` has no `poll_question`), and never `poll_options`.
 - An alert sends the whole prefixed `note` when either its description or its severity changes.
 
 **Server rules mirrored on the client:** chart_schema `validate_marker_content_rules` (a poll needs a question and two options; an alert needs a severity prefix and 10 characters after it) and the 200-character title limit.
